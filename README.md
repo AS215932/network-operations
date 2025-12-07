@@ -67,14 +67,14 @@ I maintain an **open peering policy** and welcome peering requests at any of my 
 
 Contact via PeeringDB or open an issue in this repository with the `peering` label.
 
-## 📚 Documentation
+## Documentation
 
 Key documentation:
-- [Network Architecture](docs/architecture.md) *(coming soon)*
-- [BGP Routing Policy](docs/bgp-policy.md) *(coming soon)*
-- [Peering Guidelines](docs/peering.md) *(coming soon)*
+- [Network Architecture](docs/architecture.md)
+- [BGP Routing Policy](docs/bgp-policy.md)
+- [Peering Guidelines](docs/peering.md)
 
-## 🎯 Project Goals
+## Project Goals
 
 - [x] Obtain AS number and IP allocations
 - [x] Establish BGP transit agreements
