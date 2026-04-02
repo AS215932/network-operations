@@ -1,0 +1,32 @@
+# Cloud-init network-config (v2) for Debian VMs on XCP-NG
+#
+# Xen PV NIC naming: enX0, enX1, etc. (Xen platform devices)
+# Use match by name pattern to avoid driver-specific issues.
+#
+# Variables:
+#   {{ ipv4_address }}   — static IPv4 with prefix (e.g. 10.0.0.10/24)
+#   {{ ipv4_gateway }}   — default gateway (e.g. 10.0.0.1)
+#   {{ ipv6_address }}   — static IPv6 with prefix (e.g. 2a0c:b641:b50::10/64)
+#   {{ ipv6_gateway }}   — IPv6 gateway (e.g. 2a0c:b641:b50::1)
+#   {{ dns_servers }}    — DNS server(s) (e.g. 213.186.33.99)
+
+version: 2
+ethernets:
+  primary:
+    match:
+      name: "en*"
+    addresses:
+      - {{ ipv4_address }}
+{% if ipv6_address is defined %}
+      - {{ ipv6_address }}
+{% endif %}
+    routes:
+      - to: default
+        via: {{ ipv4_gateway }}
+{% if ipv6_gateway is defined %}
+      - to: "::/0"
+        via: {{ ipv6_gateway }}
+{% endif %}
+    nameservers:
+      addresses:
+        - {{ dns_servers }}

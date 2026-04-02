@@ -1,0 +1,33 @@
+# /etc/systemd/system/hyrule-web.service
+# Deploy to: web VM
+
+[Unit]
+Description=Hyrule Cloud Web Frontend
+After=network.target
+
+[Service]
+Type=exec
+User=hyrule
+Group=hyrule
+WorkingDirectory=/opt/hyrule-web
+EnvironmentFile=/opt/hyrule-web/.env
+ExecStart=/opt/hyrule-web/.venv/bin/uvicorn hyrule_web.app:app \
+    --host :: \
+    --port 8080 \
+    --workers 2 \
+    --log-level info \
+    --access-log
+Restart=always
+RestartSec=5
+
+# Security hardening
+ProtectSystem=strict
+ReadWritePaths=/opt/hyrule-web
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

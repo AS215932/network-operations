@@ -1,0 +1,68 @@
+# /etc/caddy/Caddyfile — Hyrule Cloud TLS reverse proxy
+# Deploy to: proxy VM (2a0c:b641:b50:2::40)
+# Requires: caddy built with github.com/caddy-dns/rfc2136
+#   xcaddy build --with github.com/caddy-dns/rfc2136
+#
+# All backends are IPv6-only on AS215932 public space.
+#
+# Variables to fill:
+#   {{ acme_email }}      — Let's Encrypt contact email
+#   {{ tsig_secret }}     — Base64 TSIG secret
+
+{
+    email {{ acme_email | default('admin@servify.network') }}
+}
+
+# API — api.servify.network
+api.servify.network {
+    tls {
+        dns rfc2136 {
+            server 2a0c:b641:b50:2::10
+            key_name hyrule-dns
+            key_alg hmac-sha256.
+            key {{ tsig_secret }}
+        }
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::20]:8402
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/api.log
+    }
+}
+
+# Web frontend — servify.network
+servify.network {
+    tls {
+        dns rfc2136 {
+            server 2a0c:b641:b50:2::10
+            key_name hyrule-dns
+            key_alg hmac-sha256.
+            key {{ tsig_secret }}
+        }
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::30]:8080
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/web.log
+    }
+}
+
+# Wildcard for customer VM subdomains (future — HTTPS proxy to VMs)
+# *.deploy.servify.network {
+#     tls {
+#         dns rfc2136 { ... }
+#     }
+#     # Route to customer VMs based on subdomain lookup
+# }

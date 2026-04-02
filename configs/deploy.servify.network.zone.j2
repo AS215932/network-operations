@@ -1,0 +1,22 @@
+; /var/lib/knot/zones/deploy.servify.network.zone
+; Deploy to: dns VM (2a0c:b641:b50:2::10)
+;
+; This zone is managed dynamically via RFC 2136 (nsupdate + TSIG).
+; The hyrule-cloud API creates/deletes AAAA records here when VMs
+; are provisioned/destroyed. All customer VMs are IPv6-only.
+
+$ORIGIN deploy.servify.network.
+$TTL 300
+
+@       IN  SOA   ns1.servify.network. admin.servify.network. (
+                  2026040101 ; serial
+                  3600       ; refresh
+                  900        ; retry
+                  604800     ; expire
+                  300 )      ; negative TTL
+
+@       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.
+
+; Dynamic records below — managed by hyrule-cloud API
+; Example: a1b2c3d4  IN  AAAA  2a0c:b641:b51:1:5054:ff:fe12:3456

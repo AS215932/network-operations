@@ -50,8 +50,10 @@ AS215932 is a solo project to build and operate a full-stack ISP with modern BGP
 ## Repository Structure
 ```
 network-operations/
-├── docs/              # Architecture documentation
-├── configs/           # Sanitized configuration templates
+├── autoinstall/       # OS autoinstall configs and QMP tools
+├── configs/           # Configuration templates (Jinja2)
+├── docs/              # Architecture and deployment documentation
+├── scripts/           # Bootstrap and operational scripts
 └── .github/           # Issue templates and workflows
 ```
 

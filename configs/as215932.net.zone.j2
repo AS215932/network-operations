@@ -1,0 +1,34 @@
+; /var/lib/knot/zones/as215932.net.zone
+; Deploy to: dns VM (2a0c:b641:b50:2::10)
+;
+; Forward zone for AS215932 infrastructure PTR naming.
+; PTR records in the ip6.arpa zone point here (e.g. fw.as215932.net).
+
+$ORIGIN as215932.net.
+$TTL 3600
+
+@       IN  SOA   ns1.servify.network. admin.servify.network. (
+                  2026040101 ; serial (YYYYMMDDNN)
+                  3600       ; refresh (1h)
+                  900        ; retry (15m)
+                  604800     ; expire (7d)
+                  300 )      ; negative TTL (5m)
+
+@       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.
+
+; --- Management network (2a0c:b641:b50:0::/64) ---
+dom0    IN  AAAA  2a0c:b641:b50::1
+fw      IN  AAAA  2a0c:b641:b50::2
+xoa     IN  AAAA  2a0c:b641:b50::10
+
+; --- Transit network (2a0c:b641:b50:1::/64) ---
+fw-transit   IN  AAAA  2a0c:b641:b50:1::1
+rtr-transit  IN  AAAA  2a0c:b641:b50:1::2
+
+; --- Infrastructure network (2a0c:b641:b50:2::/64) ---
+rtr     IN  AAAA  2a0c:b641:b50:2::1
+dns     IN  AAAA  2a0c:b641:b50:2::10
+api     IN  AAAA  2a0c:b641:b50:2::20
+web     IN  AAAA  2a0c:b641:b50:2::30
+proxy   IN  AAAA  2a0c:b641:b50:2::40

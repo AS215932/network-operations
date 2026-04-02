@@ -1,0 +1,35 @@
+# /etc/systemd/system/hyrule-cloud.service
+# Deploy to: api VM
+
+[Unit]
+Description=Hyrule Cloud API
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=hyrule
+Group=hyrule
+WorkingDirectory=/opt/hyrule-cloud
+EnvironmentFile=/opt/hyrule-cloud/.env
+ExecStartPre=/opt/hyrule-cloud/.venv/bin/alembic upgrade head
+ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
+    --host :: \
+    --port 8402 \
+    --workers 2 \
+    --log-level info \
+    --access-log
+Restart=always
+RestartSec=5
+
+# Security hardening
+ProtectSystem=strict
+ReadWritePaths=/opt/hyrule-cloud
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

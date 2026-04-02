@@ -1,0 +1,94 @@
+# /etc/pf.conf — Hyrule Cloud firewall (OpenBSD)
+# Deploy to: fw VM (vio0=WAN, vio1=mgmt, vio2=transit)
+#
+# Internal networks are IPv6-only using AS215932 public space.
+# WAN carries both IPv4 (OVH) and IPv6 (AS215932) for external reachability.
+#
+# Variables to fill:
+#   {{ pub_ip4 }}  — OVH public IPv4 (e.g. 203.0.113.10)
+
+# --- Interfaces ---
+wan     = "vio0"
+mgmt    = "vio1"
+transit = "vio2"
+
+# --- AS215932 addresses ---
+# 2a0c:b641:b50::/44
+#   :0::/64  mgmt      fw ::2
+#   :1::/64  transit    fw ::1, rtr ::2
+#   :2::/64  infra      rtr ::1, dns ::10, api ::20, web ::30
+# 2a0c:b641:b51::/48  customer VMs
+
+fw_mgmt     = "2a0c:b641:b50::2"
+fw_transit  = "2a0c:b641:b50:1::1"
+rtr_transit = "2a0c:b641:b50:1::2"
+dns_infra   = "2a0c:b641:b50:2::10"
+proxy_infra = "2a0c:b641:b50:2::40"
+
+# Internal prefix (everything behind fw)
+asn_prefix  = "2a0c:b641:b50::/44"
+
+# OVH public IPv4 (for external IPv4 clients)
+pub_ip4 = "{{ pub_ip4 }}"
+
+# --- Tables ---
+table <bruteforce> persist
+
+# --- Options ---
+set skip on lo
+set block-policy drop
+set loginterface $wan
+set state-policy if-bound
+
+# --- Normalization ---
+match in all scrub (no-df random-id max-mss 1440)
+
+# --- NAT64 ---
+# No NAT for IPv6 — everything is globally routable.
+# NAT44 only for the OVH IPv4 address (if infra VMs need IPv4 egress).
+# Customer VMs use NAT64/DNS64 on rtr for IPv4-only destinations.
+
+# --- Inbound redirections (IPv4) ---
+# External IPv4 clients hitting the OVH IP get forwarded to proxy/dns
+match in on $wan inet proto tcp to ($wan) port { 80, 443 } \
+    rdr-to $proxy_infra port { 80, 443 }
+
+match in on $wan inet proto { tcp, udp } to ($wan) port 53 \
+    rdr-to $dns_infra port 53
+
+# --- Default policy ---
+block all
+block in quick from <bruteforce>
+
+# --- ICMPv6 (essential for IPv6 — ND, RA, PMTU) ---
+pass inet6 proto icmp6 all
+pass inet  proto icmp all
+
+# --- WAN inbound ---
+# SSH to fw itself (rate-limited, both v4 and v6)
+pass in on $wan proto tcp to ($wan) port 22 \
+    keep state (max-src-conn 15, max-src-conn-rate 5/30, \
+    overload <bruteforce> flush global)
+
+# IPv6 inbound: allow HTTP/HTTPS/DNS directly to infra (globally routable)
+pass in on $wan inet6 proto tcp to $proxy_infra port { 80, 443 }
+pass in on $wan inet6 proto { tcp, udp } to $dns_infra port 53
+
+# IPv4 inbound: redirected traffic (matched above)
+pass in on $wan inet proto tcp to $proxy_infra port { 80, 443 }
+pass in on $wan inet proto { tcp, udp } to $dns_infra port 53
+
+# --- Transit (fw <-> rtr) ---
+pass on $transit inet6
+
+# --- Management ---
+pass on $mgmt inet6
+
+# --- Outbound ---
+pass out on $wan
+pass out on $transit
+pass out on $mgmt
+
+# --- Stateful forwarding for AS215932 prefix ---
+# Allow established/related traffic back in for our prefix
+pass in on $wan inet6 from any to $asn_prefix

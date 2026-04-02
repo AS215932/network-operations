@@ -1,0 +1,39 @@
+# Cloud-init user-data for Debian VMs on XCP-NG
+#
+# Usage: inject via NoCloud datasource (seed directory or ISO)
+#   /var/lib/cloud/seed/nocloud/user-data
+#   /var/lib/cloud/seed/nocloud/meta-data
+#   /var/lib/cloud/seed/nocloud/network-config
+#
+# Variables:
+#   {{ hostname }}       — VM hostname (e.g. dns, api, web, rtr, proxy)
+#   {{ root_password }}  — root password (plaintext, set type: text)
+#   {{ ssh_pubkey }}     — SSH public key for root
+
+#cloud-config
+hostname: {{ hostname }}
+manage_etc_hosts: true
+
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+      - {{ ssh_pubkey }}
+
+ssh_pwauth: false
+disable_root: false
+
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: {{ root_password }}
+      type: text
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/root.conf
+    content: |
+      PermitRootLogin prohibit-password
+
+runcmd:
+  - systemctl restart ssh
