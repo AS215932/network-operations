@@ -86,6 +86,7 @@ Key documentation:
 - [ ] Expand IXP presence
 - [ ] Grow peering relationships
 - [ ] Deploy additional services (Tor/I2PD/Yggdrasil relays, public resolvers, etc.)
+- [ ] x402 one-time service usage (like paying for _one_ tor request)
 - [ ] Automate configuration management
 - [ ] Build comprehensive monitoring stack
 

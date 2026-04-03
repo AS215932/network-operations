@@ -1,0 +1,19 @@
+# /etc/netplan/01-default.yaml — rtr.ovh1 (Debian 13 on XCP-NG)
+network:
+  version: 2
+  ethernets:
+    enX0:
+      # mgmt (xenbr-mgmt) — DHCP4 for dom0 connectivity
+      dhcp4: true
+    enX2:
+      # infra (xenbr-infra) — dns, api, web VMs
+      addresses:
+        - "2a0c:b641:b50:2::1/64"
+    enX3:
+      # vm (xenbr-vm) — customer VMs
+      addresses:
+        - "2a0c:b641:b51::1/48"
+    enX4:
+      # wan (xenbr0) — OVH underlay, WireGuard endpoint
+      addresses:
+        - "2001:41d0:303:48a::2/64"
