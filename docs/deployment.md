@@ -1,6 +1,6 @@
-# Hyrule Infrastructure
+# Hyrule Infrastructure Deployment
 
-Deployment configs and scripts for Hyrule Cloud on OVH dedicated servers with XCP-NG, AS215932.
+Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 
 **Everything internal is IPv6-only** using public AS215932 space. No RFC1918.
 
@@ -9,14 +9,13 @@ Deployment configs and scripts for Hyrule Cloud on OVH dedicated servers with XC
 ```
 2a0c:b641:b50::/44  (full allocation)
 ├── 2a0c:b641:b50::/48   Infrastructure
-│   ├── :0::/64   mgmt     dom0 ::1, fw ::2, xoa ::10
-│   ├── :1::/64   transit   fw ::1, rtr ::2
-│   └── :2::/64   infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40
-├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM via SLAAC)
+│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40
+├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM)
 └── 2a0c:b641:b52-b5f    Future expansion
 ```
 
-OVH provides one public IPv4 per server — used only on the firewall's WAN interface for dual-stack external access. All internal traffic is pure IPv6.
+Mgmt bridge is **link-local only** — not part of the AS215932 address plan.
+OVH provides one public IPv4 per server — used only on dom0's WAN bridge.
 
 ## Architecture
 
@@ -24,63 +23,90 @@ OVH provides one public IPv4 per server — used only on the firewall's WAN inte
 Internet (IPv4 + IPv6)
   │
   ▼
-[OVH Physical NIC] ── xenbr0 (WAN)
+[OVH Physical NIC] ── xenbr0 (WAN, dual-stack)
   │
   ▼
-[fw - OpenBSD/pf] ── stateful filtering, IPv4→proxy redirect
+[dom0 / XCP-NG] ── underlay only, NDP proxy for rtr
   │
-  │ xenbr-transit (2a0c:b641:b50:1::/64)
-  │   fw ::1  ↔  rtr ::2
-  ▼
-[rtr - BIRD 2] ── BGP tunnels to transit, IPv6 routing
-  │              │
-  ▼              ▼
-xenbr-infra    xenbr-vm
-:2::/64        2a0c:b641:b51::/48
-[proxy ::40]   [customer VMs]
-[dns   ::10]
-[api   ::20]
-[web   ::30]
+[rtr - Debian 13 + FRRouting]
+  │  enX0 (mgmt, link-local)   enX4 (wan/underlay)     ← default VRF
+  │  enX2 (infra)  enX3 (vm)  wg0  wg1  lo-overlay     ← overlay VRF
+  │
+  ├── xenbr-infra (:2::/64)
+  │   [dns ::10]    Knot DNS (authoritative)
+  │   [api ::20]    hyrule-cloud + Postgres 17
+  │   [web ::30]    hyrule-web frontend
+  │   [proxy ::40]  Caddy TLS reverse proxy
+  │
+  └── xenbr-vm (2a0c:b641:b51::/48)
+      [customer VMs]
 
-xenbr-mgmt (:0::/64): dom0 ::1, xoa ::10, fw ::2
+xenbr-mgmt (link-local): dom0, rtr enX0, xoa (+ 10.0.0.x for XOA→XAPI)
 ```
+
+### Routers (WireGuard mesh, iBGP + OSPF6)
+
+| Router | Location | OS | Underlay address | Loopback | Router-ID |
+|--------|----------|-----|------------------|----------|-----------|
+| cr1.nl1 | Servperso NL | FreeBSD + FRRouting | 2a0c:b640:8:69::1 | ::a | 1.1.1.1 |
+| cr1.de1 | Servperso DE | FreeBSD + FRRouting | 2a0c:b640:10::213 | ::b | 2.2.2.2 |
+| rtr | OVH FR | Debian 13 + FRRouting | 2001:41d0:303:48a::2 | ::d | 0.0.0.13 |
+
+All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
+
+### WireGuard mesh
+
+| Tunnel | Endpoints | Overlay /127 |
+|--------|-----------|--------------|
+| cr1.nl1 wg0 ↔ cr1.de1 wg0 | :1337 ↔ :1337 | ff00::/127 |
+| cr1.nl1 wg3 ↔ rtr wg0 | :1340 ↔ :1337 | ff02::/127 |
+| cr1.de1 wg1 ↔ rtr wg1 | :1338 ↔ :1338 | ff05::/127 |
+
+WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50:ffXX::/127`.
 
 ## VM Layout (OVH RISE-S: 64GB RAM, 8c/16t)
 
-| VM | Role | vCPU | RAM | Disk | OS | IPv6 |
-|----|------|------|-----|------|----|------|
-| xoa | Xen Orchestra | 2 | 4GB | 20GB | Debian 12 | 2a0c:b641:b50::10 |
-| fw | Firewall (pf) | 2 | 1GB | 10GB | OpenBSD 7.6+ | ::2 / :1::1 |
-| rtr | BGP Router | 2 | 2GB | 10GB | Debian 12 + BIRD 2 | :1::2 / :2::1 |
-| proxy | TLS reverse proxy | 1 | 1GB | 10GB | Debian 12 + Caddy | :2::40 |
-| dns | Authoritative DNS | 1 | 1GB | 10GB | Debian 12 + Knot | :2::10 |
-| api | hyrule-cloud + PG | 2 | 4GB | 40GB | Debian 12 | :2::20 |
-| web | hyrule-web | 1 | 2GB | 20GB | Debian 12 | :2::30 |
+| VM | Role | vCPU | RAM | Disk | OS | Network |
+|----|------|------|-----|------|----|---------|
+| xoa | Xen Orchestra | 2 | 4GB | 20GB | Debian 13 | mgmt (link-local + 10.0.0.10) |
+| rtr | Router + firewall | 2 | 2GB | 10GB | Debian 13 + FRRouting | mgmt + infra + vm + wan |
+| dns | Authoritative DNS | 1 | 1GB | 10GB | Debian 13 + Knot | infra :2::10 |
+| api | hyrule-cloud + Postgres 17 | 2 | 4GB | 40GB | Debian 13 | infra :2::20 |
+| web | hyrule-web | 1 | 2GB | 20GB | Debian 13 | infra :2::30 |
+| proxy | TLS reverse proxy | 1 | 1GB | 10GB | Debian 13 + Caddy | infra :2::40 |
 
 ~15GB for infra, ~45GB available for customer VMs.
 
-## File Layout
+## VM Provisioning (XO CloudConfig)
 
+Infrastructure VMs are provisioned via Xen Orchestra's `vm.create` API with `cloudConfig` and `networkConfig` parameters. XO creates a ConfigDrive ISO that cloud-init reads on first boot.
+
+**Template**: Debian 13 `generic` cloud image with cloud-init pre-installed, imported into XCP-NG as an HVM/UEFI template. The `generic` variant is required — `genericcloud` lacks Xen drivers and `nocloud` doesn't detect XO's ConfigDrive.
+
+```bash
+# Example: create a VM via xo-cli (see scripts/create-vms.sh)
+VM_ID=$(xo-cli vm.create \
+  name_label="dns" \
+  template=<template-uuid> \
+  VIFs='json:[{"network":"<infra-net-uuid>"}]' \
+  CPUs.number=1 \
+  memory=1073741824 \
+  bootAfterCreate=false \
+  destroyCloudConfigVdiAfterBoot=true \
+  cloudConfig="<cloud-config yaml>" \
+  networkConfig="<netplan v2 yaml>")
+
+# Resize template disk before boot (cloud-init grows partition on first boot)
+VDI_ID=$(xo-cli --list-objects type=VBD VM="$VM_ID" is_cd_drive=false | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['VDI'] if d else '')")
+xo-cli vdi.set id="$VDI_ID" size=10737418240
+
+# Set UEFI boot order: disk only (no PXE)
+xo-cli vm.setBootOrder vm="$VM_ID" order=c
+xo-cli vm.start id="$VM_ID"
 ```
-configs/
-  pf.conf.j2                 OpenBSD firewall (IPv6 native + IPv4 WAN redirect)
-  bird.conf.j2               BIRD 2 BGP (AS215932, 2a0c:b641:b50::/44)
-  knot.conf.j2               Knot DNS + TSIG (IPv6-only listener)
-  servify.network.zone.j2    Main DNS zone (dual-stack A+AAAA)
-  deploy.servify.network.zone.j2  Dynamic zone (AAAA only)
-  as215932.net.zone.j2       Forward zone for infra PTR names
-  0.5.b...ip6.arpa.zone.j2  Reverse DNS (PTR) for 2a0c:b641:b50::/48
-  Caddyfile.j2               TLS reverse proxy on proxy VM (IPv6 backends)
-  hyrule-cloud.service       systemd unit for API
-  hyrule-web.service         systemd unit for web frontend
-  hyrule-cloud.env.j2        API environment (IPv6 addresses)
-  hyrule-web.env.j2          Web environment
-scripts/
-  bootstrap-dom0.sh          Create XCP-NG bridges, set dom0 IPv6
-  generate-tsig-key.sh       Generate TSIG key for DNS + API
-  build-template.sh          Prepare IPv6-only customer VM template
-  smoke-test.sh              End-to-end test (IPv6-first)
-```
+
+NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both cloud-init and networkd configs.
 
 ## Deployment Runbook
 
@@ -88,150 +114,105 @@ scripts/
 
 1. Order OVH RISE-S (ECO range, €65/mo)
 2. Install XCP-NG 8.3 via OVH IPMI/KVM (NVMe RAID 1)
-3. SSH into dom0 and run the bootstrap:
+3. SSH into dom0 and run bootstrap:
    ```bash
    scp scripts/bootstrap-dom0.sh root@<ovh-ip>:/tmp/
    ssh root@<ovh-ip> bash /tmp/bootstrap-dom0.sh
    ```
-4. Reboot, save the network UUIDs printed by the script
+   Creates bridges: xenbr-mgmt, xenbr-infra, xenbr-vm
+4. Configure IPv6 forwarding and NDP proxy for rtr (see `configs/dom0/network-setup.sh`)
 
 ### Phase 1: Xen Orchestra
 
-5. Create a Debian 12 VM on `xenbr-mgmt` (2 vCPU, 4GB RAM, 20GB disk)
-6. Assign static IPv6: `2a0c:b641:b50::10/64`
-7. Install XO from sources:
-   ```bash
-   curl -sS https://raw.githubusercontent.com/ronivay/XenOrchestraInstallerUpdater/master/xo-install.sh | bash
-   ```
-8. Access XO at `https://[2a0c:b641:b50::10]` (via SSH tunnel or mgmt network)
-9. Connect XO to dom0 (`2a0c:b641:b50::1`), generate API token
+5. Create Debian 13 VM on xenbr-mgmt (2 vCPU, 4GB, 20GB)
+6. Assign static IPv4: `10.0.0.10/24` (link-local IPv6 auto). No global IPv6 needed.
+7. Install XO from sources
+8. Connect XO to dom0 via `10.0.0.1`, generate API token for hyrule-cloud
 
-### Phase 2: Firewall (OpenBSD)
+### Phase 2: VM Template
 
-10. Create fw VM: 2 vCPU, 1GB RAM, 10GB disk
-    - 3 NICs: xenbr0 (WAN), xenbr-mgmt, xenbr-transit
-11. Configure interfaces:
-    - `vio0` (WAN): OVH public IPv4 + route from AS215932 /44 via OVH
-    - `vio1` (mgmt): `2a0c:b641:b50::2/64`
-    - `vio2` (transit): `2a0c:b641:b50:1::1/64`
-12. Deploy `configs/pf.conf.j2` → `/etc/pf.conf`
-13. Enable forwarding:
-    ```
-    sysctl net.inet6.ip6.forwarding=1
-    sysctl net.inet.ip.forwarding=1   # for IPv4 WAN only
-    ```
+9. Download Debian 13 `generic` cloud image on dom0
+10. Install cloud-init via chroot into the image
+11. Import into XCP-NG as HVM/UEFI template via `xe vdi-import`
+12. See `scripts/build-template.sh` for the full procedure
 
-**OVH networking:** OVH uses /32 IPv4 with point-to-point gateway:
-```
-# /etc/hostname.vio0
-inet <pub-ip> 255.255.255.255
-!route add -host <ovh-gw> -link -iface vio0
-!route add default <ovh-gw>
-```
+### Phase 3: Router (rtr)
 
-### Phase 3: Router
-
-14. Create rtr VM: 2 vCPU, 2GB RAM, 10GB disk
-    - 3 NICs: xenbr-transit, xenbr-infra, xenbr-vm
-15. Configure interfaces:
-    - `eth0` (transit): `2a0c:b641:b50:1::2/64`
-    - `eth1` (infra): `2a0c:b641:b50:2::1/64`
-    - `eth2` (vm): `2a0c:b641:b51::1/48` (acts as gateway for customer /64s)
-16. Default route: `ip -6 route add default via 2a0c:b641:b50:1::1`
-17. Enable forwarding: `sysctl -w net.ipv6.conf.all.forwarding=1`
-18. Install BIRD 2: `apt install bird2`
-19. Deploy `configs/bird.conf.j2` → `/etc/bird/bird.conf`
-20. Isolation (prevent customer VMs from reaching infra/mgmt):
+13. Create rtr VM: 2 vCPU, 2GB RAM, 10GB disk
+    - 4 NICs: mgmt (enX0), infra (enX2), vm (enX3), wan (enX4)
+14. Remove netplan, deploy systemd-networkd configs (`configs/rtr/networkd/`):
+    - enX0 (mgmt): link-local only, default VRF
+    - enX2 (infra): overlay VRF — address `2a0c:b641:b50:2::1/64` via FRR
+    - enX3 (vm): overlay VRF — address `2a0c:b641:b51::1/48` via FRR
+    - enX4 (wan): default VRF — `2001:41d0:303:48a::2/64` (OVH underlay)
+    - WireGuard tunnels (wg0, wg1) and lo-overlay created as .netdev in overlay VRF
+15. Deploy sysctl (`configs/rtr/sysctl.conf`): IPv6 forwarding, disable DAD on enX4
+16. Install FRRouting, deploy `configs/rtr/frr.conf`
+    - Overlay VRF with WireGuard tunnels
+    - All overlay IPv6 addresses assigned by FRR
+    - iBGP mesh with cr1.nl1 and cr1.de1
+    - Announces /44 aggregate + infra /64 + vm /48 into iBGP
+17. Copy WG private key to `/etc/wireguard/private.key` (mode 0640, root:systemd-network)
+18. Customer VM isolation (nftables):
     ```bash
-    ip6tables -I FORWARD -i eth2 -o eth1 -j DROP
-    ip6tables -I FORWARD -i eth2 -d 2a0c:b641:b50:0::/64 -j DROP
+    nft add rule inet filter forward iifname "enX3" oifname "enX2" drop
+    nft add rule inet filter forward iifname "enX3" ip6 daddr 2a0c:b641:b50::/64 drop
     ```
-
-### Phase 3.5: TLS Reverse Proxy
-
-21. Create proxy VM: 1 vCPU, 1GB RAM, 10GB disk (xenbr-infra, `2a0c:b641:b50:2::40`)
-22. Install Caddy with rfc2136 DNS plugin:
-    ```bash
-    apt install golang
-    go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
-    ~/go/bin/xcaddy build --with github.com/caddy-dns/rfc2136
-    mv caddy /usr/local/bin/
-    ```
-23. Deploy `configs/Caddyfile.j2` → `/etc/caddy/Caddyfile`
-24. Enable and start Caddy: `systemctl enable --now caddy`
 
 ### Phase 4: DNS
 
-22. Create dns VM: 1 vCPU, 1GB RAM, 10GB disk (xenbr-infra, `2a0c:b641:b50:2::10`)
-23. Install Knot DNS: `apt install knot`
-24. Generate TSIG key: `./scripts/generate-tsig-key.sh`
+19. Create dns VM via XO CloudConfig: 1 vCPU, 1GB, 10GB, infra network, `::10`
+20. Install Knot DNS: `apt install knot`
+21. Generate TSIG key: `./scripts/generate-tsig-key.sh`
     - Key name **must** be `hyrule-dns` (hardcoded in `hyrule_cloud/providers/dns.py:36`)
-25. Deploy `configs/knot.conf.j2` → `/etc/knot/knot.conf`
-26. Deploy all zone files to `/var/lib/knot/zones/`:
-    - `servify.network.zone` — main forward zone
-    - `deploy.servify.network.zone` — dynamic VM subdomains
-    - `as215932.net.zone` — infrastructure PTR names
-    - `0.5.b.1.4.6.b.c.0.a.2.ip6.arpa.zone` — reverse DNS for 2a0c:b641:b50::/48
-27. Start: `systemctl enable --now knot`
-28. Update Openprovider:
-    - NS records for servify.network → ns1/ns2.servify.network with glue A + AAAA
-    - NS records for as215932.net → ns1/ns2.servify.network
-    - Request RIPE rDNS delegation for 2a0c:b641:b50::/48 → ns1/ns2.servify.network
-29. Test:
-    ```bash
-    dig @<pub-ip> servify.network AAAA
-    dig @<pub-ip> proxy.as215932.net AAAA
-    dig @<pub-ip> -x 2a0c:b641:b50:2::40   # should return proxy.as215932.net
-    ```
+22. Deploy `configs/knot.conf.j2` → `/etc/knot/knot.conf`
+23. Deploy zone files to `/var/lib/knot/zones/`
+24. Update registrar NS records, request RIPE rDNS delegation
 
 ### Phase 5: API Server
 
-30. Create api VM: 2 vCPU, 4GB RAM, 40GB disk (xenbr-infra, `2a0c:b641:b50:2::20`)
-31. Install PostgreSQL 17 (localhost-only):
-    ```bash
-    apt install postgresql-17
-    sudo -u postgres createuser -s hyrule
-    sudo -u postgres createdb -O hyrule hyrule
-    sudo -u postgres psql -c "ALTER USER hyrule PASSWORD '<password>';"
-    ```
-32. Deploy hyrule-cloud to `/opt/hyrule-cloud`:
-    ```bash
-    useradd -r -s /usr/sbin/nologin hyrule
-    python3.12 -m venv .venv && source .venv/bin/activate
-    pip install .
-    ```
-33. Deploy `configs/hyrule-cloud.env.j2` → `/opt/hyrule-cloud/.env`
-34. Run migrations: `.venv/bin/alembic upgrade head`
-35. Deploy `configs/hyrule-cloud.service` → `/etc/systemd/system/`
-36. Start: `systemctl enable --now hyrule-cloud`
+25. Create api VM via XO CloudConfig: 2 vCPU, 4GB, 40GB, infra network, `::20`
+26. Install PostgreSQL 17 (localhost-only, scram-sha-256)
+27. Deploy hyrule-cloud to `/opt/hyrule-cloud`
+28. Configure `.env` (XO token, TSIG key, DB URL)
+29. Run migrations: `alembic upgrade head`
+30. Deploy systemd unit, start service (uvicorn on port 8402)
 
 ### Phase 6: Web Frontend
 
-37. Create web VM: 1 vCPU, 2GB RAM, 20GB disk (xenbr-infra, `2a0c:b641:b50:2::30`)
-38. Deploy hyrule-web to `/opt/hyrule-web`:
-    ```bash
-    useradd -r -s /usr/sbin/nologin hyrule
-    python3.12 -m venv .venv && source .venv/bin/activate
-    pip install .
-    ```
-39. Deploy `configs/hyrule-web.env.j2` → `/opt/hyrule-web/.env`
-40. Deploy `configs/hyrule-web.service` → `/etc/systemd/system/`
-41. Start: `systemctl enable --now hyrule-web`
+31. Create web VM via XO CloudConfig: 1 vCPU, 2GB, 20GB, infra network, `::30`
+32. Deploy hyrule-web to `/opt/hyrule-web`
+33. Configure `HYRULE_WEB_API_BASE_URL=http://[2a0c:b641:b50:2::20]:8402`
+34. Deploy systemd unit, start service (uvicorn on port 8080)
 
-### Phase 7: Customer VM Template
+### Phase 7: TLS Reverse Proxy (proxy)
 
-42. Create minimal Debian 13 VM on xenbr-vm
-43. Run: `scp scripts/build-template.sh root@[2a0c:b641:b51:...] && ssh ... bash build-template.sh`
-44. Shut down, convert to template, add UUID to `XCPNG_TEMPLATES`
+35. Create proxy VM via XO CloudConfig: 1 vCPU, 1GB, 10GB, infra network, `::40`
+36. Install Caddy (built with `xcaddy --with github.com/caddy-dns/rfc2136`)
+37. Deploy Caddyfile:
+    - `servify.network` → `http://[2a0c:b641:b50:2::30]:8080` (web)
+    - `api.servify.network` → `http://[2a0c:b641:b50:2::20]:8402` (api)
+    - DNS-01 ACME via RFC 2136 against Knot DNS (`::10`)
+38. Deploy systemd unit, start service
 
-### Phase 8: BGP Peering
+### Phase 8: Customer VM Template
 
-45. Establish GRE/WireGuard tunnels from rtr to transit provider(s)
-46. Add BGP peer blocks to `bird.conf` (see template comments)
-47. Reload BIRD: `birdc configure`
-48. Verify: `birdc show protocols all`, check looking glass for 2a0c:b641:b50::/44
+39. Create minimal Debian 13 VM on xenbr-vm
+40. Install: cloud-init (ConfigDrive), xe-guest-utilities, openssh-server
+41. Clean: `cloud-init clean --logs --seed`, remove machine-id
+42. Convert to XCP-NG template, add UUID to api `.env` `XCPNG_TEMPLATES`
 
-### Phase 9: Smoke Test
+### Phase 9: BGP Peering
+
+Already live via WireGuard mesh to cr1.nl1 and cr1.de1 (see configs/).
+
+Transit peers:
+- AS34872 (Servperso) on cr1.nl1 and cr1.de1
+- AS210233 on cr1.de1
+
+BGP policy: `TRANSIT-IN` (as-path filter), `TRANSIT-OUT` (prefix-list). iBGP peers use `next-hop-self` only.
+
+### Phase 10: Smoke Test
 
 ```bash
 ./scripts/smoke-test.sh servify.network <dev-bypass-secret>
@@ -240,8 +221,11 @@ inet <pub-ip> 255.255.255.255
 ## Key Notes
 
 - **TSIG key name must be `hyrule-dns`** — hardcoded in `hyrule_cloud/providers/dns.py:36`
-- **Caddy runs on dedicated proxy VM** (::40), not on the router — build with `xcaddy --with github.com/caddy-dns/rfc2136`
-- **OVH uses /32 IPv4** — OpenBSD hostname.if needs host route to gateway
-- **Customer VM isolation** — ip6tables on rtr blocks xenbr-vm → xenbr-infra/mgmt
+- **Caddy runs on proxy VM (`::40`)** — NOT on rtr. Build with `xcaddy --with github.com/caddy-dns/rfc2136`
+- **FRRouting, not BIRD** — all routers use FRR. FreeBSD core routers use `doas`, not `sudo`.
+- **Overlay VRF on rtr** — enX2, enX3, WG, lo-overlay in overlay VRF; enX0 (link-local), enX4 (underlay) in default VRF
+- **dom0 is underlay-only** — no AS215932 addresses on dom0. Mgmt bridge is link-local.
+- **systemd-networkd on rtr** — replaces netplan. VRF assignment at boot, addresses via FRR.
+- **Customer VM isolation** — nftables on rtr drops forwarding from xenbr-vm to xenbr-infra/mgmt
+- **Static IPs only** — no DHCP for infrastructure VMs
 - **Dev bypass** — set `PAYMENT_DEV_BYPASS_SECRET` for testing, clear for production
-- **DNS zones** — servify.network has dual-stack A+AAAA; deploy.servify.network is AAAA-only

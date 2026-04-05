@@ -1,0 +1,13 @@
+# /etc/systemd/network/20-wg1.network — WG1 in overlay VRF
+# Address assigned by FRR (frr.conf)
+# Static link-local required — WG has no MAC for auto-generation, OSPF6 needs it
+[Match]
+Name=wg1
+
+[Network]
+VRF=overlay
+LinkLocalAddressing=no
+IPv6AcceptRA=false
+
+[Address]
+Address=fe80::d:1/64

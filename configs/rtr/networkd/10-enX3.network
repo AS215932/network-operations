@@ -1,0 +1,9 @@
+# /etc/systemd/network/10-enX3.network — vm (overlay VRF)
+# Address assigned by FRR (frr.conf)
+[Match]
+Name=enX3
+
+[Network]
+VRF=overlay
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=false

@@ -1,0 +1,7 @@
+# /etc/systemd/network/05-overlay.netdev — overlay VRF (table 200)
+[NetDev]
+Name=overlay
+Kind=vrf
+
+[VRF]
+Table=200

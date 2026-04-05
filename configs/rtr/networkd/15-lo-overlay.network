@@ -1,0 +1,9 @@
+# /etc/systemd/network/15-lo-overlay.network — loopback in overlay VRF
+# Address assigned by FRR (frr.conf)
+[Match]
+Name=lo-overlay
+
+[Network]
+VRF=overlay
+LinkLocalAddressing=no
+IPv6AcceptRA=false

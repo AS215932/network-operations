@@ -1,0 +1,8 @@
+# /etc/systemd/network/10-enX0.network — mgmt (default VRF, link-local only)
+# Management SSH from dom0 via link-local. No global address.
+[Match]
+Name=enX0
+
+[Network]
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=false

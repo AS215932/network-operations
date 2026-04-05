@@ -1,0 +1,5 @@
+# /etc/systemd/network/05-overlay.network — bring up VRF master device
+[Match]
+Name=overlay
+
+[Network]

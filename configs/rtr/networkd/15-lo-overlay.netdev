@@ -1,0 +1,4 @@
+# /etc/systemd/network/15-lo-overlay.netdev — dummy loopback for BGP router-id
+[NetDev]
+Name=lo-overlay
+Kind=dummy

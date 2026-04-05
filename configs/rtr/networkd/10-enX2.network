@@ -1,0 +1,9 @@
+# /etc/systemd/network/10-enX2.network — infra (overlay VRF)
+# Address assigned by FRR (frr.conf)
+[Match]
+Name=enX2
+
+[Network]
+VRF=overlay
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=false

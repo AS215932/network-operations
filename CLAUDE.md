@@ -42,25 +42,33 @@ WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links f
 
 | VM | Role | OS | NICs |
 |----|------|----|------|
-| rtr | Router + firewall + TLS proxy | Debian 13 | enX0(mgmt), enX2(infra), enX3(vm), enX4(wan) |
-| dns | Authoritative DNS | Debian 12 | infra |
-| api | hyrule-cloud + Postgres | Debian 12 | infra |
-| web | hyrule-web | Debian 12 | infra |
-| xoa | Xen Orchestra | Debian 12 | mgmt |
+| rtr | Router + firewall | Debian 13 | enX0(mgmt), enX2(infra), enX3(vm), enX4(wan) |
+| dns | Authoritative DNS | Debian 13 | infra |
+| api | hyrule-cloud + Postgres | Debian 13 | infra |
+| web | hyrule-web | Debian 13 | infra |
+| proxy | TLS reverse proxy (Caddy) | Debian 13 | infra |
+| xoa | Xen Orchestra | Debian 13 | mgmt |
 
-rtr uses an overlay VRF (table 200) — WG interfaces and lo-overlay live in the VRF; physical NICs stay in default VRF. dom0 acts as NDP proxy for rtr's OVH IPv6 underlay address.
+dom0 is **underlay-only** — no AS215932 addresses. It acts as NDP proxy for rtr's OVH underlay address. mgmt bridge uses link-local IPv6 + `10.0.0.1/24` (for XOA→XAPI).
+
+rtr uses an overlay VRF (table 200) via systemd-networkd (not netplan). Interface assignment:
+- **Default VRF**: enX0 (mgmt, link-local only), enX4 (wan/underlay)
+- **Overlay VRF**: enX2 (infra), enX3 (vm), wg0, wg1, lo-overlay
+
+Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to rtr: dom0 → `2001:41d0:303:48a::2` (underlay, same L2 on xenbr0).
 
 ## Addressing
 
 ```
-2a0c:b641:b50:0::/64   mgmt      dom0 ::1, xoa ::10
-2a0c:b641:b50:2::/64   infra     rtr ::1, dns ::10, api ::20, web ::30
-2a0c:b641:b51::/48     customer VMs (one /64 each)
+mgmt bridge           link-local only (dom0, rtr enX0, xoa)
+2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40
+2a0c:b641:b51::/48    customer VMs (one /64 each)
 ```
 
 ## Repository layout
 
 - `configs/<router>/` — Live FRR and WireGuard configs per router (`rtr/`, `cr1-de1/`, `cr1-nl1/`, `dom0/`).
+- `configs/rtr/networkd/` — systemd-networkd `.netdev` and `.network` files for rtr (replaces netplan + overlay-vrf.service).
 - `configs/` — Jinja2 templates for services not yet deployed (Knot DNS, Caddy, systemd units, DNS zones, env files).
 - `autoinstall/` — OS autoinstall response files (OpenBSD, Debian cloud-init) and QMP tools for headless VM interaction.
 - `scripts/` — Shell scripts for dom0 bootstrap, TSIG key generation, VM template prep, and smoke tests.
@@ -84,7 +92,7 @@ rtr uses an overlay VRF (table 200) — WG interfaces and lo-overlay live in the
 ## Critical details
 
 - **TSIG key name must be `hyrule-dns`** — hardcoded in `hyrule-cloud` API at `hyrule_cloud/providers/dns.py:36`.
-- **Caddy** will run on rtr, built with `xcaddy --with github.com/caddy-dns/rfc2136` for DNS-01 ACME challenges against Knot.
+- **Caddy** runs on a dedicated proxy VM (`::40`), NOT on rtr. Built with `xcaddy --with github.com/caddy-dns/rfc2136` for DNS-01 ACME challenges against Knot. Terminates TLS and reverse-proxies to web (`:8080`) and api (`:8402`).
 - **Customer VM isolation**: nftables on rtr drops forwarding from xenbr-vm to xenbr-infra/xenbr-mgmt.
 
 ## Related repositories
