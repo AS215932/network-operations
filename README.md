@@ -35,7 +35,7 @@ AS215932 is a solo project to build and operate a full-stack ISP with modern BGP
 ### Routing & Network
 
 - **Core Routers**: FreeBSD + FRRouting
-- **Gateways/Edge Routers**: OPNsense
+- **Edge Router**: Debian 13 + FRRouting (rtr at OVH)
 - **Overlay Network**: Wireguard tunnels
 - **Protocols**: BGP, OSPFv3
 - **Virtualization**: XCP-NG w/ Xen Orchestra

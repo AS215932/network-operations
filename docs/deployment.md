@@ -15,7 +15,7 @@ Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 ```
 
 Mgmt bridge is **link-local only** — not part of the AS215932 address plan.
-OVH provides one public IPv4 per server — used only on dom0's WAN bridge.
+OVH provides two IPv4 addresses: dom0's primary (`193.70.32.138`) and a failover IP on rtr for NAT64.
 
 ## Architecture
 
@@ -159,6 +159,40 @@ NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both c
     nft add rule inet filter forward iifname "enX3" ip6 daddr 2a0c:b641:b50::/64 drop
     ```
 
+### Phase 3b: NAT64/DNS64 on rtr
+
+The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for overlay clients (VMs, Unbound itself) to reach IPv4-only services on the internet.
+
+**Prerequisites**: Order an OVH failover IPv4. Assign a virtual MAC in OVH panel and set it on rtr's enX4 VIF in XO.
+
+19. Add failover IPv4 to rtr's enX4 (`configs/rtr/networkd/10-enX4.network`):
+    ```ini
+    [Address]
+    Address=<failover-ipv4>/32
+    [Route]
+    Destination=0.0.0.0/0
+    Gateway=193.70.32.254
+    ```
+20. Enable IPv4 forwarding: add `net.ipv4.conf.all.forwarding=1` to sysctl
+21. Install Jool: `apt install jool-dkms jool-tools`
+22. Deploy `configs/rtr/jool/nat64.conf` and `jool-nat64.service`:
+    - pool6: `64:ff9b::/96`
+    - pool4: `<failover-ipv4>` (TCP/UDP 1024-65535, ICMP 0-65535)
+23. Add VRF route leak rules (persist via systemd unit):
+    ```bash
+    # Forward: overlay clients → Jool in default VRF
+    ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+    # Return: Jool response → overlay VRF
+    ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+    ```
+24. Enable DNS64 + DNSSEC in Unbound:
+    ```
+    module-config: "dns64 validator iterator"
+    dns64:
+        prefix: 64:ff9b::/96
+    ```
+25. Verify: `dig AAAA files.pythonhosted.org` from a VM should return `64:ff9b::...`
+
 ### Phase 4: DNS
 
 19. Create dns VM via XO CloudConfig: 1 vCPU, 1GB, 10GB, infra network, `::10`
@@ -228,4 +262,5 @@ BGP policy: `TRANSIT-IN` (as-path filter), `TRANSIT-OUT` (prefix-list). iBGP pee
 - **systemd-networkd on rtr** — replaces netplan. VRF assignment at boot, addresses via FRR.
 - **Customer VM isolation** — nftables on rtr drops forwarding from xenbr-vm to xenbr-infra/mgmt
 - **Static IPs only** — no DHCP for infrastructure VMs
+- **NAT64/DNS64** — Jool (`64:ff9b::/96`) on rtr in default VRF, with policy routing rules leaking traffic between overlay VRF (table 200) and default VRF. DNS64 in Unbound synthesizes AAAA for IPv4-only domains. Failover IPv4 on enX4 (OVH virtual MAC) — not dom0's IP.
 - **Dev bypass** — set `PAYMENT_DEV_BYPASS_SECRET` for testing, clear for production

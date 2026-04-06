@@ -89,6 +89,41 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa)
 - **AS-path filter** (as-path access-list 1): denies own ASN (loop prevention), private 16-bit ASNs (64512-65535), private 32-bit ASNs (4200000000-4294967295), and paths longer than 200 chars.
 - iBGP peers have no transit filters — only `next-hop-self` and `soft-reconfiguration inbound`.
 
+## NAT64/DNS64
+
+The overlay network is IPv6-only, but some external services (authoritative DNS servers, package repos) are IPv4-only. NAT64 + DNS64 on rtr provides IPv4 reachability for all overlay clients.
+
+### Components
+
+- **DNS64** (Unbound on rtr): When a domain has only A records (no AAAA), Unbound synthesizes a AAAA by embedding the IPv4 address in `64:ff9b::/96`. Example: `93.184.216.34` → `64:ff9b::5db8:d822`.
+- **NAT64** (Jool on rtr): Kernel module that translates IPv6 packets destined to `64:ff9b::/96` into IPv4 packets, using an OVH failover IP as the source address (pool4).
+
+### VRF route leaking
+
+Jool does not support VRF — it runs in the default VRF only. Overlay VRF clients reach Jool via policy routing rules that leak the NAT64 prefix between VRFs:
+
+```
+# Forward: overlay → default VRF (so Jool sees the packet)
+ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+
+# Return: default → overlay VRF (so the translated reply reaches the VM)
+ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+```
+
+The forward rule says: if source is AS215932 and destination is the NAT64 prefix, use the main (default VRF) routing table instead of overlay table 200. Jool's netfilter hook intercepts the packet, translates to IPv4, and sends it out enX4.
+
+The return rule says: when Jool translates the IPv4 reply back to IPv6 (src=`64:ff9b::...`, dst=AS215932 address), use overlay table 200 to route the response back to the client VM.
+
+### IPv4 addressing
+
+rtr's enX4 (on xenbr0) carries both the OVH underlay IPv6 and a failover IPv4 for NAT64. The failover IP uses an OVH virtual MAC assigned to rtr's VIF — dom0's IPv4 (`193.70.32.138`) is not used for NAT64 traffic.
+
+### Key files
+
+- `configs/rtr/jool/nat64.conf` — Jool instance config (pool6 + pool4)
+- `configs/rtr/jool/jool-nat64.service` — systemd unit to load Jool on boot
+- Unbound config on rtr — `module-config: "dns64 validator iterator"` + `dns64: prefix: 64:ff9b::/96`
+
 ## Critical details
 
 - **TSIG key name must be `hyrule-dns`** — hardcoded in `hyrule-cloud` API at `hyrule_cloud/providers/dns.py:36`.

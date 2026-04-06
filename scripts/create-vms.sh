@@ -90,5 +90,6 @@ ethernets:
 create_vm dns "Authoritative DNS (Knot)" 1 1073741824 10737418240 "2a0c:b641:b50:2::10"
 create_vm api "hyrule-cloud API + Postgres" 2 4294967296 42949672960 "2a0c:b641:b50:2::20"
 create_vm web "hyrule-web frontend" 1 2147483648 21474836480 "2a0c:b641:b50:2::30"
+create_vm proxy "TLS reverse proxy (Caddy)" 1 1073741824 10737418240 "2a0c:b641:b50:2::40"
 
 echo "All VMs created."
