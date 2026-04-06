@@ -2,37 +2,39 @@
 ; Deploy to: dns VM (2a0c:b641:b50:2::10)
 ;
 ; Variables:
-;   {{ pub_ip4 }}  — OVH public IPv4 (for dual-stack external access)
+;   {{ pub_ip4 }}  — rtr failover IPv4 (for dual-stack external access via DNAT)
 
 $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040101 ; serial (YYYYMMDDNN)
+                  2026040601 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
                   300 )      ; negative TTL (5m)
 
-; Nameservers
+; Nameservers — ns1 is ours, Openprovider is secondary (AXFR)
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns2.servify.network.
+@       IN  NS    ns1.openprovider.nl.
+@       IN  NS    ns2.openprovider.be.
+@       IN  NS    ns3.openprovider.eu.
 
-; NS glue records — dual-stack for maximum reachability
+; NS glue — IPv4 via rtr DNAT, IPv6 direct to Knot
 ns1     IN  A     {{ pub_ip4 }}
 ns1     IN  AAAA  2a0c:b641:b50:2::10
-ns2     IN  A     {{ pub_ip4 }}
-ns2     IN  AAAA  2a0c:b641:b50:2::10
 
-; Web frontend — dual-stack (IPv4 via fw redirect, IPv6 direct to proxy)
+; Web frontend — IPv4 via rtr DNAT to proxy, IPv6 direct to proxy
 @       IN  A     {{ pub_ip4 }}
 @       IN  AAAA  2a0c:b641:b50:2::40
 
-; API — dual-stack
+; API — same pattern
 api     IN  A     {{ pub_ip4 }}
 api     IN  AAAA  2a0c:b641:b50:2::40
 
 ; Delegate deploy.servify.network to our own nameservers
 ; Dynamic AAAA records managed via RFC 2136 from the API
 deploy  IN  NS    ns1.servify.network.
-deploy  IN  NS    ns2.servify.network.
+deploy  IN  NS    ns1.openprovider.nl.
+deploy  IN  NS    ns2.openprovider.be.
+deploy  IN  NS    ns3.openprovider.eu.

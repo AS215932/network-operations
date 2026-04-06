@@ -13,29 +13,16 @@ $ORIGIN 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040101 ; serial
+                  2026040601 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
                   300 )      ; negative TTL
 
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns2.servify.network.
-
-; --- :0::1 — dom0 ---
-1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  dom0.as215932.net.
-
-; --- :0::2 — fw (mgmt) ---
-2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  fw.as215932.net.
-
-; --- :0::10 — xoa ---
-0.1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  xoa.as215932.net.
-
-; --- :1::1 — fw (transit) ---
-1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.0  IN  PTR  fw-transit.as215932.net.
-
-; --- :1::2 — rtr (transit) ---
-2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1.0.0.0  IN  PTR  rtr-transit.as215932.net.
+@       IN  NS    ns1.openprovider.nl.
+@       IN  NS    ns2.openprovider.be.
+@       IN  NS    ns3.openprovider.eu.
 
 ; --- :2::1 — rtr (infra gateway) ---
 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  rtr.as215932.net.

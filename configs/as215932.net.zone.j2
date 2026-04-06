@@ -8,23 +8,16 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040101 ; serial (YYYYMMDDNN)
+                  2026040601 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
                   300 )      ; negative TTL (5m)
 
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns2.servify.network.
-
-; --- Management network (2a0c:b641:b50:0::/64) ---
-dom0    IN  AAAA  2a0c:b641:b50::1
-fw      IN  AAAA  2a0c:b641:b50::2
-xoa     IN  AAAA  2a0c:b641:b50::10
-
-; --- Transit network (2a0c:b641:b50:1::/64) ---
-fw-transit   IN  AAAA  2a0c:b641:b50:1::1
-rtr-transit  IN  AAAA  2a0c:b641:b50:1::2
+@       IN  NS    ns1.openprovider.nl.
+@       IN  NS    ns2.openprovider.be.
+@       IN  NS    ns3.openprovider.eu.
 
 ; --- Infrastructure network (2a0c:b641:b50:2::/64) ---
 rtr     IN  AAAA  2a0c:b641:b50:2::1
