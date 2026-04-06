@@ -1,0 +1,20 @@
+# /etc/systemd/system/nat64-vrf-leak.service
+# Route NAT64 prefix from overlay VRF to default VRF (where Jool + enX4 live).
+# Return rule sends translated replies back to overlay VRF.
+[Unit]
+Description=NAT64 VRF route leak rules
+After=systemd-networkd.service
+Before=jool.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Route NAT64 prefix in overlay VRF table → enX4 (default VRF)
+ExecStart=/usr/sbin/ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
+# Return path: Jool reply (src 64:ff9b::) → overlay VRF for delivery to client
+ExecStart=/usr/sbin/ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 101
+ExecStop=/usr/sbin/ip -6 route del 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
+ExecStop=/usr/sbin/ip -6 rule del from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 101
+
+[Install]
+WantedBy=multi-user.target

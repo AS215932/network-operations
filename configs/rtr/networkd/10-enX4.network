@@ -1,6 +1,7 @@
 # /etc/systemd/network/10-enX4.network — wan/underlay (default VRF)
 # OVH underlay — WireGuard endpoints reach peers via this.
 # accept_dad=0 via sysctl (dom0 NDP proxy causes DAD failure).
+# Failover IPv4 (46.105.40.223) for NAT64 + incoming DNAT.
 [Match]
 Name=enX4
 
@@ -11,6 +12,17 @@ IPv6AcceptRA=false
 [Address]
 Address=2001:41d0:303:48a::2/64
 
+[Address]
+Address=46.105.40.223/32
+
 [Route]
 Destination=::/0
 Gateway=2001:41d0:303:48a::1
+
+[Route]
+Destination=193.70.32.254/32
+Scope=link
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=193.70.32.254
