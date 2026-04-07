@@ -5,7 +5,7 @@
 #   {{ tsig_secret }}  — Base64 TSIG key (generate with scripts/generate-tsig-key.sh)
 
 server:
-  listen: [ ::@53 ]
+  listen: [ ::@53, 0.0.0.0@53 ]
   rundir: "/run/knot"
   user: knot:knot
 

@@ -1,0 +1,22 @@
+# /etc/systemd/network/10-enX0.network — dns VM (infra bridge)
+# RFC1918 IPv4 for inbound DNAT from rtr (failover IP → Knot).
+[Match]
+Name=enX0
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+
+[Address]
+Address=2a0c:b641:b50:2::10/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1
+
+[Address]
+Address=10.0.2.10/24
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=10.0.2.1

@@ -1,5 +1,5 @@
 # /etc/systemd/network/10-enX2.network — infra (overlay VRF)
-# Address assigned by FRR (frr.conf)
+# RFC1918 IPv4 for DNAT targets (dns, proxy) — avoids NAT46 complexity.
 [Match]
 Name=enX2
 
@@ -7,3 +7,10 @@ Name=enX2
 VRF=overlay
 LinkLocalAddressing=ipv6
 IPv6AcceptRA=false
+KeepConfiguration=static
+
+[Address]
+Address=2a0c:b641:b50:2::1/64
+
+[Address]
+Address=10.0.2.1/24
