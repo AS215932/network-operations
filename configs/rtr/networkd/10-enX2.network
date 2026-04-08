@@ -14,3 +14,8 @@ Address=2a0c:b641:b50:2::1/64
 
 [Address]
 Address=10.0.2.1/24
+
+[RoutingPolicyRule]
+From=10.0.2.0/24
+Table=main
+Priority=999
