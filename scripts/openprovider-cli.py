@@ -424,6 +424,34 @@ def cmd_nsgroup_create(client, args):
         out(args, data)
 
 
+def cmd_nsgroup_update(client, args):
+    ns_list = []
+    for i, ns_str in enumerate(args.nameservers):
+        parts = ns_str.split(",")
+        ns = {"name": parts[0], "seq_nr": i + 1}
+        if len(parts) > 1 and parts[1]:
+            ns["ip"] = parts[1]
+        if len(parts) > 2 and parts[2]:
+            ns["ip6"] = parts[2]
+        ns_list.append(ns)
+
+    print(f"Updating NS group: {args.group}")
+    for ns in ns_list:
+        glue = ""
+        if ns.get("ip") or ns.get("ip6"):
+            glue = f"  (glue: {ns.get('ip', '')} {ns.get('ip6', '')})"
+        print(f"  {ns['seq_nr']}. {ns['name']}{glue}")
+
+    if not args.yes:
+        confirm(f"Update NS group {args.group}?")
+
+    body = {"ns_group": args.group, "name_servers": ns_list}
+    data = client.put(f"/dns/nameservers/groups/{args.group}", body=body)
+    print(f"NS group updated: {args.group}")
+    if args.json:
+        out(args, data)
+
+
 def cmd_nsgroup_delete(client, args):
     if not args.yes:
         confirm(f"Delete NS group {args.group}?")
@@ -541,6 +569,12 @@ def build_parser():
     nsg_create.add_argument("nameservers", nargs="+",
                             help="Nameservers: name[,ip][,ip6]")
     nsg_create.set_defaults(func=cmd_nsgroup_create)
+
+    nsg_update = nsg_subs.add_parser("update", help="Update NS group members")
+    nsg_update.add_argument("group", help="Group name")
+    nsg_update.add_argument("nameservers", nargs="+",
+                            help="Nameservers: name[,ip][,ip6]")
+    nsg_update.set_defaults(func=cmd_nsgroup_update)
 
     nsg_del = nsg_subs.add_parser("delete", help="Delete NS group")
     nsg_del.add_argument("group", help="Group name")

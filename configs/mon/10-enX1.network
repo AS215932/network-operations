@@ -1,0 +1,12 @@
+# /etc/systemd/network/10-enX1.network — mon VM (mgmt bridge)
+# Allows Prometheus to scrape dom0 node_exporter and XOA (underlay-only hosts).
+# No default route — only used to reach 10.0.0.0/24 (dom0, xoa).
+[Match]
+Name=enX1
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+
+[Address]
+Address=10.0.0.50/24

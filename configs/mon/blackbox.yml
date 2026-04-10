@@ -1,0 +1,36 @@
+# /etc/prometheus/blackbox.yml — mon VM
+# Blackbox exporter probe modules for Prometheus.
+
+modules:
+  icmp6:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+
+  dns_servify:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+      query_name: servify.network
+      query_type: AAAA
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - ".*2a0c:b641:b50:2::40.*"
+
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      tls_config:
+        insecure_skip_verify: false

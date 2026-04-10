@@ -8,7 +8,7 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040601 ; serial (YYYYMMDDNN)
+                  2026040901 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -25,3 +25,4 @@ dns     IN  AAAA  2a0c:b641:b50:2::10
 api     IN  AAAA  2a0c:b641:b50:2::20
 web     IN  AAAA  2a0c:b641:b50:2::30
 proxy   IN  AAAA  2a0c:b641:b50:2::40
+mon     IN  AAAA  2a0c:b641:b50:2::50

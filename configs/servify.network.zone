@@ -5,7 +5,7 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040801 ; serial (YYYYMMDDNN)
+                  2026040901 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -34,3 +34,9 @@ dns     IN  AAAA  2a0c:b641:b50:2::10
 rtr     IN  AAAA  2a0c:b641:b50:2::1
 web     IN  AAAA  2a0c:b641:b50:2::30
 proxy   IN  AAAA  2a0c:b641:b50:2::40
+
+; Monitoring — via Caddy reverse proxy on proxy VM
+grafana IN  A     46.105.40.223
+grafana IN  AAAA  2a0c:b641:b50:2::40
+mon     IN  A     46.105.40.223
+mon     IN  AAAA  2a0c:b641:b50:2::40

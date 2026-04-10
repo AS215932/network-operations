@@ -61,6 +61,13 @@ check "Homepage contains Hyrule" curl -6 -sf "https://$DOMAIN/" | grep -qi "hyru
 check "API proxy works (/api/v1/pricing)" curl -6 -sf "https://$DOMAIN/api/v1/pricing" | python3 -m json.tool
 check "Static assets load (htmx)" curl -6 -sf "https://$DOMAIN/static/htmx.min.js" -o /dev/null
 
+# --- Monitoring ---
+echo ""
+echo "--- Monitoring ---"
+check "grafana.servify.network returns 200 (IPv6)" curl -6 -sf "https://grafana.$DOMAIN/api/health" -o /dev/null
+check "mon.servify.network returns 200 (IPv6)" curl -6 -sf "https://mon.$DOMAIN/" -o /dev/null
+check "Prometheus targets reachable" curl -6 -sf "http://[2a0c:b641:b50:2::50]:9090/api/v1/targets" -o /dev/null
+
 # --- VM Provisioning (requires dev bypass) ---
 if [ -n "$DEV_BYPASS" ]; then
     echo ""

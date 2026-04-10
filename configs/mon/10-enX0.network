@@ -1,0 +1,16 @@
+# /etc/systemd/network/10-enX0.network — mon VM (infra bridge)
+# IPv6-only — no DNAT needed (web UIs served via Caddy on proxy VM).
+[Match]
+Name=enX0
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:2::50/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1

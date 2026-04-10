@@ -1,0 +1,139 @@
+# /etc/prometheus/prometheus.yml — mon VM (2a0c:b641:b50:2::50)
+# All scrape targets use AS215932 IPv6 overlay addresses, except dom0 (mgmt IPv4).
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # --- node_exporter (port 9100) ---
+  # System metrics from all Debian VMs and routers.
+
+  - job_name: node-infra
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::10]:9100"   # dns
+          - "[2a0c:b641:b50:2::20]:9100"   # api
+          - "[2a0c:b641:b50:2::30]:9100"   # web
+          - "[2a0c:b641:b50:2::40]:9100"   # proxy
+          - "[2a0c:b641:b50:2::50]:9100"   # mon (self)
+        labels:
+          site: ovh1
+          role: infra
+
+  - job_name: node-routers
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::1]:9100"    # rtr (via infra address)
+        labels:
+          site: ovh1
+          role: router
+      - targets:
+          - "[2a0c:b641:b50::a]:9100"      # cr1.nl1
+        labels:
+          site: nl1
+          role: router
+      - targets:
+          - "[2a0c:b641:b50::b]:9100"      # cr1.de1
+        labels:
+          site: de1
+          role: router
+
+  - job_name: node-hypervisor
+    static_configs:
+      - targets:
+          - "10.0.0.1:9100"                # dom0 (via mgmt bridge)
+        labels:
+          site: ovh1
+          role: hypervisor
+
+  # --- frr_exporter (port 9342) ---
+  # BGP session state, route counts, OSPF neighbours.
+
+  - job_name: frr
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::1]:9342"    # rtr (via infra address)
+        labels:
+          site: ovh1
+      - targets:
+          - "[2a0c:b641:b50::a]:9342"      # cr1.nl1
+        labels:
+          site: nl1
+      - targets:
+          - "[2a0c:b641:b50::b]:9342"      # cr1.de1
+        labels:
+          site: de1
+
+  # --- postgres_exporter (port 9187) ---
+
+  - job_name: postgres
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::20]:9187"   # api VM
+        labels:
+          db: hyrule
+
+  # --- blackbox_exporter (port 9115, local) ---
+  # Probes run from the mon VM itself.
+
+  - job_name: blackbox-icmp
+    metrics_path: /probe
+    params:
+      module: [icmp6]
+    static_configs:
+      - targets:
+          # Routers
+          - "2a0c:b641:b50::d"             # rtr loopback
+          - "2a0c:b641:b50::a"             # cr1.nl1
+          - "2a0c:b641:b50::b"             # cr1.de1
+          # Infra VMs
+          - "2a0c:b641:b50:2::10"          # dns
+          - "2a0c:b641:b50:2::20"          # api
+          - "2a0c:b641:b50:2::30"          # web
+          - "2a0c:b641:b50:2::40"          # proxy
+          # WireGuard link endpoints (far side)
+          - "2a0c:b641:b50:ff02::"         # cr1.nl1 side of rtr-nl1 tunnel
+          - "2a0c:b641:b50:ff05::"         # cr1.de1 side of rtr-de1 tunnel
+          - "2a0c:b641:b50:ff00::"         # cr1.nl1 side of nl1-de1 tunnel
+          - "2a0c:b641:b50:ff00::1"        # cr1.de1 side of nl1-de1 tunnel
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
+  - job_name: blackbox-dns
+    metrics_path: /probe
+    params:
+      module: [dns_servify]
+    static_configs:
+      - targets:
+          - "2a0c:b641:b50:2::10"          # Knot DNS
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - "https://servify.network/"
+          - "https://api.servify.network/health"
+          - "https://grafana.servify.network/api/health"
+          - "https://mon.servify.network/"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"

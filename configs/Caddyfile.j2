@@ -59,6 +59,52 @@ servify.network {
     }
 }
 
+# Grafana — grafana.servify.network
+grafana.servify.network {
+    tls {
+        dns rfc2136 {
+            server 2a0c:b641:b50:2::10
+            key_name hyrule-dns
+            key_alg hmac-sha256.
+            key {{ tsig_secret }}
+        }
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::50]:3000
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/grafana.log
+    }
+}
+
+# Icinga Web — mon.servify.network
+mon.servify.network {
+    tls {
+        dns rfc2136 {
+            server 2a0c:b641:b50:2::10
+            key_name hyrule-dns
+            key_alg hmac-sha256.
+            key {{ tsig_secret }}
+        }
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::50]:80
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/mon.log
+    }
+}
+
 # Wildcard for customer VM subdomains (future — HTTPS proxy to VMs)
 # *.deploy.servify.network {
 #     tls {
