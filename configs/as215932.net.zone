@@ -8,7 +8,7 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026041401 ; serial (YYYYMMDDNN)
+                  2026041402 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -18,6 +18,10 @@ $TTL 3600
 @       IN  NS    ns1.openprovider.nl.
 @       IN  NS    ns2.openprovider.be.
 @       IN  NS    ns3.openprovider.eu.
+
+; --- Public ASN info site (served by Caddy on proxy VM) ---
+@       IN  AAAA  2a0c:b641:b50:2::40
+www     IN  AAAA  2a0c:b641:b50:2::40
 
 ; --- Infrastructure network (2a0c:b641:b50:2::/64) ---
 rtr     IN  AAAA  2a0c:b641:b50:2::1

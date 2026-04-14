@@ -17,11 +17,12 @@
 api.servify.network {
     tls {
         dns rfc2136 {
-            server 2a0c:b641:b50:2::10
-            key_name hyrule-dns
-            key_alg hmac-sha256.
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
             key {{ tsig_secret }}
         }
+        propagation_delay 60s
     }
 
     reverse_proxy [2a0c:b641:b50:2::20]:8402
@@ -40,11 +41,12 @@ api.servify.network {
 servify.network {
     tls {
         dns rfc2136 {
-            server 2a0c:b641:b50:2::10
-            key_name hyrule-dns
-            key_alg hmac-sha256.
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
             key {{ tsig_secret }}
         }
+        propagation_delay 60s
     }
 
     reverse_proxy [2a0c:b641:b50:2::30]:8080
@@ -63,11 +65,12 @@ servify.network {
 grafana.servify.network {
     tls {
         dns rfc2136 {
-            server 2a0c:b641:b50:2::10
-            key_name hyrule-dns
-            key_alg hmac-sha256.
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
             key {{ tsig_secret }}
         }
+        propagation_delay 60s
     }
 
     reverse_proxy [2a0c:b641:b50:2::50]:3000
@@ -86,11 +89,12 @@ grafana.servify.network {
 mon.servify.network {
     tls {
         dns rfc2136 {
-            server 2a0c:b641:b50:2::10
-            key_name hyrule-dns
-            key_alg hmac-sha256.
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
             key {{ tsig_secret }}
         }
+        propagation_delay 60s
     }
 
     reverse_proxy [2a0c:b641:b50:2::50]:80
@@ -102,6 +106,41 @@ mon.servify.network {
 
     log {
         output file /var/log/caddy/mon.log
+    }
+}
+
+# AS215932 info site — apex + www share one site block so the TLS config,
+# reverse proxy, headers, and redirect logic aren't duplicated. Caddy still
+# issues one cert per subject (Caddyfile site blocks don't produce SAN certs);
+# propagation_delay above masks Openprovider's slow secondary AXFR.
+# Static HTML served by nginx on the web VM (port 8081).
+as215932.net, www.as215932.net {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key {{ tsig_secret }}
+        }
+        propagation_delay 60s
+    }
+
+    @www host www.as215932.net
+    redir @www https://as215932.net{uri} permanent
+
+    reverse_proxy [2a0c:b641:b50:2::30]:8081
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # No JS anywhere on the site; lock it down so Tor Safest mode is happy.
+        Content-Security-Policy "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        Referrer-Policy "no-referrer"
+        X-Content-Type-Options "nosniff"
+    }
+
+    log {
+        output file /var/log/caddy/as215932.log
     }
 }
 
