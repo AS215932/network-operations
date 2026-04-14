@@ -1,0 +1,75 @@
+#!/bin/bash
+# check_prom_query — Nagios/Icinga plugin: query Prometheus and compare result to thresholds.
+# Deploy path: /usr/lib/nagios/plugins/check_prom_query (chmod +x)
+#
+# Usage: check_prom_query -u URL -q QUERY -w WARN -c CRIT -o OP [-n NAME] [-f FMT]
+#   -u  Prometheus base URL (e.g. http://localhost:9090)
+#   -q  PromQL query (expected to return an instant scalar / single-series vector)
+#   -w  WARN threshold
+#   -c  CRIT threshold
+#   -o  Comparison: "lt" alerts when value < threshold, "gt" when value > threshold
+#   -n  Metric name for output/perfdata (default: "value")
+#   -f  printf format for the value (default: "%g")
+#
+# Exit codes follow the Nagios convention: 0=OK 1=WARN 2=CRIT 3=UNKNOWN.
+
+set -eu
+
+URL=""
+QUERY=""
+WARN=""
+CRIT=""
+OP="gt"
+NAME="value"
+FMT="%g"
+
+while getopts "u:q:w:c:o:n:f:" opt; do
+  case "$opt" in
+    u) URL=$OPTARG ;;
+    q) QUERY=$OPTARG ;;
+    w) WARN=$OPTARG ;;
+    c) CRIT=$OPTARG ;;
+    o) OP=$OPTARG ;;
+    n) NAME=$OPTARG ;;
+    f) FMT=$OPTARG ;;
+    *) echo "UNKNOWN: bad argument"; exit 3 ;;
+  esac
+done
+
+for v in URL QUERY WARN CRIT; do
+  if [ -z "${!v}" ]; then echo "UNKNOWN: missing -$(echo "$v" | tr '[:upper:]' '[:lower:]')"; exit 3; fi
+done
+
+RESP=$(curl -sfG --max-time 10 --data-urlencode "query=$QUERY" "$URL/api/v1/query" 2>/dev/null) || {
+  echo "UNKNOWN: Prometheus query failed ($URL)"; exit 3;
+}
+
+STATUS=$(printf '%s' "$RESP" | jq -r '.status // "error"')
+if [ "$STATUS" != "success" ]; then
+  ERR=$(printf '%s' "$RESP" | jq -r '.error // "unknown error"')
+  echo "UNKNOWN: Prometheus returned $STATUS: $ERR"; exit 3
+fi
+
+VAL=$(printf '%s' "$RESP" | jq -r '
+  if .data.resultType == "scalar" then .data.result[1]
+  else .data.result[0].value[1] // empty end')
+
+if [ -z "$VAL" ] || [ "$VAL" = "null" ]; then
+  echo "UNKNOWN: query returned no data"; exit 3
+fi
+
+awk -v v="$VAL" -v w="$WARN" -v c="$CRIT" -v o="$OP" -v n="$NAME" -v fmt="$FMT" '
+BEGIN {
+  vf = sprintf(fmt, v+0)
+  perf = sprintf("%s=%s;%s;%s", n, v, w, c)
+  if (o == "lt") {
+    if (v+0 < c+0) { printf "CRITICAL: %s=%s (< %s) | %s\n", n, vf, c, perf; exit 2 }
+    if (v+0 < w+0) { printf "WARNING: %s=%s (< %s) | %s\n", n, vf, w, perf; exit 1 }
+  } else if (o == "gt") {
+    if (v+0 > c+0) { printf "CRITICAL: %s=%s (> %s) | %s\n", n, vf, c, perf; exit 2 }
+    if (v+0 > w+0) { printf "WARNING: %s=%s (> %s) | %s\n", n, vf, w, perf; exit 1 }
+  } else {
+    printf "UNKNOWN: unknown op %s\n", o; exit 3
+  }
+  printf "OK: %s=%s | %s\n", n, vf, perf
+}'

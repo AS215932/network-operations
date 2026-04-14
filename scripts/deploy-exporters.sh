@@ -20,6 +20,7 @@ DEBIAN_VMS=(
   "2a0c:b641:b50:2::20"  # api
   "2a0c:b641:b50:2::30"  # web
   "2a0c:b641:b50:2::40"  # proxy
+  "2a0c:b641:b50:2::60"  # vpn
 )
 
 echo "=== Deploying node_exporter to Debian infrastructure VMs ==="
@@ -46,9 +47,20 @@ echo ""
 echo "=== Deploying postgres_exporter to api VM ==="
 $SSH root@"2a0c:b641:b50:2::20" bash <<REMOTE
   apt-get install -y -qq prometheus-postgres-exporter
-  # Configure connection string
+
+  # Dedicated read-only monitoring role; peer auth from the prometheus OS user
+  # keeps the credential pair off disk (no password to rotate or leak).
+  sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='prometheus'" | grep -q 1 \
+    || sudo -u postgres psql -c "CREATE USER prometheus"
+  sudo -u postgres psql -c "GRANT pg_monitor TO prometheus"
+
+  PG_HBA=\$(ls /etc/postgresql/*/main/pg_hba.conf)
+  grep -q '^local.*prometheus.*peer' \$PG_HBA \
+    || sed -i '0,/^local/{s|^local|local   all             prometheus                              peer\nlocal|}' \$PG_HBA
+  systemctl reload postgresql
+
   cat > /etc/default/prometheus-postgres-exporter <<'EOF'
-DATA_SOURCE_NAME="postgresql://hyrule@localhost/hyrule?sslmode=disable"
+DATA_SOURCE_NAME="postgresql:///postgres?host=/run/postgresql&user=prometheus&sslmode=disable"
 ARGS="--web.listen-address=[::]:9187"
 EOF
   systemctl enable --now prometheus-postgres-exporter

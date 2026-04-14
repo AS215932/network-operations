@@ -17,6 +17,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::30]:9100"   # web
           - "[2a0c:b641:b50:2::40]:9100"   # proxy
           - "[2a0c:b641:b50:2::50]:9100"   # mon (self)
+          - "[2a0c:b641:b50:2::60]:9100"   # vpn
         labels:
           site: ovh1
           role: infra
@@ -92,6 +93,7 @@ scrape_configs:
           - "2a0c:b641:b50:2::20"          # api
           - "2a0c:b641:b50:2::30"          # web
           - "2a0c:b641:b50:2::40"          # proxy
+          - "2a0c:b641:b50:2::60"          # vpn
           # WireGuard link endpoints (far side)
           - "2a0c:b641:b50:ff02::"         # cr1.nl1 side of rtr-nl1 tunnel
           - "2a0c:b641:b50:ff05::"         # cr1.de1 side of rtr-de1 tunnel

@@ -90,10 +90,28 @@ icinga2 api setup
 
 # Deploy Icinga 2 config objects
 mkdir -p /etc/icinga2/conf.d/hosts /etc/icinga2/conf.d/services
+# Disable stock conf.d files: they define a duplicate NodeName host and apply
+# swap/apt/users/procs/load checks to it — swap trips CRITICAL on VMs with no
+# swap, and the NodeName host shadows our own mon entry.
+for f in hosts.conf services.conf apt.conf; do
+  if [ -f /etc/icinga2/conf.d/$f ]; then
+    mv /etc/icinga2/conf.d/$f /etc/icinga2/conf.d/$f.stock-disabled
+  fi
+done
 cp "$CONFIGS/icinga2/zones.conf" /etc/icinga2/zones.conf
 cp "$CONFIGS/icinga2/hosts/"*.conf /etc/icinga2/conf.d/hosts/
 cp "$CONFIGS/icinga2/services/"*.conf /etc/icinga2/conf.d/services/
 cp "$CONFIGS/icinga2/notifications.conf" /etc/icinga2/conf.d/
+
+# Install custom plugins (Prometheus-backed checks)
+apt-get install -y jq curl
+install -m 0755 "$CONFIGS/plugins/check_prom_query" /usr/lib/nagios/plugins/check_prom_query
+
+# Install notification scripts (Discord webhook)
+install -d -o nagios -g nagios -m 0755 /etc/icinga2/scripts
+install -o nagios -g nagios -m 0755 \
+  "$CONFIGS/icinga2/scripts/notify-discord.sh" \
+  /etc/icinga2/scripts/notify-discord.sh
 
 # Validate config before starting
 icinga2 daemon -C

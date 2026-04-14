@@ -92,6 +92,7 @@ create_vm api "hyrule-cloud API + Postgres" 2 4294967296 42949672960 "2a0c:b641:
 create_vm web "hyrule-web frontend" 1 2147483648 21474836480 "2a0c:b641:b50:2::30"
 create_vm proxy "TLS reverse proxy (Caddy)" 1 1073741824 10737418240 "2a0c:b641:b50:2::40"
 create_vm mon "Monitoring (Icinga2 + Prometheus + Grafana)" 2 4294967296 42949672960 "2a0c:b641:b50:2::50"
+create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 
 # mon needs a second NIC on xenbr-mgmt to scrape dom0/XOA (underlay-only hosts).
 # After create_vm, add it manually:
