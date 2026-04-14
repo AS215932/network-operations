@@ -5,7 +5,7 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026040901 ; serial (YYYYMMDDNN)
+                  2026041401 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -40,3 +40,9 @@ grafana IN  A     46.105.40.223
 grafana IN  AAAA  2a0c:b641:b50:2::40
 mon     IN  A     46.105.40.223
 mon     IN  AAAA  2a0c:b641:b50:2::40
+
+; Core routers — underlay addresses (reachable from public internet)
+cr1-nl1 IN  A     194.28.98.69
+cr1-nl1 IN  AAAA  2a0c:b640:8:69::1
+cr1-de1 IN  A     194.28.99.213
+cr1-de1 IN  AAAA  2a0c:b640:10::213
