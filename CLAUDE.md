@@ -47,6 +47,7 @@ WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links f
 | api | hyrule-cloud + Postgres | Debian 13 | infra |
 | web | hyrule-web | Debian 13 | infra |
 | proxy | TLS reverse proxy (Caddy) | Debian 13 | infra |
+| vpn | WireGuard VPN | Debian 13 | infra |
 | xoa | Xen Orchestra | Debian 13 | mgmt |
 
 dom0 is **underlay-only** — no AS215932 addresses. It acts as NDP proxy for rtr's OVH underlay address. mgmt bridge uses link-local IPv6 + `10.0.0.1/24` (for XOA→XAPI).
@@ -61,7 +62,8 @@ Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to
 
 ```
 mgmt bridge           link-local only (dom0, rtr enX0, xoa)
-2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40
+2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, vpn ::60
+2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM)
 2a0c:b641:b51::/48    customer VMs (one /64 each)
 ```
 
@@ -120,9 +122,14 @@ rtr's enX4 (on xenbr0) carries both the OVH underlay IPv6 and a failover IPv4 fo
 
 ### Key files
 
-- `configs/rtr/jool/nat64.conf` — Jool instance config (pool6 + pool4)
-- `configs/rtr/jool/jool-nat64.service` — systemd unit to load Jool on boot
-- Unbound config on rtr — `module-config: "dns64 validator iterator"` + `dns64: prefix: 64:ff9b::/96`
+- `configs/rtr/jool/jool.conf` — Jool instance config (pool6 + pool4). Instance name is `nat64` (not `default`); `jool -i nat64 ...` everywhere. Pool4 must include TCP, UDP, **and ICMP** — omitting any protocol breaks traffic of that type silently.
+- Jool itself runs under the stock `jool.service` from `jool-tools`.
+- `configs/rtr/jool/nat64-vrf-leak.service` — systemd oneshot that installs the forward rule, return rule, and overlay-VRF route (table 200) for `64:ff9b::/96`. Ordered `Before=jool.service`. If only the return rule is installed, overlay traffic never reaches Jool and all NAT64 checks time out.
+- Unbound config on rtr — `module-config: "dns64 validator iterator"` + `dns64: prefix: 64:ff9b::/96`.
+
+### Verifying
+
+From an overlay VM: `ping6 64:ff9b::0101:0101` (embedded 1.1.1.1) should reply. The `nat64-ipv4-reachability` Icinga check on rtr runs exactly this ping from mon. If it fails, the fastest triage is `jool -i nat64 stats display --all | awk '$2 != 0'` on rtr — non-zero counters for `POOL4_MISMATCH`, `BIB4_NOT_FOUND`, or `POOL6_MISMATCH` each point at a distinct layer.
 
 ## Critical details
 

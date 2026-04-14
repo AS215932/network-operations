@@ -175,23 +175,45 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
     ```
 20. Enable IPv4 forwarding: add `net.ipv4.conf.all.forwarding=1` to sysctl
 21. Install Jool: `apt install jool-dkms jool-tools`
-22. Deploy `configs/rtr/jool/nat64.conf` and `jool-nat64.service`:
+22. Deploy `configs/rtr/jool/jool.conf` → `/etc/jool/jool.conf`:
+    - instance name: `nat64` (netfilter framework)
     - pool6: `64:ff9b::/96`
-    - pool4: `<failover-ipv4>` (TCP/UDP 1024-65535, ICMP 0-65535)
-23. Add VRF route leak rules (persist via systemd unit):
-    ```bash
-    # Forward: overlay clients → Jool in default VRF
-    ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
-    # Return: Jool response → overlay VRF
-    ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+    - pool4: `<failover-ipv4>` entries for TCP/UDP (1024-65535) **and ICMP** (0-65535)
+      — all three protocols are required; without the ICMP entry, ping-based
+      reachability checks silently fail even though TCP/UDP work.
+    - Enable the stock `jool.service` shipped by `jool-tools` (it runs
+      `jool file handle /etc/jool/jool.conf` on start).
+23. Deploy `configs/rtr/jool/nat64-vrf-leak.service` → `/etc/systemd/system/`
+    and `systemctl enable --now nat64-vrf-leak`. It installs both VRF leak
+    rules plus a table-200 route for the NAT64 prefix:
     ```
+    # Forward: overlay clients → Jool in default VRF (so Jool's netfilter
+    # hook sees the packet; without this rule overlay traffic never reaches
+    # Jool and all NAT64 checks time out)
+    ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+    # Return: Jool reply (src 64:ff9b::...) → overlay VRF so it reaches the VM
+    ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+    # Route in overlay VRF giving clients a next-hop for the NAT64 prefix
+    ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
+    ```
+    The unit is ordered `Before=jool.service` so rules are in place before
+    Jool starts.
 24. Enable DNS64 + DNSSEC in Unbound:
     ```
     module-config: "dns64 validator iterator"
     dns64:
         prefix: 64:ff9b::/96
     ```
-25. Verify: `dig AAAA files.pythonhosted.org` from a VM should return `64:ff9b::...`
+25. Verify from an overlay VM (e.g. mon):
+    ```
+    dig AAAA files.pythonhosted.org    # should return 64:ff9b::...
+    ping6 64:ff9b::0101:0101           # 1.1.1.1 via NAT64; must reply
+    ```
+    The Icinga check `nat64-ipv4-reachability` on rtr exercises this same
+    ping6 path end-to-end. A failure there means one of: Jool down, pool4
+    missing a protocol, VRF leak rules missing, failover IPv4 unbound on
+    enX4, or upstream IPv4 broken — debug with
+    `jool -i nat64 stats display --all | awk '$2 != 0'` on rtr.
 
 ### Phase 4: DNS
 
