@@ -12,6 +12,7 @@ User=hyrule
 Group=hyrule
 WorkingDirectory=/opt/hyrule-cloud
 EnvironmentFile=/opt/hyrule-cloud/.env
+Environment=PYTHONPATH=/opt/hyrule-cloud
 ExecStartPre=/opt/hyrule-cloud/.venv/bin/alembic upgrade head
 ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
     --host :: \

@@ -37,8 +37,11 @@ api.servify.network {
     }
 }
 
-# Web frontend — servify.network
-servify.network {
+# Web frontend — servify.network (+ www redirect to apex).
+# Both subjects share one site block so the TLS/proxy/header config isn't
+# duplicated. Caddy issues per-subject certs (not a SAN). Matches the
+# as215932.net block below.
+servify.network, www.servify.network {
     tls {
         dns rfc2136 {
             server [2a0c:b641:b50:2::10]:53
@@ -48,6 +51,9 @@ servify.network {
         }
         propagation_delay 60s
     }
+
+    @www host www.servify.network
+    redir @www https://servify.network{uri} permanent
 
     reverse_proxy [2a0c:b641:b50:2::30]:8080
 

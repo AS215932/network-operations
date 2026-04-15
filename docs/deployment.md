@@ -225,21 +225,47 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
 23. Deploy zone files to `/var/lib/knot/zones/`
 24. Update registrar NS records, request RIPE rDNS delegation
 
-### Phase 5: API Server
+### Phase 5: API Server (hyrule-cloud)
 
 25. Create api VM via XO CloudConfig: 2 vCPU, 4GB, 40GB, infra network, `::20`
-26. Install PostgreSQL 17 (localhost-only, scram-sha-256)
-27. Deploy hyrule-cloud to `/opt/hyrule-cloud`
-28. Configure `.env` (XO token, TSIG key, DB URL)
-29. Run migrations: `alembic upgrade head`
-30. Deploy systemd unit, start service (uvicorn on port 8402)
+26. Populate secrets in `secrets.local.sh` at the repo root (gitignored) —
+    see the header of `scripts/bootstrap-app.sh` for the required variable list.
+27. Run `./scripts/bootstrap-app.sh cloud`. The script installs Postgres 17,
+    creates the `hyrule` role/db, generates a per-VM deploy key (prints it
+    for you to paste into the GitHub repo's Deploy keys page), clones
+    `AS215932/hyrule-cloud`, renders and installs `/opt/hyrule-cloud/.env`
+    from `configs/hyrule-cloud.env.j2`, installs the systemd unit, and runs
+    the first `uv sync`. It does not start the service — inspect logs first.
+28. `ssh root@[::20] systemctl start hyrule-cloud` once verified.
 
-### Phase 6: Web Frontend
+### Phase 6: Web Frontend (hyrule-web)
 
-31. Create web VM via XO CloudConfig: 1 vCPU, 2GB, 20GB, infra network, `::30`
-32. Deploy hyrule-web to `/opt/hyrule-web`
-33. Configure `HYRULE_WEB_API_BASE_URL=http://[2a0c:b641:b50:2::20]:8402`
-34. Deploy systemd unit, start service (uvicorn on port 8080)
+29. Create web VM via XO CloudConfig: 1 vCPU, 2GB, 20GB, infra network, `::30`
+30. Run `./scripts/bootstrap-app.sh web`. Same flow as cloud, minus Postgres.
+31. `ssh root@[::30] systemctl start hyrule-web`.
+
+### Iterating on code (live deploys after initial bootstrap)
+
+Both repos live on GitHub under the `AS215932` org. The bootstrap step put
+per-VM read-only deploy keys on each VM, so pulls work without any human
+credential on the box. To ship a change:
+
+```bash
+# In ~/Dev/hyrule-web (or ~/Dev/hyrule-cloud):
+git commit -am "..."
+git push origin main
+
+# Then from ~/Dev/hyrule-infra:
+./scripts/deploy-app.sh web      # or: deploy-app.sh cloud
+```
+
+`deploy-app.sh` SSHes to the target VM, `git fetch`es the latest
+`origin/main`, runs `uv sync --frozen`, runs migrations (cloud only), and
+restarts the systemd service. Total time is a few seconds when deps haven't
+changed.
+
+Rolling back is the same pattern with a git ref:
+`./scripts/deploy-app.sh web <sha>`.
 
 ### Phase 7: TLS Reverse Proxy (proxy)
 

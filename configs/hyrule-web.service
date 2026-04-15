@@ -11,6 +11,7 @@ User=hyrule
 Group=hyrule
 WorkingDirectory=/opt/hyrule-web
 EnvironmentFile=/opt/hyrule-web/.env
+Environment=PYTHONPATH=/opt/hyrule-web
 ExecStart=/opt/hyrule-web/.venv/bin/uvicorn hyrule_web.app:app \
     --host :: \
     --port 8080 \

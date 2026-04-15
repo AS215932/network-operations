@@ -1,3 +1,4 @@
 ovh.conf
 openprovider.conf
+secrets.local.sh
 __pycache__/
