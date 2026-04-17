@@ -21,6 +21,7 @@ DEBIAN_VMS=(
   "2a0c:b641:b50:2::30"  # web
   "2a0c:b641:b50:2::40"  # proxy
   "2a0c:b641:b50:2::60"  # vpn
+  "2a0c:b641:b50:2::70"  # xoa
 )
 
 echo "=== Deploying node_exporter to Debian infrastructure VMs ==="

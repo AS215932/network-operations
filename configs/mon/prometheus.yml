@@ -18,6 +18,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::40]:9100"   # proxy
           - "[2a0c:b641:b50:2::50]:9100"   # mon (self)
           - "[2a0c:b641:b50:2::60]:9100"   # vpn
+          - "[2a0c:b641:b50:2::70]:9100"   # xoa
         labels:
           site: ovh1
           role: infra
