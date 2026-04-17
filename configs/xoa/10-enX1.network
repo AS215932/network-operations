@@ -1,0 +1,17 @@
+# /etc/systemd/network/10-enX1.network — xoa VM (infra bridge)
+# Public IPv6 for Xen Orchestra UI + api VM access.
+# enX0 (mgmt) is retained for XO -> XAPI on 10.0.0.1.
+[Match]
+Name=enX1
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:2::70/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1

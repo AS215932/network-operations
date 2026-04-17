@@ -48,7 +48,7 @@ WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links f
 | web | hyrule-web | Debian 13 | infra |
 | proxy | TLS reverse proxy (Caddy) | Debian 13 | infra |
 | vpn | WireGuard VPN | Debian 13 | infra |
-| xoa | Xen Orchestra | Debian 13 | mgmt |
+| xoa | Xen Orchestra | Debian 13 | mgmt, infra |
 
 dom0 is **underlay-only** — no AS215932 addresses. It acts as NDP proxy for rtr's OVH underlay address. mgmt bridge uses link-local IPv6 + `10.0.0.1/24` (for XOA→XAPI).
 
@@ -61,8 +61,8 @@ Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to
 ## Addressing
 
 ```
-mgmt bridge           link-local only (dom0, rtr enX0, xoa)
-2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, vpn ::60
+mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
+2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
 2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM)
 2a0c:b641:b51::/48    customer VMs (one /64 each)
 ```

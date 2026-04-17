@@ -9,7 +9,7 @@ Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 ```
 2a0c:b641:b50::/44  (full allocation)
 ├── 2a0c:b641:b50::/48   Infrastructure
-│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40
+│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
 ├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM)
 └── 2a0c:b641:b52-b5f    Future expansion
 ```
@@ -68,7 +68,7 @@ WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50
 
 | VM | Role | vCPU | RAM | Disk | OS | Network |
 |----|------|------|-----|------|----|---------|
-| xoa | Xen Orchestra | 2 | 4GB | 20GB | Debian 13 | mgmt (link-local + 10.0.0.10) |
+| xoa | Xen Orchestra | 2 | 4GB | 20GB | Debian 13 | mgmt (link-local + 10.0.0.10) + infra (::70) |
 | rtr | Router + firewall | 2 | 2GB | 10GB | Debian 13 + FRRouting | mgmt + infra + vm + wan |
 | dns | Authoritative DNS | 1 | 1GB | 10GB | Debian 13 + Knot | infra :2::10 |
 | api | hyrule-cloud + Postgres 17 | 2 | 4GB | 40GB | Debian 13 | infra :2::20 |
@@ -124,10 +124,17 @@ NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both c
 
 ### Phase 1: Xen Orchestra
 
-5. Create Debian 13 VM on xenbr-mgmt (2 vCPU, 4GB, 20GB)
-6. Assign static IPv4: `10.0.0.10/24` (link-local IPv6 auto). No global IPv6 needed.
-7. Install XO from sources
-8. Connect XO to dom0 via `10.0.0.1`, generate API token for hyrule-cloud
+5. Create Debian 13 VM with two NICs: xenbr-mgmt (enX0) and xenbr-infra (enX1).
+   2 vCPU, 4GB, 20GB.
+6. Assign addresses:
+   - enX0 (mgmt): static IPv4 `10.0.0.10/24`, link-local IPv6 auto, **no default route**.
+   - enX1 (infra): static IPv6 `2a0c:b641:b50:2::70/64`, default route via `2a0c:b641:b50:2::1`.
+   Deploy `configs/xoa/10-enX1.network` to `/etc/systemd/network/`.
+7. Install XO from sources. XO binds to all interfaces by default, so the
+   UI is reachable on both addresses.
+8. Connect XO to dom0 via `10.0.0.1` (mgmt-side XAPI), generate API token
+   for hyrule-cloud. Public UI is served at `https://xo.servify.network`
+   via Caddy on the proxy VM.
 
 ### Phase 2: VM Template
 
