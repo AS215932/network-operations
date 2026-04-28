@@ -25,7 +25,16 @@ api.servify.network {
         propagation_delay 60s
     }
 
-    reverse_proxy [2a0c:b641:b50:2::20]:8402
+    reverse_proxy [2a0c:b641:b50:2::20]:8402 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https
@@ -55,7 +64,16 @@ servify.network, www.servify.network {
     @www host www.servify.network
     redir @www https://servify.network{uri} permanent
 
-    reverse_proxy [2a0c:b641:b50:2::30]:8080
+    reverse_proxy [2a0c:b641:b50:2::30]:8080 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https
@@ -79,7 +97,16 @@ grafana.servify.network {
         propagation_delay 60s
     }
 
-    reverse_proxy [2a0c:b641:b50:2::50]:3000
+    reverse_proxy [2a0c:b641:b50:2::50]:3000 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https
@@ -103,7 +130,16 @@ mon.servify.network {
         propagation_delay 60s
     }
 
-    reverse_proxy [2a0c:b641:b50:2::50]:80
+    reverse_proxy [2a0c:b641:b50:2::50]:80 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https
@@ -134,7 +170,16 @@ as215932.net, www.as215932.net {
     @www host www.as215932.net
     redir @www https://as215932.net{uri} permanent
 
-    reverse_proxy [2a0c:b641:b50:2::30]:8081
+    reverse_proxy [2a0c:b641:b50:2::30]:8081 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https
@@ -162,7 +207,16 @@ xo.servify.network {
         propagation_delay 60s
     }
 
-    reverse_proxy [2a0c:b641:b50:2::70]:80
+    reverse_proxy [2a0c:b641:b50:2::70]:80 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
 
     header {
         X-Forwarded-Proto https

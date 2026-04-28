@@ -1,0 +1,30 @@
+# /etc/systemd/system/caddy.service
+# Deploy to: proxy VM (2a0c:b641:b50:2::40)
+# Captured from live install (custom xcaddy build with rfc2136 in /usr/local/bin/caddy).
+# Adds Restart=on-failure to recover from crashes — original unit has no restart policy.
+
+[Unit]
+Description=Caddy
+Documentation=https://caddyserver.com/docs/
+After=network.target network-online.target
+Requires=network-online.target
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+LimitNPROC=512
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWriteDirectories=/var/lib/caddy /var/log/caddy
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

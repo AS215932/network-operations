@@ -17,7 +17,7 @@ ExecStartPre=/opt/hyrule-cloud/.venv/bin/alembic upgrade head
 ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
     --host :: \
     --port 8402 \
-    --workers 2 \
+    --workers 4 \
     --log-level info \
     --access-log
 Restart=always

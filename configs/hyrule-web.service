@@ -15,7 +15,7 @@ Environment=PYTHONPATH=/opt/hyrule-web
 ExecStart=/opt/hyrule-web/.venv/bin/uvicorn hyrule_web.app:app \
     --host :: \
     --port 8080 \
-    --workers 2 \
+    --workers 4 \
     --log-level info \
     --access-log
 Restart=always
