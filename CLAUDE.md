@@ -84,6 +84,7 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 - NIC naming: Debian on Xen uses `enX0`/`enX1`/`enX2`/etc.
 - Each WG peer needs a `/128` static route for the remote's underlay address, pinned to the physical gateway, to prevent overlay BGP routes from swallowing underlay traffic.
 - Config files include a comment header with the target deploy path.
+- `~/.ssh/id_servify` is the only SSH key on the ops workstation and authenticates both AS215932 hosts and the `AS215932` GitHub org. No ssh-agent runs by default, so git pushes need: `GIT_SSH_COMMAND="ssh -i ~/.ssh/id_servify -o IdentitiesOnly=yes" git push` (or `ssh-add ~/.ssh/id_servify` once per session).
 
 ## BGP policy
 
