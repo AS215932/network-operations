@@ -1,0 +1,4 @@
+---
+# Hosts that legitimately accept traffic from the public internet.
+# rtr (DNAT target), dns (auth NS), proxy (TLS), vpn (WireGuard).
+firewall_public_facing: true

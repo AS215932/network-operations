@@ -1,0 +1,12 @@
+---
+# mon — Prometheus + Grafana + Icinga2 + blackbox_exporter.
+
+firewall_extra_rules:
+  # Grafana via Caddy.
+  - { proto: tcp, dport: 3000, src: "{{ peers.proxy.ipv6 }}", comment: "Grafana from proxy" }
+
+  # Self-scrape (mon scrapes its own node_exporter).
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter self-scrape" }
+
+  # Prometheus / blackbox / Icinga2 are localhost-only (Grafana/Prometheus run
+  # on the same box). No external allow rules; loopback already accepted.

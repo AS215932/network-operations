@@ -1,0 +1,22 @@
+---
+# dns — Knot authoritative DNS for as215932.net, servify.network, and reverse zones.
+# Reachable from public internet (via DNAT on rtr for v4 + direct on v6).
+
+firewall_extra_rules:
+  # Authoritative DNS — accept queries from anywhere.
+  - { proto: tcp+udp, dport: 53, src: any,                   family: both, comment: "auth DNS from world" }
+
+  # AXFR from Openprovider DNS secondaries (v6).
+  - { proto: tcp, dport: 53, src: "{{ openprovider_secondaries_v6 }}", family: ip6, comment: "AXFR from Openprovider (v6)" }
+  # AXFR from Openprovider secondaries (v4 via DNAT — appears as v4 src on rtr).
+  - { proto: tcp, dport: 53, src: "{{ openprovider_secondaries_v4 }}", family: ip,  comment: "AXFR from Openprovider (v4)" }
+
+  # AXFR from the ops-prefix home network (per knot.conf.j2:47).
+  - { proto: tcp, dport: 53, src: "{{ ops_prefix_v6 }}", family: ip6, comment: "AXFR from ops-prefix (v6)" }
+  - { proto: tcp, dport: 53, src: "{{ ops_prefix_v4 }}", family: ip,  comment: "AXFR from ops-prefix (v4)" }
+
+  # RFC 2136 dynamic updates from api (TSIG-authenticated) and proxy (ACME DNS-01).
+  - { proto: tcp, dport: 53, src: ["{{ peers.api.ipv6 }}", "{{ peers.proxy.ipv6 }}"], comment: "RFC 2136 dyn updates from api/proxy" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

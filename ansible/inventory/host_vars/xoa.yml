@@ -1,0 +1,13 @@
+---
+# xoa — Xen Orchestra. mgmt NIC reaches dom0 XAPI; infra NIC serves UI.
+
+firewall_extra_rules:
+  # Xen Orchestra UI — proxied by Caddy.
+  - { proto: tcp, dport: 443, src: "{{ peers.proxy.ipv6 }}", comment: "XO UI from proxy" }
+
+  # XAPI talks back over the mgmt /24. dom0 contacts XO via 10.0.0.10.
+  - { proto: tcp, dport: 80,  src: "10.0.0.0/24", family: ip, comment: "XAPI from dom0 (mgmt v4)" }
+  - { proto: tcp, dport: 443, src: "10.0.0.0/24", family: ip, comment: "XAPI HTTPS from dom0 (mgmt v4)" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

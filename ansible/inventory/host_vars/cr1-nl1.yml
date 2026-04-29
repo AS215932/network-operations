@@ -1,0 +1,20 @@
+---
+# cr1-nl1 — FreeBSD 14.3 + FRRouting at Servperso NL.
+# Single-interface (vtnet0), antispoof on, BGP peer with Servperso NL.
+# Live ruleset captured at ansible/baseline/cr1-nl1/pf.conf.
+
+pf_ext_if: "vtnet0"
+pf_antispoof: true
+pf_use_as215932_table: false
+
+# WG underlay listener ports — 1337 (cr1-de1), 1338 (cr1-de1 leg b), 1340 (rtr).
+pf_wg_ports: [1337, 1338, 1340]
+
+# External BGP peers.
+pf_bgp_peers:
+  - "2a0c:b640:10::ffff"   # Servperso
+
+# Monitoring scrape allowance — explicit, even though WG-pass already covers it.
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
+  - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }

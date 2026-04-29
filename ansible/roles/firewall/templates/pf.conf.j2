@@ -1,0 +1,112 @@
+{# /etc/pf.conf — managed by ansible (roles/firewall)
+   Host: {{ inventory_hostname }}
+   Generated: do not edit by hand.
+
+   This template reproduces the live pf rulesets on cr1-nl1 / cr1-de1
+   (captured in ansible/baseline/) as closely as possible. New per-host
+   service allows (e.g. Prometheus scrape from mon) come in via
+   firewall_extra_rules; arbitrary additions via firewall_extra_raw_pf. #}
+# /etc/pf.conf — managed by ansible (roles/firewall) — host {{ inventory_hostname }}
+
+# --- Interfaces ---
+ext_if="{{ pf_ext_if }}"
+{% for extra_if in pf_extra_ifs | default([]) %}
+{{ extra_if.name }}="{{ extra_if.dev }}"
+{% endfor %}
+{% if pf_ext_ifs is defined %}
+ext_ifs="{ {{ pf_ext_ifs | join(' ') }} }"
+{% endif %}
+
+{% if pf_use_as215932_table | default(false) %}
+# --- Our networks ---
+table <AS215932> const { {{ as215932_prefix }} }
+
+{% endif %}
+# --- Bogons ---
+table <bogons4> persist file "/etc/pf.bogons4"
+table <bogons6> persist file "/etc/pf.bogons6"
+
+# --- Options ---
+set skip on lo
+set loginterface $ext_if
+
+# --- Normalization ---
+match all scrub(random-id max-mss 1360)
+
+# --- Default policy ---
+{% if firewall_log_only %}
+# log_only mode: would-block becomes pass log so we can observe before enforcing.
+pass log all
+{% else %}
+block return in log all
+block return out log all
+{% endif %}
+
+# --- Bogons drop ---
+block drop in quick log on $ext_if inet from <bogons4>
+block drop out quick log on $ext_if inet to <bogons4>
+block drop in quick log on $ext_if inet6 from <bogons6>
+block drop out quick log on $ext_if inet6 to <bogons6>
+
+{% if pf_antispoof | default(false) %}
+# --- Antispoof ---
+antispoof quick log for $ext_if
+
+{% endif %}
+# --- WireGuard mesh transit (asymmetric routing — no state) ---
+pass quick on wg all no state
+
+# --- AS215932 transit ---
+{% set transit_ifs = '$ext_ifs' if pf_ext_ifs is defined else '$ext_if' %}
+{% set transit_dst = '<AS215932>' if pf_use_as215932_table | default(false) else as215932_prefix %}
+pass in quick on {{ transit_ifs }} inet6 from any to {{ transit_dst }} no state
+pass out quick on {{ transit_ifs }} inet6 from {{ transit_dst }} to any no state
+
+# --- WireGuard underlay ports ---
+{% set wg_ifs = '$ext_ifs' if pf_ext_ifs is defined else '$ext_if' %}
+{% if pf_wg_ports | length > 0 %}
+pass in quick on {{ wg_ifs }} inet  proto udp from any to any port { {{ pf_wg_ports | join(', ') }} } keep state label "WG_RULE: WireGuard underlay (v4)"
+pass in quick on {{ wg_ifs }} inet6 proto udp from any to any port { {{ pf_wg_ports | join(', ') }} } keep state label "WG_RULE: WireGuard underlay (v6)"
+{% endif %}
+
+{% if pf_bgp_peers | default([]) | length > 0 %}
+# --- External BGP ---
+pass in quick on {{ wg_ifs }} inet6 proto tcp from { {{ pf_bgp_peers | join(', ') }} } to any port = bgp flags S/SA keep state label "BGP_RULE: External BGP peers"
+
+{% endif %}
+# --- SSH from ops-prefix ---
+pass in quick on $ext_if inet  proto tcp from {{ ops_prefix_v4 }} to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops-prefix (v4)"
+pass in quick on $ext_if inet6 proto tcp from {{ ops_prefix_v6 }} to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops-prefix (v6)"
+
+# --- ICMP ---
+pass in quick {% if not pf_use_as215932_table | default(false) %}on $ext_if {% endif %}inet  proto icmp keep state
+pass in quick {% if not pf_use_as215932_table | default(false) %}on $ext_if {% endif %}inet6 proto ipv6-icmp keep state
+
+{% if firewall_extra_rules | length > 0 %}
+# --- Per-host service allows (firewall_extra_rules) ---
+{% for r in firewall_extra_rules %}
+{% set protos = ['tcp', 'udp'] if r.proto == 'tcp+udp' else [r.proto] %}
+{% set fams = ['inet6'] if (r.family | default('inet6')) == 'inet6' else (['inet'] if r.family == 'inet' else ['inet', 'inet6']) %}
+{% for fam in fams %}
+{% for proto in protos %}
+{% if r.src == 'any' %}
+{% set src_clause = 'from any' %}
+{% elif r.src is iterable and r.src is not string %}
+{% set src_clause = 'from { ' ~ (r.src | join(', ')) ~ ' }' %}
+{% else %}
+{% set src_clause = 'from ' ~ r.src %}
+{% endif %}
+pass in quick on $ext_if {{ fam }} proto {{ proto }} {{ src_clause }} to any port = {{ r.dport }} keep state label "{{ r.comment }}"
+{% endfor %}
+{% endfor %}
+{% endfor %}
+
+{% endif %}
+{% if firewall_extra_raw_pf %}
+# --- raw escape hatch ---
+{{ firewall_extra_raw_pf }}
+
+{% endif %}
+# --- Outbound ---
+pass out quick on {{ wg_ifs }} inet  proto { tcp, udp, icmp } from any to any keep state
+pass out quick on {{ wg_ifs }} inet6 proto { tcp, udp, ipv6-icmp } from any to any keep state

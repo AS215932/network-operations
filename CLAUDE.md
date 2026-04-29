@@ -74,7 +74,8 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 - `configs/` — Jinja2 templates for services not yet deployed (Knot DNS, Caddy, systemd units, DNS zones, env files).
 - `autoinstall/` — OS autoinstall response files (OpenBSD, Debian cloud-init) and QMP tools for headless VM interaction.
 - `scripts/` — Shell scripts for dom0 bootstrap, TSIG key generation, VM template prep, and smoke tests.
-- `docs/` — Deployment runbook and architecture docs.
+- `ansible/` — Declarative provisioning. Currently scopes the `firewall` role (nftables on Linux, pf on FreeBSD) for every host except dom0. Inventory + role + generated artifacts under `ansible/generated/<host>/`. Future roles (knot, caddy, frr, exporters) drop in here.
+- `docs/` — Deployment runbook, architecture docs, and the canonical traffic-flow inventory at `docs/network-flows.md`.
 
 ## Key conventions
 
@@ -137,6 +138,39 @@ From an overlay VM: `ping6 64:ff9b::0101:0101` (embedded 1.1.1.1) should reply. 
 - **TSIG key name must be `hyrule-dns`** — hardcoded in `hyrule-cloud` API at `hyrule_cloud/providers/dns.py:36`.
 - **Caddy** runs on a dedicated proxy VM (`::40`), NOT on rtr. Built with `xcaddy --with github.com/caddy-dns/rfc2136` for DNS-01 ACME challenges against Knot. Terminates TLS and reverse-proxies to web (`:8080`) and api (`:8402`).
 - **Customer VM isolation**: nftables on rtr drops forwarding from xenbr-vm to xenbr-infra/xenbr-mgmt.
+
+## Firewalls — Ansible + traffic-flow inventory
+
+Host-level firewalls (nftables on Linux, pf on FreeBSD) are managed by the
+Ansible role at `ansible/roles/firewall/`. The single source of truth for
+"who talks to whom on which port" is `docs/network-flows.md`. Every rule in
+`ansible/inventory/host_vars/*.yml` traces back to a row in that file.
+
+When changing firewall behaviour (opening/closing a port, adding a peer,
+adding a service, moving a host), update **all three** in this order:
+
+1. **`docs/network-flows.md`** — add/remove/edit the relevant row in the
+   per-host inbound table and any cross-cutting flow entry. This is the
+   spec; if it's not in this file, it shouldn't be in a rule.
+2. **`ansible/inventory/host_vars/<host>.yml`** — append/edit the matching
+   `firewall_extra_rules` entry. Reference peers by name
+   (`{{ peers.mon.ipv6 }}`), never literal addresses. New peers go in
+   `ansible/inventory/group_vars/all.yml` under the `peers:` dict first.
+3. **Re-render and review** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
+
+The same flow applies when adding hosts: define the host in
+`ansible/inventory/hosts.yml`, add it to `peers:`, write its
+`host_vars/<host>.yml`, document its flows in `docs/network-flows.md`,
+re-render.
+
+Apply (vs render) is gated on tag `apply` and the `firewall_apply=true`
+extra-var; see `docs/ansible.md` for the rollout runbook (`serial: 1`,
+`at(1)` watchdog, ordered handler chain on rtr). Do not skip the runbook
+on first-time applies.
+
+The previous shell-script provisioning under `scripts/` continues to work
+through this transition; future Ansible roles (knot, caddy, frr, exporters)
+will absorb those scripts one at a time.
 
 ## Related repositories
 

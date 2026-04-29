@@ -1,0 +1,42 @@
+---
+- name: validate nftables
+  command: "nft -c -f {{ firewall_conf_path }}"
+  changed_when: false
+  listen: reload nftables
+
+- name: reload nftables
+  systemd:
+    name: nftables
+    state: reloaded
+  listen: reload nftables
+
+- name: restart dnat-vrf-leak
+  systemd:
+    name: dnat-vrf-leak
+    state: restarted
+  when: inventory_hostname == 'rtr'
+  listen: reload nftables
+
+- name: restart nat64-vrf-leak
+  systemd:
+    name: nat64-vrf-leak
+    state: restarted
+  when: inventory_hostname == 'rtr'
+  listen: reload nftables
+
+- name: restart jool
+  systemd:
+    name: jool
+    state: restarted
+  when: inventory_hostname == 'rtr'
+  listen: reload nftables
+
+- name: validate pf
+  command: "pfctl -nf {{ firewall_conf_path }}"
+  changed_when: false
+  listen: reload pf
+
+- name: reload pf
+  command: "pfctl -f {{ firewall_conf_path }}"
+  changed_when: false
+  listen: reload pf

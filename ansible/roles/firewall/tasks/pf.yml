@@ -1,0 +1,64 @@
+---
+- name: Render pf config to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  template:
+    src: pf.conf.j2
+    dest: "{{ firewall_generated_dir }}/{{ inventory_hostname }}/pf.conf"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Render pf config to host (staging path)
+  template:
+    src: pf.conf.j2
+    dest: "{{ firewall_conf_path }}.new"
+    mode: "0644"
+  when: firewall_apply
+  tags: [apply]
+
+- name: Syntax check rendered pf config
+  command: "{{ firewall_validate_cmd }} {{ firewall_conf_path }}.new"
+  changed_when: false
+  when: firewall_apply
+  tags: [apply]
+
+- name: Backup currently-loaded ruleset before swap
+  shell: |
+    pfctl -sr > {{ firewall_backup_path }}.live 2>/dev/null || true
+    if [ -f {{ firewall_conf_path }} ]; then
+      cp {{ firewall_conf_path }} {{ firewall_backup_path }}
+    fi
+  changed_when: false
+  when: firewall_apply
+  tags: [apply]
+
+- name: Schedule rollback watchdog (3 min) — cancels on success
+  shell: |
+    echo 'pfctl -f {{ firewall_backup_path }} 2>&1 | logger -t firewall-rollback' \
+      | at now + 3 minutes 2>&1 | awk '/Job/ {print $2}'
+  register: _firewall_at_job
+  changed_when: false
+  when: firewall_apply
+  tags: [apply]
+
+- name: Move new config into place
+  copy:
+    src: "{{ firewall_conf_path }}.new"
+    dest: "{{ firewall_conf_path }}"
+    remote_src: true
+    mode: "0644"
+  when: firewall_apply
+  notify: reload pf
+  tags: [apply]
+
+- name: Flush handlers now
+  meta: flush_handlers
+  tags: [apply]
+
+- name: Cancel rollback watchdog
+  command: "atrm {{ _firewall_at_job.stdout }}"
+  changed_when: false
+  when:
+    - firewall_apply
+    - _firewall_at_job.stdout | default('') | length > 0
+  tags: [apply]

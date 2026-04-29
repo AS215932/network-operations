@@ -1,0 +1,10 @@
+---
+# proxy — Caddy TLS reverse proxy + ACME DNS-01 (RFC 2136 to dns).
+
+firewall_extra_rules:
+  # Public TLS termination + HTTP-01 ACME redirect.
+  - { proto: tcp, dport: 80,  src: any, family: both, comment: "HTTP (ACME + redirect)" }
+  - { proto: tcp, dport: 443, src: any, family: both, comment: "HTTPS (Caddy TLS)" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

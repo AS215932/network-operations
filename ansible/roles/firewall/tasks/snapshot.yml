@@ -1,0 +1,19 @@
+---
+# Pre/post Icinga snapshot — calls a small script on mon to capture
+# current problem state. Used to diff "what was broken before" vs "after".
+#
+# Skipped silently if mon is unreachable or the script doesn't exist yet;
+# this keeps the firewall play usable before the icinga_master role lands.
+
+- name: "{{ snapshot_phase | capitalize }}-deploy Icinga snapshot"
+  delegate_to: mon
+  remote_user: svag
+  become: false
+  shell: |
+    if [ -x /usr/local/bin/icinga-snapshot ]; then
+      /usr/local/bin/icinga-snapshot {{ snapshot_phase }} firewall-rollout
+    else
+      echo "skip: /usr/local/bin/icinga-snapshot not present yet"
+    fi
+  changed_when: false
+  failed_when: false

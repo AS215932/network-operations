@@ -1,0 +1,39 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.conf — managed by ansible (roles/firewall)
+# Host: {{ inventory_hostname }}
+# Generated: do not edit by hand.
+
+flush ruleset
+
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy {{ firewall_input_policy }};
+
+{% include 'partials/_input_base.j2' %}
+
+        # Per-host service allowances.
+{% include 'partials/_extra_rules.j2' %}
+
+{% if firewall_extra_raw_nft %}
+        # --- raw escape hatch ---
+{{ firewall_extra_raw_nft | indent(8, True) }}
+{% endif %}
+
+        # End of input — log+counter what would have been dropped if policy were drop.
+{% if firewall_log_only or firewall_input_policy == 'accept' %}
+        limit rate 10/second counter log prefix "fw-would-drop " accept
+{% else %}
+        limit rate 10/second counter log prefix "fw-drop "
+{% endif %}
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

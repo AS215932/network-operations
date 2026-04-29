@@ -1,0 +1,34 @@
+---
+- name: Firewall — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: Firewall — apply
+  hosts: all:!dom0
+  serial: 1
+  # Facts come from group_vars (ansible_os_family preset), so render-only runs
+  # don't require connectivity to the hosts.
+  gather_facts: false
+  roles:
+    - firewall
+  tags: [firewall]
+
+- name: Firewall — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

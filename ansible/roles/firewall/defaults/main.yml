@@ -1,0 +1,27 @@
+---
+# Defaults consumed by the role. Override per-host or per-group.
+
+# When true: rules log+counter but the input policy stays accept on Linux,
+# and pf default block becomes pass log on FreeBSD.
+# Use for first-apply observation, then flip to false to enforce.
+firewall_log_only: false
+
+# Linux input chain default policy. accept = effectively no filter (log only).
+# Set to "drop" once log_only observation is complete.
+firewall_input_policy: drop
+
+# Per-host extras. Each entry is a dict; see roles/firewall/README.md for shape.
+firewall_extra_rules: []
+
+# Optional raw escape hatches for constructs that don't fit the data model.
+firewall_extra_raw_nft: ""
+firewall_extra_raw_pf: ""
+
+# rtr-only — preserves the existing IPv4 NAT/forward block.
+firewall_rtr_v4_nat: false
+
+# Where rendered configs land in the repo for review (under ansible/).
+firewall_generated_dir: "{{ playbook_dir }}/../generated"
+
+# Whether to copy the rendered config into place + reload. False = render only.
+firewall_apply: false

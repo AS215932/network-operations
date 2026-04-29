@@ -1,0 +1,10 @@
+---
+# api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
+
+firewall_extra_rules:
+  # API upstream from Caddy (proxy).
+  - { proto: tcp, dport: 8402, src: "{{ peers.proxy.ipv6 }}", comment: "hyrule-cloud API from proxy" }
+
+  # Monitoring scrapes.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+  - { proto: tcp, dport: 9187, src: "{{ peers.mon.ipv6 }}", comment: "postgres_exporter scrape" }

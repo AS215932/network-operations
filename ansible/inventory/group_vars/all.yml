@@ -1,0 +1,72 @@
+---
+# AS215932 network constants and peer registry.
+# Every firewall rule references peers by name, never by literal address.
+# When a host moves, this is the one place to update.
+
+# --- Subnets ---
+as215932_prefix: "2a0c:b641:b50::/44"
+infra_subnet: "2a0c:b641:b50:2::/64"
+vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+customer_subnet: "2a0c:b641:b51::/48"
+wg_link_prefix: "2a0c:b641:b50:ff00::/56"  # all wg /127s sit under this
+mgmt_v4: "10.0.0.0/24"
+legacy_infra_v4: "10.0.2.0/24"
+
+# --- Ops workstation (KPN home) ---
+# Live in cr1-* pf SSH allows and configs/knot.conf.j2 AXFR sources.
+ops_prefix_v4: "77.166.211.126/32"
+ops_prefix_v6: "2a02:a442:1016::/48"
+
+# --- Peer registry ---
+# ipv6: overlay address (or loopback for routers).
+# underlay: physical underlay address (routers only — used as WG endpoint).
+peers:
+  rtr:
+    ipv6: "2a0c:b641:b50:2::1"
+    loopback: "2a0c:b641:b50::d"
+    underlay: "2001:41d0:303:48a::2"
+  dns:     { ipv6: "2a0c:b641:b50:2::10" }
+  api:     { ipv6: "2a0c:b641:b50:2::20" }
+  web:     { ipv6: "2a0c:b641:b50:2::30" }
+  proxy:   { ipv6: "2a0c:b641:b50:2::40" }
+  mon:     { ipv6: "2a0c:b641:b50:2::50" }
+  vpn:     { ipv6: "2a0c:b641:b50:2::60" }
+  xoa:
+    ipv6: "2a0c:b641:b50:2::70"
+    mgmt_v4: "10.0.0.10"
+  cr1_nl1:
+    loopback: "2a0c:b641:b50::a"
+    underlay: "2a0c:b640:8:69::1"
+  cr1_de1:
+    loopback: "2a0c:b641:b50::b"
+    underlay: "2a0c:b640:10::213"
+
+# --- BGP peer addresses (external transits) ---
+bgp_peers:
+  servperso_de: "2a0c:b640:10::ffff"
+  servperso_nl: "2a0c:b640:8:69::ffff"  # placeholder — nl1 BGP peer not live-confirmed
+  extra_transit: "2a0c:b641:870::ffff"
+
+# --- Openprovider DNS secondary AXFR sources ---
+# From hyrule-infra/configs/knot.conf.j2:28-29.
+openprovider_secondaries_v4:
+  - "35.157.8.190"
+  - "18.203.73.190"
+  - "185.27.175.218"
+openprovider_secondaries_v6:
+  - "2a00:f10:121:400:4be:60ff:fe00:526"
+  - "2a05:d014:f80:6e00:c937:174c:45eb:a5f7"
+
+# --- WireGuard tunnel underlay UDP ports (per CLAUDE.md mesh table) ---
+wg_ports:
+  - 1337
+  - 1338
+  - 1340
+
+# --- SSH source set used by every host's input chain ---
+# Permits the ops workstation directly plus any client connected to the VPN.
+ssh_allow_sources_v6:
+  - "{{ ops_prefix_v6 }}"
+  - "{{ vpn_clients_subnet }}"
+ssh_allow_sources_v4:
+  - "{{ ops_prefix_v4 }}"

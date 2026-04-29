@@ -1,0 +1,12 @@
+# Encrypted with `ansible-vault encrypt all.vault.yml` before commit.
+# Copy this file to all.vault.yml and fill in real values, then encrypt.
+---
+tsig_keys:
+  hyrule_dns: "REDACTED_BASE64_TSIG_SECRET"
+
+icinga_api_token: "REDACTED_TOKEN"
+
+wireguard_psk:
+  rtr_cr1_nl1: "REDACTED_PSK"
+  rtr_cr1_de1: "REDACTED_PSK"
+  cr1_nl1_cr1_de1: "REDACTED_PSK"

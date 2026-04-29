@@ -1,0 +1,5 @@
+---
+# Default posture for the seven Debian VMs behind rtr.
+firewall_input_policy: accept    # logging-only on first run; flip to drop in a follow-up PR
+firewall_log_only: true
+firewall_allow_node_exporter_from_mon: true

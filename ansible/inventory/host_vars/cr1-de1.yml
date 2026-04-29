@@ -1,0 +1,25 @@
+---
+# cr1-de1 — FreeBSD 15.0 + FRRouting at Servperso DE.
+# Multi-interface (vtnet0..3), no antispoof, BGP peers with Servperso + Extra-Transit.
+# Live ruleset captured at ansible/baseline/cr1-de1/pf.conf.
+
+pf_ext_if: "vtnet0"
+pf_extra_ifs:
+  - { name: "transit2_if", dev: "vtnet1" }
+  - { name: "ixp_dus",     dev: "vtnet2" }
+  - { name: "ixp_fra",     dev: "vtnet3" }
+pf_ext_ifs: ["vtnet0", "vtnet1", "vtnet2", "vtnet3"]
+pf_antispoof: false
+pf_use_as215932_table: true
+
+# WG underlay listener ports — 1337 (cr1-nl1), 1338 (rtr).
+pf_wg_ports: [1337, 1338]
+
+# External BGP peers (Servperso DE + Extra-Transit).
+pf_bgp_peers:
+  - "2a0c:b640:10::ffff"
+  - "2a0c:b641:870::ffff"
+
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
+  - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }

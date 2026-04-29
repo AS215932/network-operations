@@ -1,0 +1,22 @@
+{# Common input rules. Used by both nftables.conf.j2 and nftables-rtr.conf.j2.
+   Renders into a chain that already has its own header/policy line. #}
+        # Loopback always allowed.
+        iif lo accept
+
+        # Established/related — keep returning packets flowing.
+        ct state established,related accept
+        ct state invalid drop
+
+        # ICMPv6 — required for ND, RA, MTU discovery, ping.
+        meta l4proto ipv6-icmp accept
+
+        # ICMPv4 — keep ping working.
+        meta l4proto icmp accept
+
+        # SSH from VPN clients and the KPN ops prefix.
+{% for src in ssh_allow_sources_v6 %}
+        ip6 saddr {{ src }} tcp dport 22 counter accept comment "ssh from {{ src }}"
+{% endfor %}
+{% for src in ssh_allow_sources_v4 %}
+        ip saddr {{ src }} tcp dport 22 counter accept comment "ssh from {{ src }}"
+{% endfor %}

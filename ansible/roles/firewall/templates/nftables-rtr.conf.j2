@@ -1,0 +1,98 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.conf — managed by ansible (roles/firewall)
+# Host: rtr
+# Combines existing IPv4 NAT/forward (preserved verbatim from configs/rtr/nftables.conf)
+# with new IPv6 host-level input filter.
+# Generated: do not edit by hand.
+
+flush ruleset
+
+# --- IPv4 NAT (DNAT inbound on failover IP, masquerade outbound on WAN) ---
+# Original file: configs/rtr/nftables.conf. Preserved here so that
+# `ansible --check --diff` shows zero functional change to v4 behaviour
+# on first run; only the inet filter table below is new.
+
+define WAN_IP   = {{ rtr_wan_ip }}
+define WAN_IF   = {{ rtr_wan_if }}
+define DNS_IP   = {{ rtr_dns_v4 }}
+define PROXY_IP = {{ rtr_proxy_v4 }}
+define VPN_IP   = {{ rtr_vpn_v4 }}
+
+table ip nat {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+
+        # DNS → Knot
+        ip daddr $WAN_IP tcp dport 53 dnat to $DNS_IP
+        ip daddr $WAN_IP udp dport 53 dnat to $DNS_IP
+
+        # HTTP/HTTPS → Caddy
+        ip daddr $WAN_IP tcp dport { 80, 443 } dnat to $PROXY_IP
+
+        # WireGuard VPN → vpn VM
+        ip daddr $WAN_IP udp dport 51820 dnat to $VPN_IP
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+
+        # Masquerade on WAN — preserves source IPs through DNAT (no masq on enX2),
+        # and allows infra VMs to reach IPv4 internet (outgoing NAT).
+        oifname $WAN_IF masquerade
+    }
+}
+
+table ip filter {
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+
+        # Customer VM isolation: drop forwarding from the customer VM bridge
+        # to the infra and management bridges. Documented in CLAUDE.md but
+        # missing from the previous live config — added here.
+        iifname enX3 oifname { enX2, enX0 } drop
+
+        # Allow established/related
+        ct state established,related accept
+
+        # Allow DNAT'd traffic to infra VMs
+        ip daddr $DNS_IP tcp dport 53 accept
+        ip daddr $DNS_IP udp dport 53 accept
+        ip daddr $PROXY_IP tcp dport { 80, 443 } accept
+        ip daddr $VPN_IP udp dport 51820 accept
+    }
+}
+
+# --- IPv6 host filter — new in this rollout ---
+table inet filter {
+    chain input {
+        type filter hook input priority filter; policy {{ firewall_input_policy }};
+
+{% include 'partials/_input_base.j2' %}
+
+        # Per-host service allowances.
+{% include 'partials/_extra_rules.j2' %}
+
+{% if firewall_extra_raw_nft %}
+        # --- raw escape hatch ---
+{{ firewall_extra_raw_nft | indent(8, True) }}
+{% endif %}
+
+        # End of input — log what would have been dropped.
+{% if firewall_log_only or firewall_input_policy == 'accept' %}
+        limit rate 10/second counter log prefix "fw-would-drop " accept
+{% else %}
+        limit rate 10/second counter log prefix "fw-drop "
+{% endif %}
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+
+        # Customer VM isolation for IPv6 — mirror of the v4 rule above.
+        iifname enX3 oifname { enX2, enX0 } drop
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

@@ -1,0 +1,4 @@
+---
+firewall_enable_forwarding: true
+firewall_allow_bgp: true
+firewall_allow_ospf6_on_wg: true

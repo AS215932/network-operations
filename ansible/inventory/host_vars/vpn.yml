@@ -1,0 +1,9 @@
+---
+# vpn — WireGuard server for client tunnels (clients in 2a0c:b641:b50:3::/64).
+
+firewall_extra_rules:
+  # WireGuard listener — public ingress (DNAT'd from v4 on rtr, direct on v6).
+  - { proto: udp, dport: 51820, src: any, family: both, comment: "WireGuard from world" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

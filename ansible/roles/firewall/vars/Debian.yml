@@ -1,0 +1,7 @@
+---
+firewall_pkg: nftables
+firewall_service: nftables
+firewall_conf_path: /etc/nftables.conf
+firewall_backup_path: /etc/nftables.conf.backup
+firewall_validate_cmd: "nft -c -f"
+firewall_reload_cmd: "systemctl reload nftables"

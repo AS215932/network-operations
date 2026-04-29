@@ -1,0 +1,32 @@
+match all scrub( random-id max-mss 1360)
+block return in log all
+block return out log all
+block drop in log quick on vtnet0 inet6 from <bogons6> to any
+block drop in log quick on vtnet0 inet6 from fe80::8cac:73ff:fea3:6da1 to any
+block drop in log quick on ! vtnet0 inet6 from 2a0c:b640:8::/48 to any
+block drop in log quick inet6 from 2a0c:b640:8:69::1 to any
+block drop in log quick on vtnet0 inet from <bogons4> to any
+block drop in log quick on ! vtnet0 inet from 194.28.98.64/27 to any
+block drop in log quick inet from 194.28.98.69 to any
+block drop out log quick on vtnet0 inet from any to <bogons4>
+block drop out log quick on vtnet0 inet6 from any to <bogons6>
+pass quick on wg all no state
+pass in quick on vtnet0 inet6 from any to 2a0c:b641:b50::/44 no state
+pass out quick on vtnet0 inet6 from 2a0c:b641:b50::/44 to any no state
+pass in quick on vtnet0 inet proto udp from any to any port = 1337 keep state label "WG_RULE: Allow WG IPv4 wg0 cr1.de1"
+pass in quick on vtnet0 inet6 proto udp from any to any port = 1337 keep state label "WG_RULE: Allow WG IPv6 wg0 cr1.de1"
+pass in quick on vtnet0 inet proto udp from any to any port = 1338 keep state label "WG_RULE: Allow WG IPv4 wg1 gw01"
+pass in quick on vtnet0 inet proto udp from any to any port = 1340 keep state label "WG_RULE: Allow WG IPv4 wg3 rtr.ovh1"
+pass in quick on vtnet0 inet6 proto udp from any to any port = 1340 keep state label "WG_RULE: Allow WG IPv6 wg3 rtr.ovh1"
+pass in quick on vtnet0 inet6 proto udp from any to any port = 1338 keep state label "WG_RULE: Allow WG IPv6 wg1 gw01"
+pass in quick on vtnet0 inet6 proto tcp from 2a0c:b640:10::ffff to any port = bgp flags S/SA keep state label "BGP_RULE: Allow BGP from Servperso"
+pass in quick on vtnet0 inet proto tcp from 77.166.211.126 to any port = ssh flags S/SA keep state label "USER_RULE: Allow SSH from KPN IPv4"
+pass in quick on vtnet0 inet6 proto tcp from 2a02:a442:1016::/48 to any port = ssh flags S/SA keep state label "USER_RULE: Allow SSH from KPN IPv6"
+pass out quick on vtnet0 inet proto tcp all flags S/SA keep state
+pass out quick on vtnet0 inet proto udp all keep state
+pass out quick on vtnet0 inet proto icmp all keep state
+pass out quick on vtnet0 inet6 proto tcp all flags S/SA keep state
+pass out quick on vtnet0 inet6 proto udp all keep state
+pass out quick on vtnet0 inet6 proto ipv6-icmp all keep state
+pass in quick on vtnet0 inet proto icmp all keep state
+pass in quick on vtnet0 inet6 proto ipv6-icmp all keep state

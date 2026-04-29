@@ -1,0 +1,7 @@
+---
+# web — hyrule-web (uvicorn :8080 servify.network) + nginx (:8081 as215932.net).
+
+firewall_extra_rules:
+  - { proto: tcp, dport: 8080, src: "{{ peers.proxy.ipv6 }}", comment: "hyrule-web upstream from proxy" }
+  - { proto: tcp, dport: 8081, src: "{{ peers.proxy.ipv6 }}", comment: "as215932.net upstream from proxy" }
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}",   comment: "node_exporter scrape" }

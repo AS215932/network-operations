@@ -1,0 +1,23 @@
+---
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Ensure generated/ host directory exists (controller)
+  delegate_to: localhost
+  become: false
+  run_once: false
+  file:
+    path: "{{ firewall_generated_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render nftables config (Linux)
+  include_tasks: nftables.yml
+  when: ansible_os_family == "Debian"
+  tags: [validate, diff, apply]
+
+- name: Render pf config (FreeBSD)
+  include_tasks: pf.yml
+  when: ansible_os_family == "FreeBSD"
+  tags: [validate, diff, apply]

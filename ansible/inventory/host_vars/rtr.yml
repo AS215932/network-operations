@@ -1,0 +1,39 @@
+---
+# rtr — Debian 13 + FRRouting + nftables, dom0-hosted VM at OVH FR.
+# Bridges: enX0 (mgmt), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
+# Carries IPv4 NAT/DNAT for legacy v4 service ingress + customer VM isolation.
+
+# --- IPv4 variables for the preserved nat/forward block ---
+rtr_wan_ip:   "46.105.40.223"
+rtr_wan_if:   "enX4"
+rtr_dns_v4:   "10.0.2.10"
+rtr_proxy_v4: "10.0.2.40"
+rtr_vpn_v4:   "10.0.2.60"
+
+# --- Input chain posture ---
+# First-run: accept + log so we can see what would be dropped.
+# Follow-up PR flips this to drop after counters confirm.
+firewall_input_policy: accept
+firewall_log_only: true
+
+firewall_extra_rules:
+  # DNS recursion — overlay VMs and customer VMs use rtr's Unbound resolver.
+  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}"], comment: "DNS recursion from overlay" }
+
+  # Monitoring scrapes from mon.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+  - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", comment: "frr_exporter scrape" }
+
+  # iBGP from cr1-nl1, cr1-de1 loopbacks (sourced from their loopback addresses).
+  - { proto: tcp, dport: 179, src: ["{{ peers.cr1_nl1.loopback }}", "{{ peers.cr1_de1.loopback }}"], comment: "iBGP from cr1-* loopbacks" }
+
+  # WireGuard underlay listeners (v6 endpoints — physical underlay addresses).
+  - { proto: udp, dport: 1337, src: "{{ peers.cr1_nl1.underlay }}", comment: "WG to cr1-nl1" }
+  - { proto: udp, dport: 1338, src: "{{ peers.cr1_de1.underlay }}", comment: "WG to cr1-de1" }
+
+# OSPF6 runs on wg0/wg1 between router loopbacks and is multicast. Allow per-iface.
+firewall_extra_raw_nft: |
+  # OSPF6 (proto 89) on WireGuard interfaces — iBGP/OSPF mesh transit.
+  iifname { wg0, wg1 } meta l4proto ospf accept comment "OSPF6 on wg mesh"
+  # iBGP also accepted on wg ifaces with no source restriction (already covered above
+  # via loopback src match, but this is a defense-in-depth allow for the wg link).
