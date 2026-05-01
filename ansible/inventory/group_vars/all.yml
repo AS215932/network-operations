@@ -34,6 +34,7 @@ peers:
   xoa:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
+  irc:     { ipv6: "2a0c:b641:b50:2::80" }
   cr1_nl1:
     loopback: "2a0c:b641:b50::a"
     underlay: "2a0c:b640:8:69::1"

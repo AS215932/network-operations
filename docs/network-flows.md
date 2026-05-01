@@ -23,6 +23,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
 | vpn | Debian 13 | `2a0c:b641:b50:2::60` | (DNAT'd from `46.105.40.223`) | WireGuard server |
 | xoa | Debian 13 | `2a0c:b641:b50:2::70`, `10.0.0.10` | — | Xen Orchestra |
+| irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
 
@@ -72,7 +73,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | Openprovider secondaries (v6: `2a00:f10:121:400:4be:60ff:fe00:526`, `2a05:d014:f80:6e00:c937:174c:45eb:a5f7`) | TCP | 53 | AXFR |
 | Openprovider secondaries (v4: `35.157.8.190`, `18.203.73.190`, `185.27.175.218`) | TCP | 53 | AXFR (DNAT'd) |
 | ops-prefix | TCP | 53 | AXFR (per `configs/knot.conf.j2:47`) |
-| api, proxy | TCP | 53 | RFC 2136 dyn updates (TSIG `hyrule-dns`) |
+| api, proxy, irc | TCP | 53 | RFC 2136 dyn updates (TSIG `hyrule-dns`) |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
@@ -125,6 +126,15 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 |------|-------|------|---------|
 | proxy | TCP | 443 | XO web UI |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 80, 443 | XAPI back-channel |
+| mon | TCP | 9100 | node_exporter |
+| ops-prefix, vpn-clients | TCP | 22 | SSH |
+
+### irc (`2a0c:b641:b50:2::80`)
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| any | TCP | 6697 | Soju IRCS (TLS terminated by Soju, cert via certbot HTTP-01) |
+| any | TCP | 80   | ACME HTTP-01 challenge (certbot standalone, briefly during renew) |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
@@ -190,6 +200,8 @@ exceptions are:
 | dns ↔ Openprovider | both | 53 tcp | AXFR (NOTIFY broken — see memory) |
 | rtr ↔ cr1-nl1, cr1-de1 underlay | both | 1337/1338 udp | WireGuard mesh |
 | Public → rtr | in | 53/80/443/51820 | DNAT to dns/proxy/vpn |
+| Public → irc | in | 6697 tcp | Soju IRCS (direct v6, no DNAT) |
+| irc → dns | out | 53 tcp | RFC 2136 dyn updates (ACME DNS-01) |
 | ops-prefix, vpn-clients → all | in | 22 tcp | SSH |
 
 ---

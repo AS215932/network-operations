@@ -1,0 +1,16 @@
+---
+# irc — Soju IRC bouncer.
+# TLS termination is handled by Caddy on proxy; soju listens plaintext on :6697
+# and is reachable only from proxy (and the ops-prefix/vpn-clients SSH set).
+
+firewall_extra_rules:
+  # Soju bouncer — TLS terminated by Soju itself.
+  - { proto: tcp, dport: 6697, src: any, family: v6, comment: "Soju IRCS (public)" }
+
+  # ACME HTTP-01 challenge — certbot --standalone briefly binds tcp/80 during issuance/renewal.
+  # We're using HTTP-01 instead of DNS-01 because Openprovider secondaries don't refresh
+  # in time for the ACME check (project_openprovider_notify memory).
+  - { proto: tcp, dport: 80, src: any, family: v6, comment: "ACME HTTP-01 (certbot standalone)" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

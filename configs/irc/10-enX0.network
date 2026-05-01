@@ -1,0 +1,16 @@
+# /etc/systemd/network/10-enX0.network — irc VM (infra bridge)
+# Soju IRC bouncer. IPv6-only — no public IPv4 ingress (Caddy on proxy fronts).
+[Match]
+Name=enX0
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:2::80/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1
