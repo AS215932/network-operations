@@ -1,0 +1,42 @@
+---
+# Monitoring rollout — installs node_exporter on the host and registers
+# its Icinga2 Host object on mon.
+#
+# Single source of truth for "which checks run for which host" is
+# host_vars/<host>.yml — `monitoring_disks` + `monitoring_extra_services`.
+#
+# Apply: source ../secrets.local.sh first.
+#   ansible-playbook playbooks/monitoring.yml --tags apply -e '{"monitoring_apply":true}'
+
+- name: Monitoring — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: Monitoring — apply
+  hosts: linux
+  serial: 1
+  gather_facts: false
+  become: true
+  roles:
+    - monitoring
+  tags: [monitoring]
+
+- name: Monitoring — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

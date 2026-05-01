@@ -1,0 +1,4 @@
+---
+monitoring_pkg: prometheus-node-exporter
+monitoring_node_service: prometheus-node-exporter
+monitoring_node_env_path: /etc/default/prometheus-node-exporter

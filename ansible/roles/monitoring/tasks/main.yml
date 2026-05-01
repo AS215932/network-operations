@@ -1,0 +1,16 @@
+---
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
+
+- name: Install + configure node_exporter on the host
+  include_tasks: node_exporter.yml
+  when:
+    - monitoring_apply | default(false) | bool
+    - inventory_hostname != monitoring_mon_host    # mon scrapes itself; package present
+  tags: [apply]
+
+- name: Register host object on mon
+  include_tasks: register.yml
+  when: monitoring_register | bool
+  tags: [validate, diff, apply]

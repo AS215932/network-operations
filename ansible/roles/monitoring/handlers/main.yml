@@ -1,0 +1,22 @@
+---
+- name: restart node_exporter
+  systemd:
+    name: "{{ monitoring_node_service }}"
+    state: restarted
+    enabled: true
+  when: ansible_os_family == "Debian"
+
+- name: reload icinga2
+  command: icinga2 daemon -C
+  changed_when: false
+  listen: reload icinga2
+  delegate_to: "{{ monitoring_mon_host }}"
+  run_once: true
+
+- name: reload icinga2 (apply)
+  systemd:
+    name: icinga2
+    state: reloaded
+  listen: reload icinga2
+  delegate_to: "{{ monitoring_mon_host }}"
+  run_once: true

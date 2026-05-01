@@ -1,0 +1,38 @@
+---
+# Render this host's Icinga2 Host object (+ extra services) onto mon.
+# Each host gets its own file at /etc/icinga2/conf.d/hosts/ansible/<host>.conf;
+# avoids clobbering /etc/icinga2/conf.d/hosts/{infra-vms,routers,dom0}.conf,
+# which are still hand-curated.
+
+- name: Render host object to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  template:
+    src: icinga_host.conf.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/icinga_host.conf"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Ensure ansible-managed hosts/ dir exists on mon
+  file:
+    path: "{{ monitoring_icinga_dir }}"
+    state: directory
+    owner: root
+    group: nagios
+    mode: "0750"
+  delegate_to: "{{ monitoring_mon_host }}"
+  run_once: false
+  when: monitoring_apply | bool
+  tags: [apply]
+
+- name: Render host object on mon
+  template:
+    src: icinga_host.conf.j2
+    dest: "{{ monitoring_icinga_dir }}/{{ inventory_hostname }}.conf"
+    owner: root
+    group: nagios
+    mode: "0640"
+  delegate_to: "{{ monitoring_mon_host }}"
+  when: monitoring_apply | bool
+  notify: reload icinga2
+  tags: [apply]

@@ -1,0 +1,22 @@
+---
+- name: Install node_exporter (Debian)
+  apt:
+    name: "{{ monitoring_pkg }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
+- name: Configure node_exporter listen address (Debian)
+  lineinfile:
+    path: "{{ monitoring_node_env_path }}"
+    create: true
+    regexp: '^ARGS='
+    line: 'ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd"'
+    owner: root
+    group: root
+    mode: "0644"
+  when: ansible_os_family == "Debian"
+  notify: restart node_exporter
+  tags: [apply]

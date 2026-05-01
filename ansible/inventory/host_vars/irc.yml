@@ -14,3 +14,19 @@ firewall_extra_rules:
 
   # Monitoring.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+
+# --- Monitoring ---
+monitoring_register: true
+monitoring_display_name: "irc (Soju IRC bouncer)"
+monitoring_role: irc
+monitoring_extra_services:
+  - name: ircs-tcp
+    check_command: tcp
+    interval: 2m
+    notes: "Soju TLS listener on tcp/6697"
+    vars: { tcp_address: "{{ peers.irc.ipv6 }}", tcp_port: 6697 }
+  - name: ircs-cert-validity
+    check_command: ssl
+    interval: 1h
+    notes: "TLS certificate days-until-expiry on Soju"
+    vars: { ssl_address: "{{ peers.irc.ipv6 }}", ssl_port: 6697, ssl_cert_valid_days_warn: 14, ssl_cert_valid_days_critical: 5 }

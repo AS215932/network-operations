@@ -169,8 +169,50 @@ extra-var; see `docs/ansible.md` for the rollout runbook (`serial: 1`,
 on first-time applies.
 
 The previous shell-script provisioning under `scripts/` continues to work
-through this transition; future Ansible roles (knot, caddy, frr, exporters)
-will absorb those scripts one at a time.
+through this transition; future Ansible roles (caddy, frr) will absorb
+those scripts one at a time.
+
+## Monitoring — every host gets node_exporter + Icinga2
+
+**Every server we provision MUST have monitoring from day one.** The
+`monitoring` role at `ansible/roles/monitoring/` and its playbook at
+`ansible/playbooks/monitoring.yml` are the single entry point.
+
+What it does:
+
+1. **Installs node_exporter** on the host (`prometheus-node-exporter` on
+   Debian). Configures `/etc/default/prometheus-node-exporter` to bind on
+   `:9100`. Idempotent — re-running on existing hosts is a no-op.
+2. **Registers an Icinga2 Host object** on `mon` at
+   `/etc/icinga2/conf.d/hosts/ansible/<host>.conf`, set `vars.prom_instance_node`
+   so existing services in `/etc/icinga2/conf.d/services/{node-up,disk,ssh,...}.conf`
+   auto-apply via their `assign where` clauses.
+3. **Renders host-specific service checks** from
+   `host_vars/<host>.yml :: monitoring_extra_services`. Each entry is one
+   `object Service` block — used for service-aware probes that don't fit
+   the generic apply rules (DNS SOA query, TLS cert validity, TCP port probe).
+
+When adding a new host (or service) update **all three** alongside the
+firewall flow:
+
+1. **`docs/network-flows.md`** — open `mon → host:9100` for node_exporter
+   scrape (already implicit in firewall_extra_rules for most hosts).
+2. **`host_vars/<host>.yml`** — set `monitoring_register: true` (only for
+   hosts NOT in the legacy `/etc/icinga2/conf.d/hosts/{infra-vms,routers,
+   dom0}.conf` — duplicates fail the icinga2 reload). Add
+   `monitoring_extra_services` for service-specific probes.
+3. **`/etc/prometheus/prometheus.yml` on mon** — add the host to the
+   appropriate `static_configs` job (`node-infra`, `node-routers`,
+   `node-offsite-ns`, …). The role does NOT yet manage prometheus.yml —
+   this is the one manual step. Reload with `systemctl reload prometheus`.
+
+Apply:
+```bash
+cd ansible
+set -a; source ../secrets.local.sh; set +a
+ansible-playbook playbooks/monitoring.yml --tags apply \
+    -e '{"monitoring_apply":true}' --limit <host>
+```
 
 ## Related repositories
 

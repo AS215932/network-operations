@@ -1,0 +1,63 @@
+// /etc/icinga2/conf.d/hosts/ansible/{{ inventory_hostname }}.conf
+// Managed by ansible/roles/monitoring — do not edit by hand.
+// Source of truth: ansible/inventory/host_vars/{{ inventory_hostname }}.yml
+
+object Host "{{ inventory_hostname }}" {
+{% if peers[inventory_hostname].ipv4 is defined %}
+  address  = "{{ peers[inventory_hostname].ipv4 }}"
+{% endif %}
+{% if peers[inventory_hostname].ipv6 is defined %}
+  address6 = "{{ peers[inventory_hostname].ipv6 }}"
+{% elif peers[inventory_hostname].loopback is defined %}
+  address6 = "{{ peers[inventory_hostname].loopback }}"
+{% endif %}
+  display_name = "{{ monitoring_display_name | default(inventory_hostname) }}"
+
+{% if peers[inventory_hostname].ipv6 is defined or peers[inventory_hostname].loopback is defined %}
+  check_command = "ping6"
+{% else %}
+  check_command = "ping4"
+{% endif %}
+
+  vars.os = "{{ ansible_os_family | default('Debian') }}"
+  vars.role = "{{ monitoring_role | default('infra') }}"
+  vars.ssh_port = 22
+
+{# Prometheus instance for node-up + disk apply rules. #}
+{% set scrape_addr = peers[inventory_hostname].ipv6 | default(peers[inventory_hostname].loopback) | default(peers[inventory_hostname].ipv4) %}
+{% if ':' in scrape_addr %}
+  vars.prom_instance_node = "[{{ scrape_addr }}]:9100"
+{% else %}
+  vars.prom_instance_node = "{{ scrape_addr }}:9100"
+{% endif %}
+
+{# Disks — drives the disk.conf apply Service #}
+{% for disk_name, disk_cfg in monitoring_disks.items() %}
+  vars.disks["{{ disk_name }}"] = { mountpoint = "{{ disk_cfg.mountpoint }}" }
+{% endfor %}
+}
+
+{# Per-service blocks (service-specific checks not covered by the global apply rules). #}
+{% for svc in monitoring_extra_services %}
+object Service "{{ svc.name }}" {
+  host_name = "{{ inventory_hostname }}"
+  check_command = "{{ svc.check_command }}"
+  check_interval = {{ svc.interval | default('2m') }}
+  retry_interval = {{ svc.retry | default('30s') }}
+{% if svc.notes is defined %}
+  notes = "{{ svc.notes }}"
+{% endif %}
+{% if svc.vars is defined %}
+{% for k, v in svc.vars.items() %}
+{% if v is string %}
+  vars.{{ k }} = "{{ v }}"
+{% elif v is mapping %}
+  vars.{{ k }} = { {% for kk, vv in v.items() %}{{ kk }} = "{{ vv }}"{% if not loop.last %}, {% endif %}{% endfor %} }
+{% else %}
+  vars.{{ k }} = {{ v }}
+{% endif %}
+{% endfor %}
+{% endif %}
+}
+
+{% endfor %}

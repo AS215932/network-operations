@@ -1,0 +1,34 @@
+---
+# When true: install node_exporter on the host AND register the Host object
+# on mon. False = render only.
+monitoring_apply: false
+
+# When true: render an Icinga2 Host object for this host on mon.
+# Default false because the existing /etc/icinga2/conf.d/hosts/{infra-vms,
+# routers,dom0}.conf already covers the original fleet — opt in for new hosts
+# (ns2, irc, future). Setting this to true on a host already in those files
+# WILL fail icinga2 reload (duplicate Host objects).
+monitoring_register: false
+
+# Where to register host objects on mon (kept separate from manually-curated
+# /etc/icinga2/conf.d/hosts/{infra-vms,routers,dom0}.conf).
+monitoring_icinga_dir: /etc/icinga2/conf.d/hosts/ansible
+
+# The mon host the registration is delegated to.
+monitoring_mon_host: mon
+
+# node_exporter listen address. By default we listen on the host's overlay v6
+# (so only mon can scrape via the firewall rule), then on its public v6/v4
+# for off-net hosts (e.g. ns2).
+# Override per-host via host_vars if a different bind is needed.
+monitoring_node_listen: ":9100"
+
+# Disks to monitor. Each key is the Icinga service name suffix; mountpoint is
+# read by the prom_disk apply rule on mon. Default = root only.
+monitoring_disks:
+  "disk /": { mountpoint: "/" }
+
+# Per-host extra service objects. Each entry becomes one `object Service` block
+# on mon. Required keys: name, check_command. Optional: vars (dict), interval, retry, notes.
+# Hostname and address derive automatically from the host being registered.
+monitoring_extra_services: []
