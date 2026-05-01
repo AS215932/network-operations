@@ -40,14 +40,15 @@ bootcmd:
     [Network]
     DHCP=no
     IPv6AcceptRA=no
-    DNS=2606:4700:4700::1111
+    DNS=2a0c:b641:b50:2::1
+    Domains=as215932.net
     Address=${IPV6}/64
     [Route]
     Destination=::/0
     Gateway=2a0c:b641:b50:2::1
     NETEOF
-  - echo 'nameserver 2a0c:b641:b50:2::1' > /etc/resolv.conf
-  - sed -i 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf
+  - "printf 'nameserver 2a0c:b641:b50:2::1\\nsearch as215932.net\\n' > /etc/resolv.conf"
+  - "sed -i 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf"
   - systemctl restart systemd-networkd
 package_update: true
 package_upgrade: true"
@@ -93,6 +94,7 @@ create_vm web "hyrule-web frontend" 1 2147483648 21474836480 "2a0c:b641:b50:2::3
 create_vm proxy "TLS reverse proxy (Caddy)" 1 1073741824 10737418240 "2a0c:b641:b50:2::40"
 create_vm mon "Monitoring (Icinga2 + Prometheus + Grafana)" 2 4294967296 42949672960 "2a0c:b641:b50:2::50"
 create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
+create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
 
 # mon needs a second NIC on xenbr-mgmt to scrape dom0/XOA (underlay-only hosts).
 # After create_vm, add it manually:
