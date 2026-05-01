@@ -1,0 +1,7 @@
+---
+knot_pkg: knot
+knot_service: knot
+knot_conf_path: /etc/knot/knot.conf
+knot_backup_path: /etc/knot/knot.conf.backup
+knot_zones_dir: /var/lib/knot/zones
+knot_validate_cmd: "knotc -c"

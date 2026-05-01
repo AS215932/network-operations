@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: knot
+  author: AS215932 ops
+  description: Knot DNS authoritative nameserver (primary or secondary)
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+dependencies: []

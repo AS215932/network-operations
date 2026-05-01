@@ -24,6 +24,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | vpn | Debian 13 | `2a0c:b641:b50:2::60` | (DNAT'd from `46.105.40.223`) | WireGuard server |
 | xoa | Debian 13 | `2a0c:b641:b50:2::70`, `10.0.0.10` | — | Xen Orchestra |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
+| ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
 
@@ -65,14 +66,13 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | public internet (v4 DNAT'd) | TCP | 80, 443 | → proxy |
 | public internet (v4 DNAT'd) | UDP | 51820 | → vpn |
 
-### dns (`2a0c:b641:b50:2::10`)
+### dns (`2a0c:b641:b50:2::10`) — primary nameserver "ns1"
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | any | TCP/UDP | 53 | Authoritative DNS queries |
-| Openprovider secondaries (v6: `2a00:f10:121:400:4be:60ff:fe00:526`, `2a05:d014:f80:6e00:c937:174c:45eb:a5f7`) | TCP | 53 | AXFR |
-| Openprovider secondaries (v4: `35.157.8.190`, `18.203.73.190`, `185.27.175.218`) | TCP | 53 | AXFR (DNAT'd) |
-| ops-prefix | TCP | 53 | AXFR (per `configs/knot.conf.j2:47`) |
+| ns2 (`2001:41d0:304:300::7bfb`, `54.38.14.218`) | TCP | 53 | AXFR pull (TSIG `hyrule-dns`) |
+| ops-prefix | TCP | 53 | AXFR (home-xfr ACL) |
 | api, proxy, irc | TCP | 53 | RFC 2136 dyn updates (TSIG `hyrule-dns`) |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
@@ -138,6 +138,18 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
+### ns2 (`2001:41d0:304:300::7bfb`, `54.38.14.218`) — secondary nameserver, OVH GRA11
+
+Off-net authoritative secondary; not on AS215932 overlay (different ASN, different site).
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| any | TCP/UDP | 53 | Authoritative DNS queries (v4 + v6) |
+| ops-prefix | TCP | 22 | SSH |
+| any | ICMP, ICMPv6 | — | ping |
+
+NOTIFY from `dns` and outbound AXFR pull from `dns` are TSIG-authenticated at the Knot ACL layer, not IP-restricted at the firewall.
+
 ### cr1-nl1 (`2a0c:b641:b50::a` loopback, `2a0c:b640:8:69::1` underlay)
 
 | From | Proto | Port | Purpose |
@@ -184,7 +196,7 @@ exceptions are:
 | rtr, cr1-* | UDP 1337/1338/1340 → peer underlay | WireGuard mesh |
 | mon | → all hosts:9100 + per-host scrape ports | Prometheus |
 | mon | → public HTTPS, ICMP, DNS targets | blackbox checks |
-| dns | → Openprovider secondaries (NOTIFY) | NOTIFY currently refused — see memory |
+| dns | → ns2 (NOTIFY + serves AXFR pull) | TSIG `hyrule-dns` |
 
 ---
 
@@ -197,7 +209,8 @@ exceptions are:
 | mon → api | out | 9187 tcp | postgres_exporter |
 | mon → routers | out | 9342 tcp | frr_exporter |
 | api/proxy → dns | out | 53 tcp | RFC 2136 dyn updates (TSIG) |
-| dns ↔ Openprovider | both | 53 tcp | AXFR (NOTIFY broken — see memory) |
+| dns → ns2 | out | 53 tcp/udp | NOTIFY (TSIG `hyrule-dns`) |
+| ns2 → dns | out | 53 tcp | AXFR pull on NOTIFY (TSIG `hyrule-dns`) |
 | rtr ↔ cr1-nl1, cr1-de1 underlay | both | 1337/1338 udp | WireGuard mesh |
 | Public → rtr | in | 53/80/443/51820 | DNAT to dns/proxy/vpn |
 | Public → irc | in | 6697 tcp | Soju IRCS (direct v6, no DNAT) |

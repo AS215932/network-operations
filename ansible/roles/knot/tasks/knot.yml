@@ -1,0 +1,56 @@
+---
+- name: Render knot.conf to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  template:
+    src: knot.conf.j2
+    dest: "{{ knot_generated_dir }}/{{ inventory_hostname }}/knot.conf"
+    mode: "0640"
+  tags: [validate, diff, apply]
+
+- name: Render knot.conf to host (staging path)
+  template:
+    src: knot.conf.j2
+    dest: "{{ knot_conf_path }}.new"
+    owner: root
+    group: knot
+    mode: "0640"
+  when: knot_apply
+  tags: [apply]
+
+- name: Validate rendered knot.conf
+  command: "{{ knot_validate_cmd }} {{ knot_conf_path }}.new conf-check"
+  changed_when: false
+  when: knot_apply
+  tags: [apply]
+
+- name: Backup currently-loaded config before swap
+  copy:
+    src: "{{ knot_conf_path }}"
+    dest: "{{ knot_backup_path }}"
+    remote_src: true
+    mode: "0640"
+  when: knot_apply
+  failed_when: false
+  changed_when: false
+  tags: [apply]
+
+- name: Move new config into place
+  copy:
+    src: "{{ knot_conf_path }}.new"
+    dest: "{{ knot_conf_path }}"
+    remote_src: true
+    owner: root
+    group: knot
+    mode: "0640"
+  when: knot_apply
+  notify: reload knot
+  tags: [apply]
+
+- name: Ensure knot is enabled and running
+  systemd:
+    name: "{{ knot_service }}"
+    enabled: true
+    state: started
+  when: knot_apply
+  tags: [apply]

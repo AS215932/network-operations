@@ -35,6 +35,9 @@ peers:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
   irc:     { ipv6: "2a0c:b641:b50:2::80" }
+  ns2:
+    ipv4: "54.38.14.218"
+    ipv6: "2001:41d0:304:300::7bfb"
   cr1_nl1:
     loopback: "2a0c:b641:b50::a"
     underlay: "2a0c:b640:8:69::1"

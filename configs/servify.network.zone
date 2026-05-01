@@ -5,21 +5,21 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026041701 ; serial (YYYYMMDDNN)
+                  2026050201 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
                   300 )      ; negative TTL (5m)
 
-; Nameservers — ns1 is ours, Openprovider is secondary (AXFR)
+; Nameservers — both self-hosted: ns1 on AS215932, ns2 off-net at OVH GRA11
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns1.openprovider.nl.
-@       IN  NS    ns2.openprovider.be.
-@       IN  NS    ns3.openprovider.eu.
+@       IN  NS    ns2.servify.network.
 
 ; NS glue — IPv4 via rtr DNAT, IPv6 direct to Knot
 ns1     IN  A     46.105.40.223
 ns1     IN  AAAA  2a0c:b641:b50:2::10
+ns2     IN  A     54.38.14.218
+ns2     IN  AAAA  2001:41d0:304:300::7bfb
 
 ; Web frontend — IPv4 via rtr DNAT to proxy, IPv6 direct to proxy
 @       IN  A     46.105.40.223

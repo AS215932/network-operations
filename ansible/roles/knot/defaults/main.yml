@@ -1,0 +1,38 @@
+---
+# Defaults consumed by the knot role. Override per-host or per-group.
+
+# "primary" loads zones from disk and notifies secondaries.
+# "secondary" pulls AXFR from the primary; zones live in journal only.
+knot_role: primary
+
+# Per-host: list of zones to serve. Each entry is a dict { name: <zone> }.
+# Both primary and secondary use the same list.
+knot_zones: []
+
+# Primary-only: list of secondaries to NOTIFY + transfer to.
+# Each entry: { name: <id>, address_v4: <addr>, address_v6: <addr> }
+knot_secondaries: []
+
+# Secondary-only: address of the primary (NOTIFY source / AXFR target).
+knot_primary_v4: ""
+knot_primary_v6: ""
+
+# TSIG key shared between primary and all secondaries. Name MUST be hyrule-dns
+# (hardcoded in hyrule-cloud/providers/dns.py:36). Secret is sourced via lookup
+# in group_vars/nameservers.yml.
+knot_tsig_key_name: hyrule-dns
+knot_tsig_secret: ""
+
+# RFC 2136 dynamic-update ACLs (primary only). Each entry: { id: <acl-id>, address: <addr> }
+# Empty list disables (e.g. for hosts that don't accept dynupdates).
+knot_dynupdate_acls: []
+
+# AXFR-out ACLs (primary only) — TSIG-keyless transfer for ops home prefix.
+# Each entry: { id: <acl-id>, address: <addr-or-list> }
+knot_xfr_acls: []
+
+# Where rendered configs land in the repo for review.
+knot_generated_dir: "{{ playbook_dir }}/../generated"
+
+# Whether to install knot, copy config into place + reload. False = render only.
+knot_apply: false

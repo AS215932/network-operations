@@ -1,0 +1,16 @@
+# Knot DNS — shared between primary (dns) and secondary (ns2).
+# Per-host role + remote/ACL details live in host_vars/{dns,ns2}.yml.
+
+# TSIG key name is hardcoded in hyrule-cloud/providers/dns.py:36; do not rename.
+knot_tsig_key_name: hyrule-dns
+
+# Sourced from secrets.local.sh — `set -a; source secrets.local.sh; set +a`
+# before running the playbook.
+knot_tsig_secret: "{{ lookup('env', 'TSIG_SECRET') }}"
+
+# Zones served by every nameserver in this group. The primary (dns) loads
+# from /var/lib/knot/zones/<name>.zone; the secondary (ns2) AXFR-pulls.
+knot_zones:
+  - name: servify.network
+  - name: as215932.net
+  - name: 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa

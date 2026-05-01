@@ -1,0 +1,46 @@
+# ns2.servify.network — secondary authoritative nameserver at OVH GRA11.
+# Off-net (different ASN, different site) for real DNS resilience.
+# Not on the AS215932 overlay; addressed in OVH's prefix.
+
+ansible_user: svag
+
+# --- Knot role ---
+knot_role: secondary
+# Pull AXFR from the primary (dns VM). v6 is the canonical path; v4 is
+# present for fallback reachability via rtr DNAT (configured by Step 10
+# dnat-vrf-leak.service).
+knot_primary_v4: 46.105.40.223
+knot_primary_v6: "{{ peers.dns.ipv6 }}"
+
+# --- Firewall ---
+# DNS open to the world; SSH inherits ssh_allow_sources_* from group_vars/all.yml.
+# AXFR/NOTIFY are TSIG-authed at Knot level — no port-source restrictions here.
+firewall_extra_rules:
+  - { proto: tcp+udp, dport: 53, src: any, family: both, comment: "auth DNS from world" }
+  # Prometheus on mon scrapes node_exporter via mon's overlay v6 → ns2's public v6.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: ip6, comment: "node_exporter scrape from mon" }
+
+# --- Monitoring ---
+monitoring_register: true
+monitoring_display_name: "ns2 (secondary nameserver, OVH GRA11)"
+monitoring_role: nameserver
+monitoring_extra_services:
+  - name: dns-soa-servify-network
+    check_command: dig
+    interval: 2m
+    notes: "Authoritative SOA query against ns2 for servify.network"
+    vars: { dig_lookup: "servify.network", dig_server: "{{ peers.ns2.ipv6 }}", dig_record_type: "SOA" }
+  - name: dns-soa-as215932-net
+    check_command: dig
+    interval: 2m
+    notes: "Authoritative SOA query against ns2 for as215932.net"
+    vars: { dig_lookup: "as215932.net", dig_server: "{{ peers.ns2.ipv6 }}", dig_record_type: "SOA" }
+  - name: dns-soa-reverse
+    check_command: dig
+    interval: 2m
+    notes: "Authoritative SOA query against ns2 for reverse zone"
+    vars: { dig_lookup: "0.5.b.1.4.6.b.c.0.a.2.ip6.arpa", dig_server: "{{ peers.ns2.ipv6 }}", dig_record_type: "SOA" }
+  - name: dns-axfr-fresh
+    check_command: dummy   # placeholder — fill in once we have a custom check that compares ns1 vs ns2 SOA
+    interval: 5m
+    notes: "Detect AXFR drift: compare serials between ns1 and ns2"

@@ -1,0 +1,108 @@
+# /etc/knot/knot.conf — managed by ansible/roles/knot.
+# Host:  {{ inventory_hostname }}
+# Role:  {{ knot_role }}
+#
+# Do not edit manually — changes will be overwritten on next deploy.
+
+server:
+  listen: [ ::@53, 0.0.0.0@53 ]
+  rundir: "/run/knot"
+  user: knot:knot
+
+log:
+  - target: syslog
+    any: info
+
+database:
+  storage: "/var/lib/knot"
+
+# TSIG key shared between primary (dns) and all secondaries. Name MUST be
+# "{{ knot_tsig_key_name }}" — hardcoded in hyrule_cloud/providers/dns.py.
+key:
+  - id: {{ knot_tsig_key_name }}
+    algorithm: hmac-sha256
+    secret: "{{ knot_tsig_secret }}"
+
+{% if knot_role == "primary" %}
+# --- Primary: notifies + serves AXFR to secondaries -----------------------
+{% if knot_secondaries | length > 0 %}
+remote:
+{% for s in knot_secondaries %}
+  - id: {{ s.name }}
+    address: [ {{ s.address_v6 }}, {{ s.address_v4 }} ]
+    key: {{ knot_tsig_key_name }}
+{% endfor %}
+{% endif %}
+
+acl:
+  # RFC 2136 dynamic updates from authorized clients (TSIG-authed).
+  - id: api-update
+    address: {{ peers.api.ipv6 }}
+    key: {{ knot_tsig_key_name }}
+    action: update
+
+  - id: caddy-update
+    address: {{ peers.proxy.ipv6 }}
+    key: {{ knot_tsig_key_name }}
+    action: update
+
+  - id: irc-update
+    address: {{ peers.irc.ipv6 }}
+    key: {{ knot_tsig_key_name }}
+    action: update
+
+{% for s in knot_secondaries %}
+  - id: {{ s.name }}-xfr
+    address: [ {{ s.address_v6 }}, {{ s.address_v4 }} ]
+    key: {{ knot_tsig_key_name }}
+    action: transfer
+{% endfor %}
+
+  # AXFR from the ops home network (no TSIG — IP-based for ad-hoc dig +axfr).
+  - id: home-xfr
+    address: [ {{ ops_prefix_v4 }}, {{ ops_prefix_v6 }} ]
+    action: transfer
+
+template:
+  - id: default
+    storage: "/var/lib/knot/zones"
+    file: "%s.zone"
+    journal-content: all
+    zonefile-load: difference-no-serial
+{% if knot_secondaries | length > 0 %}
+    notify: [ {{ knot_secondaries | map(attribute='name') | join(', ') }} ]
+{% endif %}
+
+zone:
+{% for z in knot_zones %}
+  - domain: {{ z.name }}
+    acl: [ api-update, caddy-update, irc-update, home-xfr{% for s in knot_secondaries %}, {{ s.name }}-xfr{% endfor %} ]
+    template: default
+{% endfor %}
+
+{% else %}
+# --- Secondary: pulls AXFR from primary -----------------------------------
+remote:
+  - id: ns1
+    address: [ {{ knot_primary_v6 }}, {{ knot_primary_v4 }} ]
+    key: {{ knot_tsig_key_name }}
+
+acl:
+  - id: ns1-notify
+    address: [ {{ knot_primary_v6 }}, {{ knot_primary_v4 }} ]
+    key: {{ knot_tsig_key_name }}
+    action: notify
+
+template:
+  - id: default
+    storage: "/var/lib/knot/zones"
+    file: "%s.zone"
+    master: [ ns1 ]
+    acl: [ ns1-notify ]
+
+zone:
+{% for z in knot_zones %}
+  - domain: {{ z.name }}
+{% endfor %}
+
+{% endif %}

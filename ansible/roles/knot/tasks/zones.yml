@@ -1,0 +1,14 @@
+---
+# Primary only — push zone files from configs/ to /var/lib/knot/zones/.
+# Knot reloads on file change; zonefile-load: difference-no-serial syncs.
+
+- name: Distribute zone files
+  copy:
+    src: "{{ playbook_dir }}/../../configs/{{ item.name }}.zone"
+    dest: "{{ knot_zones_dir }}/{{ item.name }}.zone"
+    owner: knot
+    group: knot
+    mode: "0644"
+  loop: "{{ knot_zones }}"
+  notify: reload knot
+  tags: [apply]

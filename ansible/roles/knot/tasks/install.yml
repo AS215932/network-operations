@@ -1,0 +1,40 @@
+---
+- name: Install Knot DNS
+  apt:
+    name: "{{ knot_pkg }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Ensure /var/lib/knot/zones exists (writable by knot)
+  file:
+    path: "{{ knot_zones_dir }}"
+    state: directory
+    owner: knot
+    group: knot
+    mode: "0750"
+  tags: [apply]
+
+# systemd-resolved binds 127.0.0.53:53 by default; that prevents Knot from
+# binding 0.0.0.0:53 (the bind range includes 127.0.0.53). Disable the stub
+# listener; system resolution still works via /etc/resolv.conf written by
+# resolved itself or by the cloud-init / OVH default config.
+- name: Ensure resolved.conf.d/ exists
+  file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+  tags: [apply]
+
+- name: Disable systemd-resolved DNS stub listener
+  copy:
+    dest: /etc/systemd/resolved.conf.d/99-no-stub.conf
+    content: |
+      [Resolve]
+      DNSStubListener=no
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart systemd-resolved
+  tags: [apply]

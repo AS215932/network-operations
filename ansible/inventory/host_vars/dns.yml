@@ -1,21 +1,29 @@
 ---
-# dns — Knot authoritative DNS for as215932.net, servify.network, and reverse zones.
-# Reachable from public internet (via DNAT on rtr for v4 + direct on v6).
+# dns — Knot authoritative DNS (primary "ns1") for as215932.net, servify.network,
+# and reverse zones. Reachable from public internet (via DNAT on rtr for v4 +
+# direct on v6).
+
+# --- Knot role ---
+knot_role: primary
+knot_secondaries:
+  - name: ns2
+    address_v4: "{{ peers.ns2.ipv4 }}"
+    address_v6: "{{ peers.ns2.ipv6 }}"
 
 firewall_extra_rules:
   # Authoritative DNS — accept queries from anywhere.
-  - { proto: tcp+udp, dport: 53, src: any,                   family: both, comment: "auth DNS from world" }
+  - { proto: tcp+udp, dport: 53, src: any, family: both, comment: "auth DNS from world" }
 
-  # AXFR from Openprovider DNS secondaries (v6).
-  - { proto: tcp, dport: 53, src: "{{ openprovider_secondaries_v6 }}", family: ip6, comment: "AXFR from Openprovider (v6)" }
-  # AXFR from Openprovider secondaries (v4 via DNAT — appears as v4 src on rtr).
-  - { proto: tcp, dport: 53, src: "{{ openprovider_secondaries_v4 }}", family: ip,  comment: "AXFR from Openprovider (v4)" }
+  # AXFR pulls from ns2 (off-net secondary). TSIG-authenticated at Knot level;
+  # firewall still needs the path open.
+  - { proto: tcp, dport: 53, src: "{{ peers.ns2.ipv6 }}", family: ip6, comment: "AXFR from ns2 (v6)" }
+  - { proto: tcp, dport: 53, src: "{{ peers.ns2.ipv4 }}", family: ip,  comment: "AXFR from ns2 (v4)" }
 
-  # AXFR from the ops-prefix home network (per knot.conf.j2:47).
+  # AXFR from the ops-prefix home network.
   - { proto: tcp, dport: 53, src: "{{ ops_prefix_v6 }}", family: ip6, comment: "AXFR from ops-prefix (v6)" }
   - { proto: tcp, dport: 53, src: "{{ ops_prefix_v4 }}", family: ip,  comment: "AXFR from ops-prefix (v4)" }
 
-  # RFC 2136 dynamic updates from api (TSIG-authenticated), proxy (ACME DNS-01), and irc (ACME DNS-01).
+  # RFC 2136 dynamic updates from api (TSIG), proxy (ACME DNS-01), irc (ACME DNS-01).
   - { proto: tcp, dport: 53, src: ["{{ peers.api.ipv6 }}", "{{ peers.proxy.ipv6 }}", "{{ peers.irc.ipv6 }}"], comment: "RFC 2136 dyn updates from api/proxy/irc" }
 
   # Monitoring.

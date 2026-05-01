@@ -1,0 +1,42 @@
+---
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
+
+- name: Assert TSIG secret is provided
+  assert:
+    that: knot_tsig_secret | length > 0
+    fail_msg: |
+      knot_tsig_secret is empty. Did you forget:
+        set -a; source secrets.local.sh; set +a
+  tags: [validate, diff, apply]
+
+- name: Install knot prerequisites
+  include_tasks: install.yml
+  when: knot_apply | default(false) | bool
+  tags: [apply]
+
+# Flush so systemd-resolved restarts before knot tries to bind 0.0.0.0:53.
+- name: Flush handlers before configuring knot
+  meta: flush_handlers
+  tags: [apply]
+
+- name: Ensure generated/<host>/ directory exists (controller)
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ knot_generated_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render + apply knot config
+  include_tasks: knot.yml
+  tags: [validate, diff, apply]
+
+- name: Distribute zone files (primary only)
+  include_tasks: zones.yml
+  when:
+    - knot_role == "primary"
+    - knot_apply | default(false) | bool
+  tags: [apply]

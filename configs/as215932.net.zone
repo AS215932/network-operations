@@ -8,16 +8,15 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026042901 ; serial (YYYYMMDDNN)
+                  2026050201 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
                   300 )      ; negative TTL (5m)
 
+; Out-of-bailiwick NS — resolvers chase glue via the parent (servify.network).
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns1.openprovider.nl.
-@       IN  NS    ns2.openprovider.be.
-@       IN  NS    ns3.openprovider.eu.
+@       IN  NS    ns2.servify.network.
 
 ; --- Public ASN info site (served by Caddy on proxy VM) ---
 @       IN  AAAA  2a0c:b641:b50:2::40

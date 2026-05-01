@@ -1,0 +1,16 @@
+---
+- name: validate knot config
+  command: "{{ knot_validate_cmd }} {{ knot_conf_path }}.new conf-check"
+  changed_when: false
+  listen: reload knot
+
+- name: reload knot
+  command: knotc reload
+  changed_when: true
+  listen: reload knot
+
+- name: restart systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: restarted
+    daemon_reload: true

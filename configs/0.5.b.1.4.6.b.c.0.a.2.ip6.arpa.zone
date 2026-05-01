@@ -13,15 +13,15 @@ $ORIGIN 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026042901 ; serial
+                  2026050201 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
                   300 )      ; negative TTL
 
-; Self-hosted only — Openprovider does not act as secondary for this zone.
-; Single-NS = lame-delegation warning at RIPE; add a secondary when one is available.
+; Two NS — required for RIPE reverse-domain delegation (DNS-Check policy).
 @       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.
 
 ; --- :2::1 — rtr (infra gateway) ---
 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  rtr.as215932.net.
