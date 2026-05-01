@@ -1,6 +1,7 @@
 ---
 - name: Load OS-specific vars
   include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
 
 - name: Install firewall prerequisites
   include_tasks: install.yml
