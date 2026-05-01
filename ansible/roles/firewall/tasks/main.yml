@@ -2,6 +2,11 @@
 - name: Load OS-specific vars
   include_vars: "{{ ansible_os_family }}.yml"
 
+- name: Install firewall prerequisites
+  include_tasks: install.yml
+  when: firewall_apply | default(false) | bool
+  tags: [apply]
+
 - name: Ensure generated/ host directory exists (controller)
   delegate_to: localhost
   become: false

@@ -1,6 +1,7 @@
 ---
 ansible_user: svag
-ansible_become: false
+# Default is no escalation — playbooks opt in with `become: true` at play or task level.
+# Localhost-delegated render tasks override with explicit `become: false`.
 ansible_become_method: sudo
 ansible_python_interpreter: /usr/bin/python3
 ansible_os_family: Debian

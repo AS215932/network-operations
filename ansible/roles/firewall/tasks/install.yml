@@ -1,0 +1,14 @@
+---
+# Ensure prerequisites for the apply pipeline are present.
+# nftables provides the `nft` binary; `at` is used for the rollback watchdog.
+
+- name: Install firewall prerequisites (Debian)
+  apt:
+    name:
+      - nftables
+      - at
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+  tags: [apply]

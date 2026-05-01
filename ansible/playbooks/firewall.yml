@@ -17,6 +17,7 @@
   # Facts come from group_vars (ansible_os_family preset), so render-only runs
   # don't require connectivity to the hosts.
   gather_facts: false
+  become: true
   roles:
     - firewall
   tags: [firewall]
