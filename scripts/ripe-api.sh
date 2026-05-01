@@ -34,12 +34,19 @@ fi
 
 API="https://rest.db.ripe.net/ripe"
 
-# Convert plain RPSL on stdin into the RIPE REST JSON envelope on stdout.
+# Convert an RPSL file into the RIPE REST JSON envelope on stdout.
+# Also prints the object type to stderr so callers can route the request.
 rpsl_to_json() {
-  python3 - <<'PY'
+  python3 - "$1" <<'PY'
 import sys, json, re
+TYPES = {
+    "domain","route6","inet6num","aut-num","mntner","person","role",
+    "route","inetnum","organisation","key-cert","poem","poetic-form",
+}
+with open(sys.argv[1]) as fh:
+    raw = fh.readlines()
 attrs = []
-for line in sys.stdin:
+for line in raw:
     line = line.rstrip("\n")
     if not line or line.startswith("#"):
         continue
@@ -47,10 +54,11 @@ for line in sys.stdin:
     if not m:
         continue
     attrs.append({"name": m.group(1), "value": m.group(2)})
-otype = next((a["value"] for a in attrs if a["name"] in ("domain","route6","inet6num","aut-num","mntner","person","role","route","inetnum","organisation","key-cert","poem","poetic-form")), None)
+otype = next((a["name"] for a in attrs if a["name"] in TYPES), None)
 if otype is None:
     sys.stderr.write("could not infer object type from first attribute\n")
     sys.exit(2)
+sys.stderr.write(otype + "\n")
 print(json.dumps({
     "objects": {
         "object": [
@@ -78,10 +86,12 @@ cmd_search() {
 
 cmd_create() {
   local file="$1"
-  local body
-  body="$(rpsl_to_json < "$file")"
-  local type
-  type="$(printf '%s\n' "$body" | python3 -c 'import sys,json;print(json.load(sys.stdin)["objects"]["object"][0]["attributes"]["attribute"][0]["name"])')"
+  local body type
+  # rpsl_to_json prints the inferred object type to stderr; capture it.
+  exec 3>&1
+  type="$(rpsl_to_json "$file" 2>&1 1>&3 | tail -1)"
+  body="$(rpsl_to_json "$file" 2>/dev/null)"
+  exec 3>&-
   curl -sS -X POST \
     -H "Authorization: ${RIPE_API_AUTH}" \
     -H "Accept: application/json" \
@@ -93,7 +103,7 @@ cmd_create() {
 cmd_update() {
   local type="$1" key="$2" file="$3"
   local body
-  body="$(rpsl_to_json < "$file")"
+  body="$(rpsl_to_json "$file" 2>/dev/null)"
   curl -sS -X PUT \
     -H "Authorization: ${RIPE_API_AUTH}" \
     -H "Accept: application/json" \
