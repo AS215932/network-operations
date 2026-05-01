@@ -1,0 +1,5 @@
+# Managed by ansible — roles/networkd_resolved
+# Drop-in merged into /etc/systemd/network/{{ networkd_primary_unit }}.network
+[Network]
+DNS={{ networkd_dns }}
+Domains={{ networkd_search_domain }}

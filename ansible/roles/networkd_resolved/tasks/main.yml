@@ -1,0 +1,22 @@
+---
+# Apply the search-domain + DNS drop-in. Linux-only; FreeBSD core routers
+# are handled by playbooks/freebsd_resolv.yml.
+
+- name: Ensure drop-in directory exists
+  ansible.builtin.file:
+    path: "/etc/systemd/network/{{ networkd_primary_unit }}.network.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ansible_os_family != 'FreeBSD'
+
+- name: Render search-domain drop-in
+  ansible.builtin.template:
+    src: 10-search.conf.j2
+    dest: "/etc/systemd/network/{{ networkd_primary_unit }}.network.d/10-search.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when: ansible_os_family != 'FreeBSD'
+  notify: networkd reload

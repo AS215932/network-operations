@@ -1,0 +1,18 @@
+---
+# Idempotent search-domain rollout for FreeBSD core routers (cr1-nl1, cr1-de1).
+# We don't template the whole /etc/resolv.conf — preserves whatever
+# nameserver entries were placed manually (audit-live-state principle).
+
+- name: FreeBSD — ensure search as215932.net in /etc/resolv.conf
+  hosts: freebsd
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Ensure search line is present
+      ansible.builtin.lineinfile:
+        path: /etc/resolv.conf
+        regexp: '^search\s'
+        line: 'search as215932.net'
+        state: present
+        create: false
+      tags: [networkd_resolved]

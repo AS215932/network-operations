@@ -1,0 +1,4 @@
+---
+- name: reload systemd-networkd
+  ansible.builtin.command: networkctl reload
+  listen: networkd reload

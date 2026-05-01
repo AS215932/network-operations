@@ -28,5 +28,6 @@ ethernets:
         via: {{ ipv6_gateway }}
 {% endif %}
     nameservers:
+      search: [ as215932.net ]
       addresses:
         - {{ dns_servers }}

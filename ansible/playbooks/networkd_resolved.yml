@@ -1,0 +1,33 @@
+---
+- name: networkd_resolved — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: networkd_resolved — apply search domain + DNS drop-in
+  hosts: linux
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - networkd_resolved
+  tags: [networkd_resolved]
+
+- name: networkd_resolved — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

@@ -1,0 +1,12 @@
+---
+# Drop-in for systemd-networkd that adds the AS215932 search domain and
+# overlay resolver to a host's primary interface. Merges into the existing
+# .network unit at runtime — does not replace it.
+
+# Filename (without .network) of the parent unit the drop-in attaches to.
+# Drop-in dirs MUST be named exactly after the parent file: e.g.
+# parent /etc/systemd/network/10-enX0.network → drop-in dir 10-enX0.network.d/.
+networkd_primary_unit: "10-enX0"
+
+networkd_search_domain: as215932.net
+networkd_dns: "2a0c:b641:b50:2::1"

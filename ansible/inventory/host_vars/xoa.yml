@@ -1,6 +1,11 @@
 ---
 # xoa — Xen Orchestra. mgmt NIC reaches dom0 XAPI; infra NIC serves UI.
 
+# enX0 is XOA-appliance-managed (netplan-rendered to /run); enX1 is the static
+# infra-bound NIC carrying our overlay resolver. Attach the search-domain drop-in
+# there so it doesn't fight the appliance.
+networkd_primary_unit: "10-enX1"
+
 firewall_extra_rules:
   # Xen Orchestra UI — proxied by Caddy.
   - { proto: tcp, dport: 443, src: "{{ peers.proxy.ipv6 }}", comment: "XO UI from proxy" }
