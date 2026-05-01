@@ -39,6 +39,11 @@ acl:
     key: hyrule-dns
     action: update
 
+  - id: irc-update
+    address: 2a0c:b641:b50:2::80
+    key: hyrule-dns
+    action: update
+
   - id: openprovider-xfr
     address: [ 35.157.8.190, 18.203.73.190, 185.27.175.218, 2a00:f10:121:400:4be:60ff:fe00:526, 2a05:d014:f80:6e00:c937:174c:45eb:a5f7 ]
     action: transfer
@@ -52,7 +57,15 @@ template:
     storage: "/var/lib/knot/zones"
     file: "%s.zone"
     journal-content: all
+    zonefile-load: difference-no-serial
     notify: [ openprovider ]
+
+  # Self-hosted zones: no Openprovider NOTIFY/AXFR (e.g. reverse DNS).
+  - id: selfhosted
+    storage: "/var/lib/knot/zones"
+    file: "%s.zone"
+    journal-content: all
+    zonefile-load: difference-no-serial
 
 zone:
   - domain: servify.network
@@ -60,9 +73,9 @@ zone:
     template: default
 
   - domain: as215932.net
-    acl: [ caddy-update, openprovider-xfr, home-xfr ]
+    acl: [ caddy-update, irc-update, openprovider-xfr, home-xfr ]
     template: default
 
   - domain: 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa
-    acl: [ openprovider-xfr, home-xfr ]
-    template: default
+    acl: [ home-xfr ]
+    template: selfhosted

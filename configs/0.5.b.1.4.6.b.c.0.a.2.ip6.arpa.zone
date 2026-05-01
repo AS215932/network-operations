@@ -13,16 +13,15 @@ $ORIGIN 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026041201 ; serial
+                  2026042901 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
                   300 )      ; negative TTL
 
+; Self-hosted only — Openprovider does not act as secondary for this zone.
+; Single-NS = lame-delegation warning at RIPE; add a secondary when one is available.
 @       IN  NS    ns1.servify.network.
-@       IN  NS    ns1.openprovider.nl.
-@       IN  NS    ns2.openprovider.be.
-@       IN  NS    ns3.openprovider.eu.
 
 ; --- :2::1 — rtr (infra gateway) ---
 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  rtr.as215932.net.
@@ -44,3 +43,9 @@ $TTL 3600
 
 ; --- :2::60 — vpn ---
 0.6.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  vpn.as215932.net.
+
+; --- :2::70 — xoa ---
+0.7.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  xoa.as215932.net.
+
+; --- :2::80 — irc ---
+0.8.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  irc.as215932.net.
