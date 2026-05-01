@@ -1,0 +1,33 @@
+---
+# rtr-specific routing units that don't fit the firewall role.
+# Currently: dnat-vrf-leak.service — leaks 10.0.2.0/24 from overlay VRF
+# (table 200) into main, so DNAT'd v4 traffic arriving on enX4 can return
+# to the infra VMs on enX2.
+
+- name: rtr — static routing units (VRF leaks)
+  hosts: rtr
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Install dnat-vrf-leak.service
+      copy:
+        src: ../../configs/rtr/dnat-vrf-leak.service
+        dest: /etc/systemd/system/dnat-vrf-leak.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - daemon-reload
+        - enable + start dnat-vrf-leak
+
+  handlers:
+    - name: daemon-reload
+      systemd:
+        daemon_reload: true
+      listen: daemon-reload
+    - name: enable + start dnat-vrf-leak
+      systemd:
+        name: dnat-vrf-leak.service
+        enabled: true
+        state: started
+      listen: enable + start dnat-vrf-leak
