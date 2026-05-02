@@ -13,4 +13,4 @@ knot_tsig_secret: "{{ lookup('env', 'TSIG_SECRET') }}"
 knot_zones:
   - name: servify.network
   - name: as215932.net
-  - name: 0.5.b.1.4.6.b.c.0.a.2.ip6.arpa
+  - name: 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa   # /48 = 12 nibbles of 2a0c:b641:0b50

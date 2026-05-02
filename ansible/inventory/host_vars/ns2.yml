@@ -39,7 +39,7 @@ monitoring_extra_services:
     check_command: dig
     interval: 2m
     notes: "Authoritative SOA query against ns2 for reverse zone"
-    vars: { dig_lookup: "0.5.b.1.4.6.b.c.0.a.2.ip6.arpa", dig_server: "{{ peers.ns2.ipv6 }}", dig_record_type: "SOA" }
+    vars: { dig_lookup: "0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa", dig_server: "{{ peers.ns2.ipv6 }}", dig_record_type: "SOA" }
   - name: dns-axfr-fresh
     check_command: dummy   # placeholder — fill in once we have a custom check that compares ns1 vs ns2 SOA
     interval: 5m
