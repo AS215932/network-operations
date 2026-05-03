@@ -7,8 +7,8 @@ ansible_user: svag
 # --- Knot role ---
 knot_role: secondary
 # Pull AXFR from the primary (dns VM). v6 is the canonical path; v4 is
-# present for fallback reachability via rtr DNAT (configured by Step 10
-# dnat-vrf-leak.service).
+# present for fallback reachability via rtr DNAT (VRF leak via routing-policy
+# rules in configs/rtr/networkd/10-enX2.network).
 knot_primary_v4: 46.105.40.223
 knot_primary_v6: "{{ peers.dns.ipv6 }}"
 

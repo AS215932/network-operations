@@ -1,33 +1,39 @@
 ---
-# rtr-specific routing units that don't fit the firewall role.
-# Currently: dnat-vrf-leak.service — leaks 10.0.2.0/24 from overlay VRF
-# (table 200) into main, so DNAT'd v4 traffic arriving on enX4 can return
-# to the infra VMs on enX2.
+# Remove the legacy dnat-vrf-leak.service. The DNAT VRF leak now lives as
+# routing-policy rules in configs/rtr/networkd/10-enX2.network.
 
-- name: rtr — static routing units (VRF leaks)
+- name: rtr — remove dnat-vrf-leak.service
   hosts: rtr
   gather_facts: false
   become: true
   tasks:
-    - name: Install dnat-vrf-leak.service
-      copy:
-        src: ../../configs/rtr/dnat-vrf-leak.service
-        dest: /etc/systemd/system/dnat-vrf-leak.service
-        owner: root
-        group: root
-        mode: "0644"
-      notify:
-        - daemon-reload
-        - enable + start dnat-vrf-leak
+    - name: Stop and disable dnat-vrf-leak.service
+      systemd:
+        name: dnat-vrf-leak.service
+        state: stopped
+        enabled: false
+      register: leak_stop
+      failed_when:
+        - leak_stop.failed
+        - "'Could not find the requested service' not in (leak_stop.msg | default(''))"
+
+    - name: Remove dnat-vrf-leak.service unit file
+      file:
+        path: /etc/systemd/system/dnat-vrf-leak.service
+        state: absent
+      notify: daemon-reload
+
+    - name: Ensure leaked 10.0.2.0/24 route is gone from main table
+      command: ip -4 route del 10.0.2.0/24 dev enX2 table main
+      register: route_del
+      changed_when: route_del.rc == 0
+      failed_when:
+        - route_del.rc != 0
+        - "'No such process' not in route_del.stderr"
+        - "'Cannot find device' not in route_del.stderr"
 
   handlers:
     - name: daemon-reload
       systemd:
         daemon_reload: true
       listen: daemon-reload
-    - name: enable + start dnat-vrf-leak
-      systemd:
-        name: dnat-vrf-leak.service
-        enabled: true
-        state: started
-      listen: enable + start dnat-vrf-leak

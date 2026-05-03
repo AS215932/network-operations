@@ -10,13 +10,6 @@
     state: reloaded
   listen: reload nftables
 
-- name: restart dnat-vrf-leak
-  systemd:
-    name: dnat-vrf-leak
-    state: restarted
-  when: inventory_hostname == 'rtr'
-  listen: reload nftables
-
 - name: restart nat64-vrf-leak
   systemd:
     name: nat64-vrf-leak

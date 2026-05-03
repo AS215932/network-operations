@@ -1,5 +1,9 @@
 # /etc/systemd/network/10-enX2.network — infra (overlay VRF)
 # RFC1918 IPv4 for DNAT targets (dns, proxy) — avoids NAT46 complexity.
+# IPv4 routing-policy rules form a symmetric VRF leak for the DNAT path:
+# To=10.0.2.0/24 → overlay (forward), From=10.0.2.0/24 → main (return).
+# Replaces dnat-vrf-leak.service, which leaked the route into MAIN and
+# caused asymmetric routing + ARP instability (~18% UDP loss to DNAT'd VMs).
 [Match]
 Name=enX2
 
@@ -14,6 +18,11 @@ Address=2a0c:b641:b50:2::1/64
 
 [Address]
 Address=10.0.2.1/24
+
+[RoutingPolicyRule]
+To=10.0.2.0/24
+Table=200
+Priority=998
 
 [RoutingPolicyRule]
 From=10.0.2.0/24
