@@ -75,7 +75,7 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 - `autoinstall/` — OS autoinstall response files (OpenBSD, Debian cloud-init) and QMP tools for headless VM interaction.
 - `scripts/` — Shell scripts for dom0 bootstrap, TSIG key generation, VM template prep, and smoke tests.
 - `ansible/` — Declarative provisioning. Currently scopes the `firewall` role (nftables on Linux, pf on FreeBSD) for every host except dom0. Inventory + role + generated artifacts under `ansible/generated/<host>/`. Future roles (knot, caddy, frr, exporters) drop in here.
-- `docs/` — Deployment runbook, architecture docs, and the canonical traffic-flow inventory at `docs/network-flows.md`. rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`.
+- `docs/` — Deployment runbook, architecture docs, and the canonical traffic-flow inventory at `docs/network-flows.md`. rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`. Reverse DNS / PTR setup is in `docs/reverse-dns.md`.
 
 ## Key conventions
 
