@@ -153,7 +153,7 @@ NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both c
     - enX3 (vm): overlay VRF — address `2a0c:b641:b51::1/48` via FRR
     - enX4 (wan): default VRF — `2001:41d0:303:48a::2/64` (OVH underlay)
     - WireGuard tunnels (wg0, wg1) and lo-overlay created as .netdev in overlay VRF
-15. Deploy sysctl (`configs/rtr/sysctl.conf`): IPv6 forwarding, disable DAD on enX4
+15. Deploy sysctl (`configs/rtr/sysctl.conf` → `/etc/sysctl.d/99-rtr.conf`): IPv6 forwarding, disable DAD on enX4, `tcp/udp_l3mdev_accept=1` for VRF-overlay reachability. Also deploy `configs/rtr/modules-load.d/vrf.conf` → `/etc/modules-load.d/vrf.conf` so the `vrf` module is loaded at boot before `systemd-sysctl` runs (otherwise the l3mdev sysctls don't exist at apply time and silently default to 0).
 16. Install FRRouting, deploy `configs/rtr/frr.conf`
     - Overlay VRF with WireGuard tunnels
     - All overlay IPv6 addresses assigned by FRR
@@ -181,7 +181,7 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
     Gateway=193.70.32.254
     ```
 20. Enable IPv4 forwarding: add `net.ipv4.conf.all.forwarding=1` to sysctl
-21. Install Jool: `apt install jool-dkms jool-tools`
+21. Install Jool: `apt install jool-dkms jool-tools linux-headers-$(uname -r)`. The headers package must be installed alongside `jool-dkms` (or kept in sync after kernel upgrades) — without it DKMS can't build, `modprobe jool` fails with `Module jool not found`, and `jool.service` enters `failed` state on next boot.
 22. Deploy `configs/rtr/jool/jool.conf` → `/etc/jool/jool.conf`:
     - instance name: `nat64` (netfilter framework)
     - pool6: `64:ff9b::/96`
