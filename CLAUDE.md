@@ -168,6 +168,23 @@ extra-var; see `docs/ansible.md` for the rollout runbook (`serial: 1`,
 `at(1)` watchdog, ordered handler chain on rtr). Do not skip the runbook
 on first-time applies.
 
+## Deployment safety — always check Icinga before and after
+
+Every live deployment MUST capture Icinga state before and after the change.
+Use the playbook snapshot wrapper or manually run the same check on `mon`
+before touching hosts and again after handlers/reloads finish. The point is to
+compare "already broken" vs "newly broken" and catch regressions from our
+changes immediately. Do not use `--skip-tags snapshot` for real deploys unless
+there is an explicit emergency reason, and record that reason in the rollout
+notes.
+
+## Commit discipline
+
+Commit changes as small, logical, individual commits. Keep unrelated repo areas
+separate, and avoid one omnibus commit for multi-part work. Push with
+`GIT_SSH_COMMAND="ssh -i ~/.ssh/id_servify -o IdentitiesOnly=yes"` unless the
+user explicitly says otherwise.
+
 The previous shell-script provisioning under `scripts/` continues to work
 through this transition; future Ansible roles (caddy, frr) will absorb
 those scripts one at a time.

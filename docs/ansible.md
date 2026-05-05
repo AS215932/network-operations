@@ -42,6 +42,11 @@ ansible-playbook playbooks/firewall.yml \
   -e firewall_apply=true
 ```
 
+For every live deployment, keep the Icinga snapshot plays enabled. The
+pre-deploy snapshot captures known problems before we touch hosts; the
+post-deploy snapshot lets us spot new alerts caused by the rollout. Only use
+`--skip-tags snapshot` for render-only validation or an explicit emergency.
+
 This:
 1. SSHes to the host (no `--connection=local`).
 2. Renders the config to `<conf_path>.new` on the host.
@@ -71,6 +76,8 @@ in `host_vars/rtr.yml` and re-apply.
 - `inventory/hosts.yml` — static, IPv6 ansible_host per VM.
 - `inventory/group_vars/all.yml` — the canonical `peers` dict + subnets + ops-prefix. **Edit this when a host moves.**
 - `inventory/group_vars/{linux,freebsd}.yml` — OS-family defaults (user, become, python).
+- `inventory/group_vars/openbsd.yml` — OpenBSD service-host defaults for the
+  mail VM (`doas`, `/usr/local/bin/python3`, PF service profile).
 - `inventory/group_vars/{routers,infra_vms,public_facing}.yml` — role-based posture.
 - `inventory/host_vars/<host>.yml` — host-specific `firewall_extra_rules`.
 
