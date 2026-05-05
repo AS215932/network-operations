@@ -10,11 +10,13 @@
 #   {{ hostname }}       — VM hostname (e.g. mail)
 #   {{ fqdn }}           — VM FQDN (e.g. mail.as215932.net)
 #   {{ ssh_pubkey }}     — SSH public key for svag/root
-#   {{ ipv6_address }}   — static IPv6 with prefix (e.g. 2a0c:b641:b50:2::90/64)
-#   {{ ipv6_gateway }}   — IPv6 gateway (e.g. 2a0c:b641:b50:2::1)
-#   {{ dns_server }}     — recursive DNS server (e.g. 2a0c:b641:b50:2::1)
-#   {{ mail_ipv4 }}      — optional failover IPv4 address (e.g. 51.91.236.215)
-#   {{ mail_ipv4_gw }}   — optional failover IPv4 gateway (e.g. 193.70.32.254)
+#   {{ ipv6_address }}       — static IPv6 with prefix (e.g. 2a0c:b641:b50:2::90/64)
+#   {{ ipv6_gateway }}       — IPv6 gateway (e.g. 2a0c:b641:b50:2::1)
+#   {{ dns_server }}         — recursive DNS server (e.g. 2a0c:b641:b50:2::1)
+#   {{ infra_if_name }}      — optional hostname.if target (default: xnf0)
+#   {{ mail_ipv4 }}          — optional failover IPv4 address (e.g. 51.91.236.215)
+#   {{ mail_ipv4_gw }}       — optional failover IPv4 gateway (e.g. 193.70.32.254)
+#   {{ mail_ipv4_if_name }}  — optional hostname.if target (default: xnf1)
 
 #cloud-config
 hostname: {{ hostname }}
@@ -40,19 +42,19 @@ write_files:
     permissions: "0640"
     content: |
       permit nopass keepenv :wheel
-  - path: /etc/hostname.xnf0
+  - path: /etc/hostname.{{ infra_if_name | default('xnf0') }}
     owner: root:wheel
     permissions: "0644"
     content: |
       inet6 {{ ipv6_address }}
       !route -n add -inet6 default {{ ipv6_gateway }}
 {% if mail_ipv4 is defined and mail_ipv4 %}
-  - path: /etc/hostname.xnf1
+  - path: /etc/hostname.{{ mail_ipv4_if_name | default('xnf1') }}
     owner: root:wheel
     permissions: "0644"
     content: |
       inet {{ mail_ipv4 }} 255.255.255.255
-      !route -n add -inet {{ mail_ipv4_gw }} -cloning -link -iface xnf1
+      !route -n add -inet {{ mail_ipv4_gw }} -cloning -link -iface $if
       !route -n add -inet default {{ mail_ipv4_gw }}
 {% endif %}
   - path: /etc/resolv.conf
@@ -64,9 +66,6 @@ write_files:
 
 runcmd:
   - rcctl enable sshd
-  - sh /etc/netstart xnf0
-{% if mail_ipv4 is defined and mail_ipv4 %}
-  - sh /etc/netstart xnf1
-{% endif %}
+  - sh /etc/netstart
   - pkg_add -I python3
   - rcctl restart sshd
