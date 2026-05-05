@@ -35,11 +35,10 @@ Templates:
   and restarts networking/SSH.
 - `openbsd-meta-data.j2` — instance metadata for ConfigDrive/NoCloud.
 
-OpenBSD NIC names depend on how XCP-NG presents the device. Prefer MAC-address
-hostname files (`/etc/hostname.fa:5a:78:...`) by passing `infra_if_name` and
-`mail_ipv4_if_name` to `openbsd-cloud-init.yaml.j2`; fall back to `xnf0`/`xnf1`
-only for templates that expose Xen PV NICs. For `mail`, attach the infra VIF
-first and the OVH failover IPv4 VIF second.
+OpenBSD NICs on XCP-NG should use the Xen PV driver names `xnf0`, `xnf1`,
+`xnf2` (not emulated-device names and not MAC-address hostname files). For
+`mail`, attach the infra VIF first as `xnf0`; attach the OVH failover IPv4 VIF
+second as `xnf1`.
 
 ## OpenBSD autoinstall fallback
 

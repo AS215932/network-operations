@@ -310,17 +310,17 @@ doas rm -f /etc/ssh/ssh_host_*
 ```
 
 Convert the cleaned VM to an XO template. Deploy the actual `mail` VM with
-2 vCPU, 2GB RAM, 40GB disk, the first VIF on xenbr-infra, and static IPv6
+2 vCPU, 2GB RAM, 40GB disk, `xnf0` on xenbr-infra, and static IPv6
 `2a0c:b641:b50:2::90/64` via `autoinstall/openbsd-cloud-init.yaml.j2`.
 If `51.91.236.215` is delivered directly to the VM, attach a second VIF
-to the OVH failover IPv4 bridge/MAC and pass `mail_ipv4` plus `mail_ipv4_gw`
-into the same user-data. Prefer MAC-address hostname files by also passing
-`infra_if_name` and `mail_ipv4_if_name`, because OpenBSD may expose the NICs as
-emulated devices rather than `xnf*` on BIOS templates. The current
-direct-delivery gateway is `193.70.32.254`; cloud-init writes an explicit
-on-link route to that gateway before adding the IPv4 default route. If the IPv4
-is routed/DNATed by `rtr`, do not attach the second VIF; keep the host IPv6-only
-and update the rtr firewall/NAT design instead.
+as `xnf1` to the OVH failover IPv4 bridge/MAC and pass `mail_ipv4` plus
+`mail_ipv4_gw` into the same user-data. OpenBSD must see the Xen PV network
+interfaces as `xnf*`; do not use emulated-device names or MAC-address hostname
+files for normal provisioning. The current direct-delivery gateway is
+`193.70.32.254`; cloud-init writes an explicit on-link route to that gateway
+before adding the IPv4 default route. If the IPv4 is routed/DNATed by `rtr`, do
+not attach the second VIF; keep the host IPv6-only and update the rtr
+firewall/NAT design instead.
 
 The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
 configured in OVH as `mail.as215932.net`. The DNS A record and SPF `ip4:`
