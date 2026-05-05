@@ -20,8 +20,8 @@ mail_acme_authority: letsencrypt
 mail_acme_email: "noc@{{ mail_domain }}"
 
 mail_packages:
-  - dovecot
-  - dovecot-pigeonhole
+  - dovecot--
+  - dovecot-pigeonhole--
   - rspamd--
   - opensmtpd-filter-rspamd
   - redis
