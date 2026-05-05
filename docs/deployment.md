@@ -320,7 +320,8 @@ files for normal provisioning. The current direct-delivery gateway is
 `193.70.32.254`; cloud-init writes an explicit on-link route to that gateway
 before adding the IPv4 default route. If the IPv4 is routed/DNATed by `rtr`, do
 not attach the second VIF; keep the host IPv6-only and update the rtr
-firewall/NAT design instead.
+firewall/NAT design instead. Use `2a0c:b641:b50:2::1` as the VM resolver;
+`dns`/`ns1` is authoritative-only.
 
 The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
 configured in OVH as `mail.as215932.net`. The DNS A record and SPF `ip4:`

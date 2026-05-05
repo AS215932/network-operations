@@ -38,7 +38,8 @@ Templates:
 OpenBSD NICs on XCP-NG should use the Xen PV driver names `xnf0`, `xnf1`,
 `xnf2` (not emulated-device names and not MAC-address hostname files). For
 `mail`, attach the infra VIF first as `xnf0`; attach the OVH failover IPv4 VIF
-second as `xnf1`.
+second as `xnf1`. Use the router resolver `2a0c:b641:b50:2::1` for
+`dns_server`; `dns`/`ns1` is authoritative and is not a general recursor.
 
 ## OpenBSD autoinstall fallback
 
