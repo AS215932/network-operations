@@ -4,6 +4,10 @@
 # /etc/pf.conf — managed by ansible (roles/firewall) — host {{ inventory_hostname }}
 
 ext_if="{{ pf_ext_if }}"
+{% if pf_ext_ifs is defined %}
+ext_ifs="{ {{ pf_ext_ifs | join(' ') }} }"
+{% endif %}
+{% set service_ifs = '$ext_ifs' if pf_ext_ifs is defined else '$ext_if' %}
 
 set skip on lo
 set loginterface $ext_if
@@ -19,12 +23,12 @@ block return out log all
 {% endif %}
 
 # SSH from ops-prefix and VPN clients.
-pass in quick on $ext_if inet proto tcp from {{ ops_prefix_v4 }} to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops-prefix (v4)"
-pass in quick on $ext_if inet6 proto tcp from { {{ ssh_allow_sources_v6 | join(', ') }} } to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops/VPN (v6)"
+pass in quick on {{ service_ifs }} inet proto tcp from {{ ops_prefix_v4 }} to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops-prefix (v4)"
+pass in quick on {{ service_ifs }} inet6 proto tcp from { {{ ssh_allow_sources_v6 | join(', ') }} } to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops/VPN (v6)"
 
 # ICMP.
-pass in quick on $ext_if inet proto icmp keep state
-pass in quick on $ext_if inet6 proto ipv6-icmp keep state
+pass in quick on {{ service_ifs }} inet proto icmp keep state
+pass in quick on {{ service_ifs }} inet6 proto ipv6-icmp keep state
 
 {% macro pf_src(src) -%}
 {%- if src == 'any' -%}
@@ -51,7 +55,7 @@ from {{ src }}
 {% set fams = ['inet6'] if family in ['ip6', 'inet6', 'v6'] else (['inet'] if family in ['ip', 'inet', 'v4'] else ['inet', 'inet6']) %}
 {% for fam in fams %}
 {% for proto in protos %}
-pass in quick on $ext_if {{ fam }} proto {{ proto }} {{ pf_src(r.src) }} to any port = {{ pf_port(r.dport) }} keep state label "{{ r.comment }}"
+pass in quick on {{ service_ifs }} {{ fam }} proto {{ proto }} {{ pf_src(r.src) }} to any port = {{ pf_port(r.dport) }} keep state label "{{ r.comment }}"
 {% endfor %}
 {% endfor %}
 {% endfor %}
@@ -63,5 +67,5 @@ pass in quick on $ext_if {{ fam }} proto {{ proto }} {{ pf_src(r.src) }} to any 
 
 {% endif %}
 # Outbound.
-pass out quick on $ext_if inet proto { tcp, udp, icmp } from any to any keep state
-pass out quick on $ext_if inet6 proto { tcp, udp, ipv6-icmp } from any to any keep state
+pass out quick on {{ service_ifs }} inet proto { tcp, udp, icmp } from any to any keep state
+pass out quick on {{ service_ifs }} inet6 proto { tcp, udp, ipv6-icmp } from any to any keep state

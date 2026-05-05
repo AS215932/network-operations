@@ -14,7 +14,7 @@
 #   {{ ipv6_gateway }}   — IPv6 gateway (e.g. 2a0c:b641:b50:2::1)
 #   {{ dns_server }}     — recursive DNS server (e.g. 2a0c:b641:b50:2::1)
 #   {{ mail_ipv4 }}      — optional failover IPv4 address (e.g. 51.91.236.215)
-#   {{ mail_ipv4_gw }}   — optional failover IPv4 gateway (e.g. 51.91.236.254)
+#   {{ mail_ipv4_gw }}   — optional failover IPv4 gateway (e.g. 193.70.32.254)
 
 #cloud-config
 hostname: {{ hostname }}
@@ -52,6 +52,7 @@ write_files:
     permissions: "0644"
     content: |
       inet {{ mail_ipv4 }} 255.255.255.255
+      !route -n add -inet {{ mail_ipv4_gw }} -cloning -link -iface xnf1
       !route -n add -inet default {{ mail_ipv4_gw }}
 {% endif %}
   - path: /etc/resolv.conf

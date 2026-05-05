@@ -81,3 +81,4 @@ ssh_allow_sources_v4:
 # Dedicated OVH failover IPv4 for SMTP deliverability. Reverse DNS is set in
 # OVH to mail.as215932.net.
 mail_failover_ipv4: "51.91.236.215"
+mail_failover_ipv4_gateway: "193.70.32.254"

@@ -3,6 +3,7 @@
 # Public SMTP is world-facing; mailbox access stays on ops/VPN only.
 
 pf_ext_if: xnf0
+pf_ext_ifs: ["xnf0", "xnf1"]
 
 firewall_extra_rules:
   # Public mail delivery and submission.
@@ -51,6 +52,7 @@ mail_domain: as215932.net
 mail_hostname: mail.as215932.net
 mail_ipv6: "{{ peers.mail.ipv6 }}"
 mail_ipv4: "{{ mail_failover_ipv4 | default('') }}"
+mail_ipv4_gw: "{{ mail_failover_ipv4_gateway | default('') }}"
 mail_shared_user: noc
 mail_role_addresses:
   - noc

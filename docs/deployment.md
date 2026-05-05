@@ -314,8 +314,10 @@ Convert the cleaned VM to an XO template. Deploy the actual `mail` VM with
 `2a0c:b641:b50:2::90/64` via `autoinstall/openbsd-cloud-init.yaml.j2`.
 If `51.91.236.215` is delivered directly to the VM, attach a second VIF
 (`xnf1`) to the OVH failover IPv4 bridge/MAC and pass `mail_ipv4` plus
-`mail_ipv4_gw` into the same user-data. If the IPv4 is routed/DNATed by `rtr`,
-do not attach `xnf1`; keep the host IPv6-only and update the rtr firewall/NAT
+`mail_ipv4_gw` into the same user-data. The current direct-delivery gateway is
+`193.70.32.254`; cloud-init writes an explicit on-link route to that gateway
+before adding the IPv4 default route. If the IPv4 is routed/DNATed by `rtr`, do
+not attach `xnf1`; keep the host IPv6-only and update the rtr firewall/NAT
 design instead.
 
 The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
