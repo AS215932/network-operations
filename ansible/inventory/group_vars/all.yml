@@ -35,6 +35,8 @@ peers:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
   irc:     { ipv6: "2a0c:b641:b50:2::80" }
+  mail:
+    ipv6: "2a0c:b641:b50:2::90"
   ns2:
     ipv4: "54.38.14.218"
     ipv6: "2001:41d0:304:300::7bfb"
@@ -74,3 +76,8 @@ ssh_allow_sources_v6:
   - "{{ vpn_clients_subnet }}"
 ssh_allow_sources_v4:
   - "{{ ops_prefix_v4 }}"
+
+# --- Mail server public identity ---
+# Dedicated OVH failover IPv4 for SMTP deliverability. Reverse DNS is set in
+# OVH to mail.as215932.net.
+mail_failover_ipv4: "51.91.236.215"

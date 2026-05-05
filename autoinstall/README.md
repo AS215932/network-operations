@@ -2,9 +2,11 @@
 
 Templates and tools for automated VM provisioning on XCP-NG.
 
-## OpenBSD (firewall)
+## OpenBSD (firewall/mail)
 
 `openbsd-fw.conf` — autoinstall response file. Serve via HTTP on the mgmt bridge:
+`openbsd-mail.conf` is the equivalent response file for the `mail` VM on
+xenbr-infra with static IPv6 `2a0c:b641:b50:2::90`.
 
 ```bash
 # On dom0: start DHCP + HTTP for autoinstall

@@ -20,3 +20,29 @@
   when: ansible_os_family == "Debian"
   notify: restart node_exporter
   tags: [apply]
+
+- name: Install node_exporter (OpenBSD)
+  community.general.openbsd_pkg:
+    name: "{{ monitoring_pkg }}"
+    state: present
+  when: ansible_os_family == "OpenBSD"
+  tags: [apply]
+
+- name: Configure node_exporter listen address (OpenBSD)
+  lineinfile:
+    path: "{{ monitoring_node_env_path }}"
+    create: true
+    regexp: '^node_exporter_flags='
+    line: 'node_exporter_flags=--web.listen-address={{ monitoring_node_listen }}'
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: ansible_os_family == "OpenBSD"
+  notify: restart node_exporter
+  tags: [apply]
+
+- name: Enable node_exporter (OpenBSD)
+  command: "rcctl enable {{ monitoring_node_service }}"
+  changed_when: false
+  when: ansible_os_family == "OpenBSD"
+  tags: [apply]

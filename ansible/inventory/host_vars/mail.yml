@@ -1,0 +1,59 @@
+---
+# mail — OpenBSD mail server for as215932.net.
+# Public SMTP is world-facing; mailbox access stays on ops/VPN only.
+
+pf_ext_if: xnf0
+
+firewall_extra_rules:
+  # Public mail delivery and submission.
+  - { proto: tcp, dport: 25,  src: any, family: both, comment: "SMTP inbound (OpenSMTPD)" }
+  - { proto: tcp, dport: 465, src: any, family: both, comment: "SMTPS submission (OpenSMTPD)" }
+  - { proto: tcp, dport: 587, src: any, family: both, comment: "Submission STARTTLS (OpenSMTPD)" }
+
+  # ACME HTTP-01 challenge for mail.as215932.net.
+  - { proto: tcp, dport: 80, src: any, family: both, comment: "ACME HTTP-01 (httpd)" }
+
+  # Mailbox access is intentionally private; use VPN or ops-prefix.
+  - { proto: tcp, dport: 993,  src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "IMAPS from ops/VPN" }
+  - { proto: tcp, dport: 4190, src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "ManageSieve from ops/VPN" }
+
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: ip6, comment: "node_exporter scrape" }
+
+# --- Monitoring ---
+monitoring_register: true
+monitoring_display_name: "mail (OpenBSD mail server)"
+monitoring_role: mail
+monitoring_extra_services:
+  - name: smtp-tcp
+    check_command: tcp
+    interval: 2m
+    notes: "OpenSMTPD public SMTP listener on tcp/25"
+    vars: { tcp_address: "mail.as215932.net", tcp_port: 25 }
+  - name: smtps-cert-validity
+    check_command: ssl
+    interval: 12h
+    notes: "TLS certificate days-until-expiry on tcp/465"
+    vars: { ssl_address: "mail.as215932.net", ssl_sni: "mail.as215932.net", ssl_port: 465, ssl_cert_valid_days_warn: 14, ssl_cert_valid_days_critical: 7 }
+  - name: submission-tcp
+    check_command: tcp
+    interval: 2m
+    notes: "OpenSMTPD submission listener on tcp/587"
+    vars: { tcp_address: "mail.as215932.net", tcp_port: 587 }
+  - name: imaps-cert-validity
+    check_command: ssl
+    interval: 12h
+    notes: "Dovecot IMAPS certificate days-until-expiry on tcp/993"
+    vars: { ssl_address: "mail.as215932.net", ssl_sni: "mail.as215932.net", ssl_port: 993, ssl_cert_valid_days_warn: 14, ssl_cert_valid_days_critical: 7 }
+
+# --- Mail role ---
+mail_domain: as215932.net
+mail_hostname: mail.as215932.net
+mail_ipv6: "{{ peers.mail.ipv6 }}"
+mail_ipv4: "{{ mail_failover_ipv4 | default('') }}"
+mail_shared_user: noc
+mail_role_addresses:
+  - noc
+  - abuse
+  - peering
+  - dh

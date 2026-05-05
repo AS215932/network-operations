@@ -1,0 +1,35 @@
+---
+mail_apply: false
+mail_generated_dir: "{{ playbook_dir }}/../generated"
+
+mail_domain: as215932.net
+mail_hostname: "mail.{{ mail_domain }}"
+mail_ipv6: "{{ peers.mail.ipv6 }}"
+mail_ipv4: "{{ mail_failover_ipv4 | default('') }}"
+mail_shared_user: noc
+mail_role_addresses: [noc, abuse, peering, dh]
+
+mail_dkim_selector: dkim
+mail_dkim_private_key_path: "/etc/mail/dkim/private/{{ mail_domain }}.key"
+mail_dkim_public_key_path: "/etc/mail/dkim/{{ mail_domain }}.pub"
+mail_dkim_private_key: "{{ vault_mail_dkim_private_key | default(lookup('env', 'MAIL_DKIM_PRIVATE_KEY'), true) | default('', true) }}"
+mail_shared_password_hash: "{{ vault_mail_noc_password_hash | default(lookup('env', 'MAIL_NOC_PASSWORD_HASH'), true) | default('', true) }}"
+
+mail_run_acme: false
+mail_acme_authority: letsencrypt
+mail_acme_email: "noc@{{ mail_domain }}"
+
+mail_packages:
+  - dovecot
+  - dovecot-pigeonhole
+  - rspamd--
+  - opensmtpd-filter-rspamd
+  - redis
+  - node_exporter
+
+mail_services:
+  - redis
+  - rspamd
+  - dovecot
+  - httpd
+  - smtpd

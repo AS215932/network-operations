@@ -21,7 +21,7 @@
   tags: [snapshot, always]
 
 - name: Monitoring — apply
-  hosts: linux
+  hosts: linux:openbsd
   serial: 1
   gather_facts: false
   become: true

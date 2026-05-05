@@ -1,0 +1,10 @@
+# /etc/rspamd/local.d/dkim_signing.conf — managed by ansible/roles/mail_openbsd
+
+allow_username_mismatch = true;
+
+domain {
+    {{ mail_domain }} {
+        path = "{{ mail_dkim_private_key_path }}";
+        selector = "{{ mail_dkim_selector }}";
+    }
+}

@@ -6,6 +6,11 @@
     enabled: true
   when: ansible_os_family == "Debian"
 
+- name: restart node_exporter (OpenBSD)
+  command: "rcctl restart {{ monitoring_node_service }}"
+  listen: restart node_exporter
+  when: ansible_os_family == "OpenBSD"
+
 - name: reload icinga2
   command: icinga2 daemon -C
   changed_when: false

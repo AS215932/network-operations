@@ -3,14 +3,14 @@
   delegate_to: localhost
   become: false
   template:
-    src: pf.conf.j2
+    src: "{{ firewall_pf_template | default('pf.conf.j2') }}"
     dest: "{{ firewall_generated_dir }}/{{ inventory_hostname }}/pf.conf"
     mode: "0644"
   tags: [validate, diff, apply]
 
 - name: Render pf config to host (staging path)
   template:
-    src: pf.conf.j2
+    src: "{{ firewall_pf_template | default('pf.conf.j2') }}"
     dest: "{{ firewall_conf_path }}.new"
     mode: "0644"
   when: firewall_apply

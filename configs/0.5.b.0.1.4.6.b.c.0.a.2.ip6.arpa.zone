@@ -19,7 +19,7 @@ $ORIGIN 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026050202 ; serial
+                  2026050501 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
@@ -55,3 +55,6 @@ $TTL 3600
 
 ; --- :2::80 — irc ---
 0.8.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  irc.as215932.net.
+
+; --- :2::90 — mail ---
+0.9.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  mail.as215932.net.

@@ -1,0 +1,4 @@
+#!/bin/sh
+# /etc/weekly.local — managed by ansible/roles/mail_openbsd
+
+acme-client {{ mail_hostname }} && rcctl restart dovecot httpd smtpd

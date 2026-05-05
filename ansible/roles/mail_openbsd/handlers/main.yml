@@ -1,0 +1,19 @@
+---
+- name: update aliases table
+  command: smtpctl update table aliases
+  changed_when: false
+
+- name: restart smtpd
+  command: rcctl restart smtpd
+
+- name: restart dovecot
+  command: rcctl restart dovecot
+
+- name: restart rspamd
+  command: rcctl restart rspamd
+
+- name: restart httpd
+  command: rcctl restart httpd
+
+- name: restart redis
+  command: rcctl restart redis

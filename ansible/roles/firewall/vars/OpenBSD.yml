@@ -1,0 +1,8 @@
+---
+firewall_pkg: ""
+firewall_service: pf
+firewall_conf_path: /etc/pf.conf
+firewall_backup_path: /etc/pf.conf.backup
+firewall_validate_cmd: "pfctl -nf"
+firewall_reload_cmd: "pfctl -f /etc/pf.conf"
+firewall_pf_template: pf-service.conf.j2

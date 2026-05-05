@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: mail_openbsd
+  description: OpenBSD mail server role for AS215932
+  min_ansible_version: "2.14"
+dependencies: []

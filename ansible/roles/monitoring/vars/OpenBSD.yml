@@ -1,0 +1,4 @@
+---
+monitoring_pkg: node_exporter
+monitoring_node_service: node_exporter
+monitoring_node_env_path: /etc/rc.conf.local

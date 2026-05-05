@@ -24,6 +24,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | vpn | Debian 13 | `2a0c:b641:b50:2::60` | (DNAT'd from `46.105.40.223`) | WireGuard server |
 | xoa | Debian 13 | `2a0c:b641:b50:2::70`, `10.0.0.10` | — | Xen Orchestra |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
+| mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | `51.91.236.215` | OpenSMTPD + Rspamd + Dovecot mail server |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
@@ -138,6 +139,19 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
+### mail (`2a0c:b641:b50:2::90`)
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| any | TCP | 25 | OpenSMTPD inbound SMTP |
+| any | TCP | 465 | OpenSMTPD SMTPS authenticated submission |
+| any | TCP | 587 | OpenSMTPD STARTTLS authenticated submission |
+| any | TCP | 80 | ACME HTTP-01 challenge via OpenBSD httpd |
+| ops-prefix, vpn-clients | TCP | 993 | Dovecot IMAPS mailbox access |
+| ops-prefix, vpn-clients | TCP | 4190 | Dovecot ManageSieve |
+| mon | TCP | 9100 | node_exporter |
+| ops-prefix, vpn-clients | TCP | 22 | SSH |
+
 ### ns2 (`2001:41d0:304:300::7bfb`, `54.38.14.218`) — secondary nameserver, OVH GRA11
 
 Off-net authoritative secondary; not on AS215932 overlay (different ASN, different site).
@@ -215,6 +229,9 @@ exceptions are:
 | Public → rtr | in | 53/80/443/51820 | DNAT to dns/proxy/vpn |
 | Public → irc | in | 6697 tcp | Soju IRCS (direct v6, no DNAT) |
 | irc → dns | out | 53 tcp | RFC 2136 dyn updates (ACME DNS-01) |
+| Public → mail | in | 25/465/587 tcp | SMTP and authenticated submission on dedicated mail IPs |
+| Public → mail | in | 80 tcp | ACME HTTP-01 for mail.as215932.net |
+| ops-prefix, vpn-clients → mail | in | 993/4190 tcp | Private mailbox and Sieve access |
 | ops-prefix, vpn-clients → all | in | 22 tcp | SSH |
 
 ---

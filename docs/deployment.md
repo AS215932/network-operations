@@ -74,6 +74,7 @@ WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50
 | api | hyrule-cloud + Postgres 17 | 2 | 4GB | 40GB | Debian 13 | infra :2::20 |
 | web | hyrule-web | 1 | 2GB | 20GB | Debian 13 | infra :2::30 |
 | proxy | TLS reverse proxy | 1 | 1GB | 10GB | Debian 13 + Caddy | infra :2::40 |
+| mail | Mail server | 2 | 2GB | 40GB | OpenBSD 7.8 + OpenSMTPD/Rspamd/Dovecot | infra :2::90 + dedicated failover IPv4 |
 
 ~15GB for infra, ~45GB available for customer VMs.
 
@@ -109,6 +110,11 @@ xo-cli vm.start id="$VM_ID"
 NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both cloud-init and networkd configs.
 
 ## Deployment Runbook
+
+Before every live deployment, capture Icinga state from `mon`; capture it again
+after the deployment finishes and compare for new problems. The Ansible
+playbooks include pre/post snapshot plays for this. Do not skip snapshots on a
+real rollout unless it is an explicit emergency.
 
 ### Phase 0: Server Preparation
 
@@ -283,6 +289,39 @@ Rolling back is the same pattern with a git ref:
     - `api.servify.network` → `http://[2a0c:b641:b50:2::20]:8402` (api)
     - DNS-01 ACME via RFC 2136 against Knot DNS (`::10`)
 38. Deploy systemd unit, start service
+
+### Phase 7b: Mail Server (mail)
+
+Create an OpenBSD 7.8 `mail` VM with 2 vCPU, 2GB RAM, 40GB disk, and static
+IPv6 `2a0c:b641:b50:2::90` on the infra bridge. Use
+`autoinstall/openbsd-mail.conf` during install, then bootstrap Python and doas:
+
+```bash
+pkg_add python3
+cat >/etc/doas.conf <<'EOF'
+permit nopass keepenv :wheel
+EOF
+```
+
+The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
+configured in OVH as `mail.as215932.net`. The DNS A record and SPF `ip4:`
+mechanism live in `configs/as215932.net.zone`.
+
+Render and review:
+
+```bash
+cd ansible
+ansible-playbook playbooks/mail_openbsd.yml --tags validate --connection=local
+ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot
+```
+
+Apply after `MAIL_NOC_PASSWORD_HASH` and `MAIL_DKIM_PRIVATE_KEY` are loaded
+from `secrets.local.sh`:
+
+```bash
+ansible-playbook playbooks/mail_openbsd.yml --tags apply \
+    -e '{"mail_apply":true,"mail_run_acme":true}'
+```
 
 ### Phase 8: Customer VM Template
 

@@ -25,5 +25,5 @@
 
 - name: Render pf config (FreeBSD)
   include_tasks: pf.yml
-  when: ansible_os_family == "FreeBSD"
+  when: ansible_os_family in ["FreeBSD", "OpenBSD"]
   tags: [validate, diff, apply]

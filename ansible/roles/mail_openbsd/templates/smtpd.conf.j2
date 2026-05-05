@@ -1,0 +1,22 @@
+# /etc/mail/smtpd.conf — managed by ansible/roles/mail_openbsd
+
+pki {{ mail_hostname }} cert "/etc/ssl/{{ mail_hostname }}.fullchain.pem"
+pki {{ mail_hostname }} key "/etc/ssl/private/{{ mail_hostname }}.key"
+pki {{ mail_hostname }} dhe auto
+
+smtp sub-addr-delim '+'
+
+filter rspamd proc-exec "filter-rspamd"
+
+table aliases file:/etc/mail/aliases
+
+listen on all port 25  tls         pki "{{ mail_hostname }}" filter "rspamd"
+listen on all port 465 smtps       pki "{{ mail_hostname }}" auth mask-src filter "rspamd"
+listen on all port 587 tls-require pki "{{ mail_hostname }}" auth mask-src filter "rspamd"
+
+action "local" lmtp "/var/dovecot/lmtp" alias <aliases>
+action "outbound" relay
+
+match from any for domain "{{ mail_domain }}" action "local"
+match from local for local action "local"
+match from any auth for any action "outbound"

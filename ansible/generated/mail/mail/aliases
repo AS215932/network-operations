@@ -1,0 +1,10 @@
+# /etc/mail/aliases — managed by ansible/roles/mail_openbsd
+
+root: noc
+postmaster: noc
+hostmaster: noc
+
+noc: noc
+abuse: noc+abuse
+peering: noc+peering
+dh: noc+dh

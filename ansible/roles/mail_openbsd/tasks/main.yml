@@ -1,0 +1,133 @@
+---
+- name: Ensure generated mail directory exists (controller)
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ mail_generated_dir }}/{{ inventory_hostname }}/mail"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render mail configs to controller
+  delegate_to: localhost
+  become: false
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ mail_generated_dir }}/{{ inventory_hostname }}/mail/{{ item.dest | basename }}"
+    mode: "0644"
+  loop:
+    - { src: smtpd.conf.j2, dest: /etc/mail/smtpd.conf }
+    - { src: aliases.j2, dest: /etc/mail/aliases }
+    - { src: dovecot-local.conf.j2, dest: /etc/dovecot/local.conf }
+    - { src: rspamd-dkim_signing.conf.j2, dest: /etc/rspamd/local.d/dkim_signing.conf }
+    - { src: acme-client.conf.j2, dest: /etc/acme-client.conf }
+    - { src: httpd.conf.j2, dest: /etc/httpd.conf }
+    - { src: weekly.local.j2, dest: /etc/weekly.local }
+  tags: [validate, diff, apply]
+
+- name: Install mail packages
+  community.general.openbsd_pkg:
+    name: "{{ mail_packages }}"
+    state: present
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Require mailbox password hash when applying
+  assert:
+    that:
+      - mail_shared_password_hash | length > 0
+    fail_msg: "Set MAIL_NOC_PASSWORD_HASH or mail_shared_password_hash before applying."
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Require DKIM private key when applying
+  assert:
+    that:
+      - mail_dkim_private_key | length > 0
+    fail_msg: "Set MAIL_DKIM_PRIVATE_KEY or mail_dkim_private_key before applying."
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Ensure shared mailbox user exists
+  user:
+    name: "{{ mail_shared_user }}"
+    shell: /sbin/nologin
+    create_home: true
+    password: "{{ mail_shared_password_hash }}"
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Ensure DKIM directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/mail/dkim, group: wheel, mode: "0755" }
+    - { path: /etc/mail/dkim/private, group: _rspamd, mode: "0775" }
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Install DKIM private key
+  copy:
+    content: "{{ mail_dkim_private_key }}\n"
+    dest: "{{ mail_dkim_private_key_path }}"
+    owner: root
+    group: _rspamd
+    mode: "0440"
+  when: mail_apply | bool
+  notify: restart rspamd
+  tags: [apply]
+
+- name: Deploy mail configs
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: wheel
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - { src: smtpd.conf.j2, dest: /etc/mail/smtpd.conf }
+    - { src: aliases.j2, dest: /etc/mail/aliases }
+    - { src: dovecot-local.conf.j2, dest: /etc/dovecot/local.conf }
+    - { src: rspamd-dkim_signing.conf.j2, dest: /etc/rspamd/local.d/dkim_signing.conf }
+    - { src: acme-client.conf.j2, dest: /etc/acme-client.conf }
+    - { src: httpd.conf.j2, dest: /etc/httpd.conf }
+    - { src: weekly.local.j2, dest: /etc/weekly.local, mode: "0755" }
+  when: mail_apply | bool
+  notify:
+    - update aliases table
+    - restart smtpd
+    - restart dovecot
+    - restart rspamd
+    - restart httpd
+  tags: [apply]
+
+- name: Enable mail services
+  command: "rcctl enable {{ item }}"
+  loop: "{{ mail_services }}"
+  changed_when: false
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Start httpd for ACME challenges
+  command: rcctl start httpd
+  register: _mail_httpd_start
+  changed_when: false
+  failed_when: false
+  when: mail_apply | bool
+  tags: [apply]
+
+- name: Run ACME client
+  command: "acme-client -v {{ mail_hostname }}"
+  changed_when: true
+  when:
+    - mail_apply | bool
+    - mail_run_acme | bool
+  notify:
+    - restart smtpd
+    - restart dovecot
+    - restart httpd
+  tags: [apply]

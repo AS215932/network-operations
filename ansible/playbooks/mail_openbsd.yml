@@ -1,0 +1,41 @@
+---
+# OpenBSD mail server rollout.
+#
+# Validate/render:
+#   ansible-playbook playbooks/mail_openbsd.yml --tags validate --connection=local
+#
+# Apply after DNS/PTR/secrets are ready:
+#   set -a; source ../secrets.local.sh; set +a
+#   ansible-playbook playbooks/mail_openbsd.yml --tags apply -e '{"mail_apply":true}'
+
+- name: OpenBSD mail server — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: OpenBSD mail server
+  hosts: mail
+  gather_facts: false
+  become: true
+  roles:
+    - mail_openbsd
+  tags: [mail]
+
+- name: OpenBSD mail server — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

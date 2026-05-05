@@ -1,0 +1,13 @@
+# /etc/mail/aliases — managed by ansible/roles/mail_openbsd
+
+root: {{ mail_shared_user }}
+postmaster: {{ mail_shared_user }}
+hostmaster: {{ mail_shared_user }}
+
+{% for localpart in mail_role_addresses %}
+{% if localpart == mail_shared_user %}
+{{ localpart }}: {{ mail_shared_user }}
+{% else %}
+{{ localpart }}: {{ mail_shared_user }}+{{ localpart }}
+{% endif %}
+{% endfor %}

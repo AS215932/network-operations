@@ -1,0 +1,67 @@
+{# /etc/pf.conf — managed by ansible (roles/firewall)
+   Host: {{ inventory_hostname }}
+   Service-host profile for OpenBSD infrastructure VMs. #}
+# /etc/pf.conf — managed by ansible (roles/firewall) — host {{ inventory_hostname }}
+
+ext_if="{{ pf_ext_if }}"
+
+set skip on lo
+set loginterface $ext_if
+
+match all scrub(random-id max-mss 1360)
+
+{% if firewall_log_only %}
+# log_only mode: would-block becomes pass log so we can observe before enforcing.
+pass log all
+{% else %}
+block return in log all
+block return out log all
+{% endif %}
+
+# SSH from ops-prefix and VPN clients.
+pass in quick on $ext_if inet proto tcp from {{ ops_prefix_v4 }} to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops-prefix (v4)"
+pass in quick on $ext_if inet6 proto tcp from { {{ ssh_allow_sources_v6 | join(', ') }} } to any port = ssh flags S/SA keep state label "USER_RULE: SSH from ops/VPN (v6)"
+
+# ICMP.
+pass in quick on $ext_if inet proto icmp keep state
+pass in quick on $ext_if inet6 proto ipv6-icmp keep state
+
+{% macro pf_src(src) -%}
+{%- if src == 'any' -%}
+from any
+{%- elif src is iterable and src is not string -%}
+from { {{ src | join(', ') }} }
+{%- else -%}
+from {{ src }}
+{%- endif -%}
+{%- endmacro %}
+{% macro pf_port(dport) -%}
+{%- if dport is iterable and dport is not string -%}
+{ {{ dport | join(', ') }} }
+{%- else -%}
+{{ dport }}
+{%- endif -%}
+{%- endmacro %}
+
+{% if firewall_extra_rules | length > 0 %}
+# Per-host service allows.
+{% for r in firewall_extra_rules %}
+{% set protos = ['tcp', 'udp'] if r.proto == 'tcp+udp' else [r.proto] %}
+{% set family = r.family | default('ip6') %}
+{% set fams = ['inet6'] if family in ['ip6', 'inet6', 'v6'] else (['inet'] if family in ['ip', 'inet', 'v4'] else ['inet', 'inet6']) %}
+{% for fam in fams %}
+{% for proto in protos %}
+pass in quick on $ext_if {{ fam }} proto {{ proto }} {{ pf_src(r.src) }} to any port = {{ pf_port(r.dport) }} keep state label "{{ r.comment }}"
+{% endfor %}
+{% endfor %}
+{% endfor %}
+
+{% endif %}
+{% if firewall_extra_raw_pf %}
+# raw escape hatch.
+{{ firewall_extra_raw_pf }}
+
+{% endif %}
+# Outbound.
+pass out quick on $ext_if inet proto { tcp, udp, icmp } from any to any keep state
+pass out quick on $ext_if inet6 proto { tcp, udp, ipv6-icmp } from any to any keep state

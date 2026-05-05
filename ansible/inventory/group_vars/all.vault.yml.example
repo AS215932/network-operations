@@ -10,3 +10,9 @@ wireguard_psk:
   rtr_cr1_nl1: "REDACTED_PSK"
   rtr_cr1_de1: "REDACTED_PSK"
   cr1_nl1_cr1_de1: "REDACTED_PSK"
+
+vault_mail_noc_password_hash: "REDACTED_OPENBSD_LOGIN_HASH"
+vault_mail_dkim_private_key: |
+  -----BEGIN PRIVATE KEY-----
+  REDACTED
+  -----END PRIVATE KEY-----
