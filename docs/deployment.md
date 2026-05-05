@@ -125,7 +125,8 @@ VMs use an offline prep step between `vdi.set` and `vm.start`:
 The builder VM is persistent and dedicated to image preparation. `hyrule-cloud`
 serializes OpenBSD prep jobs with an in-process lock, so only one target VDI is
 attached to the builder at a time. Configure it in `configs/hyrule-cloud.env.j2`
-with `XCPNG_OPENBSD_BUILDER_*`.
+with `XCPNG_OPENBSD_BUILDER_*`. The default builder SSH user is `svag`; it must
+be in `wheel` with passwordless `doas` for the resize command.
 
 For infrastructure VMs provisioned outside `hyrule-cloud`, run the same flow
 after resizing the target VDI and before first boot:
@@ -135,6 +136,7 @@ scripts/openbsd-offline-resize.sh \
   --target-vm <new-openbsd-vm-uuid> \
   --builder-vm <openbsd-builder-vm-uuid> \
   --builder-host <openbsd-builder-ip-or-name> \
+  --builder-user svag \
   --builder-key ~/.ssh/id_servify
 ```
 

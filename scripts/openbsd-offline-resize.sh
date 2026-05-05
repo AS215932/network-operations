@@ -14,7 +14,7 @@ Usage:
 
 Options:
   --target-vdi <uuid>       Root VDI to prep. If omitted, detected from target VM.
-  --builder-user <user>     SSH user on the builder VM (default: root).
+  --builder-user <user>     SSH user on the builder VM (default: svag).
   --builder-key <path>      SSH key for the builder VM.
   --builder-disk <dev>      Device name for attached target disk on builder (default: sd1).
   --attach-position <n>     VBD position on builder (default: 1).
@@ -27,7 +27,7 @@ TARGET_VM=""
 TARGET_VDI=""
 BUILDER_VM=""
 BUILDER_HOST=""
-BUILDER_USER="root"
+BUILDER_USER="svag"
 BUILDER_KEY=""
 BUILDER_DISK="sd1"
 ATTACH_POSITION="1"
@@ -119,7 +119,11 @@ done
 ssh_builder true
 
 echo "Growing OpenBSD root filesystem on $BUILDER_DISK..."
-ssh_builder sh -s -- "$BUILDER_DISK" <<'OPENBSD_RESIZE'
+RESIZE_CMD=(sh -s -- "$BUILDER_DISK")
+if [[ "$BUILDER_USER" != "root" ]]; then
+  RESIZE_CMD=(doas "${RESIZE_CMD[@]}")
+fi
+ssh_builder "${RESIZE_CMD[@]}" <<'OPENBSD_RESIZE'
 set -eu
 disk="$1"
 
