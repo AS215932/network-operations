@@ -109,6 +109,35 @@ xo-cli vm.start id="$VM_ID"
 
 NIC naming: Debian on Xen uses `enX0` (xe-guest-utilities). Use `enX0` in both cloud-init and networkd configs.
 
+### OpenBSD offline root resize
+
+OpenBSD cannot safely grow the mounted root filesystem during first boot. To
+keep the customer and infrastructure VM size UX identical to Debian, OpenBSD
+VMs use an offline prep step between `vdi.set` and `vm.start`:
+
+1. clone the OpenBSD cloud-init template;
+2. resize the clone's root VDI to the requested size;
+3. attach that VDI as device `1` to a dedicated halted OpenBSD builder VM;
+4. boot the builder and run native `fdisk`, `disklabel`, `growfs`, and
+   `fsck_ffs` against unmounted `sd1a`;
+5. halt the builder, detach the VDI, then boot the target VM.
+
+The builder VM is persistent and dedicated to image preparation. `hyrule-cloud`
+serializes OpenBSD prep jobs with an in-process lock, so only one target VDI is
+attached to the builder at a time. Configure it in `configs/hyrule-cloud.env.j2`
+with `XCPNG_OPENBSD_BUILDER_*`.
+
+For infrastructure VMs provisioned outside `hyrule-cloud`, run the same flow
+after resizing the target VDI and before first boot:
+
+```bash
+scripts/openbsd-offline-resize.sh \
+  --target-vm <new-openbsd-vm-uuid> \
+  --builder-vm <openbsd-builder-vm-uuid> \
+  --builder-host <openbsd-builder-ip-or-name> \
+  --builder-key ~/.ssh/id_servify
+```
+
 ## Deployment Runbook
 
 Before every live deployment, capture Icinga state from `mon`; capture it again
