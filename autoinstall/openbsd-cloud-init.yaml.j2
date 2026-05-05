@@ -1,0 +1,73 @@
+# Cloud-init user-data for OpenBSD VMs on XCP-NG / Xen Orchestra.
+#
+# Use with an OpenBSD template that already has:
+#   pkg_add cloud-init
+#   rcctl enable cloudinit_local cloudinit
+#   /etc/cloud/cloud.cfg.d/99_datasource.cfg:
+#     datasource_list: [ ConfigDrive, NoCloud, OpenStack, None ]
+#
+# Variables:
+#   {{ hostname }}       — VM hostname (e.g. mail)
+#   {{ fqdn }}           — VM FQDN (e.g. mail.as215932.net)
+#   {{ ssh_pubkey }}     — SSH public key for svag/root
+#   {{ ipv6_address }}   — static IPv6 with prefix (e.g. 2a0c:b641:b50:2::90/64)
+#   {{ ipv6_gateway }}   — IPv6 gateway (e.g. 2a0c:b641:b50:2::1)
+#   {{ dns_server }}     — recursive DNS server (e.g. 2a0c:b641:b50:2::1)
+#   {{ mail_ipv4 }}      — optional failover IPv4 address (e.g. 51.91.236.215)
+#   {{ mail_ipv4_gw }}   — optional failover IPv4 gateway (e.g. 51.91.236.254)
+
+#cloud-config
+hostname: {{ hostname }}
+fqdn: {{ fqdn }}
+manage_etc_hosts: true
+
+users:
+  - name: svag
+    groups: wheel
+    shell: /bin/ksh
+    ssh_authorized_keys:
+      - {{ ssh_pubkey }}
+  - name: root
+    ssh_authorized_keys:
+      - {{ ssh_pubkey }}
+
+ssh_pwauth: false
+disable_root: false
+
+write_files:
+  - path: /etc/doas.conf
+    owner: root:wheel
+    permissions: "0640"
+    content: |
+      permit nopass keepenv :wheel
+  - path: /etc/hostname.xnf0
+    owner: root:wheel
+    permissions: "0644"
+    content: |
+      inet6 {{ ipv6_address }}
+      !route -n add -inet6 default {{ ipv6_gateway }}
+{% if mail_ipv4 is defined and mail_ipv4 %}
+  - path: /etc/hostname.xnf1
+    owner: root:wheel
+    permissions: "0644"
+    content: |
+      inet {{ mail_ipv4 }} 255.255.255.255
+      !route -n add -inet default {{ mail_ipv4_gw }}
+{% endif %}
+  - path: /etc/resolv.conf
+    owner: root:wheel
+    permissions: "0644"
+    content: |
+      search as215932.net
+      nameserver {{ dns_server }}
+
+packages:
+  - python3
+
+runcmd:
+  - rcctl enable sshd
+  - sh /etc/netstart xnf0
+{% if mail_ipv4 is defined and mail_ipv4 %}
+  - sh /etc/netstart xnf1
+{% endif %}
+  - rcctl restart sshd

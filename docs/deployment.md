@@ -292,16 +292,31 @@ Rolling back is the same pattern with a git ref:
 
 ### Phase 7b: Mail Server (mail)
 
-Create an OpenBSD 7.8 `mail` VM with 2 vCPU, 2GB RAM, 40GB disk, and static
-IPv6 `2a0c:b641:b50:2::90` on the infra bridge. Use
-`autoinstall/openbsd-mail.conf` during install, then bootstrap Python and doas:
+Build an OpenBSD 7.8 cloud-init template once, then deploy `mail` from that
+template through Xen Orchestra CloudConfig. OpenBSD cloud-init is packaged in
+ports and uses native OpenBSD integration (`rcctl`, `/etc/myname`,
+`/etc/hostname.if`):
 
 ```bash
-pkg_add python3
-cat >/etc/doas.conf <<'EOF'
-permit nopass keepenv :wheel
-EOF
+doas pkg_add -u
+doas pkg_add cloud-init
+doas rcctl enable cloudinit_local
+doas rcctl enable cloudinit
+doas mkdir -p /etc/cloud/cloud.cfg.d
+printf 'datasource_list: [ ConfigDrive, NoCloud, OpenStack, None ]\n' | \
+    doas tee /etc/cloud/cloud.cfg.d/99_datasource.cfg
+doas cloud-init clean --logs --seed
+doas rm -f /etc/ssh/ssh_host_*
 ```
+
+Convert the cleaned VM to an XO template. Deploy the actual `mail` VM with
+2 vCPU, 2GB RAM, 40GB disk, `xnf0` on xenbr-infra, and static IPv6
+`2a0c:b641:b50:2::90/64` via `autoinstall/openbsd-cloud-init.yaml.j2`.
+If `51.91.236.215` is delivered directly to the VM, attach a second VIF
+(`xnf1`) to the OVH failover IPv4 bridge/MAC and pass `mail_ipv4` plus
+`mail_ipv4_gw` into the same user-data. If the IPv4 is routed/DNATed by `rtr`,
+do not attach `xnf1`; keep the host IPv6-only and update the rtr firewall/NAT
+design instead.
 
 The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
 configured in OVH as `mail.as215932.net`. The DNS A record and SPF `ip4:`

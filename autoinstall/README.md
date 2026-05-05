@@ -2,11 +2,49 @@
 
 Templates and tools for automated VM provisioning on XCP-NG.
 
-## OpenBSD (firewall/mail)
+## OpenBSD (cloud-init template)
+
+OpenBSD is supported by cloud-init, and the preferred provisioning path for
+service VMs is an XO template with cloud-init preinstalled. Build the template
+once:
+
+```sh
+doas pkg_add -u
+doas pkg_add cloud-init
+doas rcctl enable cloudinit_local
+doas rcctl enable cloudinit
+```
+
+Set the datasource order in `/etc/cloud/cloud.cfg.d/99_datasource.cfg`:
+
+```yaml
+datasource_list: [ ConfigDrive, NoCloud, OpenStack, None ]
+```
+
+Then clean the template before converting it in XO:
+
+```sh
+doas cloud-init clean --logs --seed
+doas rm -f /etc/ssh/ssh_host_*
+```
+
+Templates:
+
+- `openbsd-cloud-init.yaml.j2` — user-data for OpenBSD service VMs. It writes
+  native `/etc/hostname.xnf*` files, installs `python3`, configures `doas`,
+  and restarts networking/SSH.
+- `openbsd-meta-data.j2` — instance metadata for ConfigDrive/NoCloud.
+
+OpenBSD NICs on Xen: `xnf0`, `xnf1`, `xnf2` (not `vio`). For `mail`, attach
+`xnf0` to `xenbr-infra`; attach `xnf1` to the bridge used for the OVH failover
+IPv4 only if the IPv4 is delivered directly to the VM.
+
+## OpenBSD autoinstall fallback
 
 `openbsd-fw.conf` — autoinstall response file. Serve via HTTP on the mgmt bridge:
 `openbsd-mail.conf` is the equivalent response file for the `mail` VM on
-xenbr-infra with static IPv6 `2a0c:b641:b50:2::90`.
+xenbr-infra with static IPv6 `2a0c:b641:b50:2::90`. Use this path to build the
+first cloud-init template or when ConfigDrive provisioning is unavailable.
 
 ```bash
 # On dom0: start DHCP + HTTP for autoinstall
@@ -16,7 +54,6 @@ cd /path/to/autoinstall && python3 -m http.server 80 --bind 10.0.0.1
 # Boot VM from ISO, type 'a' at prompt, select mgmt NIC, confirm URL
 ```
 
-OpenBSD NICs on Xen: `xnf0`, `xnf1`, `xnf2` (not `vio`).
 Install sets come from the CD (`Location of sets = cd0`).
 
 ## Debian (cloud-init)
