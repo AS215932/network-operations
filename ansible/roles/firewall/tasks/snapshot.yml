@@ -7,8 +7,9 @@
 
 - name: "{{ snapshot_phase | capitalize }}-deploy Icinga snapshot"
   delegate_to: mon
-  remote_user: root
   become: false
+  vars:
+    ansible_user: root
   shell: |
     if [ -x /usr/local/bin/icinga-snapshot ]; then
       /usr/local/bin/icinga-snapshot {{ snapshot_phase }} firewall-rollout
