@@ -62,13 +62,11 @@ write_files:
       search as215932.net
       nameserver {{ dns_server }}
 
-packages:
-  - python3
-
 runcmd:
   - rcctl enable sshd
   - sh /etc/netstart xnf0
 {% if mail_ipv4 is defined and mail_ipv4 %}
   - sh /etc/netstart xnf1
 {% endif %}
+  - pkg_add -I python3
   - rcctl restart sshd
