@@ -7,7 +7,7 @@
 
 - name: "{{ snapshot_phase | capitalize }}-deploy Icinga snapshot"
   delegate_to: mon
-  remote_user: svag
+  remote_user: root
   become: false
   shell: |
     if [ -x /usr/local/bin/icinga-snapshot ]; then
