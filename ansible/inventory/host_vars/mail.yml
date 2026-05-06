@@ -4,6 +4,7 @@
 
 pf_ext_if: xnf0
 pf_ext_ifs: ["xnf0", "xnf1"]
+firewall_log_only: false
 
 firewall_extra_rules:
   # Public mail delivery and submission.
@@ -25,6 +26,7 @@ firewall_extra_rules:
 monitoring_register: true
 monitoring_display_name: "mail (OpenBSD mail server)"
 monitoring_role: mail
+monitoring_node_listen: "[::]:9100"
 monitoring_extra_services:
   - name: smtp-tcp
     check_command: tcp
@@ -54,6 +56,7 @@ mail_ipv6: "{{ peers.mail.ipv6 }}"
 mail_ipv4: "{{ mail_failover_ipv4 | default('') }}"
 mail_ipv4_gw: "{{ mail_failover_ipv4_gateway | default('') }}"
 mail_shared_user: noc
+mail_dovecot_listen: "*, ::"
 mail_role_addresses:
   - noc
   - abuse

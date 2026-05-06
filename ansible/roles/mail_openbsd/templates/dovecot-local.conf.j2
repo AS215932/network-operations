@@ -1,7 +1,7 @@
 # /etc/dovecot/local.conf — managed by ansible/roles/mail_openbsd
 
 protocols = imap lmtp sieve
-listen = *
+listen = {{ mail_dovecot_listen | default('*') }}
 
 ssl = required
 ssl_cert = </etc/ssl/{{ mail_hostname }}.fullchain.pem
