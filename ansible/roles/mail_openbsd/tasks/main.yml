@@ -122,7 +122,11 @@
 
 - name: Run ACME client
   command: "acme-client -v {{ mail_hostname }}"
+  register: _mail_acme_client
   changed_when: true
+  failed_when:
+    - _mail_acme_client.rc != 0
+    - "'certificate valid' not in _mail_acme_client.stderr"
   when:
     - mail_apply | bool
     - mail_run_acme | bool
