@@ -1,0 +1,13 @@
+---
+hyrule_mcp_app_user: noc-agent
+hyrule_mcp_app_group: noc-agent
+hyrule_mcp_install_dir: /opt/hyrule-mcp
+hyrule_mcp_state_dir: /var/lib/hyrule-mcp
+hyrule_mcp_etc_dir: /etc/hyrule-mcp
+# Cloned via the per-deploy SSH alias `github-hyrule-mcp` configured in the role.
+hyrule_mcp_repo: "git@github-hyrule-mcp:AS215932/hyrule-mcp.git"
+hyrule_mcp_version: main
+
+# Path on the ansible controller (workstation) to the dedicated id_noc_mcp keypair.
+# Set in secrets.local.sh (export NOC_MCP_KEY_PATH=/path/to/id_noc_mcp).
+hyrule_mcp_local_key_path: "{{ noc_mcp_key_path }}"

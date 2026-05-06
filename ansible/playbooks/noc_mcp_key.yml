@@ -1,0 +1,19 @@
+---
+# Distribute id_noc_mcp.pub to all AS215932 hosts. Restricted with from="<noc-ipv6>"
+# so a leaked key only works when the connection originates from the noc VM.
+#
+# Run BEFORE playbooks/noc.yml so hyrule-mcp can SSH out the moment it lands.
+#
+# Apply:
+#   set -a; source ../secrets.local.sh; set +a
+#   ansible-playbook playbooks/noc_mcp_key.yml --tags apply
+
+- name: noc-mcp key distribution — all hosts except noc itself
+  hosts: linux:freebsd:openbsd:!noc
+  gather_facts: false
+  become: true
+  vars:
+    noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
+  roles:
+    - noc_mcp_key
+  tags: [noc_mcp_key]

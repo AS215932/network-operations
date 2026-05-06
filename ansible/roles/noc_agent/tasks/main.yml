@@ -1,0 +1,142 @@
+---
+# Deploy noc-agent: clone repo, install deps, render .env, install systemd unit.
+# Assumes hyrule_mcp role has run first (creates the noc-agent user and lays
+# down /opt/hyrule-mcp).
+
+- name: Ensure base packages are installed
+  apt:
+    name:
+      - python3
+      - python3-venv
+      - git
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Check if Node.js is already installed
+  command: node --version
+  register: nodejs_check
+  failed_when: false
+  changed_when: false
+  tags: [apply]
+
+- name: Add NodeSource repository for Node.js LTS
+  shell: "curl -fsSL {{ nodejs_lts_setup_url }} | bash -"
+  when: nodejs_check.rc != 0
+  tags: [apply]
+
+- name: Install Node.js
+  apt:
+    name: nodejs
+    state: present
+    update_cache: true
+  when: nodejs_check.rc != 0
+  tags: [apply]
+
+- name: Ensure noc-agent install/state dirs exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0755"
+  loop:
+    - "{{ noc_agent_install_dir }}"
+    - "{{ noc_agent_state_dir }}"
+  tags: [apply]
+
+- name: Generate per-repo deploy key for noc-agent (idempotent)
+  command: ssh-keygen -t ed25519 -N "" -C "noc-agent@noc deploy:noc-agent" -f /var/lib/noc-agent/.ssh/id_noc-agent
+  args:
+    creates: /var/lib/noc-agent/.ssh/id_noc-agent
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  tags: [apply]
+
+- name: Show deploy key pubkey (add to github.com/AS215932/noc-agent deploy keys)
+  command: cat /var/lib/noc-agent/.ssh/id_noc-agent.pub
+  register: noc_agent_deploy_pub
+  changed_when: false
+  tags: [apply]
+
+- name: Print deploy-key reminder
+  debug:
+    msg: |
+      noc-agent deploy key (read-only) — add to:
+        https://github.com/AS215932/noc-agent/settings/keys
+      Pubkey:
+        {{ noc_agent_deploy_pub.stdout }}
+  tags: [apply]
+
+- name: Configure SSH for noc-agent clones via deploy key
+  blockinfile:
+    path: /var/lib/noc-agent/.ssh/config
+    create: true
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0600"
+    marker: "# {mark} noc-agent deploy key"
+    block: |
+      Host github-noc-agent
+        Hostname github.com
+        User git
+        IdentityFile /var/lib/noc-agent/.ssh/id_noc-agent
+        IdentitiesOnly yes
+  tags: [apply]
+
+- name: Clone noc-agent repository
+  git:
+    repo: "{{ noc_agent_repo }}"
+    dest: "{{ noc_agent_install_dir }}"
+    version: "{{ noc_agent_version }}"
+    accept_hostkey: true
+    update: true
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  ignore_errors: true  # First run will fail until the deploy key is registered on GitHub.
+  notify: restart noc-agent
+  tags: [apply]
+
+- name: Sync noc-agent dependencies via uv
+  command: /usr/local/bin/uv sync --frozen
+  args:
+    chdir: "{{ noc_agent_install_dir }}"
+    creates: "{{ noc_agent_install_dir }}/.venv/bin/uvicorn"
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  notify: restart noc-agent
+  tags: [apply]
+
+- name: Render /opt/noc-agent/.env
+  template:
+    src: "{{ playbook_dir }}/../../configs/noc-agent.env.j2"
+    dest: "{{ noc_agent_install_dir }}/.env"
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0640"
+  notify: restart noc-agent
+  tags: [apply]
+
+- name: Install /etc/systemd/system/noc-agent.service
+  copy:
+    src: "{{ playbook_dir }}/../../configs/noc-agent.service"
+    dest: /etc/systemd/system/noc-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart noc-agent
+  tags: [apply]
+
+- name: Enable and start noc-agent
+  systemd:
+    name: noc-agent
+    state: started
+    enabled: true
+    daemon_reload: true
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: [apply]

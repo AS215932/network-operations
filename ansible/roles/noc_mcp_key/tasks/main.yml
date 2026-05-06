@@ -1,0 +1,28 @@
+---
+# Add id_noc_mcp.pub to authorized_keys on every host. The user the key is
+# authorized for is determined by ssh_users in group_vars/all.yml (root for
+# rtr/xoa, svag elsewhere). The key is restricted via from="..." to only
+# accept connections originating from noc's overlay address.
+
+- name: Read id_noc_mcp public key from controller
+  slurp:
+    src: "{{ noc_mcp_key_pub_path }}"
+  register: noc_mcp_key_pub
+  delegate_to: localhost
+  run_once: true
+  become: false
+  tags: [apply]
+
+- name: Determine target SSH user for this host
+  set_fact:
+    noc_mcp_target_user: "{{ ssh_users[inventory_hostname] | default(ssh_users.default) }}"
+  tags: [apply]
+
+- name: Authorize id_noc_mcp for {{ noc_mcp_target_user }} (restricted to noc's address)
+  authorized_key:
+    user: "{{ noc_mcp_target_user }}"
+    key: "{{ noc_mcp_key_pub.content | b64decode | trim }}"
+    key_options: 'from="{{ noc_mcp_key_from_address }}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
+    state: present
+    comment: "noc-agent on noc.as215932.net (managed by ansible/roles/noc_mcp_key)"
+  tags: [apply]

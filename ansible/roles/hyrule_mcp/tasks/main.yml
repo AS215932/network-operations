@@ -1,0 +1,170 @@
+---
+# Deploy hyrule-mcp: clone repo, build venv, render config + secrets, install
+# the dedicated id_noc_mcp SSH key. No daemon — hyrule-mcp is started by
+# noc-agent over stdio.
+
+- name: Ensure base packages are installed
+  apt:
+    name:
+      - python3
+      - python3-venv
+      - git
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Install uv (Python package manager)
+  shell: curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+  tags: [apply]
+
+- name: Ensure noc-agent group exists
+  group:
+    name: "{{ hyrule_mcp_app_group }}"
+    system: true
+  tags: [apply]
+
+- name: Ensure noc-agent system user exists
+  user:
+    name: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    home: /var/lib/noc-agent
+    shell: /bin/bash
+    system: true
+    create_home: true
+  tags: [apply]
+
+- name: Ensure hyrule-mcp directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_mcp_app_user) }}"
+    group: "{{ item.group | default(hyrule_mcp_app_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_mcp_install_dir }}", mode: "0755" }
+    - { path: "{{ hyrule_mcp_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_mcp_state_dir }}", mode: "0750" }
+    - { path: "{{ hyrule_mcp_state_dir }}/.ssh", mode: "0700" }
+  tags: [apply]
+
+- name: Deploy id_noc_mcp private key
+  copy:
+    src: "{{ hyrule_mcp_local_key_path }}"
+    dest: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp"
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0600"
+  tags: [apply]
+
+- name: Deploy id_noc_mcp public key (for reference)
+  copy:
+    src: "{{ hyrule_mcp_local_key_path }}.pub"
+    dest: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp.pub"
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0644"
+  tags: [apply]
+
+- name: Pre-populate known_hosts for AS215932 peers
+  known_hosts:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/known_hosts"
+    name: "[{{ item.value.ipv6 | default(item.value.loopback) | default(item.value.ipv4) }}]"
+    key: "[{{ item.value.ipv6 | default(item.value.loopback) | default(item.value.ipv4) }}] ssh-ed25519 AAAAPLACEHOLDER"
+    state: absent  # Use absent here so the file gets created empty; SSH will populate on first connect.
+  loop: "{{ peers | dict2items }}"
+  ignore_errors: true
+  tags: [apply]
+
+- name: Ensure known_hosts file exists with correct ownership
+  file:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/known_hosts"
+    state: touch
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0644"
+  tags: [apply]
+
+- name: Render /etc/hyrule-mcp/hosts.yml
+  template:
+    src: "{{ playbook_dir }}/../../configs/hyrule-mcp-hosts.yml.j2"
+    dest: "{{ hyrule_mcp_etc_dir }}/hosts.yml"
+    owner: root
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0640"
+  tags: [apply]
+
+- name: Ensure noc-agent SSH dir exists for deploy keys
+  file:
+    path: "/var/lib/noc-agent/.ssh"
+    state: directory
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0700"
+  tags: [apply]
+
+- name: Generate per-repo deploy key for hyrule-mcp (idempotent)
+  command: ssh-keygen -t ed25519 -N "" -C "noc-agent@noc deploy:hyrule-mcp" -f /var/lib/noc-agent/.ssh/id_hyrule-mcp
+  args:
+    creates: /var/lib/noc-agent/.ssh/id_hyrule-mcp
+  become: true
+  become_user: "{{ hyrule_mcp_app_user }}"
+  tags: [apply]
+
+- name: Show deploy key pubkey (add to github.com/AS215932/hyrule-mcp deploy keys)
+  command: cat /var/lib/noc-agent/.ssh/id_hyrule-mcp.pub
+  register: hyrule_mcp_deploy_pub
+  changed_when: false
+  tags: [apply]
+
+- name: Print deploy-key reminder
+  debug:
+    msg: |
+      hyrule-mcp deploy key (read-only) — add to:
+        https://github.com/AS215932/hyrule-mcp/settings/keys
+      Pubkey:
+        {{ hyrule_mcp_deploy_pub.stdout }}
+  tags: [apply]
+
+- name: Configure SSH for hyrule-mcp clones via deploy key
+  blockinfile:
+    path: /var/lib/noc-agent/.ssh/config
+    create: true
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0600"
+    marker: "# {mark} hyrule-mcp deploy key"
+    block: |
+      Host github-hyrule-mcp
+        Hostname github.com
+        User git
+        IdentityFile /var/lib/noc-agent/.ssh/id_hyrule-mcp
+        IdentitiesOnly yes
+  tags: [apply]
+
+- name: Clone hyrule-mcp repository
+  git:
+    repo: "{{ hyrule_mcp_repo }}"
+    dest: "{{ hyrule_mcp_install_dir }}"
+    version: "{{ hyrule_mcp_version }}"
+    accept_hostkey: true
+    update: true
+  become: true
+  become_user: "{{ hyrule_mcp_app_user }}"
+  ignore_errors: true  # First run will fail until the deploy key is registered on GitHub.
+  tags: [apply]
+  notify: restart noc-agent
+
+- name: Sync hyrule-mcp dependencies via uv
+  command: /usr/local/bin/uv sync --frozen
+  args:
+    chdir: "{{ hyrule_mcp_install_dir }}"
+    creates: "{{ hyrule_mcp_install_dir }}/.venv/bin/python"
+  become: true
+  become_user: "{{ hyrule_mcp_app_user }}"
+  tags: [apply]
+  notify: restart noc-agent

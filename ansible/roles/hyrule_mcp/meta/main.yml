@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: hyrule_mcp
+  author: AS215932 ops
+  description: Deploy hyrule-mcp (FastMCP server exposing AS215932 SSH + Prometheus + Icinga tools)
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+dependencies: []

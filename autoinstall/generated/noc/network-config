@@ -1,0 +1,17 @@
+# NoCloud network-config for noc VM (IPv6-only on infra subnet).
+# Renders the IPv6-only path of debian-network-config.yaml.j2.
+
+version: 2
+ethernets:
+  primary:
+    match:
+      name: "en*"
+    addresses:
+      - 2a0c:b641:b50:2::a0/64
+    routes:
+      - to: "::/0"
+        via: 2a0c:b641:b50:2::1
+    nameservers:
+      search: [ as215932.net ]
+      addresses:
+        - 2a0c:b641:b50:2::10

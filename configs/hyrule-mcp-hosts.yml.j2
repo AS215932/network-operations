@@ -1,0 +1,14 @@
+# /etc/hyrule-mcp/hosts.yml — host → SSH user/address resolver for hyrule-mcp
+# Deploy to: noc VM (rendered by ansible/roles/hyrule_mcp from `peers` and `ssh_users`)
+
+default_user: {{ ssh_users.default }}
+ssh_key: /var/lib/hyrule-mcp/.ssh/id_noc_mcp
+
+hosts:
+{% for name, peer in peers.items() %}
+{% set address = peer.ipv6 | default(peer.loopback) | default(peer.ipv4) %}
+{% set user = ssh_users[name] | default(ssh_users.default) %}
+  {{ name }}:
+    address: "{{ address }}"
+    user: {{ user }}
+{% endfor %}

@@ -1,0 +1,11 @@
+---
+noc_agent_user: noc-agent
+noc_agent_group: noc-agent
+noc_agent_install_dir: /opt/noc-agent
+noc_agent_state_dir: /var/lib/noc-agent
+# Cloned via the per-deploy SSH alias `github-noc-agent` configured in the role.
+noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
+noc_agent_version: main
+
+# NodeSource setup script for Node.js LTS (used by `npx @xen-orchestra/mcp`).
+nodejs_lts_setup_url: "https://deb.nodesource.com/setup_lts.x"

@@ -1,0 +1,32 @@
+#cloud-config
+# NoCloud user-data for noc VM.
+# Render `debian-cloud-init.yaml.j2` with hostname=noc, root pubkey = id_servify.pub.
+# `root_password` is intentionally NOT committed — substitute from secrets.local.sh
+# at deploy time (export NOC_ROOT_PASSWORD=...).
+
+hostname: noc
+manage_etc_hosts: true
+
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqhNk5JGwvgtQQgt+bs5t9zOz0XX1sVUZV8NeYdM2IE svag@Z"
+
+ssh_pwauth: false
+disable_root: false
+
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: __SUBSTITUTE_NOC_ROOT_PASSWORD__
+      type: text
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/root.conf
+    content: |
+      PermitRootLogin prohibit-password
+
+runcmd:
+  - systemctl restart ssh

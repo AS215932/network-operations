@@ -1,0 +1,6 @@
+---
+# Path on the ansible controller to the public half of the dedicated noc-mcp keypair.
+noc_mcp_key_pub_path: "{{ noc_mcp_key_path }}.pub"
+
+# Restricts the key so it only works when the connection comes from noc's overlay address.
+noc_mcp_key_from_address: "{{ peers.noc.ipv6 }}"

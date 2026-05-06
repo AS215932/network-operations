@@ -1,0 +1,59 @@
+---
+# noc rollout — installs hyrule-mcp + noc-agent on the noc VM.
+#
+# hyrule_mcp runs FIRST: creates the noc-agent user, lays down /opt/hyrule-mcp,
+# /etc/hyrule-mcp/hosts.yml, /etc/hyrule-mcp/.env, and /var/lib/hyrule-mcp/.ssh/id_noc_mcp.
+# noc_agent runs SECOND: clones noc-agent, renders /opt/noc-agent/.env,
+# installs the systemd unit, and starts the service.
+#
+# Prerequisites:
+#   - noc VM provisioned and reachable at peers.noc.ipv6.
+#   - secrets.local.sh sourced (NOC_MCP_KEY_PATH, NOC_DISCORD_WEBHOOK,
+#     GEMINI_API_KEY, ICINGA_API_USER, ICINGA_API_PASSWORD, XO_TOKEN).
+#   - playbooks/noc-mcp-key.yml has been run so id_noc_mcp.pub is in
+#     authorized_keys on every infra host.
+#
+# Apply:
+#   set -a; source ../secrets.local.sh; set +a
+#   ansible-playbook playbooks/noc.yml --tags apply -e '{"noc_apply":true}' --limit noc
+
+- name: noc — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: noc — apply hyrule-mcp + noc-agent
+  hosts: noc
+  serial: 1
+  gather_facts: true
+  become: true
+  vars:
+    gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') }}"
+    noc_discord_webhook: "{{ lookup('env', 'NOC_DISCORD_WEBHOOK') }}"
+    icinga_api_user: "{{ lookup('env', 'ICINGA_API_USER') }}"
+    icinga_api_password: "{{ lookup('env', 'ICINGA_API_PASSWORD') }}"
+    xo_token: "{{ lookup('env', 'XO_TOKEN') }}"
+    noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
+  roles:
+    - hyrule_mcp
+    - noc_agent
+  tags: [noc]
+
+- name: noc — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]
