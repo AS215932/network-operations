@@ -33,3 +33,4 @@ mail_services:
   - dovecot
   - httpd
   - smtpd
+  - node_exporter
