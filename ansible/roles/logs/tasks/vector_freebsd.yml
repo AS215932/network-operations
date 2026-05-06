@@ -1,0 +1,40 @@
+---
+# Install + configure Vector agent on FreeBSD core routers (cr1-nl1, cr1-de1).
+# Vector is in FreeBSD ports/pkg as sysutils/vector.
+
+- name: Install Vector (FreeBSD pkg)
+  community.general.pkgng:
+    name: "{{ logs_vector_pkg }}"
+    state: present
+  tags: [apply]
+
+- name: Ensure Vector data dir exists
+  file:
+    path: "{{ logs_vector_data_dir }}"
+    state: directory
+    owner: "{{ logs_vector_user }}"
+    group: "{{ logs_vector_group }}"
+    mode: "0750"
+  tags: [apply]
+
+- name: Deploy Vector agent config (FreeBSD path)
+  template:
+    src: vector-agent.toml.j2
+    dest: "{{ logs_vector_config_path }}"
+    owner: root
+    group: "{{ logs_vector_group }}"
+    mode: "0640"
+  notify: restart vector
+  tags: [apply]
+
+- name: Enable Vector via rc.conf
+  community.general.sysrc:
+    name: vector_enable
+    value: "YES"
+  tags: [apply]
+
+- name: Start Vector
+  service:
+    name: "{{ logs_vector_service }}"
+    state: started
+  tags: [apply]

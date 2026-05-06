@@ -1,0 +1,16 @@
+---
+# Vector packaging on Debian via the upstream timberio APT repository.
+# https://vector.dev/docs/setup/installation/package-managers/apt/
+logs_vector_pkg: vector
+logs_vector_service: vector
+logs_vector_config_dir: /etc/vector
+logs_vector_config_path: "{{ logs_vector_config_dir }}/vector.toml"
+logs_vector_user: vector
+logs_vector_group: vector
+
+# Loki packaging — installed only on the aggregator host.
+logs_loki_pkg: loki
+logs_loki_service: loki
+logs_loki_config_path: /etc/loki/config.yaml
+logs_loki_user: loki
+logs_loki_group: loki

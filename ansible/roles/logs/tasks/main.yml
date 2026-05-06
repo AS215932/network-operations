@@ -1,0 +1,62 @@
+---
+# Logs role orchestration.
+#
+# - Always renders config artifacts to ansible/generated/<host>/ (review-only,
+#   `--connection=local --tags validate`).
+# - When logs_apply is true, installs and configures the agent (or, on the
+#   `log` VM, the aggregator + Loki).
+#
+# Per-host gating:
+#   logs_register: true     — host is in scope; skipped otherwise.
+#   logs_aggregator: true   — host is the central aggregator (Vector + Loki).
+#   logs_use_openbsd_syslogd: true — use native syslogd forward, no Vector.
+
+- name: Skip hosts not opted in to logs role
+  meta: end_host
+  when: not (logs_register | default(false) | bool)
+  tags: [always]
+
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
+
+- name: Render configs locally for review
+  include_tasks: render.yml
+  tags: [validate, diff, apply]
+
+- name: Apply — Vector agent (Linux Debian)
+  include_tasks: vector_linux.yml
+  when:
+    - logs_apply | bool
+    - ansible_os_family == "Debian"
+    - not (logs_use_openbsd_syslogd | bool)
+  tags: [apply]
+
+- name: Apply — Vector agent (FreeBSD)
+  include_tasks: vector_freebsd.yml
+  when:
+    - logs_apply | bool
+    - ansible_os_family == "FreeBSD"
+  tags: [apply]
+
+- name: Apply — Vector agent (XCP-NG dom0, RedHat family)
+  include_tasks: vector_linux.yml
+  when:
+    - logs_apply | bool
+    - ansible_os_family == "RedHat"
+  tags: [apply]
+
+- name: Apply — OpenBSD syslogd forward
+  include_tasks: vector_openbsd.yml
+  when:
+    - logs_apply | bool
+    - ansible_os_family == "OpenBSD"
+    - logs_use_openbsd_syslogd | bool
+  tags: [apply]
+
+- name: Apply — Loki + Vector aggregator (log VM only)
+  include_tasks: aggregator.yml
+  when:
+    - logs_apply | bool
+    - logs_aggregator | bool
+  tags: [apply]

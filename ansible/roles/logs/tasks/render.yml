@@ -1,0 +1,54 @@
+---
+# Render the artifacts that the apply tasks will deploy. Output goes under
+# ansible/generated/<host>/ for review on the controller. No remote writes.
+
+- name: Ensure generated/<host> dir exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render Vector aggregator config (log VM only)
+  delegate_to: localhost
+  become: false
+  template:
+    src: vector-aggregator.toml.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/vector-aggregator.toml"
+    mode: "0644"
+  when: logs_aggregator | bool
+  tags: [validate, diff, apply]
+
+- name: Render Loki config (log VM only)
+  delegate_to: localhost
+  become: false
+  template:
+    src: loki-config.yaml.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/loki-config.yaml"
+    mode: "0644"
+  when: logs_aggregator | bool
+  tags: [validate, diff, apply]
+
+- name: Render Vector agent config (every host except OpenBSD-syslogd-forwarders and the aggregator)
+  delegate_to: localhost
+  become: false
+  template:
+    src: vector-agent.toml.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/vector-agent.toml"
+    mode: "0644"
+  when:
+    - not (logs_aggregator | bool)
+    - not (logs_use_openbsd_syslogd | bool)
+  tags: [validate, diff, apply]
+
+- name: Render OpenBSD syslog.conf (mail only)
+  delegate_to: localhost
+  become: false
+  template:
+    src: syslog.conf.openbsd.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/syslog.conf"
+    mode: "0644"
+  when: logs_use_openbsd_syslogd | bool
+  tags: [validate, diff, apply]

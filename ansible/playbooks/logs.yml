@@ -1,0 +1,59 @@
+---
+# Logging rollout — installs Vector agents on every opted-in host (Linux,
+# FreeBSD, dom0/RedHat), configures OpenBSD `mail` to forward via native
+# syslogd, and on the `log` VM brings up the Vector aggregator + Loki.
+#
+# Per-host gating in host_vars/<host>.yml: `logs_register: true` opts in,
+# `logs_role: <label>` populates the Loki `role` label.
+#
+# Single source of truth for "which logs flow where" is
+# docs/network-flows.md plus host_vars/log.yml. The application logging
+# contract is at docs/application-logging.md.
+#
+# Apply: source ../secrets.local.sh first.
+#   ansible-playbook playbooks/logs.yml --tags apply -e '{"logs_apply":true}'
+#
+# Render-only (review artifacts under ansible/generated/<host>/):
+#   ansible-playbook playbooks/logs.yml --tags validate \
+#     --connection=local --skip-tags=snapshot
+
+- name: Logs — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: Logs — bring up aggregator first (log VM)
+  hosts: log
+  gather_facts: true
+  become: true
+  roles:
+    - logs
+  tags: [logs, aggregator]
+
+- name: Logs — agents on every opted-in host
+  hosts: linux:freebsd:openbsd:!log
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - logs
+  tags: [logs, agents]
+
+- name: Logs — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

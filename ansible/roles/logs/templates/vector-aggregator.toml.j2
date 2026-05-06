@@ -1,0 +1,103 @@
+# /etc/vector/vector.toml — managed by ansible (roles/logs)
+# Host: {{ inventory_hostname }} (aggregator)
+# Generated: do not edit by hand.
+#
+# Receives:
+#   - vector-native ingest from agents on :{{ logs_aggregator_port_vector }}
+#   - syslog (TCP) from OpenBSD mail on :{{ logs_aggregator_port_syslog }}
+# Redacts (see roles/logs/files/redact.vrl), labels, sinks to local Loki.
+
+data_dir = "{{ logs_vector_data_dir }}"
+
+[api]
+enabled = true
+address = "127.0.0.1:{{ logs_vector_metrics_port }}"
+
+# --- Sources -----------------------------------------------------------------
+
+[sources.from_agents]
+type = "vector"
+address = "[::]:{{ logs_aggregator_port_vector }}"
+version = "2"
+
+[sources.openbsd_syslog]
+type = "syslog"
+address = "[::]:{{ logs_aggregator_port_syslog }}"
+mode = "tcp"
+
+# Aggregator's own journald (so the log VM is also visible in Loki).
+[sources.self_journald]
+type = "journald"
+current_boot_only = false
+
+# --- Transforms --------------------------------------------------------------
+
+# Self-host journald → same enrichment shape as remote agents.
+[transforms.self_enrich]
+type = "remap"
+inputs = ["self_journald"]
+source = '''
+parsed, err = parse_json(.message)
+if err == null && is_object(parsed) {
+    . = merge(., object!(parsed))
+}
+.service = .service ?? to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = .level ?? "info"
+.host = "{{ inventory_hostname }}"
+.role = "log"
+'''
+
+# OpenBSD syslog → match the same field shape: host/role from the syslog
+# hostname, service from the program name, level from the priority.
+[transforms.syslog_enrich]
+type = "remap"
+inputs = ["openbsd_syslog"]
+source = '''
+.host = .hostname ?? "mail"
+.role = "mail"
+.service = .appname ?? "syslog"
+.level = .severity ?? "info"
+'''
+
+# Shared redaction across every event regardless of source.
+[transforms.redact]
+type = "remap"
+inputs = ["from_agents", "self_enrich", "syslog_enrich"]
+file = "/etc/vector/redact.vrl"
+
+# Drop labels Loki shouldn't index (anything not in the small label set).
+# Keep them in the body — they remain searchable via `| json`.
+[transforms.label_strip]
+type = "remap"
+inputs = ["redact"]
+source = '''
+# Loki labels we keep: host, role, service, level. Everything else stays
+# in the event body for content-search but is removed from labels.
+.labels = {
+  "host": to_string(.host) ?? "unknown",
+  "role": to_string(.role) ?? "infra",
+  "service": to_string(.service) ?? "unknown",
+  "level": to_string(.level) ?? "info",
+}
+'''
+
+# --- Sinks -------------------------------------------------------------------
+
+[sinks.loki]
+type = "loki"
+inputs = ["label_strip"]
+endpoint = "http://127.0.0.1:{{ logs_loki_query_port }}"
+encoding.codec = "json"
+out_of_order_action = "accept"
+remove_label_fields = true
+
+[sinks.loki.labels]
+host = "{{ '{{' }} labels.host {{ '}}' }}"
+role = "{{ '{{' }} labels.role {{ '}}' }}"
+service = "{{ '{{' }} labels.service {{ '}}' }}"
+level = "{{ '{{' }} labels.level {{ '}}' }}"
+
+[sinks.loki.buffer]
+type = "disk"
+max_size = {{ logs_agent_disk_buffer_bytes }}
+when_full = "block"

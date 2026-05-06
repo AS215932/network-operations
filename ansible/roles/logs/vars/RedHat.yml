@@ -1,0 +1,10 @@
+---
+# XCP-NG dom0 is CentOS 7-based. Vector is installed via the timberio
+# yum repository.
+# https://vector.dev/docs/setup/installation/package-managers/yum/
+logs_vector_pkg: vector
+logs_vector_service: vector
+logs_vector_config_dir: /etc/vector
+logs_vector_config_path: "{{ logs_vector_config_dir }}/vector.toml"
+logs_vector_user: vector
+logs_vector_group: vector

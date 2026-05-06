@@ -1,0 +1,26 @@
+---
+- name: restart vector
+  systemd:
+    name: "{{ logs_vector_service }}"
+    state: restarted
+    enabled: true
+  when: ansible_os_family in ['Debian', 'RedHat']
+
+- name: restart vector (FreeBSD)
+  service:
+    name: "{{ logs_vector_service }}"
+    state: restarted
+  listen: restart vector
+  when: ansible_os_family == "FreeBSD"
+
+- name: restart loki
+  systemd:
+    name: "{{ logs_loki_service }}"
+    state: restarted
+    enabled: true
+  when: ansible_os_family == "Debian"
+
+- name: reload syslogd
+  command: rcctl reload {{ logs_openbsd_syslogd_service }}
+  changed_when: false
+  when: ansible_os_family == "OpenBSD"

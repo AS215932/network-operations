@@ -1,0 +1,8 @@
+---
+# Vector ships in FreeBSD ports/pkg as sysutils/vector.
+logs_vector_pkg: vector
+logs_vector_service: vector
+logs_vector_config_dir: /usr/local/etc/vector
+logs_vector_config_path: "{{ logs_vector_config_dir }}/vector.toml"
+logs_vector_user: vector
+logs_vector_group: vector

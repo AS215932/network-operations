@@ -1,0 +1,55 @@
+---
+# Master gate: false renders configs to ansible/generated/<host>/ but does
+# not install packages or restart services. Mirrors monitoring_apply.
+logs_apply: false
+
+# Aggregator host (where Loki + Vector aggregator run). Resolved at run
+# time via peers[logs_aggregator_host].
+logs_aggregator_host: "{{ logs_aggregator_host | default('log') }}"
+
+# Listening ports on the aggregator.
+logs_aggregator_port_vector: 6000   # vector-native protocol from agents
+logs_aggregator_port_syslog: 6514   # OpenBSD syslogd @@host (TCP only)
+logs_loki_query_port: 3100          # Loki HTTP API (Grafana on mon queries here)
+logs_vector_metrics_port: 8686      # Vector internal metrics (Prometheus scrape)
+
+# Retention. Routers get a longer window because BGP/OSPF flap forensics
+# sometimes need to look back further; non-router log volume dominates the
+# disk budget so they get the shorter default.
+logs_retention_default_hours: 720    # 30 days
+logs_retention_router_hours: 2160    # 90 days
+
+# Loki storage paths (on the log VM).
+logs_loki_data_dir: /var/lib/loki
+logs_loki_chunks_dir: "{{ logs_loki_data_dir }}/chunks"
+logs_loki_index_dir: "{{ logs_loki_data_dir }}/index"
+logs_loki_compactor_dir: "{{ logs_loki_data_dir }}/compactor"
+logs_loki_wal_dir: "{{ logs_loki_data_dir }}/wal"
+
+# Vector data dir (cursor file for journald source, disk buffers, etc.).
+logs_vector_data_dir: /var/lib/vector
+
+# Per-agent disk buffer cap (bytes). Sized so an aggregator outage of ~1h
+# at typical load fits without dropping. Override per host via host_vars.
+# Suggested overrides:
+#   role=router       → 268435456   (256 MB) — cr1-nl1, cr1-de1
+#   role=nameserver   → 268435456   (256 MB) — ns2 (off-net)
+#   role=hypervisor   → 536870912   (512 MB) — dom0
+#   role=log          → 4294967296  (4 GB)   — aggregator's loki-sink buffer
+logs_agent_disk_buffer_bytes: 1073741824  # 1 GB default
+
+# Whether this host registers as the aggregator. host_vars/log.yml flips
+# this to true; everywhere else it stays false.
+logs_aggregator: false
+
+# Whether this host is in scope for the role at all. Default off so a
+# render walks every host but only emits configs for the opted-in ones.
+logs_register: false
+
+# Loki label for this host's role. Mirrors monitoring_role values.
+# Required when logs_register is true.
+# logs_role: <unset>     # set in host_vars
+
+# OpenBSD `mail` host uses native syslogd to forward to the aggregator
+# instead of installing Vector. Toggled in host_vars/mail.yml.
+logs_use_openbsd_syslogd: false

@@ -38,6 +38,9 @@ peers:
   mail:
     ipv6: "2a0c:b641:b50:2::90"
   noc:     { ipv6: "2a0c:b641:b50:2::a0" }
+  log:
+    ipv6: "2a0c:b641:b50:2::b0"
+    mgmt_v4: "10.0.0.50"
   ns2:
     ipv4: "54.38.14.218"
     ipv6: "2001:41d0:304:300::7bfb"
@@ -92,3 +95,12 @@ ssh_users:
   cr1-nl1: svag
   cr1-de1: svag
   default: svag
+
+# --- Centralized logging (Vector → Loki) ---
+# These are the constants the `logs` role reads; per-host knobs (logs_role,
+# logs_register, logs_agent_disk_buffer_bytes) live in host_vars/<host>.yml.
+logs_aggregator_host: log
+logs_aggregator_port_vector: 6000
+logs_aggregator_port_syslog: 6514
+logs_loki_query_port: 3100
+logs_vector_metrics_port: 8686

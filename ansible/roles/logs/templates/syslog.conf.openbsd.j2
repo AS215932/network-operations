@@ -1,0 +1,26 @@
+# /etc/syslog.conf — managed by ansible (roles/logs)
+# Host: {{ inventory_hostname }}
+# Generated: do not edit by hand.
+#
+# Default OpenBSD syslog routing preserved; an `@@` line at the bottom
+# duplicates everything to the central Vector aggregator on log:6514
+# over TCP. UDP (`@`) is intentionally NOT used — mail authentication
+# logs are an audit trail and we don't want silent packet drops.
+
+*.notice;auth,authpriv,cron,ftp,kern,lpr,mail,user.none	/var/log/messages
+auth.info							/var/log/authlog
+authpriv.debug							/var/log/secure
+cron.info							/var/cron/log
+daemon.info							/var/log/daemon
+ftp.info							/var/log/xferlog
+lpr.debug							/var/log/lpd-errs
+mail.info							/var/log/maillog
+user.info							/var/log/userlog
+uucp.info							/var/log/uucp
+*.err;auth.none;kern.debug;mail.crit;user.none			/dev/console
+*.notice;auth.debug;mail.crit					root
+*.emerg								*
+
+# Forward everything to the AS215932 central log aggregator (TCP).
+# Address: peers.log.ipv6 = {{ peers.log.ipv6 }}
+*.*	@@[{{ peers.log.ipv6 }}]:{{ logs_aggregator_port_syslog }}

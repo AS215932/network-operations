@@ -1,0 +1,6 @@
+---
+# OpenBSD does NOT install Vector. The native syslogd(8) forwards directly
+# to the aggregator on log:6514 (TCP, double-`@`). One config line, zero
+# new packages. See tasks/vector_openbsd.yml.
+logs_openbsd_syslog_conf: /etc/syslog.conf
+logs_openbsd_syslogd_service: syslogd

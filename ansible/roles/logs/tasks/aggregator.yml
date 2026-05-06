@@ -1,0 +1,98 @@
+---
+# Runs ONLY on the log VM (logs_aggregator: true). Installs Loki + Vector
+# in aggregator mode. The Vector package is installed here too, but it's
+# configured as the aggregator (vector-aggregator.toml.j2), not the agent.
+
+- name: Install timberio APT repo (Debian)
+  apt_key:
+    url: https://repositories.timber.io/public/vector/gpg.3543DB2D0A2BC4B8.key
+    state: present
+  tags: [apply]
+
+- name: Add timberio APT source (Debian)
+  apt_repository:
+    repo: "deb https://repositories.timber.io/public/vector/deb/debian {{ ansible_distribution_release }} main"
+    state: present
+    filename: timberio-vector
+  tags: [apply]
+
+- name: Install Vector + Loki
+  apt:
+    name:
+      - "{{ logs_vector_pkg }}"
+      - "{{ logs_loki_pkg }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Ensure Loki data dir tree
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ logs_loki_user }}"
+    group: "{{ logs_loki_group }}"
+    mode: "0750"
+  loop:
+    - "{{ logs_loki_data_dir }}"
+    - "{{ logs_loki_chunks_dir }}"
+    - "{{ logs_loki_index_dir }}"
+    - "{{ logs_loki_compactor_dir }}"
+    - "{{ logs_loki_wal_dir }}"
+    - "{{ logs_loki_data_dir }}/rules"
+    - "{{ logs_loki_data_dir }}/rules-tmp"
+    - "{{ logs_loki_data_dir }}/index_cache"
+  tags: [apply]
+
+- name: Ensure Vector data dir exists
+  file:
+    path: "{{ logs_vector_data_dir }}"
+    state: directory
+    owner: "{{ logs_vector_user }}"
+    group: "{{ logs_vector_group }}"
+    mode: "0750"
+  tags: [apply]
+
+- name: Deploy redact.vrl (shared by aggregator)
+  copy:
+    src: redact.vrl
+    dest: "{{ logs_vector_config_dir }}/redact.vrl"
+    owner: root
+    group: "{{ logs_vector_group }}"
+    mode: "0644"
+  notify: restart vector
+  tags: [apply]
+
+- name: Deploy Vector aggregator config
+  template:
+    src: vector-aggregator.toml.j2
+    dest: "{{ logs_vector_config_path }}"
+    owner: root
+    group: "{{ logs_vector_group }}"
+    mode: "0640"
+  notify: restart vector
+  tags: [apply]
+
+- name: Deploy Loki config
+  template:
+    src: loki-config.yaml.j2
+    dest: "{{ logs_loki_config_path }}"
+    owner: root
+    group: "{{ logs_loki_group }}"
+    mode: "0640"
+  notify: restart loki
+  tags: [apply]
+
+- name: Enable + start Loki
+  systemd:
+    name: "{{ logs_loki_service }}"
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start Vector (aggregator)
+  systemd:
+    name: "{{ logs_vector_service }}"
+    state: started
+    enabled: true
+  tags: [apply]

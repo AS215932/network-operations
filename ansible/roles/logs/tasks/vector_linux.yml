@@ -1,0 +1,61 @@
+---
+# Install + configure Vector agent on Debian/RedHat hosts. Skipped on the
+# aggregator (which is handled by aggregator.yml so we don't double-install
+# the package or overwrite the aggregator config with the agent template).
+
+- name: Install timberio APT repo (Debian)
+  apt_key:
+    url: https://repositories.timber.io/public/vector/gpg.3543DB2D0A2BC4B8.key
+    state: present
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
+- name: Add timberio APT source (Debian)
+  apt_repository:
+    repo: "deb https://repositories.timber.io/public/vector/deb/debian {{ ansible_distribution_release }} main"
+    state: present
+    filename: timberio-vector
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
+- name: Install timberio yum repo (RedHat / dom0)
+  yum_repository:
+    name: timberio-vector
+    description: Vector (timberio)
+    baseurl: https://repositories.timber.io/public/vector/rpm/el/$releasever/$basearch
+    gpgcheck: true
+    gpgkey: https://repositories.timber.io/public/vector/gpg.3543DB2D0A2BC4B8.key
+  when: ansible_os_family == "RedHat"
+  tags: [apply]
+
+- name: Install Vector
+  package:
+    name: "{{ logs_vector_pkg }}"
+    state: present
+  tags: [apply]
+
+- name: Ensure Vector data dir exists
+  file:
+    path: "{{ logs_vector_data_dir }}"
+    state: directory
+    owner: "{{ logs_vector_user }}"
+    group: "{{ logs_vector_group }}"
+    mode: "0750"
+  tags: [apply]
+
+- name: Deploy Vector agent config
+  template:
+    src: vector-agent.toml.j2
+    dest: "{{ logs_vector_config_path }}"
+    owner: root
+    group: "{{ logs_vector_group }}"
+    mode: "0640"
+  notify: restart vector
+  tags: [apply]
+
+- name: Enable + start Vector
+  systemd:
+    name: "{{ logs_vector_service }}"
+    state: started
+    enabled: true
+  tags: [apply]

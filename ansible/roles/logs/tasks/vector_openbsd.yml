@@ -1,0 +1,13 @@
+---
+# OpenBSD `mail` host: native syslogd `@@host` forwarding to the
+# aggregator. No Vector package, no Rust toolchain.
+
+- name: Render syslog.conf
+  template:
+    src: syslog.conf.openbsd.j2
+    dest: "{{ logs_openbsd_syslog_conf }}"
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload syslogd
+  tags: [apply]

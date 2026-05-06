@@ -1,0 +1,99 @@
+# /etc/loki/config.yaml — managed by ansible (roles/logs)
+# Host: {{ inventory_hostname }} (aggregator)
+# Generated: do not edit by hand.
+
+auth_enabled: false
+
+server:
+  http_listen_address: 127.0.0.1
+  http_listen_port: {{ logs_loki_query_port }}
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 9096
+  log_level: info
+
+# The infra subnet has Grafana on mon reachable over IPv6; agents pump
+# logs in via the local Vector aggregator. Loki itself is loopback-only —
+# Grafana queries reach 3100 via the firewall rule on log:3100 (handled
+# at nftables, not in Loki).
+common:
+  path_prefix: {{ logs_loki_data_dir }}
+  storage:
+    filesystem:
+      chunks_directory: {{ logs_loki_chunks_dir }}
+      rules_directory: {{ logs_loki_data_dir }}/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2026-05-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: {{ logs_loki_index_dir }}
+    cache_location: {{ logs_loki_data_dir }}/index_cache
+  filesystem:
+    directory: {{ logs_loki_chunks_dir }}
+
+# Compactor is what enforces retention. Without retention_enabled: true
+# the index grows indefinitely regardless of limits_config — the compactor
+# would compact but never delete. Watchdog metric:
+#   loki_compactor_oldest_pending_delete_request_age
+# alerts in mon's Alertmanager rules if this rises monotonically.
+compactor:
+  working_directory: {{ logs_loki_compactor_dir }}
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  delete_request_store: filesystem
+
+# Default retention {{ logs_retention_default_hours }}h ({{ (logs_retention_default_hours | int / 24) | int }}d).
+# Routers get the longer window via per-stream override below.
+limits_config:
+  retention_period: {{ logs_retention_default_hours }}h
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  per_stream_rate_limit: 4MB
+  per_stream_rate_limit_burst: 16MB
+  max_label_name_length: 1024
+  max_label_value_length: 4096
+  max_label_names_per_series: 30
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  retention_stream:
+    - selector: '{role="router"}'
+      priority: 1
+      period: {{ logs_retention_router_hours }}h
+
+# Ingester wal: keeps in-flight chunks if Loki crashes mid-write.
+ingester:
+  wal:
+    enabled: true
+    dir: {{ logs_loki_wal_dir }}
+  chunk_idle_period: 1h
+  max_chunk_age: 2h
+  chunk_target_size: 1572864
+  chunk_retain_period: 30s
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: {{ logs_loki_data_dir }}/rules
+  rule_path: {{ logs_loki_data_dir }}/rules-tmp
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+
+analytics:
+  reporting_enabled: false

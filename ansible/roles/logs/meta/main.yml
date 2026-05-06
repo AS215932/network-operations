@@ -1,0 +1,20 @@
+---
+galaxy_info:
+  role_name: logs
+  author: AS215932 ops
+  description: |
+    Vector agents on every host shipping to a central Vector aggregator +
+    Loki on the `log` VM. OpenBSD uses native syslogd forwarding instead
+    of an agent. See docs/application-logging.md for the per-app contract.
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+    - name: FreeBSD
+      versions: ["14", "15"]
+    - name: OpenBSD
+      versions: ["7"]
+    - name: EL
+      versions: ["7"]   # XCP-NG dom0 is CentOS 7-based
+dependencies: []

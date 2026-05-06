@@ -1,0 +1,40 @@
+## Shared redaction snippet (Vector VRL).
+##
+## Applied at the aggregator on every event before the Loki sink. Order
+## of operations matters — cheap field-name deletions on the structured
+## object first; size-cap known-large fields next; expensive regex only
+## on the residual `.message` plaintext, never on the whole serialized
+## event. Keeps aggregator CPU footprint negligible at this fleet size.
+##
+## See docs/application-logging.md for the contract that makes step 1
+## work — apps that follow it land secrets in conventional field names.
+
+# Step 1 (cheap): structured-field deletions on the parsed JSON object.
+del(.password)
+del(.token)
+del(.api_key)
+del(.secret)
+del(.X_PAYMENT)
+del(."X-PAYMENT")
+del(.payment_signature)
+del(.signing_key)
+
+# Step 2 (per-app): drop or cap known-large unstructured fields by name.
+# hyrule-mcp SSH command output: cap stdout/stderr at 4 KB.
+if exists(.stdout) && length!(string!(.stdout)) > 4096 {
+    .stdout = "[TRUNCATED]"
+}
+if exists(.stderr) && length!(string!(.stderr)) > 4096 {
+    .stderr = "[TRUNCATED]"
+}
+
+# Step 3 (regex): only against .message (plaintext residue) and other
+# known free-form fields, never against the whole serialized event.
+if exists(.message) && is_string(.message) {
+    msg = string!(.message)
+    msg = replace(msg, r'X-PAYMENT:\s*\S+', "X-PAYMENT: [REDACTED]")
+    msg = replace(msg, r'0x[a-fA-F0-9]{40}', "0x[REDACTED-WALLET]")
+    msg = replace(msg, r'ICINGA2_API_PASSWORD=\S+', "ICINGA2_API_PASSWORD=[REDACTED]")
+    msg = replace(msg, r'https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+', "https://discord.com/api/webhooks/[REDACTED]")
+    .message = msg
+}

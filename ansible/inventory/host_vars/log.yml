@@ -1,0 +1,68 @@
+---
+# log — centralized log aggregation host.
+#
+# Vector aggregator on :6000 (vector-native ingest from agents) and :6514
+# (TCP syslog from OpenBSD mail). Loki on :3100 (HTTP query, only reachable
+# from mon's Grafana). Disk: 50 GB on /var/lib/loki.
+# Mgmt v4 NIC mirrors xoa so dom0 can ship logs without overlay routing.
+#
+# See docs/network-flows.md → "### log" for the canonical inbound matrix and
+# docs/application-logging.md for the contract that fills these streams.
+
+firewall_extra_rules:
+  # Vector→Vector ingest from every agent on the infra subnet.
+  - { proto: tcp, dport: 6000, src: "{{ peers.rtr.ipv6 }}",   comment: "Vector ingest from rtr" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.dns.ipv6 }}",   comment: "Vector ingest from dns" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.api.ipv6 }}",   comment: "Vector ingest from api" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.web.ipv6 }}",   comment: "Vector ingest from web" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.proxy.ipv6 }}", comment: "Vector ingest from proxy" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.mon.ipv6 }}",   comment: "Vector ingest from mon" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.vpn.ipv6 }}",   comment: "Vector ingest from vpn" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.xoa.ipv6 }}",   comment: "Vector ingest from xoa" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.irc.ipv6 }}",   comment: "Vector ingest from irc" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.noc.ipv6 }}",   comment: "Vector ingest from noc" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.cr1_nl1.loopback }}", comment: "Vector ingest from cr1-nl1 (over WG mesh)" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.cr1_de1.loopback }}", comment: "Vector ingest from cr1-de1 (over WG mesh)" }
+
+  # Off-net ns2 over public IPv6 (different ASN, transits via rtr).
+  - { proto: tcp, dport: 6000, src: "{{ peers.ns2.ipv6 }}",   comment: "Vector ingest from off-net ns2" }
+
+  # XCP-NG dom0 over mgmt v4 (no AS215932 address). Mgmt subnet matches xoa pattern.
+  - { proto: tcp, dport: 6000, src: "{{ mgmt_v4 }}",          family: ip,  comment: "Vector ingest from dom0 over mgmt v4" }
+
+  # OpenBSD mail's native syslogd `@@host` forward — TCP only, no UDP.
+  - { proto: tcp, dport: 6514, src: "{{ peers.mail.ipv6 }}",  comment: "syslog (TCP) from OpenBSD mail" }
+
+  # Grafana on mon queries Loki; also scrapes Vector's internal metrics.
+  - { proto: tcp, dport: 3100, src: "{{ peers.mon.ipv6 }}",   comment: "Loki HTTP API from Grafana on mon" }
+  - { proto: tcp, dport: 8686, src: "{{ peers.mon.ipv6 }}",   comment: "Vector internal metrics scrape from mon" }
+
+  # Standard monitoring scrape.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}",   comment: "node_exporter scrape" }
+
+# Monitoring — register on mon (new host).
+monitoring_register: true
+monitoring_role: log
+monitoring_extra_services:
+  - name: vector-aggregator
+    check_command: tcp
+    notes: "Vector aggregator listener (vector-native protocol)"
+    vars:
+      tcp_address: "{{ peers.log.ipv6 }}"
+      tcp_port: 6000
+  - name: loki-ready
+    check_command: http
+    notes: "Loki /ready endpoint"
+    vars:
+      http_address: "{{ peers.log.ipv6 }}"
+      http_port: 3100
+      http_uri: "/ready"
+
+# Logging role knobs.
+logs_register: true
+logs_role: log
+logs_aggregator: true
+# Aggregator host doesn't ship to itself externally — sources land in the
+# in-process Vector pipeline. Buffer cap on the loki sink instead, sized
+# generously since /var/lib/loki has 50 GB.
+logs_agent_disk_buffer_bytes: 4294967296   # 4 GB (loki sink buffer)

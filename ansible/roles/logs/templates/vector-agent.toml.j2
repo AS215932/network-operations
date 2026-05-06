@@ -1,0 +1,92 @@
+# /etc/vector/vector.toml — managed by ansible (roles/logs)
+# Host: {{ inventory_hostname }}  Role: {{ logs_role | default('infra') }}
+# Generated: do not edit by hand.
+#
+# Reads journald (Linux) or files (FreeBSD), normalizes labels, ships
+# vector-native protocol to {{ logs_aggregator_host }}:{{ logs_aggregator_port_vector }}.
+# See docs/application-logging.md for the contract apps follow.
+
+data_dir = "{{ logs_vector_data_dir }}"
+
+# --- API (health probe + tap) ---
+[api]
+enabled = true
+address = "127.0.0.1:{{ logs_vector_metrics_port }}"
+
+# --- Sources -----------------------------------------------------------------
+
+{% if ansible_os_family in ['Debian', 'RedHat'] %}
+[sources.journald]
+type = "journald"
+current_boot_only = false
+include_units = []   # all units
+{% endif %}
+
+{% if ansible_os_family == 'FreeBSD' %}
+# FreeBSD routers: FRR + system daemons log via syslog -> /var/log/messages.
+[sources.system_log]
+type = "file"
+include = ["/var/log/messages", "/var/log/daemon.log"]
+read_from = "end"
+{% endif %}
+
+{% if ansible_os_family == 'RedHat' %}
+# XCP-NG hypervisor: capture xensource / xapi alongside journald.
+[sources.xen_logs]
+type = "file"
+include = [
+  "/var/log/xensource.log",
+  "/var/log/xapi.log",
+  "/var/log/xenstored-access.log",
+]
+read_from = "end"
+{% endif %}
+
+{% for extra in (logs_extra_sources | default([])) %}
+[sources.{{ extra.name }}]
+type = "{{ extra.type }}"
+{% for k, v in extra.config.items() %}
+{{ k }} = {{ v | to_json }}
+{% endfor %}
+{% endfor %}
+
+# --- Transforms --------------------------------------------------------------
+
+# Lift JSON-encoded MESSAGE bodies into structured fields. OS daemons that
+# emit plaintext fall through unchanged with .message preserved.
+[transforms.parse_json]
+type = "remap"
+inputs = [{% if ansible_os_family in ['Debian', 'RedHat'] %}"journald"{% if ansible_os_family == 'RedHat' %}, "xen_logs"{% endif %}{% elif ansible_os_family == 'FreeBSD' %}"system_log"{% endif %}{% for extra in (logs_extra_sources | default([])) %}, "{{ extra.name }}"{% endfor %}]
+source = '''
+parsed, err = parse_json(.message)
+if err == null && is_object(parsed) {
+    . = merge(., object!(parsed))
+}
+{% if ansible_os_family in ['Debian', 'RedHat'] %}
+.service = .service ?? to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = .level ?? "info"
+{% endif %}
+.host = "{{ inventory_hostname }}"
+.role = "{{ logs_role | default('infra') }}"
+'''
+
+# --- Sinks -------------------------------------------------------------------
+
+[sinks.aggregator]
+type = "vector"
+inputs = ["parse_json"]
+{% set agg_addr = peers[logs_aggregator_host].ipv6 %}
+{% if logs_role == 'hypervisor' %}
+{# dom0 has no overlay v6, only mgmt v4 to log #}
+{% set agg_addr = peers[logs_aggregator_host].mgmt_v4 %}
+address = "{{ agg_addr }}:{{ logs_aggregator_port_vector }}"
+{% else %}
+address = "[{{ agg_addr }}]:{{ logs_aggregator_port_vector }}"
+{% endif %}
+version = "2"
+compression = true
+
+[sinks.aggregator.buffer]
+type = "disk"
+max_size = {{ logs_agent_disk_buffer_bytes }}
+when_full = "block"
