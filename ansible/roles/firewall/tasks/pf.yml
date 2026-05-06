@@ -35,7 +35,7 @@
 - name: Schedule rollback watchdog (3 min) — cancels on success
   shell: |
     echo 'pfctl -f {{ firewall_backup_path }} 2>&1 | logger -t firewall-rollback' \
-      | at now + 3 minutes 2>&1 | awk '/Job/ {print $2}'
+      | at now + 3 minutes 2>&1 | awk 'tolower($1) == "job" {print $2}'
   register: _firewall_at_job
   changed_when: false
   when: firewall_apply
