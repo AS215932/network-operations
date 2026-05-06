@@ -8,7 +8,7 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026050502 ; serial (YYYYMMDDNN)
+                  2026050601 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -41,6 +41,7 @@ xoa     IN  AAAA  2a0c:b641:b50:2::70
 irc     IN  AAAA  2a0c:b641:b50:2::80
 mail    IN  A     51.91.236.215
 mail    IN  AAAA  2a0c:b641:b50:2::90
+noc     IN  AAAA  2a0c:b641:b50:2::a0
 
 ; --- Core routers — overlay loopback addresses ---
 cr1-nl1 IN  AAAA  2a0c:b641:b50::a

@@ -37,6 +37,7 @@ peers:
   irc:     { ipv6: "2a0c:b641:b50:2::80" }
   mail:
     ipv6: "2a0c:b641:b50:2::90"
+  noc:     { ipv6: "2a0c:b641:b50:2::a0" }
   ns2:
     ipv4: "54.38.14.218"
     ipv6: "2001:41d0:304:300::7bfb"
@@ -82,3 +83,12 @@ ssh_allow_sources_v4:
 # OVH to mail.as215932.net.
 mail_failover_ipv4: "51.91.236.215"
 mail_failover_ipv4_gateway: "193.70.32.254"
+
+# --- SSH login user per host (consumed by roles/hyrule-mcp hosts.yml render) ---
+# Routers and the XO appliance accept root; everything else uses svag.
+ssh_users:
+  rtr: root
+  xoa: root
+  cr1-nl1: svag
+  cr1-de1: svag
+  default: svag
