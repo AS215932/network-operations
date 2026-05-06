@@ -44,7 +44,7 @@ fi
 
 $( if [[ "$IS_CLOUD" == "1" ]]; then echo "
 echo '--- alembic upgrade head ---'
-/usr/local/bin/uv run alembic upgrade head
+PYTHONPATH=/opt/${SERVICE} /usr/local/bin/uv run alembic upgrade head
 "; fi )
 
 echo "--- systemctl restart ${SERVICE} ---"
