@@ -22,3 +22,7 @@ monitoring_extra_services:
     vars:
       tcp_address: "{{ peers.noc.ipv6 }}"
       tcp_port: 8000
+
+# --- Logs --- (ships journald to log VM via Vector)
+logs_register: true
+logs_role: noc

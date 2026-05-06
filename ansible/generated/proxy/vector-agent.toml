@@ -1,0 +1,56 @@
+# /etc/vector/vector.toml — managed by ansible (roles/logs)
+# Host: proxy  Role: proxy
+# Generated: do not edit by hand.
+#
+# Reads journald (Linux) or files (FreeBSD), normalizes labels, ships
+# vector-native protocol to log:6000.
+# See docs/application-logging.md for the contract apps follow.
+
+data_dir = "/var/lib/vector"
+
+# --- API (health probe + tap) ---
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+# --- Sources -----------------------------------------------------------------
+
+[sources.journald]
+type = "journald"
+current_boot_only = false
+include_units = []   # all units
+
+
+
+
+# --- Transforms --------------------------------------------------------------
+
+# Lift JSON-encoded MESSAGE bodies into structured fields. OS daemons that
+# emit plaintext fall through unchanged with .message preserved.
+[transforms.parse_json]
+type = "remap"
+inputs = ["journald"]
+source = '''
+parsed, err = parse_json(.message)
+if err == null && is_object(parsed) {
+    . = merge(., object!(parsed))
+}
+.service = .service ?? to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = .level ?? "info"
+.host = "proxy"
+.role = "proxy"
+'''
+
+# --- Sinks -------------------------------------------------------------------
+
+[sinks.aggregator]
+type = "vector"
+inputs = ["parse_json"]
+address = "[2a0c:b641:b50:2::b0]:6000"
+version = "2"
+compression = true
+
+[sinks.aggregator.buffer]
+type = "disk"
+max_size = 1073741824
+when_full = "block"

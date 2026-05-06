@@ -44,3 +44,8 @@ monitoring_extra_services:
     check_command: dummy   # placeholder — fill in once we have a custom check that compares ns1 vs ns2 SOA
     interval: 5m
     notes: "Detect AXFR drift: compare serials between ns1 and ns2"
+
+# --- Logs --- (ships journald to log VM via Vector over public IPv6)
+logs_register: true
+logs_role: nameserver
+logs_agent_disk_buffer_bytes: 268435456   # 256 MB — off-net, low log volume

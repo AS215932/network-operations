@@ -10,3 +10,7 @@ firewall_extra_rules:
 
   # Prometheus / blackbox / Icinga2 are localhost-only (Grafana/Prometheus run
   # on the same box). No external allow rules; loopback already accepted.
+
+# --- Logs --- (ships journald to log VM via Vector)
+logs_register: true
+logs_role: mon
