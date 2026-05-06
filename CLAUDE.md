@@ -231,7 +231,34 @@ ansible-playbook playbooks/monitoring.yml --tags apply \
     -e '{"monitoring_apply":true}' --limit <host>
 ```
 
+## hyrule MCP — live-state queries via tools, not raw SSH
+
+This repo ships an MCP server entry in `.mcp.json` that points at hyrule-mcp
+running on the `noc` VM. When the MCP is connected, prefer its tools for live
+infrastructure introspection instead of running `ssh ... bash -c '...'` or
+`ansible -m shell` ad hoc:
+
+- **Routing / BGP / OSPF**: `frr_vtysh_cmd("rtr", "show bgp summary")` etc.
+- **Service state**: `os_systemd_status`, `os_journalctl`, `os_rcctl_check`.
+- **Network**: `net_ping`, `net_traceroute`, `system_tcpdump`, `wg_show`.
+- **DNS**: `dns_dig`, `knot_zone_status`.
+- **Monitoring**: `prometheus_query` (PromQL), `icinga_get_host_state`.
+
+The server runs as `mcp-ops` on noc with a key restricted via
+`from="<noc-ipv6>"` and forwards SSH to all infra hosts using the dedicated
+`id_noc_mcp` key. Repo state is still authoritative for *desired* state — only
+use MCP tools to query *runtime* state (per `feedback_audit_live_state.md` in
+auto-memory).
+
+Write tools (`os_systemd_restart`, `icinga_acknowledge_alert`) are
+shadow-mode-gated and not advertised by the MCP server until
+`HYRULE_MCP_ENABLE_ACTIONS=1` is set on `noc`. Don't ask Claude to "restart
+this service" via MCP unless that toggle has been flipped — fall back to the
+existing Ansible playbooks for changes.
+
 ## Related repositories
 
 - `hyrule-cloud` — API server (FastAPI + PostgreSQL) for VM lifecycle management
 - `hyrule-web` — Web frontend (served by the web VM)
+- `noc-agent` — Autonomous NOC triage agent (Alertmanager + Icinga → PydanticAI → Discord); deployed on the `noc` VM
+- `hyrule-mcp` — MCP server exposing AS215932 SSH/Prometheus/Icinga/FRR tools; deployed on the `noc` VM

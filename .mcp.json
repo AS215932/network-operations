@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "hyrule": {
+      "command": "ssh",
+      "args": [
+        "-i", "/home/svag/.ssh/id_servify",
+        "-o", "IdentitiesOnly=yes",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ServerAliveInterval=30",
+        "-o", "BatchMode=yes",
+        "mcp-ops@noc.as215932.net"
+      ]
+    }
+  }
+}
