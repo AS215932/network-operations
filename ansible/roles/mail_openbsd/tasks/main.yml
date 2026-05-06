@@ -112,6 +112,13 @@
   when: mail_apply | bool
   tags: [apply]
 
+- name: Start mail services
+  command: "rcctl start {{ item }}"
+  loop: "{{ mail_services }}"
+  changed_when: false
+  when: mail_apply | bool
+  tags: [apply]
+
 - name: Start httpd for ACME challenges
   command: rcctl start httpd
   register: _mail_httpd_start
