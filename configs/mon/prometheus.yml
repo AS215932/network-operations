@@ -29,6 +29,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::60]:9100"   # vpn
           - "[2a0c:b641:b50:2::70]:9100"   # xoa
           - "[2a0c:b641:b50:2::a0]:9100"   # noc
+          - "[2a0c:b641:b50:2::b0]:9100"   # log
         labels:
           site: ovh1
           role: infra
@@ -150,3 +151,24 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: "[::1]:9115"
+
+  # --- Centralized logging pipeline (log VM at ::b0) ---
+  # Vector exposes its own internal metrics on :8686 (parallel to node_exporter
+  # on :9100, scraped via the node-infra job above). Loki exposes ingester /
+  # compactor / store metrics on :3100/metrics.
+
+  - job_name: vector
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::b0]:8686"   # log (Vector aggregator)
+        labels:
+          site: ovh1
+          role: log
+
+  - job_name: loki
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::b0]:3100"   # log (Loki HTTP /metrics)
+        labels:
+          site: ovh1
+          role: log

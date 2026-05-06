@@ -1,0 +1,92 @@
+# Deploy to: /etc/prometheus/rules.d/logs-pipeline.yml on mon
+#
+# Health rules for the centralized logging stack on the `log` VM. Routes
+# through the existing Alertmanager → noc-agent webhook → Discord pipeline,
+# so an operator gets paged exactly the same way as for any other AS215932
+# alert. Critically, these alerts originate on `mon` (not `log`), so when
+# `log` is broken the alert path itself still works.
+
+groups:
+  - name: logs-pipeline
+    interval: 30s
+    rules:
+      # --- Aggregator process up ---
+      - alert: VectorDown
+        expr: up{job="vector"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "Vector aggregator down on {{ $labels.instance }}"
+          description: "Prometheus has been unable to scrape Vector's metrics endpoint on {{ $labels.instance }} for 2 minutes. Logs are not flowing into Loki."
+
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "Loki down on {{ $labels.instance }}"
+          description: "Prometheus has been unable to scrape Loki's /metrics on {{ $labels.instance }} for 2 minutes. Log queries will fail."
+
+      # --- Vector ingestion lag ---
+      # Vector emits vector_buffer_events / vector_buffer_byte_size for each
+      # buffered sink. A persistent buffer backlog means downstream (Loki)
+      # is unable to keep up.
+      - alert: VectorBufferStalling
+        expr: rate(vector_buffer_byte_size_bytes[5m]) > 0 and vector_buffer_byte_size_bytes > 100e6
+        for: 10m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "Vector disk buffer growing on {{ $labels.instance }} ({{ $labels.component_id }})"
+          description: "Vector's buffer for {{ $labels.component_id }} has been increasing for 10 minutes and exceeds 100 MB — downstream is throttling or down."
+
+      # --- Loki cardinality canary ---
+      # The plan caps active streams at <2,000. Fire at 1,500 to catch a
+      # label explosion before it actually breaks ingest.
+      - alert: LokiCardinalityHigh
+        expr: sum(loki_ingester_memory_streams) by (instance) > 1500
+        for: 15m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "Loki active streams approaching cap on {{ $labels.instance }}"
+          description: "Active stream count is {{ $value }} (cap target 2,000). A label has likely gained high cardinality — review recent ingest before streams overflow."
+
+      # --- Disk usage on /var/lib/loki ---
+      # Reuses node_exporter filesystem metrics. log VM mounts /var/lib/loki
+      # on a dedicated 50 GB xvdb. Alert at 70% so we have headroom to
+      # extend the disk via XOA before pressure becomes a query problem.
+      - alert: LokiDiskHigh
+        expr: |
+          (
+            node_filesystem_size_bytes{mountpoint="/var/lib/loki"}
+              - node_filesystem_avail_bytes{mountpoint="/var/lib/loki"}
+          )
+          / node_filesystem_size_bytes{mountpoint="/var/lib/loki"} > 0.7
+        for: 30m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "Loki disk >70% full on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} is {{ humanizePercentage $value }} full. Extend xvdb in XOA or check that the compactor is enforcing retention."
+
+      # --- Compactor / retention enforcement ---
+      # If retention is silently broken (perm error on chunks dir, mis-set
+      # retention_enabled), this metric monotonically rises while disk
+      # also fills. Fires earlier than LokiDiskHigh, points at the cause.
+      - alert: LokiCompactorRetentionStuck
+        expr: increase(loki_compactor_oldest_pending_delete_request_age_seconds[6h]) > 21600
+        for: 1h
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "Loki compactor retention not progressing on {{ $labels.instance }}"
+          description: "Oldest pending delete request age has grown by >6h over the last 6h — compactor is not actually deleting expired chunks. Check journalctl -u loki for permission errors on /var/lib/loki, and confirm retention_enabled is true."
