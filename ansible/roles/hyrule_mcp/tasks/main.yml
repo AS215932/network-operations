@@ -159,12 +159,20 @@
   tags: [apply]
   notify: restart noc-agent
 
+- name: Check for hyrule-mcp pyproject.toml (set after a successful clone)
+  stat:
+    path: "{{ hyrule_mcp_install_dir }}/pyproject.toml"
+  register: hyrule_mcp_pyproject
+  tags: [apply]
+
 - name: Sync hyrule-mcp dependencies via uv
   command: /usr/local/bin/uv sync --frozen
   args:
     chdir: "{{ hyrule_mcp_install_dir }}"
-    creates: "{{ hyrule_mcp_install_dir }}/.venv/bin/python"
+  register: hyrule_mcp_sync
+  changed_when: hyrule_mcp_sync.stdout != "" or "Resolved" in hyrule_mcp_sync.stderr or "+" in hyrule_mcp_sync.stderr
   become: true
   become_user: "{{ hyrule_mcp_app_user }}"
+  when: hyrule_mcp_pyproject.stat.exists
   tags: [apply]
   notify: restart noc-agent

@@ -8,4 +8,5 @@
     name: noc-agent
     state: restarted
     enabled: true
+  when: noc_agent_pyproject.stat.exists | default(false)
   ignore_errors: "{{ ansible_check_mode }}"

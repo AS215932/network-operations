@@ -100,13 +100,21 @@
   notify: restart noc-agent
   tags: [apply]
 
+- name: Check for noc-agent pyproject.toml (set after a successful clone)
+  stat:
+    path: "{{ noc_agent_install_dir }}/pyproject.toml"
+  register: noc_agent_pyproject
+  tags: [apply]
+
 - name: Sync noc-agent dependencies via uv
   command: /usr/local/bin/uv sync --frozen
   args:
     chdir: "{{ noc_agent_install_dir }}"
-    creates: "{{ noc_agent_install_dir }}/.venv/bin/uvicorn"
+  register: noc_agent_sync
+  changed_when: noc_agent_sync.stdout != "" or "Resolved" in noc_agent_sync.stderr or "+" in noc_agent_sync.stderr
   become: true
   become_user: "{{ noc_agent_user }}"
+  when: noc_agent_pyproject.stat.exists
   notify: restart noc-agent
   tags: [apply]
 
@@ -138,5 +146,6 @@
     state: started
     enabled: true
     daemon_reload: true
+  when: noc_agent_pyproject.stat.exists
   ignore_errors: "{{ ansible_check_mode }}"
   tags: [apply]
