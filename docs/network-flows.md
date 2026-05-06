@@ -149,10 +149,10 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | any | TCP | 465 | OpenSMTPD SMTPS authenticated submission |
 | any | TCP | 587 | OpenSMTPD STARTTLS authenticated submission |
 | any | TCP | 80 | ACME HTTP-01 challenge via OpenBSD httpd |
-| ops-prefix, vpn-clients | TCP | 993 | Dovecot IMAPS mailbox access |
+| ops-prefix, vpn-clients, mon | TCP | 993 | Dovecot IMAPS mailbox access and TLS check |
 | ops-prefix, vpn-clients | TCP | 4190 | Dovecot ManageSieve |
 | mon | TCP | 9100 | node_exporter |
-| ops-prefix, vpn-clients | TCP | 22 | SSH |
+| ops-prefix, vpn-clients, mon | TCP | 22 | SSH and monitoring check |
 
 ### noc (`2a0c:b641:b50:2::a0`)
 

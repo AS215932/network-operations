@@ -5,6 +5,10 @@
 pf_ext_if: xnf0
 pf_ext_ifs: ["xnf0", "xnf1"]
 firewall_log_only: false
+ssh_allow_sources_v6:
+  - "{{ ops_prefix_v6 }}"
+  - "{{ vpn_clients_subnet }}"
+  - "{{ peers.mon.ipv6 }}"
 
 firewall_extra_rules:
   # Public mail delivery and submission.
@@ -15,8 +19,8 @@ firewall_extra_rules:
   # ACME HTTP-01 challenge for mail.as215932.net.
   - { proto: tcp, dport: 80, src: any, family: both, comment: "ACME HTTP-01 (httpd)" }
 
-  # Mailbox access is intentionally private; use VPN or ops-prefix.
-  - { proto: tcp, dport: 993,  src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "IMAPS from ops/VPN" }
+  # Mailbox access is intentionally private; use VPN, ops-prefix, or mon for TLS checks.
+  - { proto: tcp, dport: 993,  src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}", "{{ peers.mon.ipv6 }}"], family: ip6, comment: "IMAPS from ops/VPN/mon" }
   - { proto: tcp, dport: 4190, src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "ManageSieve from ops/VPN" }
 
   # Monitoring.
@@ -26,7 +30,7 @@ firewall_extra_rules:
 monitoring_register: true
 monitoring_display_name: "mail (OpenBSD mail server)"
 monitoring_role: mail
-monitoring_node_listen: "[::]:9100"
+monitoring_node_listen: "[{{ peers.mail.ipv6 }}]:9100"
 monitoring_extra_services:
   - name: smtp-tcp
     check_command: tcp
@@ -47,7 +51,7 @@ monitoring_extra_services:
     check_command: ssl
     interval: 12h
     notes: "Dovecot IMAPS certificate days-until-expiry on tcp/993"
-    vars: { ssl_address: "mail.as215932.net", ssl_sni: "mail.as215932.net", ssl_port: 993, ssl_cert_valid_days_warn: 14, ssl_cert_valid_days_critical: 7 }
+    vars: { ssl_address: "{{ peers.mail.ipv6 }}", ssl_sni: "mail.as215932.net", ssl_port: 993, ssl_cert_valid_days_warn: 14, ssl_cert_valid_days_critical: 7 }
 
 # --- Mail role ---
 mail_domain: as215932.net
