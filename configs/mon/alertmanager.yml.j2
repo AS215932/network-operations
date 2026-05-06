@@ -1,0 +1,24 @@
+# /etc/prometheus/alertmanager.yml — mon VM (2a0c:b641:b50:2::50)
+# Alertmanager binds 127.0.0.1:9093 (local-only). Outbound webhook to noc-agent.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: noc-agent
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+
+receivers:
+  - name: noc-agent
+    webhook_configs:
+      - url: http://[{{ peers.noc.ipv6 }}]:8000/webhook/alertmanager
+        send_resolved: true
+        max_alerts: 0
+
+inhibit_rules:
+  - source_matchers: [severity="critical"]
+    target_matchers: [severity="warning"]
+    equal: [alertname, instance]

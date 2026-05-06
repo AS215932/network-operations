@@ -5,6 +5,15 @@ global:
   scrape_interval: 30s
   evaluation_interval: 30s
 
+# --- Alerting → Alertmanager (localhost on mon) → noc-agent webhook ---
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["127.0.0.1:9093"]
+
+rule_files:
+  - /etc/prometheus/rules.d/*.yml
+
 scrape_configs:
   # --- node_exporter (port 9100) ---
   # System metrics from all Debian VMs and routers.
@@ -19,6 +28,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::50]:9100"   # mon (self)
           - "[2a0c:b641:b50:2::60]:9100"   # vpn
           - "[2a0c:b641:b50:2::70]:9100"   # xoa
+          - "[2a0c:b641:b50:2::a0]:9100"   # noc
         labels:
           site: ovh1
           role: infra
