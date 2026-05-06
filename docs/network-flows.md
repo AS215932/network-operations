@@ -26,7 +26,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | `51.91.236.215` | OpenSMTPD + Rspamd + Dovecot mail server |
 | noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp (stdio child) |
-| log | Debian 13 | `2a0c:b641:b50:2::b0`, `10.0.0.50` (mgmt) | — | Vector aggregator + Loki (centralized logs) |
+| log | Debian 13 | `2a0c:b641:b50:2::b0`, `10.0.0.60` (mgmt) | — | Vector aggregator + Loki (centralized logs) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
@@ -164,7 +164,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
 
-### log (`2a0c:b641:b50:2::b0` overlay, `10.0.0.50` mgmt)
+### log (`2a0c:b641:b50:2::b0` overlay, `10.0.0.60` mgmt)
 
 Vector aggregator + Loki. Receives logs from every host in AS215932; serves
 queries to Grafana on mon. Loki itself is never exposed publicly — Grafana
