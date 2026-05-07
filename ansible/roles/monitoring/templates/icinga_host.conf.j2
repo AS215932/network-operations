@@ -49,10 +49,12 @@ object Service "{{ svc.name }}" {
 {% endif %}
 {% if svc.vars is defined %}
 {% for k, v in svc.vars.items() %}
-{% if v is string %}
-  vars.{{ k }} = "{{ v }}"
+{% if v is boolean %}
+  vars.{{ k }} = {{ v | lower }}
+{% elif v is string %}
+  vars.{{ k }} = {{ v | to_json }}
 {% elif v is mapping %}
-  vars.{{ k }} = { {% for kk, vv in v.items() %}{{ kk }} = "{{ vv }}"{% if not loop.last %}, {% endif %}{% endfor %} }
+  vars.{{ k }} = { {% for kk, vv in v.items() %}{{ kk }} = {{ vv | to_json }}{% if not loop.last %}, {% endif %}{% endfor %} }
 {% else %}
   vars.{{ k }} = {{ v }}
 {% endif %}

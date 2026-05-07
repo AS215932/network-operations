@@ -16,12 +16,57 @@ firewall_extra_rules:
 monitoring_register: true
 monitoring_role: noc
 monitoring_extra_services:
-  - name: noc-agent-http
-    check_command: tcp
-    notes: "noc-agent webhook health"
+  - name: noc-agent-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    notes: "FastAPI liveness for noc-agent"
     vars:
-      tcp_address: "{{ peers.noc.ipv6 }}"
-      tcp_port: 8000
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8000
+      http_uri: "/health"
+      http_ipv6: true
+      http_timeout: 10
+      http_expect_body_regex: '"status":"ok"'
+
+  - name: noc-agent-mcp-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    notes: "MCP subprocess connectivity for Prometheus/SSH and Xen Orchestra tools"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8000
+      http_uri: "/health/mcp"
+      http_ipv6: true
+      http_timeout: 10
+      http_expect_body_regex: '"status":"ok"'
+
+  - name: noc-agent-config-health
+    check_command: http
+    interval: 2m
+    retry: 30s
+    notes: "Required noc-agent runtime configuration and secret presence"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8000
+      http_uri: "/health/config"
+      http_ipv6: true
+      http_timeout: 10
+      http_expect_body_regex: '"status":"ok"'
+
+  - name: noc-agent-mail-health
+    check_command: http
+    interval: 2m
+    retry: 30s
+    notes: "NOC mailbox IMAP login/select used by mail polling"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8000
+      http_uri: "/health/mail"
+      http_ipv6: true
+      http_timeout: 15
+      http_expect_body_regex: '"status":"ok"'
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
