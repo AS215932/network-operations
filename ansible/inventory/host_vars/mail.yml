@@ -1,6 +1,6 @@
 ---
 # mail — OpenBSD mail server for as215932.net.
-# Public SMTP is world-facing; mailbox access stays on ops/VPN only.
+# Public SMTP is world-facing; mailbox access stays on ops/VPN plus NOC automation.
 
 pf_ext_if: xnf0
 pf_ext_ifs: ["xnf0", "xnf1"]
@@ -19,8 +19,8 @@ firewall_extra_rules:
   # ACME HTTP-01 challenge for mail.as215932.net.
   - { proto: tcp, dport: 80, src: any, family: both, comment: "ACME HTTP-01 (httpd)" }
 
-  # Mailbox access is intentionally private; use VPN, ops-prefix, or mon for TLS checks.
-  - { proto: tcp, dport: 993,  src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}", "{{ peers.mon.ipv6 }}"], family: ip6, comment: "IMAPS from ops/VPN/mon" }
+  # Mailbox access is intentionally private; use VPN, ops-prefix, mon for TLS checks, or noc-agent polling.
+  - { proto: tcp, dport: 993,  src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}", "{{ peers.mon.ipv6 }}", "{{ peers.noc.ipv6 }}"], family: ip6, comment: "IMAPS from ops/VPN/mon/noc" }
   - { proto: tcp, dport: 4190, src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "ManageSieve from ops/VPN" }
 
   # Monitoring.
