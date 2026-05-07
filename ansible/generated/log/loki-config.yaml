@@ -5,16 +5,20 @@
 auth_enabled: false
 
 server:
-  http_listen_address: 127.0.0.1
+  # HTTP API (3100) listens on all interfaces so Grafana on mon can query
+  # over IPv6. Access is gated at the host firewall (nftables): inbound
+  # 3100 is restricted to peers.mon.ipv6 in host_vars/log.yml. A kernel
+  # firewall cannot redirect into a loopback socket, so binding here on
+  # ::1 / 127.0.0.1 makes Loki unreachable from mon entirely.
+  http_listen_address: "::"
   http_listen_port: 3100
+  # gRPC (9096) stays on loopback — it carries intra-process ring chatter
+  # from the ingester back to itself. The advertised ring address must
+  # match the listener, which is why common.instance_addr below also pins
+  # to 127.0.0.1.
   grpc_listen_address: 127.0.0.1
   grpc_listen_port: 9096
   log_level: info
-
-# The infra subnet has Grafana on mon reachable over IPv6; agents pump
-# logs in via the local Vector aggregator. Loki itself is loopback-only —
-# Grafana queries reach 3100 via the firewall rule on log:3100 (handled
-# at nftables, not in Loki).
 common:
   path_prefix: /var/lib/loki
   storage:
@@ -34,7 +38,11 @@ common:
 
 schema_config:
   configs:
-    - from: 2026-05-01
+    # Far-back `from:` so historical journald entries replayed by
+    # newly-installed Vector agents don't fail with "no schema config
+    # found". The reject_old_samples_max_age below is the real ingestion
+    # cutoff (7d window).
+    - from: 2020-01-01
       store: tsdb
       object_store: filesystem
       schema: v13
