@@ -34,3 +34,53 @@ groups:
         annotations:
           summary: "BGP peer {{ $labels.peer }} not established on {{ $labels.instance }}"
           description: "Peer state is {{ $labels.state }}."
+
+      - alert: NOCAgentGeminiQuotaLow
+        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 25
+        for: 5m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "NOC Agent Gemini quota is low"
+          description: "Gemini quota remaining estimate is {{ $value }} requests. Verify fallback model credentials before the primary quota is exhausted."
+
+      - alert: NOCAgentGeminiQuotaEmpty
+        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "NOC Agent Gemini quota is exhausted"
+          description: "Gemini quota remaining estimate is {{ $value }}. The NOC Agent must rely on fallback models or human triage."
+
+      - alert: NOCAgentGeminiQuotaProbeFailed
+        expr: noc_agent_gemini_quota_configured == 1 and noc_agent_gemini_quota_probe_ok == 0
+        for: 10m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "NOC Agent Gemini quota probe failed"
+          description: "The NOC Agent is configured for Gemini quota monitoring but the Cloud Monitoring probe has failed for 10 minutes."
+
+      - alert: NOCAgentModelFallbackActive
+        expr: increase(noc_agent_model_fallback_attempts_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "NOC Agent used model fallback"
+          description: "The NOC Agent attempted model fallback in the last 10 minutes. Check provider quota/rate-limit metrics and fallback success counters."
+
+      - alert: NOCAgentAllModelsFailing
+        expr: increase(noc_agent_model_run_failures_total[10m]) > 0 and increase(noc_agent_model_run_successes_total[10m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "NOC Agent model access is failing"
+          description: "The NOC Agent has model failures and no successful model runs in the last 10 minutes. Check /health/model and provider credentials/quotas."

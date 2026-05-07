@@ -68,6 +68,19 @@ monitoring_extra_services:
       http_timeout: 15
       http_expect_body_regex: '"status":"ok"'
 
+  - name: noc-agent-model-health
+    check_command: http
+    interval: 2m
+    retry: 30s
+    notes: "Configured AI model and fallback access for noc-agent"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8000
+      http_uri: "/health/model"
+      http_ipv6: true
+      http_timeout: 15
+      http_expect_body_regex: '"status":"ok"'
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: noc
