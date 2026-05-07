@@ -1,24 +1,28 @@
 ---
-# Install + configure Vector agent on Debian/RedHat hosts. Skipped on the
-# aggregator (which is handled by aggregator.yml so we don't double-install
-# the package or overwrite the aggregator config with the agent template).
+# Install + configure Vector agent on Debian/RedHat hosts. The aggregator
+# host (logs_aggregator=true) is excluded by main.yml's gating so this
+# file only runs on agent-mode hosts.
+#
+# Vector ships as a single .deb on GitHub releases — no apt repo. The
+# legacy timberio.io apt host is no longer resolving (2026-05). Pin the
+# version in vars/Debian.yml.
 
-- name: Install timberio APT repo (Debian)
-  apt_key:
-    url: https://repositories.timber.io/public/vector/gpg.3543DB2D0A2BC4B8.key
+- name: Download Vector .deb (Debian)
+  get_url:
+    url: "{{ logs_vector_deb_url }}"
+    dest: "/tmp/vector_{{ logs_vector_version }}.deb"
+    mode: "0644"
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
+- name: Install Vector .deb (Debian)
+  apt:
+    deb: "/tmp/vector_{{ logs_vector_version }}.deb"
     state: present
   when: ansible_os_family == "Debian"
   tags: [apply]
 
-- name: Add timberio APT source (Debian)
-  apt_repository:
-    repo: "deb https://repositories.timber.io/public/vector/deb/debian {{ ansible_distribution_release }} main"
-    state: present
-    filename: timberio-vector
-  when: ansible_os_family == "Debian"
-  tags: [apply]
-
-- name: Install timberio yum repo (RedHat / dom0)
+- name: Install timberio yum repo (RedHat / dom0 CentOS 7)
   yum_repository:
     name: timberio-vector
     description: Vector (timberio)
@@ -28,10 +32,11 @@
   when: ansible_os_family == "RedHat"
   tags: [apply]
 
-- name: Install Vector
+- name: Install Vector (RedHat)
   package:
     name: "{{ logs_vector_pkg }}"
     state: present
+  when: ansible_os_family == "RedHat"
   tags: [apply]
 
 - name: Ensure Vector data dir exists

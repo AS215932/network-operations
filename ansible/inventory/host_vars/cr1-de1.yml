@@ -3,6 +3,8 @@
 # Multi-interface (vtnet0..3), no antispoof, BGP peers with Servperso + Extra-Transit.
 # Live ruleset captured at ansible/baseline/cr1-de1/pf.conf.
 
+ansible_python_interpreter: /usr/local/bin/python3.11
+
 pf_ext_if: "vtnet0"
 pf_extra_ifs:
   - { name: "transit2_if", dev: "vtnet1" }
@@ -15,10 +17,12 @@ pf_use_as215932_table: true
 # WG underlay listener ports — 1337 (cr1-nl1), 1338 (rtr).
 pf_wg_ports: [1337, 1338]
 
-# External BGP peers (Servperso DE + Extra-Transit).
+# External BGP peers (Servperso DE + Extra-Transit + LocIX).
 pf_bgp_peers:
   - "2a0c:b640:10::ffff"
   - "2a0c:b641:870::ffff"
+  # - "[LocIX DUS IP placeholder]"
+  # - "[LocIX FRA IP placeholder]"
 
 firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }

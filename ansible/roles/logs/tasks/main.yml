@@ -30,6 +30,7 @@
     - logs_apply | bool
     - ansible_os_family == "Debian"
     - not (logs_use_openbsd_syslogd | bool)
+    - not (logs_aggregator | bool)
   tags: [apply]
 
 - name: Apply — Vector agent (FreeBSD)
@@ -37,6 +38,7 @@
   when:
     - logs_apply | bool
     - ansible_os_family == "FreeBSD"
+    - not (logs_aggregator | bool)
   tags: [apply]
 
 - name: Apply — Vector agent (XCP-NG dom0, RedHat family)
@@ -44,6 +46,7 @@
   when:
     - logs_apply | bool
     - ansible_os_family == "RedHat"
+    - not (logs_aggregator | bool)
   tags: [apply]
 
 - name: Apply — OpenBSD syslogd forward

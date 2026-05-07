@@ -1,48 +1,123 @@
 ---
-# Runs ONLY on the log VM (logs_aggregator: true). Installs Loki + Vector
-# in aggregator mode. The Vector package is installed here too, but it's
-# configured as the aggregator (vector-aggregator.toml.j2), not the agent.
+# Runs ONLY on the log VM (logs_aggregator: true). Installs Vector + Loki
+# in aggregator mode. Vector comes from timberio's APT repo; Loki ships
+# as a single Go binary from upstream releases (no apt package on Debian).
 
-- name: Install timberio APT repo (Debian)
-  apt_key:
-    url: https://repositories.timber.io/public/vector/gpg.3543DB2D0A2BC4B8.key
-    state: present
+# --- Vector via direct .deb download from GitHub releases ---
+# (timberio's apt repo no longer resolves; see vars/Debian.yml.)
+
+- name: Download Vector .deb
+  get_url:
+    url: "{{ logs_vector_deb_url }}"
+    dest: "/tmp/vector_{{ logs_vector_version }}.deb"
+    mode: "0644"
   tags: [apply]
 
-- name: Add timberio APT source (Debian)
-  apt_repository:
-    repo: "deb https://repositories.timber.io/public/vector/deb/debian {{ ansible_distribution_release }} main"
-    state: present
-    filename: timberio-vector
-  tags: [apply]
-
-- name: Install Vector + Loki
+- name: Install Vector .deb
   apt:
-    name:
-      - "{{ logs_vector_pkg }}"
-      - "{{ logs_loki_pkg }}"
+    deb: "/tmp/vector_{{ logs_vector_version }}.deb"
     state: present
-    update_cache: true
-    cache_valid_time: 3600
   tags: [apply]
 
-- name: Ensure Loki data dir tree
-  file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ logs_loki_user }}"
-    group: "{{ logs_loki_group }}"
-    mode: "0750"
-  loop:
-    - "{{ logs_loki_data_dir }}"
-    - "{{ logs_loki_chunks_dir }}"
-    - "{{ logs_loki_index_dir }}"
-    - "{{ logs_loki_compactor_dir }}"
-    - "{{ logs_loki_wal_dir }}"
-    - "{{ logs_loki_data_dir }}/rules"
-    - "{{ logs_loki_data_dir }}/rules-tmp"
-    - "{{ logs_loki_data_dir }}/index_cache"
+# --- Loki: upstream binary release ---
+# Loki isn't in Debian's apt repos. Download the prebuilt binary and
+# manage it ourselves. Pin via logs_loki_version (defaulted in
+# vars/Debian.yml so we can bump in one place).
+
+- name: Ensure loki system user
+  user:
+    name: "{{ logs_loki_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ logs_loki_data_dir }}"
+    create_home: false
   tags: [apply]
+
+- name: Loki data + config dirs
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(logs_loki_user) }}"
+    group: "{{ item.group | default(logs_loki_group) }}"
+    mode: "{{ item.mode | default('0750') }}"
+  loop:
+    - { path: /etc/loki, owner: root, group: "{{ logs_loki_group }}", mode: "0750" }
+    - { path: "{{ logs_loki_data_dir }}" }
+    - { path: "{{ logs_loki_chunks_dir }}" }
+    - { path: "{{ logs_loki_index_dir }}" }
+    - { path: "{{ logs_loki_compactor_dir }}" }
+    - { path: "{{ logs_loki_wal_dir }}" }
+    - { path: "{{ logs_loki_data_dir }}/rules" }
+    - { path: "{{ logs_loki_data_dir }}/rules-tmp" }
+    - { path: "{{ logs_loki_data_dir }}/index_cache" }
+  tags: [apply]
+
+- name: Install unzip (needed to extract Loki release)
+  apt:
+    name: unzip
+    state: present
+  tags: [apply]
+
+- name: Download Loki binary release
+  get_url:
+    url: "https://github.com/grafana/loki/releases/download/v{{ logs_loki_version }}/loki-linux-amd64.zip"
+    dest: "/tmp/loki-{{ logs_loki_version }}.zip"
+    mode: "0644"
+  register: loki_download
+  tags: [apply]
+
+- name: Extract Loki binary
+  unarchive:
+    src: "/tmp/loki-{{ logs_loki_version }}.zip"
+    dest: /usr/local/bin
+    remote_src: true
+    creates: "/usr/local/bin/loki-linux-amd64"
+  when: loki_download is succeeded
+  tags: [apply]
+
+- name: Symlink loki-linux-amd64 → /usr/local/bin/loki
+  file:
+    src: /usr/local/bin/loki-linux-amd64
+    dest: /usr/local/bin/loki
+    state: link
+    force: true
+  notify: restart loki
+  tags: [apply]
+
+- name: Render Loki systemd unit
+  copy:
+    dest: /etc/systemd/system/loki.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Grafana Loki
+      Documentation=https://grafana.com/docs/loki/
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ logs_loki_user }}
+      Group={{ logs_loki_group }}
+      ExecStart=/usr/local/bin/loki -config.file={{ logs_loki_config_path }}
+      Restart=on-failure
+      RestartSec=2
+      LimitNOFILE=65536
+      ReadWritePaths={{ logs_loki_data_dir }}
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: restart loki
+  tags: [apply]
+
+- name: Reload systemd to pick up loki.service
+  systemd:
+    daemon_reload: true
+  tags: [apply]
+
+# --- Configs ---
 
 - name: Ensure Vector data dir exists
   file:

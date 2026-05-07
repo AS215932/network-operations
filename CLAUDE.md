@@ -256,6 +256,61 @@ shadow-mode-gated and not advertised by the MCP server until
 this service" via MCP unless that toggle has been flipped — fall back to the
 existing Ansible playbooks for changes.
 
+## Tracking follow-ups — file GitHub issues, not TODO comments
+
+When work surfaces a follow-up that won't be done in the current change (deferred
+hardening, missed convention, "this should be automated later", a bug that's
+out of scope), file it as an issue in `AS215932/network-operations` instead of
+leaving it as a `TODO:` in code, a comment in the PR, or an entry in an
+ephemeral TodoWrite list. TodoWrite is for *current-session* progress only —
+the moment the session ends, those items are lost.
+
+What counts as "worth filing":
+
+- An action item the user accepts as out-of-scope but agrees should happen later
+  ("yes do that next week" / "follow-up issue").
+- A regression risk or hardening gap discovered during a deploy
+  (shadow-mode flips, scope-broadening of a privileged credential, etc.).
+- A workaround for a tooling gap that should be automated
+  (manual `mon`-side snapshot, raw-mode Ansible fallback, etc.).
+
+What does NOT need an issue:
+
+- Steps inside the current change being implemented — those are TodoWrite items.
+- Trivial cleanups inline with the change.
+- Anything already tracked by an existing open issue (search first with
+  `gh issue list --repo AS215932/network-operations --state open --search '<keywords>'`).
+
+Filing convention:
+
+```bash
+gh issue create --repo AS215932/network-operations \
+  --title "<imperative, scoped — one line>" \
+  --label "<comma-separated, see gh label list>" \
+  --body "$(cat <<'EOF'
+## Context
+<what state is today, why this matters>
+
+## Action items
+1. <step>
+2. <step>
+
+## Related
+- <files / links / commands>
+EOF
+)"
+```
+
+The issue body should be self-contained — the future operator picking it up
+should not need to dig through chat history or commit logs to understand it.
+Always include a **Context** section (so the reader sees why), an **Action
+items** numbered list (so the work is unambiguous), and a **Related** section
+pointing at the files/commands/incidents that motivated it.
+
+When the user says "let's track that as a follow-up", "file an issue", "todo
+for later", or similar — file it immediately, don't queue it. Surface the
+issue URL in the response so it's recoverable.
+
 ## Related repositories
 
 - `hyrule-cloud` — API server (FastAPI + PostgreSQL) for VM lifecycle management

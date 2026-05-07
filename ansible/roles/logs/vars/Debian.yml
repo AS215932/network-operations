@@ -1,6 +1,10 @@
 ---
-# Vector packaging on Debian via the upstream timberio APT repository.
-# https://vector.dev/docs/setup/installation/package-managers/apt/
+# Vector — installed from the upstream .deb on GitHub releases. Bump the
+# version pin here (vars/Debian.yml is shared by agent + aggregator).
+# We avoid the timberio apt repo because repositories.timber.io has gone
+# dark (no DNS records as of 2026-05).
+logs_vector_version: "0.55.0"
+logs_vector_deb_url: "https://github.com/vectordotdev/vector/releases/download/v{{ logs_vector_version }}/vector_{{ logs_vector_version }}-1_amd64.deb"
 logs_vector_pkg: vector
 logs_vector_service: vector
 logs_vector_config_dir: /etc/vector
@@ -8,8 +12,10 @@ logs_vector_config_path: "{{ logs_vector_config_dir }}/vector.toml"
 logs_vector_user: vector
 logs_vector_group: vector
 
-# Loki packaging — installed only on the aggregator host.
-logs_loki_pkg: loki
+# Loki — installed only on the aggregator host. Distributed as a single
+# Go binary from upstream releases (no Debian apt package). Bump the
+# version pin here; aggregator.yml downloads + symlinks accordingly.
+logs_loki_version: "3.4.2"
 logs_loki_service: loki
 logs_loki_config_path: /etc/loki/config.yaml
 logs_loki_user: loki
