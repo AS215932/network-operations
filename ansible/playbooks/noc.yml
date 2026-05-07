@@ -40,6 +40,7 @@
     icinga_api_user: "{{ lookup('env', 'ICINGA_API_USER') }}"
     icinga_api_password: "{{ lookup('env', 'ICINGA_API_PASSWORD') }}"
     xo_token: "{{ lookup('env', 'XO_TOKEN') }}"
+    noc_mail_password: "{{ lookup('env', 'MAIL_NOC_PASSWORD') }}"
     noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
   roles:
     - hyrule_mcp
