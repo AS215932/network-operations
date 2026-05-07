@@ -48,4 +48,4 @@ monitoring_extra_services:
 # --- Logs --- (ships journald to log VM via Vector over public IPv6)
 logs_register: true
 logs_role: nameserver
-logs_agent_disk_buffer_bytes: 268435456   # 256 MB — off-net, low log volume
+logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — off-net, low log volume (Vector requires ≥ 256 MiB + 32 B)

@@ -31,11 +31,11 @@ logs_vector_data_dir: /var/lib/vector
 
 # Per-agent disk buffer cap (bytes). Sized so an aggregator outage of ~1h
 # at typical load fits without dropping. Override per host via host_vars.
-# Suggested overrides:
-#   role=router       → 268435456   (256 MB) — cr1-nl1, cr1-de1
-#   role=nameserver   → 268435456   (256 MB) — ns2 (off-net)
-#   role=hypervisor   → 536870912   (512 MB) — dom0
-#   role=log          → 4294967296  (4 GB)   — aggregator's loki-sink buffer
+# Suggested overrides (Vector requires the buffer to be ≥ 256 MiB + 32 B):
+#   role=router       → 300000000   (~286 MB) — cr1-nl1, cr1-de1
+#   role=nameserver   → 300000000   (~286 MB) — ns2 (off-net)
+#   role=hypervisor   → 536870912   (512 MB)  — dom0
+#   role=log          → 4294967296  (4 GB)    — aggregator's loki-sink buffer
 logs_agent_disk_buffer_bytes: 1073741824  # 1 GB default
 
 # Whether this host registers as the aggregator. host_vars/log.yml flips

@@ -32,4 +32,4 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: nameserver
-logs_agent_disk_buffer_bytes: 268435456   # 256 MB — nameserver log volume is low
+logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — nameserver log volume is low (Vector requires ≥ 256 MiB + 32 B)

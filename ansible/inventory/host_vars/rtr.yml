@@ -45,4 +45,4 @@ firewall_extra_raw_nft: |
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: router
-logs_agent_disk_buffer_bytes: 268435456   # 256 MB — router log volume is low
+logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — router log volume is low (Vector requires ≥ 256 MiB + 32 B)
