@@ -6,12 +6,18 @@
 # --- Vector via direct .deb download from GitHub releases ---
 # (timberio's apt repo no longer resolves; see vars/Debian.yml.)
 
+- name: Check if Vector .deb is already cached
+  stat:
+    path: "/tmp/vector_{{ logs_vector_version }}.deb"
+  register: _vector_deb
+  tags: [apply]
+
 - name: Download Vector .deb
   get_url:
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
-    force: false
+  when: not _vector_deb.stat.exists
   tags: [apply]
 
 - name: Install Vector .deb
