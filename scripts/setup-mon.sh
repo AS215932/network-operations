@@ -52,6 +52,18 @@ datasources:
     editable: true
 EOF
 
+# Loki on the log VM. HTTP API is firewalled to mon by host_vars/log.yml.
+cat > /etc/grafana/provisioning/datasources/loki.yaml <<'EOF'
+apiVersion: 1
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://[2a0c:b641:b50:2::b0]:3100
+    isDefault: false
+    editable: true
+EOF
+
 # Set root URL for reverse proxy
 sed -i 's|;root_url = .*|root_url = https://grafana.servify.network/|' /etc/grafana/grafana.ini
 
