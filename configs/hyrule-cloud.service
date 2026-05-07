@@ -22,6 +22,9 @@ ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
     --access-log
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-cloud
 
 # Security hardening
 ProtectSystem=strict

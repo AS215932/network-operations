@@ -20,6 +20,9 @@ ExecStart=/opt/noc-agent/.venv/bin/uvicorn app.main:app \
     --access-log
 Restart=always
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=noc-agent
 
 # Security hardening
 ProtectSystem=strict
