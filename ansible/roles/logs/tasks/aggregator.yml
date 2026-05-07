@@ -19,6 +19,32 @@
     state: present
   tags: [apply]
 
+- name: Ensure systemd drop-in dir for vector.service
+  file:
+    path: /etc/systemd/system/vector.service.d
+    state: directory
+    mode: "0755"
+  tags: [apply]
+
+- name: Pin Vector ExecStart to our config (ignore the upstream demo vector.yaml)
+  copy:
+    dest: /etc/systemd/system/vector.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      # Override ExecStart so Vector loads only our TOML, not the
+      # default search path that picks up /etc/vector/vector.yaml.
+      ExecStartPre=
+      ExecStartPre=/usr/bin/vector validate --config-toml {{ logs_vector_config_path }}
+      ExecStart=
+      ExecStart=/usr/bin/vector --config-toml {{ logs_vector_config_path }}
+  notify:
+    - reload systemd for vector
+    - restart vector
+  tags: [apply]
+
 # --- Loki: upstream binary release ---
 # Loki isn't in Debian's apt repos. Download the prebuilt binary and
 # manage it ourselves. Pin via logs_loki_version (defaulted in

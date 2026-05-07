@@ -1,4 +1,9 @@
 ---
+- name: reload systemd for vector
+  systemd:
+    daemon_reload: true
+  when: ansible_os_family in ['Debian', 'RedHat']
+
 - name: restart vector
   systemd:
     name: "{{ logs_vector_service }}"

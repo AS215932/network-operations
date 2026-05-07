@@ -26,9 +26,10 @@ address = "[::]:{{ logs_aggregator_port_syslog }}"
 mode = "tcp"
 
 # Aggregator's own journald (so the log VM is also visible in Loki).
+# Vector default is current-boot-only on modern systemd; older releases'
+# `current_boot_only = false` flag is rejected on systemd 250+.
 [sources.self_journald]
 type = "journald"
-current_boot_only = false
 
 # --- Transforms --------------------------------------------------------------
 
@@ -41,8 +42,8 @@ parsed, err = parse_json(.message)
 if err == null && is_object(parsed) {
     . = merge(., object!(parsed))
 }
-.service = .service ?? to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? "unknown"
-.level = .level ?? "info"
+.service = string(.service) ?? string(._SYSTEMD_UNIT) ?? string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = string(.level) ?? "info"
 .host = "{{ inventory_hostname }}"
 .role = "log"
 '''
@@ -53,10 +54,10 @@ if err == null && is_object(parsed) {
 type = "remap"
 inputs = ["openbsd_syslog"]
 source = '''
-.host = .hostname ?? "mail"
+.host = string(.hostname) ?? "mail"
 .role = "mail"
-.service = .appname ?? "syslog"
-.level = .severity ?? "info"
+.service = string(.appname) ?? "syslog"
+.level = string(.severity) ?? "info"
 '''
 
 # Shared redaction across every event regardless of source.

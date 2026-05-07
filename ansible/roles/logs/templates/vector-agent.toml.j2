@@ -18,7 +18,6 @@ address = "127.0.0.1:{{ logs_vector_metrics_port }}"
 {% if ansible_os_family in ['Debian', 'RedHat'] %}
 [sources.journald]
 type = "journald"
-current_boot_only = false
 include_units = []   # all units
 {% endif %}
 
@@ -63,8 +62,8 @@ if err == null && is_object(parsed) {
     . = merge(., object!(parsed))
 }
 {% if ansible_os_family in ['Debian', 'RedHat'] %}
-.service = .service ?? to_string(._SYSTEMD_UNIT) ?? to_string(.SYSLOG_IDENTIFIER) ?? "unknown"
-.level = .level ?? "info"
+.service = string(.service) ?? string(._SYSTEMD_UNIT) ?? string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = string(.level) ?? "info"
 {% endif %}
 .host = "{{ inventory_hostname }}"
 .role = "{{ logs_role | default('infra') }}"

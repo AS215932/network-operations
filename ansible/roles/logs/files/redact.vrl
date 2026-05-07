@@ -21,17 +21,19 @@ del(.signing_key)
 
 # Step 2 (per-app): drop or cap known-large unstructured fields by name.
 # hyrule-mcp SSH command output: cap stdout/stderr at 4 KB.
-if exists(.stdout) && length!(string!(.stdout)) > 4096 {
+stdout_str = string(.stdout) ?? ""
+if length(stdout_str) > 4096 {
     .stdout = "[TRUNCATED]"
 }
-if exists(.stderr) && length!(string!(.stderr)) > 4096 {
+stderr_str = string(.stderr) ?? ""
+if length(stderr_str) > 4096 {
     .stderr = "[TRUNCATED]"
 }
 
 # Step 3 (regex): only against .message (plaintext residue) and other
 # known free-form fields, never against the whole serialized event.
-if exists(.message) && is_string(.message) {
-    msg = string!(.message)
+msg = string(.message) ?? ""
+if msg != "" {
     msg = replace(msg, r'X-PAYMENT:\s*\S+', "X-PAYMENT: [REDACTED]")
     msg = replace(msg, r'0x[a-fA-F0-9]{40}', "0x[REDACTED-WALLET]")
     msg = replace(msg, r'ICINGA2_API_PASSWORD=\S+', "ICINGA2_API_PASSWORD=[REDACTED]")

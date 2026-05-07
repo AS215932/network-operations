@@ -22,7 +22,13 @@ common:
       chunks_directory: /var/lib/loki/chunks
       rules_directory: /var/lib/loki/rules
   replication_factor: 1
+  # Pin the ingester's advertised ring address to loopback. Without
+  # this, Loki picks the host's first non-loopback address (mgmt v4
+  # on this VM) and tries to dial 9096 there — but server.grpc binds
+  # to 127.0.0.1 only, so it fails with "connection refused".
+  instance_addr: 127.0.0.1
   ring:
+    instance_addr: 127.0.0.1
     kvstore:
       store: inmemory
 
