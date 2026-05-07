@@ -42,6 +42,7 @@
     xo_token: "{{ lookup('env', 'XO_TOKEN') }}"
     noc_mail_password: "{{ lookup('env', 'MAIL_NOC_PASSWORD') }}"
     noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
+    gemini_quota_project_id: "{{ lookup('env', 'GEMINI_QUOTA_PROJECT_ID') }}"
   roles:
     - hyrule_mcp
     - noc_agent
