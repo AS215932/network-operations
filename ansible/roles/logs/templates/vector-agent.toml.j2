@@ -19,6 +19,11 @@ address = "127.0.0.1:{{ logs_vector_metrics_port }}"
 [sources.journald]
 type = "journald"
 include_units = []   # all units
+# Without since_now, Vector replays the host's entire journald history on
+# first start. Loki then 500s with "timestamp too old" / "no schema config
+# found" for entries older than reject_old_samples_max_age. Forensics
+# pre-agent-install isn't queryable through Loki anyway, so cap at "now".
+since_now = true
 {% endif %}
 
 {% if ansible_os_family == 'FreeBSD' %}

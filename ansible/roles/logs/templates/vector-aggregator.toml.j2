@@ -28,8 +28,11 @@ mode = "tcp"
 # Aggregator's own journald (so the log VM is also visible in Loki).
 # Vector default is current-boot-only on modern systemd; older releases'
 # `current_boot_only = false` flag is rejected on systemd 250+.
+# since_now: avoid replaying historical entries on first start (Loki
+# rejects them with reject_old_samples_max_age = 168h).
 [sources.self_journald]
 type = "journald"
+since_now = true
 
 # --- Transforms --------------------------------------------------------------
 

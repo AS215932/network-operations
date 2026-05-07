@@ -12,6 +12,7 @@
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
+    force: false
   when: ansible_os_family == "Debian"
   tags: [apply]
 
