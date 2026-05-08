@@ -1,0 +1,42 @@
+# extmon — external monitoring host (Vultr / DigitalOcean / Hetzner Cloud).
+#
+# Lives outside AS215932. Probes our public services from the open internet
+# the same way real users do, and posts alerts to Discord *directly* —
+# never via NAT64. Independent failure domain from the OVH server.
+#
+# Stack: prometheus + blackbox_exporter + alertmanager (Debian apt packages).
+# Self-scrape: prometheus-node-exporter on :9100.
+#
+# Provisioning runbook: docs/extmon.md.
+
+# Role gate: false renders configs to ansible/generated/extmon/ but does not
+# install packages or restart services. Mirrors the other roles' apply gates.
+extmon_apply: false
+
+# Discord webhook for Alertmanager. Will move to Vault in Phase C/L4 — for
+# now sourced from secrets.local.sh on the operator's workstation:
+#   export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+# Use discord.com (v4 + v6) instead of discordapp.com (v4-only) so future
+# redeploys to v6-preferred providers stay clean.
+extmon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_DISCORD_WEBHOOK_URL') | default('') }}"
+
+# OVH API credentials for the service-expiry collector (Phase C/L0b). Same
+# tokens as scripts/ovh-cli.py uses; rendered into /etc/ovh.conf on extmon.
+extmon_ovh_endpoint: "{{ lookup('ansible.builtin.env', 'OVH_ENDPOINT') | default('ovh-eu') }}"
+extmon_ovh_application_key: "{{ lookup('ansible.builtin.env', 'OVH_APPLICATION_KEY') | default('') }}"
+extmon_ovh_application_secret: "{{ lookup('ansible.builtin.env', 'OVH_APPLICATION_SECRET') | default('') }}"
+extmon_ovh_consumer_key: "{{ lookup('ansible.builtin.env', 'OVH_CONSUMER_KEY') | default('') }}"
+extmon_ovh_server_name: "ns3526203.ip-193-70-32.eu"
+extmon_ovh_failover_ips:
+  - "46.105.40.223"   # rtr (NAT64 + Caddy DNAT)
+  - "51.91.236.215"   # mail (SMTP/IMAP failover)
+  - "54.38.14.218"    # ns2 (auth DNS secondary)
+
+# Inbound SSH allow-list. Same set as the rest of the fleet — ops workstation
+# + AS215932 VPN clients. Extmon also needs to be reachable from the AS215932
+# overlay so we can SSH in to deploy/debug.
+extmon_ssh_allow_v4:
+  - "{{ ops_prefix_v4 }}"
+extmon_ssh_allow_v6:
+  - "{{ ops_prefix_v6 }}"
+  - "{{ as215932_prefix }}"   # allows SSH from any AS215932 host

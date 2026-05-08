@@ -1,0 +1,107 @@
+{# Prometheus alert rules for extmon. The whole point of this host is to
+   detect AS215932 outages from the outside; rules are intentionally
+   coarse and noisy-on-the-side-of-loud. -#}
+groups:
+  - name: extmon-probes
+    interval: 30s
+    rules:
+      # --- Reachability probes ---
+      - alert: ProbeFailing
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: '{% raw %}Probe failing: {{ $labels.job }} {{ $labels.instance }}{% endraw %}'
+          description: |
+            {% raw %}{{ $labels.instance }} (job {{ $labels.job }}) has failed
+            blackbox probe for 2 minutes. Real users hitting this from the
+            open internet would be unable to reach the service.{% endraw %}
+
+      - alert: ProbeSlow
+        expr: probe_duration_seconds > 5
+        for: 5m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}Probe slow: {{ $labels.job }} {{ $labels.instance }} > 5s{% endraw %}'
+
+      # --- TLS cert expiry ---
+      - alert: TLSCertExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 14 * 24 * 3600
+        for: 10m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}TLS cert expires in <14d: {{ $labels.instance }}{% endraw %}'
+
+      - alert: TLSCertExpiringCritical
+        expr: probe_ssl_earliest_cert_expiry - time() < 7 * 24 * 3600
+        for: 10m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: '{% raw %}TLS cert expires in <7d: {{ $labels.instance }}{% endraw %}'
+
+  - name: extmon-self
+    interval: 30s
+    rules:
+      - alert: ExtmonComponentDown
+        expr: up{job="extmon-self"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}extmon component down: {{ $labels.instance }}{% endraw %}'
+          description: |
+            One of the extmon stack components (Prometheus, Alertmanager,
+            blackbox_exporter, node_exporter) is not responding. Other
+            probes may be silently dropping.
+
+  - name: extmon-ovh-billing
+    interval: 5m
+    rules:
+      - alert: OVHServiceExpiryWarning
+        expr: ovh_service_expires_seconds < 14 * 24 * 3600
+        for: 10m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}OVH service {{ $labels.service }} expires in <14d{% endraw %}'
+
+      - alert: OVHServiceExpiryCritical
+        expr: ovh_service_expires_seconds < 7 * 24 * 3600
+        for: 10m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: '{% raw %}OVH service {{ $labels.service }} expires in <7d — RENEW NOW{% endraw %}'
+          description: |
+            {% raw %}{{ $labels.service }} ({{ $labels.type }}) expires in less
+            than 7 days. If this is the rtr failover IPv4 (46.105.40.223),
+            its expiry will break NAT64 across the entire fleet.{% endraw %}
+
+      - alert: OVHUnpaidBills
+        expr: ovh_unpaid_bill_count > 0
+        for: 1h
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}{{ $value }} unpaid OVH invoice(s){% endraw %}'
+
+      - alert: OVHCollectorStale
+        expr: time() - ovh_collector_last_run_timestamp > 3600
+        for: 5m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'OVH expiry collector has not run in over an hour'

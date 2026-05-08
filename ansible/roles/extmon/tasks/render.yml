@@ -1,0 +1,64 @@
+---
+# Render every config to ansible/generated/extmon/ for review.
+# Mirrors the render pattern in roles/firewall and roles/logs.
+
+- name: Ensure generated dir exists
+  file:
+    path: "{{ playbook_dir }}/../generated/extmon"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  connection: local
+  become: false
+  run_once: true
+  tags: [validate, diff, apply]
+
+- name: Render blackbox.yml
+  template:
+    src: blackbox.yml.j2
+    dest: "{{ playbook_dir }}/../generated/extmon/blackbox.yml"
+    mode: "0644"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Render prometheus.yml
+  template:
+    src: prometheus.yml.j2
+    dest: "{{ playbook_dir }}/../generated/extmon/prometheus.yml"
+    mode: "0644"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Render alerts.yml
+  template:
+    src: alerts.yml.j2
+    dest: "{{ playbook_dir }}/../generated/extmon/alerts.yml"
+    mode: "0644"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Render alertmanager.yml
+  template:
+    src: alertmanager.yml.j2
+    dest: "{{ playbook_dir }}/../generated/extmon/alertmanager.yml"
+    mode: "0644"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Render ovh-expiry-collector.py
+  template:
+    src: ovh-expiry-collector.py.j2
+    dest: "{{ playbook_dir }}/../generated/extmon/ovh-expiry-collector.py"
+    mode: "0755"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]

@@ -1,0 +1,16 @@
+[Unit]
+Description=Poll OVH API for service-expiry + unpaid invoices and emit Prometheus textfile metrics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ovh-expiry-collector.py
+User=root
+Group=root
+# Hardening
+ProtectSystem=strict
+ReadWritePaths={{ extmon_textfile_dir }}
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true

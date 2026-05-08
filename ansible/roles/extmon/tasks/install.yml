@@ -1,0 +1,159 @@
+---
+# Push rendered configs onto the live VPS, place secrets, install collector
+# script + systemd timer, reload each component on change.
+
+- name: Install blackbox.yml
+  template:
+    src: blackbox.yml.j2
+    dest: /etc/prometheus/blackbox.yml
+    owner: root
+    group: prometheus
+    mode: "0640"
+  notify: restart blackbox_exporter
+  tags: [apply]
+
+- name: Install prometheus.yml
+  template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: root
+    group: prometheus
+    mode: "0640"
+  notify: reload prometheus
+  tags: [apply]
+
+- name: Install Prometheus alert rules
+  template:
+    src: alerts.yml.j2
+    dest: /etc/prometheus/alerts.yml
+    owner: root
+    group: prometheus
+    mode: "0640"
+  notify: reload prometheus
+  tags: [apply]
+
+- name: Install alertmanager.yml
+  template:
+    src: alertmanager.yml.j2
+    dest: /etc/prometheus/alertmanager.yml
+    owner: root
+    group: prometheus
+    mode: "0640"
+  notify: reload alertmanager
+  tags: [apply]
+
+# --- node_exporter: enable textfile collector for ovh-expiry metrics ---
+- name: Ensure textfile collector dir exists
+  file:
+    path: "{{ extmon_textfile_dir }}"
+    state: directory
+    owner: root
+    group: prometheus
+    mode: "0755"
+  tags: [apply]
+
+- name: Configure node_exporter ARGS (enable textfile collector)
+  lineinfile:
+    path: /etc/default/prometheus-node-exporter
+    create: true
+    regexp: "^ARGS="
+    line: 'ARGS="--web.listen-address={{ extmon_node_exporter_listen }} --collector.systemd --collector.textfile.directory={{ extmon_textfile_dir }}"'
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart node_exporter
+  tags: [apply]
+
+# --- OVH expiry collector (Phase C/L0b) ---
+- name: Install ovh.conf for the collector
+  copy:
+    dest: /etc/extmon/ovh.conf
+    content: |
+      [default]
+      endpoint={{ extmon_ovh_endpoint }}
+
+      [ovh-eu]
+      application_key={{ extmon_ovh_application_key }}
+      application_secret={{ extmon_ovh_application_secret }}
+      consumer_key={{ extmon_ovh_consumer_key }}
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  tags: [apply]
+
+- name: Install ovh-expiry-collector.py
+  template:
+    src: ovh-expiry-collector.py.j2
+    dest: /usr/local/bin/ovh-expiry-collector.py
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [apply]
+
+- name: Install ovh-expiry-collector.service
+  template:
+    src: ovh-expiry-collector.service.j2
+    dest: /etc/systemd/system/ovh-expiry-collector.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  tags: [apply]
+
+- name: Install ovh-expiry-collector.timer
+  template:
+    src: ovh-expiry-collector.timer.j2
+    dest: /etc/systemd/system/ovh-expiry-collector.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  tags: [apply]
+
+- name: Enable + start ovh-expiry-collector.timer
+  systemd:
+    name: ovh-expiry-collector.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]
+
+# --- Stack services ---
+- name: Enable + start node_exporter
+  systemd:
+    name: prometheus-node-exporter
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start blackbox_exporter
+  systemd:
+    name: prometheus-blackbox-exporter
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start alertmanager
+  systemd:
+    name: prometheus-alertmanager
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start prometheus
+  systemd:
+    name: prometheus
+    state: started
+    enabled: true
+  tags: [apply]
+
+# blackbox_exporter ICMP probes need raw sockets. The Debian package ships
+# without CAP_NET_RAW; grant it via setcap so we don't need to run as root.
+- name: Grant CAP_NET_RAW to blackbox_exporter (for ICMP)
+  capabilities:
+    path: /usr/bin/prometheus-blackbox-exporter
+    capability: cap_net_raw+ep
+    state: present
+  notify: restart blackbox_exporter
+  tags: [apply]

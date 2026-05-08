@@ -1,0 +1,41 @@
+---
+# Tight ufw on extmon. Only SSH from ops + AS215932 inbound; everything else
+# (Prometheus, Alertmanager, blackbox) listens on loopback only and is
+# reached via SSH port-forward when needed.
+
+- name: ufw — default deny inbound
+  ufw:
+    state: enabled
+    direction: incoming
+    policy: deny
+  tags: [apply]
+
+- name: ufw — default allow outbound
+  ufw:
+    direction: outgoing
+    policy: allow
+  tags: [apply]
+
+- name: ufw — allow SSH from ops + AS215932 (v4)
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "{{ item }}"
+  loop: "{{ extmon_ssh_allow_v4 }}"
+  tags: [apply]
+
+- name: ufw — allow SSH from ops + AS215932 (v6)
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "{{ item }}"
+  loop: "{{ extmon_ssh_allow_v6 }}"
+  tags: [apply]
+
+- name: ufw — allow ICMP echo (so monitoring of extmon itself works)
+  ufw:
+    rule: allow
+    proto: icmpv6
+  tags: [apply]

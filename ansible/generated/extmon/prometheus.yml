@@ -1,0 +1,199 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    monitor: extmon
+    site: external
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['127.0.0.1:9093']
+
+scrape_configs:
+  # --- Self-monitoring ---
+  - job_name: extmon-self
+    static_configs:
+      - targets:
+          - '127.0.0.1:9100'   # node_exporter
+          - '127.0.0.1:9115'
+          - '127.0.0.1:9090'
+          - '127.0.0.1:9093'
+
+  # --- HTTPS endpoints (cert + 2xx) ---
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx_v6]
+    static_configs:
+      - targets:
+          - 'https://servify.network/'
+          - 'https://www.servify.network/'
+          - 'https://api.servify.network/healthz'
+          - 'https://hyrule.servify.network/'
+          - 'https://mon.servify.network/'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+
+  # --- ICMP-v4 — public failover IPs that must be pingable from the open
+  #     internet. This is the probe that would have caught the recent outage. ---
+  - job_name: blackbox-icmp-v4
+    metrics_path: /probe
+    params:
+      module: [icmp_v4]
+    static_configs:
+      - targets:
+          - '46.105.40.223'
+          - '51.91.236.215'
+          - '54.38.14.218'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+
+  # --- ICMP-v6 ---
+  - job_name: blackbox-icmp-v6
+    metrics_path: /probe
+    params:
+      module: [icmp_v6]
+    static_configs:
+      - targets:
+          - '2a0c:b641:b50:2::1'
+          - '2a0c:b641:b50:2::40'
+          - '2a0c:b641:b50:2::90'
+          - '2001:41d0:304:300::7bfb'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+
+  # --- TCP connect (mail SMTP/IMAP/etc.) ---
+  - job_name: blackbox-tcp-v6
+    metrics_path: /probe
+    params:
+      module: [tcp_connect_v6]
+    static_configs:
+      - targets:
+          - '[2a0c:b641:b50:2::90]:25'
+          - '[2a0c:b641:b50:2::90]:465'
+          - '[2a0c:b641:b50:2::90]:587'
+          - '[2a0c:b641:b50:2::90]:993'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+
+  # --- DNS auth checks: SOA queries against ns1 + ns2 for each managed zone. ---
+  - job_name: 'blackbox-dns-servify_network-ns1'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_servify_network]
+    static_configs:
+      - targets: ['[2a0c:b641:b50:2::10]:53']
+        labels:
+          zone: 'servify.network'
+          nameserver: 'ns1'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-servify_network-ns2-v6'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_servify_network]
+    static_configs:
+      - targets: ['[2001:41d0:304:300::7bfb]:53']
+        labels:
+          zone: 'servify.network'
+          nameserver: 'ns2-v6'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-servify_network-ns2-v4'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_servify_network]
+    static_configs:
+      - targets: ['54.38.14.218:53']
+        labels:
+          zone: 'servify.network'
+          nameserver: 'ns2-v4'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-as215932_net-ns1'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_as215932_net]
+    static_configs:
+      - targets: ['[2a0c:b641:b50:2::10]:53']
+        labels:
+          zone: 'as215932.net'
+          nameserver: 'ns1'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-as215932_net-ns2-v6'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_as215932_net]
+    static_configs:
+      - targets: ['[2001:41d0:304:300::7bfb]:53']
+        labels:
+          zone: 'as215932.net'
+          nameserver: 'ns2-v6'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-as215932_net-ns2-v4'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_as215932_net]
+    static_configs:
+      - targets: ['54.38.14.218:53']
+        labels:
+          zone: 'as215932.net'
+          nameserver: 'ns2-v4'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the OVH expiry collector every 15 minutes
+
+[Timer]
+OnCalendar={{ extmon_ovh_collector_interval }}
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

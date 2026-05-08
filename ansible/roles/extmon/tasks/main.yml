@@ -1,0 +1,52 @@
+---
+# extmon role orchestration.
+#
+# - Always renders configs to ansible/generated/extmon/ (review-only,
+#   `--connection=local --tags validate`).
+# - When extmon_apply is true, installs packages and writes /etc/* configs
+#   on the live VPS, then reloads each component via handlers.
+#
+# Pre-flight check: refuse to run apply against an unprovisioned host
+# (placeholder ansible_host=0.0.0.0). The render step still works because
+# templates only consume `peers.*` and the role-local lists.
+
+- name: Render configs locally for review
+  include_tasks: render.yml
+  tags: [validate, diff, apply]
+
+- name: Pre-flight — refuse apply against placeholder ansible_host
+  fail:
+    msg: |
+      extmon's ansible_host is still '0.0.0.0' — provision the VPS first
+      and update inventory/hosts.yml + group_vars/all.yml peers.extmon
+      before running `--tags apply`.
+  when:
+    - extmon_apply | bool
+    - ansible_host == '0.0.0.0'
+  tags: [apply]
+
+- name: Apply — install packages
+  apt:
+    name:
+      - prometheus
+      - prometheus-alertmanager
+      - prometheus-blackbox-exporter
+      - prometheus-node-exporter
+      - ufw
+      - python3-requests        # for the OVH expiry collector
+      - jq
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — push configs and binaries
+  include_tasks: install.yml
+  when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — firewall (ufw)
+  include_tasks: ufw.yml
+  when: extmon_apply | bool
+  tags: [apply]

@@ -1,0 +1,69 @@
+---
+# Master gate: false renders configs to ansible/generated/extmon/ but does not
+# install packages or restart services. Mirrors monitoring_apply / logs_apply.
+extmon_apply: false
+
+# --- Stack components and listening ports ---
+extmon_prometheus_listen: "127.0.0.1:9090"      # behind ufw + ssh tunnel only
+extmon_alertmanager_listen: "127.0.0.1:9093"
+extmon_blackbox_listen: "127.0.0.1:9115"
+extmon_node_exporter_listen: "0.0.0.0:9100"     # scraped by self-job
+
+# Scrape cadence. 30 s is fast enough to detect outages within ~1 minute
+# (probe-success goes 0 for 2m → alert), without burning the VPS.
+extmon_scrape_interval: 30s
+extmon_evaluation_interval: 30s
+
+# Alertmanager repeat interval — how often unresolved problems re-notify.
+# 1h is the right answer for the in-house Icinga too (Phase C/Notify).
+extmon_alert_repeat_interval: 1h
+
+# --- Probe targets ---
+# Each target list is consumed by templates/prometheus.yml.j2 and turned into
+# a blackbox-scrape job with appropriate relabel_configs.
+
+# Public HTTPS endpoints — full TLS handshake + 2xx/3xx response.
+extmon_http_targets:
+  - https://servify.network/
+  - https://www.servify.network/
+  - https://api.servify.network/healthz
+  - https://hyrule.servify.network/
+  - https://mon.servify.network/
+
+# Pure ICMP-v4. Failover IPs that must be reachable from the open internet.
+extmon_icmp_v4_targets:
+  - 46.105.40.223     # rtr (NAT64 source + Caddy DNAT — the host that broke)
+  - 51.91.236.215     # mail
+  - 54.38.14.218      # ns2
+
+# Pure ICMP-v6. Public AS215932 services with direct v6 ingress.
+extmon_icmp_v6_targets:
+  - "2a0c:b641:b50:2::1"    # rtr overlay
+  - "2a0c:b641:b50:2::40"   # proxy (Caddy)
+  - "2a0c:b641:b50:2::90"   # mail
+  - "2001:41d0:304:300::7bfb"  # ns2
+
+# TCP probes — service-port reachability without HTTP semantics.
+# Format: "host:port" (host can be hostname, v4, or [v6]).
+extmon_tcp_v4_targets:
+  - "[2a0c:b641:b50:2::90]:25"     # mail SMTP (v6 — host has no public v4)
+  - "[2a0c:b641:b50:2::90]:465"
+  - "[2a0c:b641:b50:2::90]:587"
+  - "[2a0c:b641:b50:2::90]:993"
+
+# DNS auth checks — both nameservers should answer SOA queries authoritatively.
+extmon_dns_targets:
+  - server: "[2a0c:b641:b50:2::10]:53"          # ns1 (dns VM, v6 direct)
+    name: ns1
+  - server: "[2001:41d0:304:300::7bfb]:53"      # ns2 (off-net v6)
+    name: ns2-v6
+  - server: "54.38.14.218:53"                   # ns2 (v4)
+    name: ns2-v4
+
+extmon_dns_zones:
+  - servify.network
+  - as215932.net
+
+# --- OVH expiry collector (C/L0b) ---
+extmon_ovh_collector_interval: "*-*-* *:0/15:00"   # every 15 minutes
+extmon_textfile_dir: /var/lib/node_exporter/textfile_collector

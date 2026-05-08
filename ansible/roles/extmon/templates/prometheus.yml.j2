@@ -1,0 +1,122 @@
+{# Prometheus on extmon. Scrapes blackbox_exporter on loopback for each
+   class of probe target, plus self-scrapes node_exporter + blackbox.
+   Rendered to /etc/prometheus/prometheus.yml. -#}
+global:
+  scrape_interval: {{ extmon_scrape_interval }}
+  evaluation_interval: {{ extmon_evaluation_interval }}
+  external_labels:
+    monitor: extmon
+    site: external
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['{{ extmon_alertmanager_listen }}']
+
+scrape_configs:
+  # --- Self-monitoring ---
+  - job_name: extmon-self
+    static_configs:
+      - targets:
+          - '127.0.0.1:9100'   # node_exporter
+          - '{{ extmon_blackbox_listen }}'
+          - '{{ extmon_prometheus_listen }}'
+          - '{{ extmon_alertmanager_listen }}'
+
+  # --- HTTPS endpoints (cert + 2xx) ---
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx_v6]
+    static_configs:
+      - targets:
+{% for t in extmon_http_targets %}
+          - '{{ t }}'
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+
+  # --- ICMP-v4 — public failover IPs that must be pingable from the open
+  #     internet. This is the probe that would have caught the recent outage. ---
+  - job_name: blackbox-icmp-v4
+    metrics_path: /probe
+    params:
+      module: [icmp_v4]
+    static_configs:
+      - targets:
+{% for t in extmon_icmp_v4_targets %}
+          - '{{ t }}'
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+
+  # --- ICMP-v6 ---
+  - job_name: blackbox-icmp-v6
+    metrics_path: /probe
+    params:
+      module: [icmp_v6]
+    static_configs:
+      - targets:
+{% for t in extmon_icmp_v6_targets %}
+          - '{{ t }}'
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+
+  # --- TCP connect (mail SMTP/IMAP/etc.) ---
+  - job_name: blackbox-tcp-v6
+    metrics_path: /probe
+    params:
+      module: [tcp_connect_v6]
+    static_configs:
+      - targets:
+{% for t in extmon_tcp_v4_targets %}
+          - '{{ t }}'
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+
+  # --- DNS auth checks: SOA queries against ns1 + ns2 for each managed zone. ---
+{% for zone in extmon_dns_zones %}
+{% for ns in extmon_dns_targets %}
+  - job_name: 'blackbox-dns-{{ zone | replace(".", "_") }}-{{ ns.name }}'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_{{ zone | replace('.', '_') }}]
+    static_configs:
+      - targets: ['{{ ns.server }}']
+        labels:
+          zone: '{{ zone }}'
+          nameserver: '{{ ns.name }}'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+{% endfor %}
+{% endfor %}

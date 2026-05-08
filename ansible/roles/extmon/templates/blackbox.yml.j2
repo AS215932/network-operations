@@ -1,0 +1,81 @@
+{# blackbox_exporter probe modules. Rendered to /etc/prometheus/blackbox.yml. -#}
+modules:
+  http_2xx_v6:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+      valid_status_codes: [200, 204, 301, 302, 401, 403]
+      fail_if_not_ssl: true
+      tls_config:
+        insecure_skip_verify: false
+
+  http_2xx_v4:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200, 204, 301, 302, 401, 403]
+      fail_if_not_ssl: true
+      tls_config:
+        insecure_skip_verify: false
+
+  icmp_v4:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  icmp_v6:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+
+  tcp_connect_v6:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+
+  tcp_connect_v4:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+
+  smtp_starttls:
+    prober: tcp
+    timeout: 10s
+    tcp:
+      preferred_ip_protocol: ip6
+      query_response:
+        - expect: "^220"
+        - send: "EHLO extmon.servify.network"
+        - expect: "^250"
+        - send: "STARTTLS"
+        - expect: "^220"
+        - starttls: true
+        - send: "EHLO extmon.servify.network"
+        - expect: "^250"
+        - send: "QUIT"
+
+{% for zone in extmon_dns_zones %}
+  dns_soa_{{ zone | replace('.', '_') }}:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: true
+      query_name: {{ zone }}
+      query_type: SOA
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - ".*ns1\\.{{ zone }}\\..*"
+{% endfor %}

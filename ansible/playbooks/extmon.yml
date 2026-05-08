@@ -1,0 +1,24 @@
+---
+# extmon — external monitoring host (Vultr / DigitalOcean / Hetzner Cloud).
+#
+# Provisioning runbook is docs/extmon.md. By the time you run this playbook,
+# the VPS exists, root SSH works, and inventory/hosts.yml + group_vars/all.yml
+# peers.extmon have been updated with the real public IPs.
+#
+# Render-only (review the rendered configs in ansible/generated/extmon/):
+#   ansible-playbook playbooks/extmon.yml --tags validate \
+#       --connection=local --skip-tags=snapshot --limit extmon
+#
+# Apply (live):
+#   set -a; source ../secrets.local.sh; set +a
+#   export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+#   ansible-playbook playbooks/extmon.yml --tags apply \
+#       -e '{"extmon_apply":true}' --limit extmon
+
+- name: extmon — render + apply
+  hosts: extmon
+  gather_facts: true
+  become: true
+  roles:
+    - extmon
+  tags: [extmon]

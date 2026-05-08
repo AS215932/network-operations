@@ -1,0 +1,45 @@
+{# Alertmanager on extmon. Single Discord receiver. The webhook URL is
+   reached from extmon over native v4/v6 — never via NAT64 — so an
+   AS215932 outage cannot suppress its own alerts.
+
+   group_wait gives related alerts a chance to coalesce; repeat_interval
+   ensures unresolved problems re-notify hourly so a single missed
+   message in the Discord feed doesn't mean the operator never sees it. -#}
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: discord
+  group_by: [alertname, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: {{ extmon_alert_repeat_interval }}
+
+  routes:
+    # Critical alerts skip group_wait so they hit Discord faster.
+    - matchers:
+        - severity = "critical"
+      receiver: discord
+      group_wait: 10s
+
+receivers:
+  - name: discord
+    discord_configs:
+      - webhook_url: '{{ extmon_discord_webhook_url }}'
+        send_resolved: true
+        title: '{% raw %}🚨 [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}{% endraw %}'
+        message: |
+          {% raw %}{{ range .Alerts -}}
+          **{{ .Labels.severity | toUpper }}** — {{ .Annotations.summary }}
+          {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+          Source: extmon (external monitor) | Started: {{ .StartsAt.Format "2006-01-02 15:04 UTC" }}
+          {{ end }}{% endraw %}
+
+inhibit_rules:
+  # If a probe is critical, don't also fire the warn-level slow alert for
+  # the same instance — would just spam.
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: [instance, job]

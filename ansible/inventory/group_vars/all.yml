@@ -50,6 +50,13 @@ peers:
   cr1_de1:
     loopback: "2a0c:b641:b50::b"
     underlay: "2a0c:b640:10::213"
+  # Off-net external monitor (different ASN, different billing).
+  # Probes AS215932 from the outside the same way real users do.
+  # ipv4/ipv6 are placeholders until the VPS is provisioned — fill in
+  # before applying ansible/playbooks/extmon.yml.
+  extmon:
+    ipv4: "0.0.0.0"          # TODO: fill in after Vultr/DO provisioning
+    ipv6: "::"               # TODO: fill in after Vultr/DO provisioning
 
 # --- BGP peer addresses (external transits) ---
 bgp_peers:

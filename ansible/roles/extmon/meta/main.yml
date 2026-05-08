@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  role_name: extmon
+  description: External monitoring host — blackbox + Prometheus + Alertmanager
+  author: AS215932 ops
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: [bookworm, trixie]
+
+dependencies: []
