@@ -25,31 +25,8 @@ users:
   - name: root
     ssh_authorized_keys:
       - $SSH_KEY
-chpasswd:
-  users:
-    - name: root
-      password: debug
-      type: text
-  expire: false
-ssh_pwauth: true
-bootcmd:
-  - |
-    cat > /etc/systemd/network/10-enX0.network <<'NETEOF'
-    [Match]
-    Name=enX0
-    [Network]
-    DHCP=no
-    IPv6AcceptRA=no
-    DNS=2a0c:b641:b50:2::1
-    Domains=as215932.net
-    Address=${IPV6}/64
-    [Route]
-    Destination=::/0
-    Gateway=2a0c:b641:b50:2::1
-    NETEOF
-  - "printf 'nameserver 2a0c:b641:b50:2::1\\nsearch as215932.net\\n' > /etc/resolv.conf"
-  - "sed -i 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf"
-  - systemctl restart systemd-networkd
+ssh_pwauth: false
+disable_root: false
 package_update: true
 package_upgrade: true"
 
@@ -58,6 +35,11 @@ ethernets:
   enX0:
     addresses:
       - ${IPV6}/64
+    nameservers:
+      addresses:
+        - 2a0c:b641:b50:2::1
+      search:
+        - as215932.net
     routes:
       - to: ::/0
         via: 2a0c:b641:b50:2::1"
