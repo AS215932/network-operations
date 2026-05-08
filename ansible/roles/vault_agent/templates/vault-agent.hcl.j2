@@ -1,0 +1,55 @@
+# {{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl
+# Managed by ansible/roles/vault_agent.
+
+pid_file = "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.pid"
+
+vault {
+  address = "{{ vault_agent_vault_addr }}"
+
+  retry {
+    num_retries = 12
+  }
+}
+
+auto_auth {
+  method "approle" {
+    mount_path = "auth/approle"
+
+    config = {
+      role_id_file_path = "{{ vault_agent_role_id_file }}"
+      secret_id_file_path = "{{ vault_agent_secret_id_file }}"
+      remove_secret_id_file_after_reading = false
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "{{ vault_agent_token_sink }}"
+      mode = 0600
+    }
+  }
+}
+
+template {
+  source      = "{{ vault_agent_template_dir }}/noc-agent.env.ctmpl"
+  destination = "{{ vault_agent_env_destination }}"
+  perms       = 0640
+  command     = "/bin/sh -c 'chgrp noc-agent {{ vault_agent_env_destination }} && chmod 0640 {{ vault_agent_env_destination }} && {{ vault_agent_reload_command }}'"
+
+  wait {
+    min = "2s"
+    max = "10s"
+  }
+}
+
+template {
+  source      = "{{ vault_agent_template_dir }}/google-subject.jwt.ctmpl"
+  destination = "{{ vault_agent_google_subject_token_destination }}"
+  perms       = 0640
+  command     = "/bin/sh -c 'chgrp noc-agent {{ vault_agent_google_subject_token_destination }} && chmod 0640 {{ vault_agent_google_subject_token_destination }} && {{ vault_agent_reload_command }}'"
+
+  wait {
+    min = "2s"
+    max = "10s"
+  }
+}

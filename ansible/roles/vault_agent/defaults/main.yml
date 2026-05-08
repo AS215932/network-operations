@@ -1,0 +1,16 @@
+---
+vault_agent_name: noc-agent
+vault_agent_vault_addr: "https://vault.as215932.net"
+vault_agent_config_dir: "/etc/vault-agent.d"
+vault_agent_run_dir: "/run/vault-agent"
+vault_agent_role_id: ""
+vault_agent_secret_id: ""
+vault_agent_role_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-role-id"
+vault_agent_secret_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-secret-id"
+vault_agent_token_sink: "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.token"
+vault_agent_template_dir: "{{ vault_agent_config_dir }}/templates"
+vault_agent_env_destination: /opt/noc-agent/.env
+vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt
+vault_agent_reload_command: /bin/systemctl try-restart noc-agent.service
+vault_agent_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
+vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"

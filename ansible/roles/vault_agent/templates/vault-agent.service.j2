@@ -1,0 +1,29 @@
+# /etc/systemd/system/vault-agent-{{ vault_agent_name }}.service
+# Managed by ansible/roles/vault_agent.
+
+[Unit]
+Description=Vault Agent for {{ vault_agent_name }}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStartPre=/bin/mkdir -p /run/noc-agent
+ExecStartPre=/bin/chgrp noc-agent /run/noc-agent
+ExecStartPre=/bin/chmod 0750 /run/noc-agent
+ExecStart=/usr/bin/vault agent -config={{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+RuntimeDirectory=vault-agent
+RuntimeDirectoryMode=0750
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

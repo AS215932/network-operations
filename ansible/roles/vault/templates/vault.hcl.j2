@@ -1,0 +1,28 @@
+# /etc/vault.d/vault.hcl
+# Managed by ansible/roles/vault.
+
+ui = {{ vault_ui_enabled | bool | lower }}
+api_addr = "{{ vault_api_addr }}"
+cluster_addr = "{{ vault_cluster_addr }}"
+disable_mlock = {{ vault_disable_mlock | bool | lower }}
+
+storage "raft" {
+  path    = "{{ vault_storage_path }}"
+  node_id = "{{ inventory_hostname }}"
+}
+
+listener "tcp" {
+  address         = "{{ vault_listener_address }}"
+  cluster_address = "{{ vault_cluster_listener_address }}"
+
+  # TLS terminates at Caddy on proxy. Vault's API port is firewalled to proxy,
+  # mon, and ops/VPN sources only.
+  tls_disable = true
+}
+
+{% if vault_telemetry_enabled %}
+telemetry {
+  prometheus_retention_time = "{{ vault_prometheus_retention_time }}"
+  disable_hostname = true
+}
+{% endif %}

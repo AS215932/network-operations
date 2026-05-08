@@ -74,6 +74,7 @@ WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50
 | api | hyrule-cloud + Postgres 17 | 2 | 4GB | 40GB | Debian 13 | infra :2::20 |
 | web | hyrule-web | 1 | 2GB | 20GB | Debian 13 | infra :2::30 |
 | proxy | TLS reverse proxy | 1 | 1GB | 10GB | Debian 13 + Caddy | infra :2::40 |
+| vault | machine secret plane | 1 | 2GB | 20GB | Debian 13 + Vault OSS | infra :2::c0 |
 | mail | Mail server | 2 | 2GB | 40GB | OpenBSD 7.8 + OpenSMTPD/Rspamd/Dovecot | infra :2::90 + dedicated failover IPv4 |
 
 ~15GB for infra, ~45GB available for customer VMs.

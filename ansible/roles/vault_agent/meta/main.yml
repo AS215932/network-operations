@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  role_name: vault_agent
+  author: AS215932
+  description: Run Vault Agent to render service env files and short-lived workload identity tokens.
+  license: MIT
+  min_ansible_version: "2.14"

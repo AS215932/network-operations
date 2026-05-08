@@ -1,0 +1,148 @@
+---
+- name: Ensure Vault Agent package prerequisites are installed
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Install HashiCorp apt signing key
+  get_url:
+    url: "{{ vault_agent_hashicorp_gpg_url }}"
+    dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [apply]
+
+- name: Add HashiCorp apt repository
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.asc] {{ vault_agent_hashicorp_repo_url }} {{ ansible_distribution_release | default('bookworm') }} main"
+    filename: hashicorp
+    state: present
+    update_cache: true
+  tags: [apply]
+
+- name: Install Vault package for agent mode
+  apt:
+    name: vault
+    state: present
+  tags: [apply]
+
+- name: Ensure Vault Agent directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ vault_agent_config_dir }}", mode: "0750" }
+    - { path: "{{ vault_agent_template_dir }}", mode: "0750" }
+    - { path: "{{ vault_agent_run_dir }}", mode: "0750" }
+    - { path: "/etc/noc-agent", group: "noc-agent", mode: "0750" }
+    - { path: "/run/noc-agent", group: "noc-agent", mode: "0750" }
+  tags: [apply]
+
+- name: Install Vault AppRole role_id
+  copy:
+    content: "{{ vault_agent_role_id }}"
+    dest: "{{ vault_agent_role_id_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: vault_agent_role_id | length > 0
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Install Vault AppRole secret_id
+  copy:
+    content: "{{ vault_agent_secret_id }}"
+    dest: "{{ vault_agent_secret_id_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: vault_agent_secret_id | length > 0
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Render NOC Agent env template for Vault Agent
+  template:
+    src: noc-agent.env.ctmpl.j2
+    dest: "{{ vault_agent_template_dir }}/noc-agent.env.ctmpl"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Render Google subject token template for Vault Agent
+  template:
+    src: google-subject.jwt.ctmpl.j2
+    dest: "{{ vault_agent_template_dir }}/google-subject.jwt.ctmpl"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Render Vault Agent configuration
+  template:
+    src: vault-agent.hcl.j2
+    dest: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Install Vault Agent systemd unit
+  template:
+    src: vault-agent.service.j2
+    dest: "/etc/systemd/system/vault-agent-{{ vault_agent_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart vault agent
+  tags: [apply]
+
+- name: Check for existing Vault AppRole role_id
+  stat:
+    path: "{{ vault_agent_role_id_file }}"
+  register: vault_agent_existing_role_id
+  tags: [apply]
+
+- name: Check for existing Vault AppRole secret_id
+  stat:
+    path: "{{ vault_agent_secret_id_file }}"
+  register: vault_agent_existing_secret_id
+  no_log: true
+  tags: [apply]
+
+- name: Assert Vault AppRole bootstrap credentials are present
+  assert:
+    that:
+      - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
+      - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists
+    fail_msg: >-
+      Vault Agent needs VAULT_NOC_AGENT_ROLE_ID and VAULT_NOC_AGENT_SECRET_ID
+      for the first deploy, or existing root-only AppRole files on the host.
+  tags: [apply]
+
+- name: Enable and start Vault Agent
+  systemd:
+    name: "vault-agent-{{ vault_agent_name }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
+    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists
+  tags: [apply]

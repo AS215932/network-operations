@@ -1,0 +1,10 @@
+{
+  "type": "external_account",
+  "audience": "//iam.googleapis.com/projects/{{ noc_agent_google_wif_project_number }}/locations/global/workloadIdentityPools/{{ noc_agent_google_wif_pool_id }}/providers/{{ noc_agent_google_wif_provider_id }}",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "token_url": "https://sts.googleapis.com/v1/token",
+  "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{{ noc_agent_google_wif_service_account_email }}:generateAccessToken",
+  "credential_source": {
+    "file": "{{ noc_agent_google_subject_token_path }}"
+  }
+}

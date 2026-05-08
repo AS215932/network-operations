@@ -228,6 +228,39 @@ xo.servify.network {
     }
 }
 
+# Vault — machine secret plane for AS215932 workloads.
+vault.as215932.net {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key {{ tsig_secret }}
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [{{ peers.vault.ipv6 }}]:8200 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/vault.log
+    }
+}
+
 # Wildcard for customer VM subdomains (future — HTTPS proxy to VMs)
 # *.deploy.servify.network {
 #     tls {

@@ -1,0 +1,14 @@
+---
+vault_domain: vault.as215932.net
+vault_api_addr: "https://{{ vault_domain }}"
+vault_cluster_addr: "http://[{{ peers.vault.ipv6 }}]:8201"
+vault_listener_address: "[::]:8200"
+vault_cluster_listener_address: "[::]:8201"
+vault_storage_path: /opt/vault/data
+vault_config_dir: /etc/vault.d
+vault_disable_mlock: true
+vault_ui_enabled: true
+vault_telemetry_enabled: true
+vault_prometheus_retention_time: 24h
+vault_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
+vault_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"

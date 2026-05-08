@@ -82,6 +82,7 @@ subnet):
 | `:2::70`  | xoa   | `xoa.as215932.net.`     |
 | `:2::80`  | irc   | `irc.as215932.net.` (host not yet provisioned) |
 | `:2::90`  | mail  | `mail.as215932.net.`    |
+| `:2::c0`  | vault | `vault-node.as215932.net.` |
 
 The forward `as215932.net.` records live in
 [`configs/as215932.net.zone`](../configs/as215932.net.zone) and must

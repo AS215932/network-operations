@@ -6,6 +6,17 @@ noc_agent_state_dir: /var/lib/noc-agent
 # Cloned via the per-deploy SSH alias `github-noc-agent` configured in the role.
 noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
 noc_agent_version: main
+noc_agent_secret_backend: env
+
+noc_agent_google_wif_enabled: false
+noc_agent_google_wif_project_id: project-73d4ac43-0c8a-4ec0-ac5
+noc_agent_google_wif_project_number: "338142359138"
+noc_agent_google_wif_pool_id: as215932-vault
+noc_agent_google_wif_provider_id: vault-identity
+noc_agent_google_wif_service_account_email: "noc-agent-monitoring@{{ noc_agent_google_wif_project_id }}.iam.gserviceaccount.com"
+noc_agent_google_subject_token_path: /run/noc-agent/google-subject.jwt
+noc_agent_google_wif_config_path: /etc/noc-agent/google-wif.json
+noc_agent_google_application_credentials: "{{ noc_agent_google_wif_config_path if noc_agent_google_wif_enabled else '' }}"
 
 # NodeSource setup script for Node.js LTS (used by `npx @xen-orchestra/mcp`).
 nodejs_lts_setup_url: "https://deb.nodesource.com/setup_lts.x"

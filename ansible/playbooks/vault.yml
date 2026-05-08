@@ -1,0 +1,44 @@
+---
+# Vault rollout — installs the AS215932 machine secret plane on the vault VM.
+#
+# Apply after provisioning the vault VM:
+#   ansible-playbook playbooks/vault.yml --tags apply --limit vault
+#
+# One-time init/unseal and policy/WIF bootstrap are intentionally explicit;
+# see docs/vault-wif.md and scripts/bootstrap-vault-noc-wif.sh.
+
+- name: Vault — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: Vault — apply
+  hosts: vault
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - vault
+    - monitoring
+    - logs
+    - firewall
+  tags: [vault]
+
+- name: Vault — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]
