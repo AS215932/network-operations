@@ -1,0 +1,72 @@
+---
+# Push canonical configs onto mon. Notifications.conf is templated (it
+# carries the Discord webhook secret); everything else is copied as-is
+# from configs/mon/icinga2/ on the operator's workstation.
+
+- name: Ensure target dirs exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: nagios
+    group: nagios
+    mode: "0755"
+  loop:
+    - "{{ icinga2_conf_dir }}/hosts"
+    - "{{ icinga2_conf_dir }}/services"
+    - "{{ icinga2_scripts_dir }}"
+  tags: [apply]
+
+# --- Host objects (legacy hardcoded — dom0, infra-vms, routers).
+#     Per-host Ansible-rendered objects under conf.d/hosts/ansible/ are
+#     handled by the monitoring role; this push is for the legacy
+#     hand-managed group files only.
+- name: Install legacy host group files
+  copy:
+    src: "{{ icinga2_repo_configs }}/hosts/"
+    dest: "{{ icinga2_conf_dir }}/hosts/"
+    owner: nagios
+    group: nagios
+    mode: "0644"
+  notify: validate and reload icinga2
+  tags: [apply]
+
+- name: Install service files
+  copy:
+    src: "{{ icinga2_repo_configs }}/services/"
+    dest: "{{ icinga2_conf_dir }}/services/"
+    owner: nagios
+    group: nagios
+    mode: "0644"
+  notify: validate and reload icinga2
+  tags: [apply]
+
+- name: Install zones.conf
+  copy:
+    src: "{{ icinga2_repo_configs }}/zones.conf"
+    dest: /etc/icinga2/zones.conf
+    owner: nagios
+    group: nagios
+    mode: "0644"
+  notify: validate and reload icinga2
+  tags: [apply]
+
+- name: Install notify scripts
+  copy:
+    src: "{{ icinga2_repo_configs }}/scripts/"
+    dest: "{{ icinga2_scripts_dir }}/"
+    owner: nagios
+    group: nagios
+    mode: "0755"
+  notify: validate and reload icinga2
+  tags: [apply]
+
+- name: Install notifications.conf (templated — carries webhook secret)
+  template:
+    src: notifications.conf.j2
+    dest: "{{ icinga2_conf_dir }}/notifications.conf"
+    owner: nagios
+    group: nagios
+    mode: "0640"
+  notify: validate and reload icinga2
+  no_log: true
+  tags: [apply]

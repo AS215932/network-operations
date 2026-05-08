@@ -1,0 +1,22 @@
+---
+# icinga2 role — manages mon-side Icinga2 core configs (hosts, services,
+# scripts, notifications). Ships static files from configs/mon/icinga2/
+# and templates the one secret-bearing file (notifications.conf).
+#
+# The per-host registration flow (host_vars/<host>.yml :: monitoring_register
+# → /etc/icinga2/conf.d/hosts/ansible/<host>.conf) is still owned by the
+# `monitoring` role. This role owns everything *else* under conf.d/.
+
+- name: Skip — only runs on mon
+  meta: end_host
+  when: inventory_hostname != "mon"
+  tags: [always]
+
+- name: Render configs locally for review
+  include_tasks: render.yml
+  tags: [validate, diff, apply]
+
+- name: Apply — push core configs to mon
+  include_tasks: install.yml
+  when: icinga2_apply | bool
+  tags: [apply]

@@ -1,0 +1,35 @@
+---
+# Render templated configs to ansible/generated/mon/icinga2/ for review.
+# Static files in configs/mon/icinga2/ are not re-rendered (they're already
+# canonical) — only files that interpolate variables are emitted here.
+
+- name: Ensure generated dir exists
+  file:
+    path: "{{ playbook_dir }}/../generated/mon/icinga2"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  connection: local
+  become: false
+  run_once: true
+  tags: [validate, diff, apply]
+
+- name: Render notifications.conf
+  template:
+    src: notifications.conf.j2
+    dest: "{{ playbook_dir }}/../generated/mon/icinga2/notifications.conf"
+    mode: "0640"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Pre-flight — fail if discord webhook URL is empty for apply
+  fail:
+    msg: |
+      icinga2_discord_webhook_url is empty. Set DISCORD_WEBHOOK_URL in
+      secrets.local.sh and re-source it before running --tags apply.
+  when:
+    - icinga2_apply | bool
+    - icinga2_discord_webhook_url == ""
+  tags: [apply]

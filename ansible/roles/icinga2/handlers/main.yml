@@ -1,0 +1,15 @@
+---
+# Two-handler chain bound to the same notify name. They run in file order.
+# If validate fails, Ansible stops with a non-zero exit before reload can
+# touch the running daemon, so we never reload a broken config.
+
+- name: validate icinga2 config
+  command: icinga2 daemon -C
+  listen: validate and reload icinga2
+  changed_when: false
+
+- name: reload icinga2
+  systemd:
+    name: icinga2
+    state: reloaded
+  listen: validate and reload icinga2

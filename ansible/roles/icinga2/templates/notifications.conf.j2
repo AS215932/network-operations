@@ -1,0 +1,148 @@
+// /etc/icinga2/conf.d/notifications.conf — Discord webhook notifications.
+//
+// Rendered by ansible/roles/icinga2 from inventory variables. Do not edit
+// in place on mon — changes will be overwritten on next apply. Edit
+// ansible/roles/icinga2/templates/notifications.conf.j2 instead.
+
+const DiscordWebhookUrl = "{{ icinga2_discord_webhook_url }}"
+const IcingaWebUrl      = "{{ icinga2_web_url }}"
+const NocAgentUrl       = "{{ icinga2_noc_agent_url }}"
+
+object NotificationCommand "discord-host-notification" {
+  command = [ "/etc/icinga2/scripts/notify-discord.sh" ]
+
+  env = {
+    DISCORD_WEBHOOK_URL = DiscordWebhookUrl
+    ICINGA_URL          = IcingaWebUrl
+    NOTIFICATION_TYPE   = "$notification.type$"
+    HOST_NAME           = "$host.name$"
+    HOST_DISPLAYNAME    = "$host.display_name$"
+    HOST_STATE          = "$host.state$"
+    HOST_OUTPUT         = "$host.output$"
+  }
+}
+
+object NotificationCommand "discord-service-notification" {
+  command = [ "/etc/icinga2/scripts/notify-discord.sh" ]
+
+  env = {
+    DISCORD_WEBHOOK_URL = DiscordWebhookUrl
+    ICINGA_URL          = IcingaWebUrl
+    NOTIFICATION_TYPE   = "$notification.type$"
+    HOST_NAME           = "$host.name$"
+    HOST_DISPLAYNAME    = "$host.display_name$"
+    HOST_STATE          = "$host.state$"
+    SERVICE_NAME        = "$service.name$"
+    SERVICE_DISPLAYNAME = "$service.display_name$"
+    SERVICE_STATE       = "$service.state$"
+    SERVICE_OUTPUT      = "$service.output$"
+  }
+}
+
+object User "discord" {
+  display_name = "Discord webhook"
+  states = [ OK, Warning, Critical, Unknown ]
+  types  = [ Problem, Acknowledgement, Recovery, Custom,
+             FlappingStart, FlappingEnd,
+             DowntimeStart, DowntimeEnd, DowntimeRemoved ]
+}
+
+object UserGroup "discord" {
+  display_name = "Discord"
+  assign where user.name == "discord"
+}
+
+apply Notification "discord-host" to Host {
+  command = "discord-host-notification"
+  users   = [ "discord" ]
+  states  = [ Up, Down ]
+  types   = [ Problem, Acknowledgement, Recovery, Custom,
+              FlappingStart, FlappingEnd,
+              DowntimeStart, DowntimeEnd, DowntimeRemoved ]
+  // Re-notify unresolved problems hourly. interval=0 (single-shot) masked
+  // the 2026-05-07 outage when the first notify failed to deliver.
+  interval = {{ icinga2_notification_interval }}
+
+  assign where true
+}
+
+apply Notification "discord-service" to Service {
+  command = "discord-service-notification"
+  users   = [ "discord" ]
+  states  = [ OK, Warning, Critical, Unknown ]
+  types   = [ Problem, Acknowledgement, Recovery, Custom,
+              FlappingStart, FlappingEnd,
+              DowntimeStart, DowntimeEnd, DowntimeRemoved ]
+  interval = {{ icinga2_notification_interval }}
+
+  assign where true
+}
+
+// --- noc-agent (parallel notification path; runs alongside Discord) ---
+//
+// Forwards every Problem/Recovery to the autonomous NOC agent on noc.as215932.net.
+// Discord remains the human-readable channel; noc-agent investigates and posts
+// its own structured triage to the same Discord webhook.
+
+object NotificationCommand "noc-agent-host-notification" {
+  command = [ "/etc/icinga2/scripts/notify-noc-agent.sh" ]
+
+  env = {
+    NOC_AGENT_URL       = NocAgentUrl
+    NOTIFICATION_TYPE   = "$notification.type$"
+    HOST_NAME           = "$host.name$"
+    HOST_ADDRESS        = "$host.address6$"
+    HOST_STATE          = "$host.state$"
+    HOST_OUTPUT         = "$host.output$"
+    HOST_CHECK_COMMAND  = "$host.check_command$"
+  }
+}
+
+object NotificationCommand "noc-agent-service-notification" {
+  command = [ "/etc/icinga2/scripts/notify-noc-agent.sh" ]
+
+  env = {
+    NOC_AGENT_URL          = NocAgentUrl
+    NOTIFICATION_TYPE      = "$notification.type$"
+    HOST_NAME              = "$host.name$"
+    HOST_ADDRESS           = "$host.address6$"
+    HOST_STATE             = "$host.state$"
+    HOST_OUTPUT            = "$host.output$"
+    HOST_CHECK_COMMAND     = "$host.check_command$"
+    SERVICE_NAME           = "$service.name$"
+    SERVICE_STATE          = "$service.state$"
+    SERVICE_OUTPUT         = "$service.output$"
+    SERVICE_CHECK_COMMAND  = "$service.check_command$"
+  }
+}
+
+object User "noc-agent" {
+  display_name = "Autonomous NOC agent"
+  states = [ OK, Warning, Critical, Unknown, Up, Down ]
+  types  = [ Problem, Recovery, Acknowledgement, Custom ]
+}
+
+object UserGroup "noc-agent" {
+  display_name = "noc-agent"
+  assign where user.name == "noc-agent"
+}
+
+apply Notification "noc-agent-host" to Host {
+  command = "noc-agent-host-notification"
+  users   = [ "noc-agent" ]
+  states  = [ Up, Down ]
+  types   = [ Problem, Recovery ]
+  interval = {{ icinga2_notification_interval }}
+
+  assign where true
+}
+
+apply Notification "noc-agent-service" to Service {
+  command = "noc-agent-service-notification"
+  users   = [ "noc-agent" ]
+  states  = [ Warning, Critical, Unknown ]
+  types   = [ Problem, Recovery ]
+  interval = {{ icinga2_notification_interval }}
+
+  assign where true
+}

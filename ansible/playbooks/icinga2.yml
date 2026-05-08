@@ -1,0 +1,48 @@
+---
+# icinga2 — push core mon-side configs (services, hosts, scripts, templated
+# notifications.conf with Discord webhook secret).
+#
+# Per-host registration (host_vars/<host>.yml :: monitoring_register) is
+# still owned by the `monitoring` role / `monitoring.yml` playbook; this
+# playbook owns the static + cross-cutting configuration only.
+#
+# Render-only (review the rendered templated file in ansible/generated/mon/icinga2/):
+#   ansible-playbook playbooks/icinga2.yml --tags validate \
+#       --connection=local --skip-tags=snapshot --limit mon
+#
+# Apply (live):
+#   set -a; source ../secrets.local.sh; set +a    # provides DISCORD_WEBHOOK_URL
+#   ansible-playbook playbooks/icinga2.yml --tags apply \
+#       -e '{"icinga2_apply":true}' --limit mon
+
+- name: icinga2 — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: icinga2 — render + apply
+  hosts: mon
+  gather_facts: true
+  become: true
+  roles:
+    - icinga2
+  tags: [icinga2]
+
+- name: icinga2 — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

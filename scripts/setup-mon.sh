@@ -110,20 +110,16 @@ for f in hosts.conf services.conf apt.conf; do
     mv /etc/icinga2/conf.d/$f /etc/icinga2/conf.d/$f.stock-disabled
   fi
 done
-cp "$CONFIGS/icinga2/zones.conf" /etc/icinga2/zones.conf
-cp "$CONFIGS/icinga2/hosts/"*.conf /etc/icinga2/conf.d/hosts/
-cp "$CONFIGS/icinga2/services/"*.conf /etc/icinga2/conf.d/services/
-cp "$CONFIGS/icinga2/notifications.conf" /etc/icinga2/conf.d/
+# NOTE: zones.conf, host group files, services, scripts, and notifications
+# are no longer copied here — they are deployed by ansible/playbooks/icinga2.yml
+# (role: icinga2). This bootstrap creates the directory structure only;
+# the playbook fills it on first apply.
+mkdir -p /etc/icinga2/conf.d/hosts /etc/icinga2/conf.d/services /etc/icinga2/scripts
 
-# Install custom plugins (Prometheus-backed checks)
+# Install custom plugins (Prometheus-backed checks). Plugins are not yet
+# managed by Ansible — keep them here until the role grows a plugins task.
 apt-get install -y jq curl
 install -m 0755 "$CONFIGS/plugins/check_prom_query" /usr/lib/nagios/plugins/check_prom_query
-
-# Install notification scripts (Discord webhook)
-install -d -o nagios -g nagios -m 0755 /etc/icinga2/scripts
-install -o nagios -g nagios -m 0755 \
-  "$CONFIGS/icinga2/scripts/notify-discord.sh" \
-  /etc/icinga2/scripts/notify-discord.sh
 
 # Validate config before starting
 icinga2 daemon -C

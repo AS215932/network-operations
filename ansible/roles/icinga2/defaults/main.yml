@@ -1,0 +1,27 @@
+---
+# Master gate. Mirrors monitoring_apply / logs_apply.
+icinga2_apply: false
+
+# Discord webhook URL. Sourced from secrets.local.sh / Vault — never
+# committed in cleartext. The previous arrangement (literal const in
+# notifications.conf) leaked the secret into git.
+icinga2_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL') | default('') }}"
+
+# noc-agent webhook (in-cluster, IPv6-only, no auth). Stays as a config
+# constant since it carries no secret.
+icinga2_noc_agent_url: "http://[2a0c:b641:b50:2::a0]:8000/webhook/icinga"
+
+# Icinga Web URL embedded in Discord notifications.
+icinga2_web_url: "https://mon.servify.network/icingaweb2"
+
+# Repeat interval for unresolved problems. 0 = single-shot (was the prior
+# behaviour, which masked the 2026-05-07 outage when the first notify
+# failed to deliver). 1h is the recommended minimum.
+icinga2_notification_interval: "1h"
+
+# Path on mon where the canonical configs live.
+icinga2_conf_dir: /etc/icinga2/conf.d
+icinga2_scripts_dir: /etc/icinga2/scripts
+
+# Source of truth in the repo. Read-only — the role copies from here.
+icinga2_repo_configs: "{{ playbook_dir }}/../../configs/mon/icinga2"
