@@ -17,6 +17,16 @@ receivers:
       - url: http://[{{ peers.noc.ipv6 }}]:8000/webhook/alertmanager
         send_resolved: true
         max_alerts: 0
+    discord_configs:
+      - webhook_url: '{{ mon_discord_webhook_url }}'
+        send_resolved: true
+        title: '{% raw %}🚨 [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.alertname }}{% endraw %}'
+        message: |
+          {% raw %}{{ range .Alerts -}}
+          **{{ .Labels.severity | toUpper }}** — {{ .Annotations.summary }}
+          {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
+          Source: mon (internal monitor) | Started: {{ .StartsAt.Format "2006-01-02 15:04 UTC" }}
+          {{ end }}{% endraw %}
 
 inhibit_rules:
   - source_matchers: [severity="critical"]

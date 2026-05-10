@@ -1,5 +1,9 @@
 ---
 # mon — Prometheus + Grafana + Icinga2 + blackbox_exporter.
+# Requires:
+#   export MON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+
+mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default('') }}"
 
 firewall_extra_rules:
   # Grafana via Caddy.
