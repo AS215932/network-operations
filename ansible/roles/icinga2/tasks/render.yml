@@ -19,6 +19,8 @@
     src: notifications.conf.j2
     dest: "{{ playbook_dir }}/../generated/mon/icinga2/notifications.conf"
     mode: "0640"
+  vars:
+    icinga2_discord_webhook_url: "__REDACTED_DISCORD_WEBHOOK_URL__"
   delegate_to: localhost
   connection: local
   become: false
