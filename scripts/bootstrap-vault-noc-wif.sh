@@ -7,7 +7,9 @@ POOL_ID="${GOOGLE_WIF_POOL_ID:-as215932-vault}"
 PROVIDER_ID="${GOOGLE_WIF_PROVIDER_ID:-vault-identity}"
 SERVICE_ACCOUNT="${GOOGLE_WIF_SERVICE_ACCOUNT:-noc-agent-monitoring@${PROJECT_ID}.iam.gserviceaccount.com}"
 VAULT_PUBLIC_ADDR="${VAULT_PUBLIC_ADDR:-https://vault.as215932.net}"
-VAULT_ISSUER="${VAULT_ISSUER:-${VAULT_PUBLIC_ADDR}/v1/identity/oidc}"
+VAULT_PUBLIC_ADDR="${VAULT_PUBLIC_ADDR%/}"
+VAULT_ISSUER="${VAULT_ISSUER:-${VAULT_PUBLIC_ADDR}}"
+VAULT_ISSUER="${VAULT_ISSUER%/}"
 GOOGLE_WIF_AUDIENCE="//iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}"
 
 need() {
