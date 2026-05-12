@@ -8,8 +8,10 @@ PROVIDER_ID="${GOOGLE_WIF_PROVIDER_ID:-vault-identity}"
 SERVICE_ACCOUNT="${GOOGLE_WIF_SERVICE_ACCOUNT:-noc-agent-monitoring@${PROJECT_ID}.iam.gserviceaccount.com}"
 VAULT_PUBLIC_ADDR="${VAULT_PUBLIC_ADDR:-https://vault.as215932.net}"
 VAULT_PUBLIC_ADDR="${VAULT_PUBLIC_ADDR%/}"
-VAULT_ISSUER="${VAULT_ISSUER:-${VAULT_PUBLIC_ADDR}}"
-VAULT_ISSUER="${VAULT_ISSUER%/}"
+VAULT_CONFIG_ISSUER="${VAULT_CONFIG_ISSUER:-${VAULT_PUBLIC_ADDR}}"
+VAULT_CONFIG_ISSUER="${VAULT_CONFIG_ISSUER%/}"
+VAULT_OIDC_ISSUER="${VAULT_OIDC_ISSUER:-${VAULT_PUBLIC_ADDR}/v1/identity/oidc}"
+VAULT_OIDC_ISSUER="${VAULT_OIDC_ISSUER%/}"
 GOOGLE_WIF_AUDIENCE="//iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}"
 
 need() {
@@ -47,7 +49,7 @@ path "identity/oidc/token/google-wif-noc-agent" {
 }
 POLICY
 
-vault write identity/oidc/config issuer="${VAULT_ISSUER}"
+vault write identity/oidc/config issuer="${VAULT_CONFIG_ISSUER}"
 vault write identity/oidc/key/google-wif \
   allowed_client_ids="${GOOGLE_WIF_AUDIENCE}" \
   algorithm=RS256 \
@@ -100,10 +102,20 @@ if ! gcloud iam workload-identity-pools providers describe "${PROVIDER_ID}" \
     --location=global \
     --workload-identity-pool="${POOL_ID}" \
     --display-name="Vault identity tokens" \
-    --issuer-uri="${VAULT_ISSUER}" \
+    --issuer-uri="${VAULT_OIDC_ISSUER}" \
     --allowed-audiences="${GOOGLE_WIF_AUDIENCE}" \
     --attribute-mapping="google.subject=assertion.sub,attribute.service=assertion.service" \
     --attribute-condition="assertion.service == 'noc-agent'"
+else
+  gcloud iam workload-identity-pools providers update-oidc "${PROVIDER_ID}" \
+    --project="${PROJECT_ID}" \
+    --location=global \
+    --workload-identity-pool="${POOL_ID}" \
+    --issuer-uri="${VAULT_OIDC_ISSUER}" \
+    --allowed-audiences="${GOOGLE_WIF_AUDIENCE}" \
+    --attribute-mapping="google.subject=assertion.sub,attribute.service=assertion.service" \
+    --attribute-condition="assertion.service == 'noc-agent'" \
+    --quiet >/dev/null
 fi
 
 gcloud iam service-accounts add-iam-policy-binding "${SERVICE_ACCOUNT}" \
