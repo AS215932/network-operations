@@ -25,6 +25,7 @@ This is the v1 secret architecture for the NOC Agent:
    ```bash
    export VAULT_ADDR=https://vault.as215932.net
    export VAULT_TOKEN=...
+   # Or authenticate with: vault login
    ./scripts/bootstrap-vault-noc-wif.sh
    ```
 
@@ -33,6 +34,7 @@ This is the v1 secret architecture for the NOC Agent:
    ```bash
    export VAULT_ADDR=https://vault.as215932.net
    export VAULT_TOKEN=...
+   # Or authenticate with: vault login
    ./scripts/vault-put-noc-agent-secrets.sh
    ```
 
@@ -52,6 +54,7 @@ The AppRole `role_id` and `secret_id` are bootstrap credentials. They are writte
    ```bash
    export VAULT_ADDR=https://vault.as215932.net
    export VAULT_TOKEN=...
+   # Or authenticate with: vault login
    export VAULT_SNAPSHOT_AGE_RECIPIENT=age1...
    ./scripts/vault-raft-snapshot.sh
    ```

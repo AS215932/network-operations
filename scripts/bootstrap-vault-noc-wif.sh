@@ -21,7 +21,10 @@ need vault
 need gcloud
 
 : "${VAULT_ADDR:?Set VAULT_ADDR, usually https://vault.as215932.net}"
-: "${VAULT_TOKEN:?Set VAULT_TOKEN to an operator token for initial bootstrap}"
+vault token lookup >/dev/null 2>&1 || {
+  echo "Set VAULT_TOKEN to an operator token, or run vault login, before initial bootstrap" >&2
+  exit 1
+}
 
 echo "Configuring Vault KV, audit, AppRole, and OIDC identity token role..."
 

@@ -2,11 +2,15 @@
 set -euo pipefail
 
 : "${VAULT_ADDR:?Set VAULT_ADDR, usually https://vault.as215932.net}"
-: "${VAULT_TOKEN:?Set VAULT_TOKEN to a token allowed to run raft snapshots}"
 : "${VAULT_SNAPSHOT_AGE_RECIPIENT:?Set VAULT_SNAPSHOT_AGE_RECIPIENT to an age public recipient}"
 
 command -v vault >/dev/null 2>&1 || {
   echo "missing required command: vault" >&2
+  exit 1
+}
+
+vault token lookup >/dev/null 2>&1 || {
+  echo "Set VAULT_TOKEN to a token allowed to run raft snapshots, or run vault login" >&2
   exit 1
 }
 

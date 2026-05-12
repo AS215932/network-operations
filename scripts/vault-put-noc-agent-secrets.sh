@@ -12,7 +12,10 @@ if [ -f "${SECRETS_FILE}" ]; then
 fi
 
 : "${VAULT_ADDR:?Set VAULT_ADDR, usually https://vault.as215932.net}"
-: "${VAULT_TOKEN:?Set VAULT_TOKEN to a token allowed to write kv/noc-agent}"
+vault token lookup >/dev/null 2>&1 || {
+  echo "Set VAULT_TOKEN to a token allowed to write kv/noc-agent, or run vault login" >&2
+  exit 1
+}
 : "${GEMINI_API_KEY:?GEMINI_API_KEY is required}"
 : "${NOC_DISCORD_WEBHOOK:?NOC_DISCORD_WEBHOOK is required}"
 : "${MAIL_NOC_PASSWORD:?MAIL_NOC_PASSWORD is required}"
