@@ -52,6 +52,48 @@
     - { path: "{{ hyrule_mcp_state_dir }}/.ssh", mode: "0700" }
   tags: [apply]
 
+- name: Check for controller id_noc_mcp private key
+  stat:
+    path: "{{ hyrule_mcp_local_key_path }}"
+  delegate_to: localhost
+  become: false
+  register: hyrule_mcp_controller_private_key
+  when: hyrule_mcp_local_key_path | default("") | length > 0
+  tags: [apply]
+
+- name: Check for controller id_noc_mcp public key
+  stat:
+    path: "{{ hyrule_mcp_local_key_path }}.pub"
+  delegate_to: localhost
+  become: false
+  register: hyrule_mcp_controller_public_key
+  when: hyrule_mcp_local_key_path | default("") | length > 0
+  tags: [apply]
+
+- name: Check existing id_noc_mcp private key on NOC
+  stat:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp"
+  register: hyrule_mcp_remote_private_key
+  tags: [apply]
+
+- name: Check existing id_noc_mcp public key on NOC
+  stat:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp.pub"
+  register: hyrule_mcp_remote_public_key
+  tags: [apply]
+
+- name: Require id_noc_mcp key material for first deploy
+  fail:
+    msg: >-
+      id_noc_mcp is not present on NOC and NOC_MCP_KEY_PATH was not set to a
+      readable controller key. Source secrets.local.sh or export
+      NOC_MCP_KEY_PATH for the first deploy; later deploys will preserve the
+      remote key.
+  when:
+    - not hyrule_mcp_remote_private_key.stat.exists
+    - not (hyrule_mcp_controller_private_key.stat.exists | default(false))
+  tags: [apply]
+
 - name: Deploy id_noc_mcp private key
   copy:
     src: "{{ hyrule_mcp_local_key_path }}"
@@ -59,6 +101,7 @@
     owner: "{{ hyrule_mcp_app_user }}"
     group: "{{ hyrule_mcp_app_group }}"
     mode: "0600"
+  when: hyrule_mcp_controller_private_key.stat.exists | default(false)
   tags: [apply]
 
 - name: Deploy id_noc_mcp public key (for reference)
@@ -68,6 +111,25 @@
     owner: "{{ hyrule_mcp_app_user }}"
     group: "{{ hyrule_mcp_app_group }}"
     mode: "0644"
+  when: hyrule_mcp_controller_public_key.stat.exists | default(false)
+  tags: [apply]
+
+- name: Ensure existing id_noc_mcp private key permissions
+  file:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp"
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0600"
+  when: hyrule_mcp_remote_private_key.stat.exists
+  tags: [apply]
+
+- name: Ensure existing id_noc_mcp public key permissions
+  file:
+    path: "{{ hyrule_mcp_state_dir }}/.ssh/id_noc_mcp.pub"
+    owner: "{{ hyrule_mcp_app_user }}"
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0644"
+  when: hyrule_mcp_remote_public_key.stat.exists
   tags: [apply]
 
 - name: Pre-populate known_hosts for AS215932 peers
