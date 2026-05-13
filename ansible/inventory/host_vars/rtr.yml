@@ -42,6 +42,18 @@ firewall_extra_raw_nft: |
   # iBGP also accepted on wg ifaces with no source restriction (already covered above
   # via loopback src match, but this is a defense-in-depth allow for the wg link).
 
+# --- Monitoring --- (issue #21: migrate from legacy configs/mon/icinga2/hosts/routers.conf
+# rtr.ovh1 entry to the standard monitoring_register flow. The Host object is now
+# named "rtr" — service files keying on host.name updated accordingly.)
+monitoring_register: true
+monitoring_role: router
+monitoring_display_name: "rtr (OVH FR)"
+monitoring_check_vars:
+  has_frr: true
+  underlay_address6: "{{ peers.rtr.underlay }}"
+  prom_instance_frr: "[{{ peers.rtr.ipv6 }}]:9342"
+  site: "ovh1"
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: router
