@@ -29,6 +29,10 @@ vault kv put kv/noc-agent \
   openai_api_key="${OPENAI_API_KEY:-}" \
   discord_webhook_url="${NOC_DISCORD_WEBHOOK}" \
   discord_bot_token="${NOC_DISCORD_BOT_TOKEN:-}" \
+  discord_bot_channel_id="${NOC_DISCORD_BOT_CHANNEL_ID:-}" \
+  discord_allowed_guild_ids="${NOC_DISCORD_ALLOWED_GUILD_IDS:-}" \
+  discord_allowed_channel_ids="${NOC_DISCORD_ALLOWED_CHANNEL_IDS:-}" \
+  discord_allowed_role_ids="${NOC_DISCORD_ALLOWED_ROLE_IDS:-}" \
   noc_control_token="${NOC_CONTROL_TOKEN:-}" \
   noc_approval_signing_secret="${NOC_APPROVAL_SIGNING_SECRET:-}" \
   mail_imap_password="${MAIL_NOC_PASSWORD}" \

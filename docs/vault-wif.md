@@ -67,6 +67,10 @@ The AppRole `role_id` and `secret_id` are bootstrap credentials. They are writte
 - `openai_api_key`
 - `discord_webhook_url`
 - `discord_bot_token`
+- `discord_bot_channel_id`
+- `discord_allowed_guild_ids`
+- `discord_allowed_channel_ids`
+- `discord_allowed_role_ids`
 - `noc_control_token`
 - `noc_approval_signing_secret`
 - `mail_imap_password`
