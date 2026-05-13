@@ -35,6 +35,16 @@ scrape_configs:
         labels:
           site: ovh1
           role: infra
+      - targets:
+          - "[2a0c:b641:b50:2::80]:9100"   # irc
+        labels:
+          site: ovh1
+          role: irc
+      - targets:
+          - "[2001:41d0:304:300::7bfb]:9100" # ns2
+        labels:
+          site: ovh-gra11
+          role: nameserver
 
   - job_name: node-routers
     static_configs:
