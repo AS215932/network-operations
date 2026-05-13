@@ -8,6 +8,11 @@ firewall_extra_rules:
   # Monitoring.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 
+# VPN clients are full-tunnel IPv6 peers. Their traffic arrives on wg0 and
+# leaves via the infra uplink toward rtr, which then handles DNS64/NAT64.
+firewall_forward_extra_raw_nft: |
+  iifname wg0 oifname enX0 ip6 saddr {{ vpn_clients_subnet }} accept comment "VPN client transit via rtr"
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: vpn

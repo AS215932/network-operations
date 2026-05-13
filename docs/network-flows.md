@@ -255,6 +255,7 @@ exceptions are:
 | api/proxy → dns | out | 53 tcp | RFC 2136 dyn updates (TSIG) |
 | dns → ns2 | out | 53 tcp/udp | NOTIFY (TSIG `hyrule-dns`) |
 | ns2 → dns | out | 53 tcp | AXFR pull on NOTIFY (TSIG `hyrule-dns`) |
+| vpn-clients → rtr / internet | out | any | Forwarded by `vpn` from `wg0` to `enX0`; includes DNS64 to rtr and routed IPv6/NAT64 egress |
 | rtr ↔ cr1-nl1, cr1-de1 underlay | both | 1337/1338 udp | WireGuard mesh |
 | Public → rtr | in | 53/80/443/51820 | DNAT to dns/proxy/vpn |
 | Public → irc | in | 6697 tcp | Soju IRCS (direct v6, no DNAT) |

@@ -31,6 +31,11 @@ table inet filter {
         type filter hook forward priority filter; policy drop;
         ct state established,related accept
         ct state invalid drop
+{% if firewall_forward_extra_raw_nft %}
+
+        # --- raw forward escape hatch ---
+{{ firewall_forward_extra_raw_nft | indent(8, True) }}
+{% endif %}
     }
 
     chain output {

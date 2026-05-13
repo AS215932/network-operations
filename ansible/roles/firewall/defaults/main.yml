@@ -15,6 +15,7 @@ firewall_extra_rules: []
 
 # Optional raw escape hatches for constructs that don't fit the data model.
 firewall_extra_raw_nft: ""
+firewall_forward_extra_raw_nft: ""
 firewall_extra_raw_pf: ""
 
 # rtr-only — preserves the existing IPv4 NAT/forward block.
