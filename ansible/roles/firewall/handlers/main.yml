@@ -33,3 +33,16 @@
   command: "pfctl -f {{ firewall_conf_path }}"
   changed_when: false
   listen: reload pf
+
+# Table-only reload — atomic, doesn't touch other rules. Used when the
+# bogon list changes but the ruleset shape hasn't. Both v4 and v6 tables
+# get one handler each so a change to only one doesn't reload both.
+- name: reload pf bogons6
+  command: "pfctl -t bogons6 -T replace -f /etc/pf.bogons6"
+  changed_when: false
+  listen: reload pf bogons6
+
+- name: reload pf bogons4
+  command: "pfctl -t bogons4 -T replace -f /etc/pf.bogons4"
+  changed_when: false
+  listen: reload pf bogons4

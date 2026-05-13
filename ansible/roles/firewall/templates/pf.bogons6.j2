@@ -1,0 +1,28 @@
+{# /etc/pf.bogons6 — managed by ansible (roles/firewall)
+   Host: {{ inventory_hostname }}
+   Generated: do not edit by hand.
+
+   IPv6 bogon prefixes per RFC 6890 — addresses that must never appear on
+   the public internet as either source or destination. Referenced by the
+   `<bogons6>` table in pf.conf and dropped on $ext_if.
+
+   IMPORTANT: `ff00::/8` (all IPv6 multicast) is NOT in this list. Blocking
+   outbound multicast breaks Neighbor Solicitation (NDP) and link-local
+   service discovery. cr1-de1 had `ff00::/8` here once and lost ~50% of
+   outbound flows to NDP cache misses — see issue #25 for the post-mortem
+   and project memory `cr1-de1-pf-bogons6-blocks-ndp`. #}
+# IPv6 bogons per RFC 6890. Managed by ansible/roles/firewall.
+# Multicast (ff00::/8) DELIBERATELY excluded — blocks NDP and breaks the
+# link-local discovery dataplane. See issue #25.
+
+::/8
+100::/64
+2001:2::/48
+2001:10::/28
+2001:db8::/32
+2002::/16
+3ffe::/16
+3fff::/20
+5f00::/16
+fc00::/7
+fec0::/10

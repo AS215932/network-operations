@@ -1,4 +1,40 @@
 ---
+- name: Render pf.bogons6 to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  template:
+    src: pf.bogons6.j2
+    dest: "{{ firewall_generated_dir }}/{{ inventory_hostname }}/pf.bogons6"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Render pf.bogons4 to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  template:
+    src: pf.bogons4.j2
+    dest: "{{ firewall_generated_dir }}/{{ inventory_hostname }}/pf.bogons4"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Render pf.bogons6 to host
+  template:
+    src: pf.bogons6.j2
+    dest: /etc/pf.bogons6
+    mode: "0644"
+  when: firewall_apply
+  notify: reload pf bogons6
+  tags: [apply]
+
+- name: Render pf.bogons4 to host
+  template:
+    src: pf.bogons4.j2
+    dest: /etc/pf.bogons4
+    mode: "0644"
+  when: firewall_apply
+  notify: reload pf bogons4
+  tags: [apply]
+
 - name: Render pf config to controller (review artifact)
   delegate_to: localhost
   become: false
