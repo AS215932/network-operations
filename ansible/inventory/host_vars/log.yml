@@ -33,6 +33,9 @@ firewall_extra_rules:
 
   # OpenBSD mail's native syslogd `@@host` forward — TCP only, no UDP.
   - { proto: tcp, dport: 6514, src: "{{ peers.mail.ipv6 }}",  comment: "syslog (TCP) from OpenBSD mail" }
+  # FreeBSD core routers' native syslogd `@@host` forward (issue #17).
+  - { proto: tcp, dport: 6514, src: "{{ peers.cr1_nl1.loopback }}", comment: "syslog (TCP) from cr1-nl1" }
+  - { proto: tcp, dport: 6514, src: "{{ peers.cr1_de1.loopback }}", comment: "syslog (TCP) from cr1-de1" }
 
   # Grafana on mon queries Loki; also scrapes Vector's internal metrics.
   - { proto: tcp, dport: 3100, src: "{{ peers.mon.ipv6 }}",   comment: "Loki HTTP API from Grafana on mon" }

@@ -29,3 +29,8 @@
   command: rcctl reload {{ logs_openbsd_syslogd_service }}
   changed_when: false
   when: ansible_os_family == "OpenBSD"
+
+- name: reload syslogd freebsd
+  command: service syslogd reload
+  changed_when: false
+  when: ansible_os_family == "FreeBSD"

@@ -27,3 +27,9 @@ pf_bgp_peers:
 firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
   - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }
+
+# --- Logs --- (issue #17: FreeBSD doesn't ship a vector pkg in modern
+# versions; ship via native syslogd @@host:6514 TCP forward instead.)
+logs_register: true
+logs_role: router
+logs_use_freebsd_syslogd: true

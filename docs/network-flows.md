@@ -186,8 +186,9 @@ on mon is the only read path.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci, cr1-nl1, cr1-de1) | TCP | 6000 | Vector→Vector ingest from agents |
+| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci) | TCP | 6000 | Vector→Vector ingest from agents |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
+| cr1-nl1, cr1-de1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
 | ns2 (`2001:41d0:304:300::7bfb`) | TCP | 6000 | Off-net Vector ingest over public IPv6 |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 6000 | XCP-NG hypervisor Vector ingest over mgmt v4 |
 | mon | TCP | 3100 | Grafana queries Loki HTTP API |
