@@ -70,3 +70,18 @@
   notify: validate and reload icinga2
   no_log: true
   tags: [apply]
+
+# Per issue #15: scoped noc-agent ApiUser, additive to the legacy
+# api-users.conf that holds the default root user. Renders only the new
+# noc-agent user definition; never touches the legacy file.
+- name: Install api-users-managed.conf (scoped noc-agent ApiUser)
+  template:
+    src: api-users-managed.conf.j2
+    dest: "{{ icinga2_conf_dir }}/api-users-managed.conf"
+    owner: nagios
+    group: nagios
+    mode: "0640"
+  notify: validate and reload icinga2
+  no_log: true
+  when: icinga2_noc_agent_api_password | default('') | length > 0
+  tags: [apply]

@@ -19,6 +19,8 @@
   hosts: mon
   gather_facts: true
   become: true
+  vars:
+    icinga2_noc_agent_api_password: "{{ lookup('env', 'ICINGA_NOC_AGENT_API_PASSWORD') | default('', true) }}"
   pre_tasks:
     - name: Pre-deploy Icinga snapshot
       include_role:
