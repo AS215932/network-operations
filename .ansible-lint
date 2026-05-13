@@ -1,0 +1,31 @@
+---
+# Permissive ansible-lint config. Like .yamllint above, intentionally soft
+# at the start; tighten via follow-up issues.
+
+profile: basic
+
+exclude_paths:
+  - ansible/generated/
+  - autoinstall/generated/
+  - .github/
+
+# Rules we never want to enforce (project conventions diverge):
+skip_list:
+  - role-name              # roles named with underscores (vault_agent, hyrule_mcp) — intentional
+  - command-instead-of-shell  # we use shell freely for run-once provisioning
+  - var-naming[no-role-prefix]  # role-prefixed vars are convention here
+
+# Rules we treat as warnings rather than errors during the soft launch:
+warn_list:
+  - yaml[line-length]
+  - yaml[truthy]
+  - no-changed-when
+  - risky-file-permissions
+  - jinja[invalid]
+  - schema[meta]
+
+kinds:
+  - playbook: "ansible/playbooks/*.yml"
+  - tasks: "ansible/roles/*/tasks/*.yml"
+  - vars: "ansible/inventory/host_vars/*.yml"
+  - vars: "ansible/inventory/group_vars/*.yml"
