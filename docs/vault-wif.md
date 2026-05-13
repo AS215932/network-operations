@@ -38,10 +38,9 @@ This is the v1 secret architecture for the NOC Agent:
    ./scripts/vault-put-noc-agent-secrets.sh
    ```
 
-6. Deploy NOC with Vault Agent enabled:
+6. Deploy NOC. Vault Agent is the production default:
 
    ```bash
-   export NOC_AGENT_SECRET_BACKEND=vault
    export VAULT_NOC_AGENT_ROLE_ID=...
    export VAULT_NOC_AGENT_SECRET_ID=...
    ansible-playbook playbooks/noc.yml --tags apply -e '{"noc_apply":true}' --limit noc
@@ -67,6 +66,9 @@ The AppRole `role_id` and `secret_id` are bootstrap credentials. They are writte
 - `anthropic_api_key`
 - `openai_api_key`
 - `discord_webhook_url`
+- `discord_bot_token`
+- `noc_control_token`
+- `noc_approval_signing_secret`
 - `mail_imap_password`
 - `xo_token`
 - `icinga_api_user`
@@ -82,6 +84,11 @@ Future service paths should follow the same split:
 - `kv/extmon`
 
 Keep non-secrets such as UUIDs, hostnames, handles, project IDs, wallet addresses, and model names in inventory/config.
+
+`secrets.local.sh` is a workstation bootstrap/import source, not the
+production runtime source for NOC Agent. Re-run
+`scripts/vault-put-noc-agent-secrets.sh` after rotating any NOC secret so Vault
+remains authoritative.
 
 ## Validation
 

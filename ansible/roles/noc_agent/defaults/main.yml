@@ -6,7 +6,7 @@ noc_agent_state_dir: /var/lib/noc-agent
 # Cloned via the per-deploy SSH alias `github-noc-agent` configured in the role.
 noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
 noc_agent_version: main
-noc_agent_secret_backend: env
+noc_agent_secret_backend: vault
 
 noc_agent_google_wif_enabled: false
 noc_agent_google_wif_project_id: project-73d4ac43-0c8a-4ec0-ac5

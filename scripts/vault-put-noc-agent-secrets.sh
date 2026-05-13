@@ -28,6 +28,9 @@ vault kv put kv/noc-agent \
   anthropic_api_key="${ANTHROPIC_API_KEY:-}" \
   openai_api_key="${OPENAI_API_KEY:-}" \
   discord_webhook_url="${NOC_DISCORD_WEBHOOK}" \
+  discord_bot_token="${NOC_DISCORD_BOT_TOKEN:-}" \
+  noc_control_token="${NOC_CONTROL_TOKEN:-}" \
+  noc_approval_signing_secret="${NOC_APPROVAL_SIGNING_SECRET:-}" \
   mail_imap_password="${MAIL_NOC_PASSWORD}" \
   xo_token="${XO_TOKEN}" \
   icinga_api_user="${ICINGA_API_USER}" \

@@ -86,6 +86,8 @@ Rendered NOC environment now includes:
 - Discord bot token and allowlist variables
 
 The Vault-rendered environment template carries the same control-plane secrets.
+Vault Agent is the production default for NOC deploys; the local plaintext
+bootstrap file is used only to seed or rotate Vault entries.
 
 ## Validation
 
