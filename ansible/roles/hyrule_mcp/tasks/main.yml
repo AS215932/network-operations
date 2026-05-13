@@ -1,7 +1,7 @@
 ---
 # Deploy hyrule-mcp: clone repo, build venv, render config + secrets, install
-# the dedicated id_noc_mcp SSH key. No daemon — hyrule-mcp is started by
-# noc-agent over stdio.
+# the dedicated id_noc_mcp SSH key, and run the local loopback MCP daemon that
+# noc-agent connects to over streamable HTTP.
 
 - name: Ensure base packages are installed
   apt:
@@ -237,4 +237,18 @@
   become_user: "{{ hyrule_mcp_app_user }}"
   when: hyrule_mcp_pyproject.stat.exists
   tags: [apply]
-  notify: restart noc-agent
+  notify:
+    - restart hyrule-mcp
+    - restart noc-agent
+
+- name: Install /etc/systemd/system/hyrule-mcp.service
+  copy:
+    src: "{{ playbook_dir }}/../../configs/hyrule-mcp.service"
+    dest: /etc/systemd/system/hyrule-mcp.service
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [apply]
+  notify:
+    - reload systemd
+    - restart hyrule-mcp

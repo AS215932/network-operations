@@ -1,0 +1,31 @@
+# /etc/systemd/system/hyrule-mcp.service
+
+[Unit]
+Description=AS215932 Hyrule MCP diagnostic daemon
+After=network.target
+
+[Service]
+Type=exec
+User=noc-agent
+Group=noc-agent
+WorkingDirectory=/opt/hyrule-mcp
+EnvironmentFile=/opt/noc-agent/.env
+Environment=HYRULE_MCP_TRANSPORT=http
+Environment=HYRULE_MCP_BIND=127.0.0.1
+Environment=HYRULE_MCP_PORT=8765
+ExecStart=/opt/hyrule-mcp/.venv/bin/python /opt/hyrule-mcp/mcp_server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-mcp
+
+ProtectSystem=strict
+ReadOnlyPaths=/etc/hyrule-mcp
+ReadWritePaths=/var/lib/hyrule-mcp /tmp
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

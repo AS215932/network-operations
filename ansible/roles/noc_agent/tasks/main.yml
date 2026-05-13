@@ -11,9 +11,17 @@
       - git
       - ca-certificates
       - curl
+      - redis-server
     state: present
     update_cache: true
     cache_valid_time: 3600
+  tags: [apply]
+
+- name: Ensure Redis checkpoint store is enabled
+  systemd:
+    name: redis-server
+    state: started
+    enabled: true
   tags: [apply]
 
 - name: Check if Node.js is already installed
