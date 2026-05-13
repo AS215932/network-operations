@@ -1,0 +1,36 @@
+---
+# dom0 rollout — XCP-NG hypervisor bring-up via Ansible.
+#
+# First-apply prerequisites:
+#   - dom0 reachable as root via the public IPv4 (193.70.32.138).
+#   - SSH key (id_servify) authorized for root@dom0.
+#
+# Apply (manual, when dom0 needs converging):
+#   set -a; source ../secrets.local.sh; set +a
+#   ansible-playbook playbooks/dom0.yml --tags apply -e dom0_apply=true --limit dom0
+
+- name: dom0 — apply XCP-NG configuration
+  hosts: dom0
+  gather_facts: true
+  become: false
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - dom0
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [dom0]
