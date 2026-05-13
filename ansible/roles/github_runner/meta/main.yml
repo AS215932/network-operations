@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: github_runner
+  description: Self-hosted GitHub Actions runner for AS215932 CI
+  author: AS215932 ops
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions:
+        - bookworm
+        - trixie
+dependencies: []

@@ -1,0 +1,50 @@
+---
+# ci rollout — installs the self-hosted GitHub Actions runner on the ci VM.
+#
+# Prerequisites:
+#   - ci VM provisioned and reachable at peers.ci.ipv6.
+#   - First-time runner registration token (1 h TTL):
+#       export GH_RUNNER_TOKEN=$(gh api -X POST \
+#         /repos/AS215932/network-operations/actions/runners/registration-token \
+#         --jq .token)
+#     Once registered, .runner / .credentials persist in the install dir.
+#
+# Apply:
+#   set -a; source ../secrets.local.sh; set +a
+#   ansible-playbook playbooks/ci.yml --tags apply \
+#     -e github_runner_apply=true \
+#     -e github_runner_registration_token="$GH_RUNNER_TOKEN" \
+#     --limit ci
+
+- name: ci — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: ci — apply self-hosted runner
+  hosts: ci
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - github_runner
+  tags: [ci]
+
+- name: ci — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]
