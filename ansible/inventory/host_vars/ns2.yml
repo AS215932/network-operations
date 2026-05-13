@@ -24,6 +24,13 @@ firewall_extra_rules:
 monitoring_register: true
 monitoring_display_name: "ns2 (secondary nameserver, OVH GRA11)"
 monitoring_role: nameserver
+# ICMP from mon to ns2 is not a reliable liveness signal across the OVH/public
+# path, while DNS TCP/53 is the host's actual critical service.
+monitoring_check_command: tcp
+monitoring_check_vars:
+  tcp_address: "{{ peers.ns2.ipv6 }}"
+  tcp_port: 53
+monitoring_ssh_check: false
 monitoring_extra_services:
   - name: dns-soa-servify-network
     check_command: dig

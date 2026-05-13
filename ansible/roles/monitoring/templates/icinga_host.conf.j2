@@ -13,7 +13,9 @@ object Host "{{ inventory_hostname }}" {
 {% endif %}
   display_name = "{{ monitoring_display_name | default(inventory_hostname) }}"
 
-{% if peers[inventory_hostname].ipv6 is defined or peers[inventory_hostname].loopback is defined %}
+{% if monitoring_check_command is defined %}
+  check_command = "{{ monitoring_check_command }}"
+{% elif peers[inventory_hostname].ipv6 is defined or peers[inventory_hostname].loopback is defined %}
   check_command = "ping6"
 {% else %}
   check_command = "ping4"
@@ -21,7 +23,28 @@ object Host "{{ inventory_hostname }}" {
 
   vars.os = "{{ ansible_os_family | default('Debian') }}"
   vars.role = "{{ monitoring_role | default('infra') }}"
+{% if monitoring_ssh_check | default(true) %}
   vars.ssh_port = 22
+{% if monitoring_ssh_address is defined %}
+  vars.ssh_address = "{{ monitoring_ssh_address }}"
+{% endif %}
+{% if monitoring_ssh_ipv6 | default(false) %}
+  vars.ssh_ipv6 = true
+{% endif %}
+{% endif %}
+{% if monitoring_check_vars is defined %}
+{% for k, v in monitoring_check_vars.items() %}
+{% if v is boolean %}
+  vars.{{ k }} = {{ v | lower }}
+{% elif v is string %}
+  vars.{{ k }} = {{ v | to_json }}
+{% elif v is mapping %}
+  vars.{{ k }} = { {% for kk, vv in v.items() %}{{ kk }} = {{ vv | to_json }}{% if not loop.last %}, {% endif %}{% endfor %} }
+{% else %}
+  vars.{{ k }} = {{ v }}
+{% endif %}
+{% endfor %}
+{% endif %}
 
 {# Prometheus instance for node-up + disk apply rules. #}
 {% set scrape_addr = peers[inventory_hostname].ipv6 | default(peers[inventory_hostname].loopback) | default(peers[inventory_hostname].ipv4) %}
