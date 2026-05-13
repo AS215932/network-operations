@@ -1,0 +1,39 @@
+---
+name: ai-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# One review per (PR, latest commit). Newer commit cancels in-flight review.
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure anthropic SDK is installed
+        run: |
+          python3 -m pip install --user --quiet --upgrade 'anthropic>=0.39.0'
+
+      - name: Run AI review
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Lever to swap models per cost class. Keep the cutting-edge default.
+          AI_REVIEW_MODEL: claude-opus-4-7
+        run: python3 scripts/ci/ai-review.py
