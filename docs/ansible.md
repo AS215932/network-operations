@@ -47,6 +47,12 @@ pre-deploy snapshot captures known problems before we touch hosts; the
 post-deploy snapshot lets us spot new alerts caused by the rollout. Only use
 `--skip-tags snapshot` for render-only validation or an explicit emergency.
 
+Snapshot plays now live as `pre_tasks` / `post_tasks` on each playbook's
+main play with `run_once: true`, so they fire correctly even when
+`--limit <subset>` is passed (issue #16). No more "remember to run the
+mon-side snapshot manually if you used `--limit`" caveat — the playbook
+enforces the bracket.
+
 This:
 1. SSHes to the host (no `--connection=local`).
 2. Renders the config to `<conf_path>.new` on the host.

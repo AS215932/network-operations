@@ -1,16 +1,4 @@
 ---
-- name: Knot DNS — pre-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-  tags: [snapshot, always]
-
 - name: Knot DNS — apply
   hosts: nameservers
   # Primary first, then secondary — so when ns2 starts, ns1 already serves
@@ -18,18 +6,24 @@
   serial: 1
   gather_facts: false
   become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - knot
-  tags: [knot]
-
-- name: Knot DNS — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+  post_tasks:
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: post
-  tags: [snapshot, always]
+      run_once: true
+      tags: [snapshot, always]
+  tags: [knot]

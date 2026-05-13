@@ -17,24 +17,30 @@
 #   ansible-playbook playbooks/logs.yml --tags validate \
 #     --connection=local --skip-tags=snapshot
 
-- name: Logs — pre-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+- name: Logs — bring up aggregator first (log VM)
+  hosts: log
+  gather_facts: true
+  become: true
+  pre_tasks:
     - name: Pre-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: pre
-  tags: [snapshot, always]
-
-- name: Logs — bring up aggregator first (log VM)
-  hosts: log
-  gather_facts: true
-  become: true
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - logs
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
   tags: [logs, aggregator]
 
 - name: Logs — agents on every opted-in host
@@ -42,18 +48,26 @@
   serial: 1
   gather_facts: true
   become: true
+  pre_tasks:
+    # Also bracket the agents play so `--limit <agent>` runs still get a
+    # snapshot bracket even when the aggregator play didn't match the limit.
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - logs
-  tags: [logs, agents]
-
-- name: Logs — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+  post_tasks:
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: post
-  tags: [snapshot, always]
+      run_once: true
+      tags: [snapshot, always]
+  tags: [logs, agents]
