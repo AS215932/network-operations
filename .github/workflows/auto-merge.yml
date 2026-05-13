@@ -1,0 +1,59 @@
+---
+name: auto-merge
+
+# Auto-merge trivial-class PRs. The AI reviewer in ai-review.yml labels a PR
+# `safe-class` iff the diff is entirely under ansible/generated/, docs/, or
+# *.md. This workflow waits for required checks (lint + render-check), then
+# squash-merges.
+#
+# A human always merges any source change. Auto-merge here is for renders,
+# docs, and AI-research-comment PRs — strictly the low-blast-radius lane.
+
+on:
+  pull_request_target:
+    types: [labeled, unlabeled, synchronize, reopened]
+  check_suite:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: contains(github.event.pull_request.labels.*.name, 'safe-class')
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - name: Verify diff scope matches safe-class
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          # Defense-in-depth: even if the label is set, verify the actual
+          # diff only touches the safe-class path set. Refuses merge for any
+          # path outside ansible/generated/, docs/, *.md, or .github/CODEOWNERS-style files.
+          files=$(gh pr view "$PR" --repo "$REPO" --json files -q '.files[].path')
+          violation=0
+          while IFS= read -r f; do
+            case "$f" in
+              ansible/generated/*) ;;
+              docs/*)              ;;
+              *.md)                ;;
+              "")                  ;;
+              *)
+                echo "::error::path '$f' is outside the safe-class set"
+                violation=1
+                ;;
+            esac
+          done <<< "$files"
+          exit "$violation"
+
+      - name: Enable auto-merge (waits for required checks)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr merge "$PR" --repo "$REPO" --squash --auto --delete-branch
