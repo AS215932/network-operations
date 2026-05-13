@@ -1,0 +1,25 @@
+---
+# Install per-host by_ssh check scripts under /usr/local/lib/nagios/plugins/.
+# Driven by `monitoring_check_scripts: ["foo.sh", "bar.sh", ...]` in
+# host_vars/<host>.yml. Each script is sourced from configs/mon/icinga2/scripts/
+# in the repo. The same path is also copied to mon as part of the icinga2 role,
+# so the script lives in one canonical location.
+
+- name: Ensure check plugin dir exists
+  file:
+    path: /usr/local/lib/nagios/plugins
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [apply]
+
+- name: Install monitoring check scripts
+  copy:
+    src: "{{ playbook_dir }}/../../configs/mon/icinga2/scripts/{{ item }}"
+    dest: "/usr/local/lib/nagios/plugins/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ monitoring_check_scripts }}"
+  tags: [apply]
