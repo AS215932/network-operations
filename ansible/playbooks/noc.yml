@@ -44,6 +44,8 @@
     icinga_api_user: "{{ lookup('env', 'ICINGA_API_USER') }}"
     icinga_api_password: "{{ lookup('env', 'ICINGA_API_PASSWORD') }}"
     xo_token: "{{ lookup('env', 'XO_TOKEN') }}"
+    xo_username: "{{ lookup('env', 'XO_USERNAME') | default('', true) }}"
+    xo_password: "{{ lookup('env', 'XO_PASSWORD') | default('', true) }}"
     noc_mail_password: "{{ lookup('env', 'MAIL_NOC_PASSWORD') }}"
     noc_discord_bot_token: "{{ lookup('env', 'NOC_DISCORD_BOT_TOKEN') | default('', true) }}"
     noc_control_token: "{{ lookup('env', 'NOC_CONTROL_TOKEN') | default('', true) }}"
