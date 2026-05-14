@@ -9,15 +9,23 @@ mostly I/O-bound during `ansible-playbook --tags validate` jobs.
 
 ## 1. Provision the VM via Xen Orchestra
 
-1. Log in to XOA: <https://xen-orchestra.servify.network>.
-2. New → VM → template **Debian 13 cloud-init**.
-3. Name: `ci`. Memory: 2 GiB. vCPUs: 1. Disk: 20 GiB on `local_storage`.
-4. Network: `xenbr-infra` (overlay). Set IPv6 statically to
-   `2a0c:b641:b50:2::d0` (matches `peers.ci.ipv6` in `group_vars/all.yml`).
-5. Use the standard `autoinstall/debian-cloud-init.yaml.j2` user-data; set
-   the hostname to `ci.as215932.net`.
-6. Start the VM. Wait for cloud-init to finish; verify `ssh svag@ci` works
-   over overlay v6.
+The repo's established pattern is `xo-cli` run **on XOA** (`10.0.0.10`, reached
+via overlay v6 `2a0c:b641:b50:2::70` or the dom0 jump `193.70.32.138`) — see
+`scripts/create-vms.sh` for the `vm.create` + `vdi.set` + `vm.setBootOrder` +
+`vm.start` sequence. The `ci` VM follows it with these parameters:
+
+- Template: **Debian 13 cloud-init**. Name: `ci`. 1 vCPU, 2 GiB RAM,
+  20 GiB disk on `local_storage`.
+- VIF on `xenbr-infra` (overlay). Static IPv6 `2a0c:b641:b50:2::d0`
+  (matches `peers.ci.ipv6` in `group_vars/all.yml`).
+- Cloud-init user-data from `autoinstall/debian-cloud-init.yaml.j2`;
+  hostname `ci.as215932.net`; `id_servify.pub` authorized for root.
+
+The XOA web UI (New → VM → Debian 13 cloud-init) is an equivalent manual
+path if you prefer.
+
+Start the VM, wait for cloud-init to finish, and verify `ssh svag@ci` works
+over overlay v6.
 
 ## 2. Bootstrap firewall + monitoring + logs
 
@@ -56,6 +64,12 @@ Use the `ops-workstation` GitHub PAT with `repo` scope to mint — or run
 
 ## 4. Apply the github_runner role
 
+> **Prerequisite (once feat/0f has landed):** the `github_runner` role
+> includes `vault_agent` to render `/etc/github-runner/secrets.env` for
+> `apply.yml` runs. Bootstrap the runner's Vault AppRole first — see
+> `docs/runbooks/bootstrap-runner-vault.md` — and export
+> `VAULT_CI_RUNNER_ROLE_ID` / `VAULT_CI_RUNNER_SECRET_ID` before applying.
+
 ```bash
 ansible-playbook playbooks/ci.yml --tags apply \
   -e github_runner_apply=true \
@@ -79,14 +93,6 @@ Expect an entry with `name=ci-runner`, `status=online`, and labels including
 
 `mcp__hyrule__icinga_get_host_state host=ci` should show the host UP with
 the `github-runner-online` service OK.
-
-## 6. Add repository secrets
-
-```bash
-gh secret set ANTHROPIC_API_KEY --repo AS215932/network-operations --body "$ANTHROPIC_API_KEY"
-```
-
-This unblocks the `ai-review.yml` workflow.
 
 ## Tear down / re-register
 
