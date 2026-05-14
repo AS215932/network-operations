@@ -41,12 +41,12 @@
     owner: root
     group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
-  loop:
-    - { path: "{{ vault_agent_config_dir }}", mode: "0750" }
-    - { path: "{{ vault_agent_template_dir }}", mode: "0750" }
-    - { path: "{{ vault_agent_run_dir }}", mode: "0750" }
-    - { path: "/etc/noc-agent", group: "noc-agent", mode: "0750" }
-    - { path: "/run/noc-agent", group: "noc-agent", mode: "0750" }
+  loop: >-
+    {{ [
+         {'path': vault_agent_config_dir, 'mode': '0750'},
+         {'path': vault_agent_template_dir, 'mode': '0750'},
+         {'path': vault_agent_run_dir, 'mode': '0750'},
+       ] + vault_agent_extra_dirs }}
   tags: [apply]
 
 - name: Install Vault AppRole role_id
@@ -73,23 +73,16 @@
   notify: restart vault agent
   tags: [apply]
 
-- name: Render NOC Agent env template for Vault Agent
+- name: Render secret templates for Vault Agent
   template:
-    src: noc-agent.env.ctmpl.j2
-    dest: "{{ vault_agent_template_dir }}/noc-agent.env.ctmpl"
+    src: "{{ item.src }}"
+    dest: "{{ vault_agent_template_dir }}/{{ item.name }}"
     owner: root
     group: root
     mode: "0640"
-  notify: restart vault agent
-  tags: [apply]
-
-- name: Render Google subject token template for Vault Agent
-  template:
-    src: google-subject.jwt.ctmpl.j2
-    dest: "{{ vault_agent_template_dir }}/google-subject.jwt.ctmpl"
-    owner: root
-    group: root
-    mode: "0640"
+  loop: "{{ vault_agent_templates }}"
+  loop_control:
+    label: "{{ item.name }}"
   notify: restart vault agent
   tags: [apply]
 

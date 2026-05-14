@@ -14,3 +14,27 @@ vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt
 vault_agent_reload_command: /bin/systemctl try-restart noc-agent.service
 vault_agent_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
 vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
+
+# Secret templates Vault Agent renders. Each entry: src (Jinja2 template in
+# this role's templates/), name (ctmpl filename written into the template
+# dir), destination (final rendered file), group (chgrp target on the
+# destination), reload_command (run after each render). The default pair
+# reproduces the noc-agent behaviour exactly; other consumers — e.g.
+# github_runner — pass their own list.
+vault_agent_templates:
+  - src: noc-agent.env.ctmpl.j2
+    name: noc-agent.env.ctmpl
+    destination: "{{ vault_agent_env_destination }}"
+    group: noc-agent
+    reload_command: "{{ vault_agent_reload_command }}"
+  - src: google-subject.jwt.ctmpl.j2
+    name: google-subject.jwt.ctmpl
+    destination: "{{ vault_agent_google_subject_token_destination }}"
+    group: noc-agent
+    reload_command: "{{ vault_agent_reload_command }}"
+
+# Extra directories the consumer needs created beyond the Vault Agent
+# config/run/template dirs. Default = noc-agent's runtime dirs.
+vault_agent_extra_dirs:
+  - { path: /etc/noc-agent, group: noc-agent, mode: "0750" }
+  - { path: /run/noc-agent, group: noc-agent, mode: "0750" }
