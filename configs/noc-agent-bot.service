@@ -3,8 +3,8 @@
 
 [Unit]
 Description=AS215932 NOC Agent Discord Bot
-After=network.target noc-agent.service
-Wants=noc-agent.service
+After=network.target hyrule-mcp.service xo-mcp.service noc-agent.service
+Wants=hyrule-mcp.service xo-mcp.service noc-agent.service
 
 [Service]
 Type=exec

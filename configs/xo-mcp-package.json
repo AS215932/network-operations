@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@xen-orchestra/mcp": "1.0.1",
+    "supergateway": "3.4.0"
+  }
+}

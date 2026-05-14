@@ -1,0 +1,40 @@
+# /etc/systemd/system/xo-mcp.service
+# Managed by ansible/roles/xo_mcp.
+
+[Unit]
+Description=AS215932 Xen Orchestra MCP daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User={{ xo_mcp_app_user }}
+Group={{ xo_mcp_app_group }}
+WorkingDirectory={{ xo_mcp_install_dir }}
+EnvironmentFile=/opt/noc-agent/.env
+Environment=NODE_ENV=production
+ExecStart={{ xo_mcp_install_dir }}/node_modules/.bin/supergateway \
+    --stdio "/usr/bin/npx --no-install @xen-orchestra/mcp" \
+    --outputTransport streamableHttp \
+    --port {{ xo_mcp_port }} \
+    --streamableHttpPath {{ xo_mcp_path }} \
+    --healthEndpoint {{ xo_mcp_health_path }} \
+    --logLevel info
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xo-mcp
+
+ProtectSystem=strict
+ReadWritePaths={{ xo_mcp_install_dir }} /var/lib/noc-agent /tmp
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+IPAddressDeny=any
+IPAddressAllow=localhost {{ xo_mcp_allowed_remote_ips | join(' ') }}
+
+[Install]
+WantedBy=multi-user.target

@@ -3,25 +3,23 @@
   systemd:
     daemon_reload: true
 
+- name: restart xo-mcp
+  systemd:
+    name: xo-mcp
+    state: restarted
+    enabled: true
+  ignore_errors: "{{ ansible_check_mode }}"
+
 - name: restart noc-agent
   systemd:
     name: noc-agent
     state: restarted
     enabled: true
-  when: noc_agent_pyproject.stat.exists | default(false)
   ignore_errors: "{{ ansible_check_mode }}"
 
 - name: restart noc-agent-bot
   systemd:
     name: noc-agent-bot
-    state: restarted
-    enabled: true
-  when: noc_agent_pyproject.stat.exists | default(false)
-  ignore_errors: "{{ ansible_check_mode }}"
-
-- name: restart xo-mcp
-  systemd:
-    name: xo-mcp
     state: restarted
     enabled: true
   ignore_errors: "{{ ansible_check_mode }}"

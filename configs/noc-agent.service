@@ -3,7 +3,8 @@
 
 [Unit]
 Description=AS215932 NOC Agent (Alertmanager + Icinga webhooks → PydanticAI investigation → Discord)
-After=network.target
+After=network.target hyrule-mcp.service xo-mcp.service
+Wants=hyrule-mcp.service xo-mcp.service
 
 [Service]
 Type=exec

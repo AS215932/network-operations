@@ -153,6 +153,7 @@
   when: noc_agent_secret_backend == 'env'
   no_log: true
   notify:
+    - restart xo-mcp
     - restart noc-agent
     - restart noc-agent-bot
   tags: [apply]
