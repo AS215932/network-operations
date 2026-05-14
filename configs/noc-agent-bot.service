@@ -1,0 +1,34 @@
+# /etc/systemd/system/noc-agent-bot.service
+# Deploy to: noc VM
+
+[Unit]
+Description=AS215932 NOC Agent Discord Bot
+After=network.target noc-agent.service
+Wants=noc-agent.service
+
+[Service]
+Type=exec
+User=noc-agent
+Group=noc-agent
+WorkingDirectory=/opt/noc-agent
+EnvironmentFile=/opt/noc-agent/.env
+Environment=PYTHONPATH=/opt/noc-agent
+ExecStart=/opt/noc-agent/.venv/bin/noc-agent-bot
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=noc-agent-bot
+
+# Security hardening
+ProtectSystem=strict
+ReadWritePaths=/opt/noc-agent /var/lib/noc-agent
+ReadOnlyPaths=/etc/hyrule-mcp /var/lib/hyrule-mcp
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -63,7 +63,7 @@
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
         vault_agent_google_subject_token_destination: "{{ noc_agent_google_subject_token_path }}"
-        vault_agent_reload_command: /bin/systemctl restart noc-agent.service
+        vault_agent_reload_command: /bin/systemctl restart noc-agent.service noc-agent-bot.service
       when: noc_agent_secret_backend == 'vault'
   tags: [noc]
 
