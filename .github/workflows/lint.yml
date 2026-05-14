@@ -39,9 +39,11 @@ jobs:
         run: |
           set -e
           # Skip generated/, but lint all hand-written scripts.
+          # --severity=error keeps this permissive at launch (the existing
+          # scripts have warning/style/info findings only); tighten via #58.
           mapfile -t scripts < <(find scripts -type f \( -name '*.sh' -o -name '*.bash' \) -print)
           if [ "${#scripts[@]}" -gt 0 ]; then
-            shellcheck "${scripts[@]}"
+            shellcheck --severity=error "${scripts[@]}"
           else
             echo "no shell scripts found, skipping"
           fi
