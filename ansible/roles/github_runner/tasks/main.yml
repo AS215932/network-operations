@@ -69,6 +69,16 @@
   when: not github_runner_installed.stat.exists
   tags: [apply]
 
+# The runner ships a .NET Core 6.0 payload that needs libicu et al.; config.sh
+# refuses to run without them. The runner's own script knows the exact set.
+- name: Install runner .NET dependencies
+  command: ./bin/installdependencies.sh
+  args:
+    chdir: "{{ github_runner_install_dir }}"
+  when: not github_runner_installed.stat.exists
+  changed_when: true
+  tags: [apply]
+
 - name: Check whether runner is already registered
   stat:
     path: "{{ github_runner_install_dir }}/.runner"
