@@ -125,3 +125,29 @@
     enabled: true
     daemon_reload: true
   tags: [apply]
+
+# Vault Agent renders /etc/github-runner/secrets.env so apply.yml can source
+# the secrets its target playbooks expect in the environment. The generic
+# vault_agent role drives this; we hand it the runner's own AppRole, template,
+# and config dir. First apply needs VAULT_CI_RUNNER_ROLE_ID / _SECRET_ID set
+# (see docs/runbooks/bootstrap-runner-vault.md); afterwards the AppRole files
+# on the host persist and re-applies converge without them.
+- name: Set up Vault Agent for runner secret delivery
+  include_role:
+    name: vault_agent
+  vars:
+    vault_agent_name: github-runner
+    vault_agent_role_id: "{{ github_runner_vault_role_id }}"
+    vault_agent_secret_id: "{{ github_runner_vault_secret_id }}"
+    vault_agent_templates:
+      - src: github-runner.env.ctmpl.j2
+        name: github-runner.env.ctmpl
+        destination: "{{ github_runner_secrets_env }}"
+        group: "{{ github_runner_group }}"
+        reload_command: "{{ github_runner_vault_reload_command }}"
+    vault_agent_extra_dirs:
+      - path: "{{ github_runner_secrets_env | dirname }}"
+        group: "{{ github_runner_group }}"
+        mode: "0750"
+  when: github_runner_vault_enabled | bool
+  tags: [apply]
