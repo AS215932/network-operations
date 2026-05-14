@@ -1,0 +1,127 @@
+---
+# Self-hosted GitHub Actions runner for AS215932 CI.
+# First-apply needs a registration token (1 hour TTL):
+#   export GH_RUNNER_TOKEN=$(gh api -X POST \
+#     /repos/{{ github_runner_owner }}/{{ github_runner_repo }}/actions/runners/registration-token \
+#     --jq .token)
+#   ansible-playbook playbooks/ci.yml --tags apply \
+#     -e github_runner_apply=true \
+#     -e github_runner_registration_token="$GH_RUNNER_TOKEN"
+
+- name: Ensure runner toolchain packages are installed
+  apt:
+    name: "{{ github_runner_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Ensure runner group exists
+  group:
+    name: "{{ github_runner_group }}"
+    state: present
+    system: true
+  tags: [apply]
+
+- name: Ensure runner user exists
+  user:
+    name: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    home: "{{ github_runner_home }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+  tags: [apply]
+
+- name: Ensure runner install directory exists
+  file:
+    path: "{{ github_runner_install_dir }}"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0750"
+  tags: [apply]
+
+- name: Check whether runner is already installed
+  stat:
+    path: "{{ github_runner_install_dir }}/config.sh"
+  register: github_runner_installed
+  tags: [apply]
+
+- name: Download runner tarball
+  get_url:
+    url: "{{ github_runner_tarball_url }}"
+    dest: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0644"
+    checksum: "{{ ('sha256:' + github_runner_tarball_sha256) if github_runner_tarball_sha256 else omit }}"
+  when: not github_runner_installed.stat.exists
+  tags: [apply]
+
+- name: Extract runner tarball
+  unarchive:
+    src: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    dest: "{{ github_runner_install_dir }}"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    remote_src: true
+  when: not github_runner_installed.stat.exists
+  tags: [apply]
+
+- name: Check whether runner is already registered
+  stat:
+    path: "{{ github_runner_install_dir }}/.runner"
+  register: github_runner_registered
+  tags: [apply]
+
+- name: Fail fast if registration token missing on first run
+  fail:
+    msg: |
+      github_runner_registration_token is empty and the runner is not yet registered.
+      Run: gh api -X POST /repos/{{ github_runner_owner }}/{{ github_runner_repo }}/actions/runners/registration-token --jq .token
+      Then re-apply with -e github_runner_registration_token=<token>.
+  when:
+    - not github_runner_registered.stat.exists
+    - github_runner_registration_token | length == 0
+  tags: [apply]
+
+- name: Register runner against repo
+  command: >-
+    ./config.sh
+    --unattended
+    --replace
+    --url https://github.com/{{ github_runner_owner }}/{{ github_runner_repo }}
+    --token {{ github_runner_registration_token }}
+    --name {{ github_runner_name }}
+    --labels {{ github_runner_labels | join(',') }}
+    --work _work
+  args:
+    chdir: "{{ github_runner_install_dir }}"
+  become: true
+  become_user: "{{ github_runner_user }}"
+  when:
+    - not github_runner_registered.stat.exists
+    - github_runner_registration_token | length > 0
+  no_log: true
+  tags: [apply]
+
+- name: Install systemd unit
+  template:
+    src: github-runner.service.j2
+    dest: /etc/systemd/system/github-runner.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart github-runner
+  tags: [apply]
+
+- name: Enable and start runner
+  systemd:
+    name: github-runner
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]

@@ -28,6 +28,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp (stdio child) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0`, `10.0.0.60` (mgmt) | — | Vector aggregator + Loki (centralized logs) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane (proxied as `vault.as215932.net`) |
+| ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
@@ -165,6 +166,18 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
 
+### ci (`2a0c:b641:b50:2::d0`)
+
+Self-hosted GitHub Actions runner. Picks up workflow jobs from
+`AS215932/network-operations`. Outbound only — no inbound from world.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| mon | TCP | 9100 | node_exporter scrape |
+| ops-prefix, vpn-clients | TCP | 22 | SSH (operator access for runner troubleshooting) |
+
+Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch action images), ci → api.anthropic.com TCP/443 (AI review), ci → every infra host TCP/22 (apply runs via `ansible-playbook --tags apply`), ci → mon TCP/9090 (Prometheus query during render-check), ci → log TCP/6000 (Vector agent).
+
 ### log (`2a0c:b641:b50:2::b0` overlay, `10.0.0.60` mgmt)
 
 Vector aggregator + Loki. Receives logs from every host in AS215932; serves
@@ -173,7 +186,7 @@ on mon is the only read path.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, cr1-nl1, cr1-de1) | TCP | 6000 | Vector→Vector ingest from agents |
+| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci, cr1-nl1, cr1-de1) | TCP | 6000 | Vector→Vector ingest from agents |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
 | ns2 (`2001:41d0:304:300::7bfb`) | TCP | 6000 | Off-net Vector ingest over public IPv6 |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 6000 | XCP-NG hypervisor Vector ingest over mgmt v4 |
