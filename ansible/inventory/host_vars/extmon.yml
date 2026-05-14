@@ -9,6 +9,13 @@
 #
 # Provisioning runbook: docs/extmon.md.
 
+# extmon is a Debian VPS but sits in the `external` group, not `linux`, so it
+# doesn't inherit these from group_vars/linux.yml. Set them statically so
+# --connection=local renders (the firewall role's include_vars) don't fail on
+# an unprovisioned host with no gathered facts.
+ansible_os_family: Debian
+ansible_distribution: Debian
+
 # Role gate: false renders configs to ansible/generated/extmon/ but does not
 # install packages or restart services. Mirrors the other roles' apply gates.
 extmon_apply: false
