@@ -42,6 +42,51 @@
     mode: "0750"
   tags: [apply]
 
+- name: Ensure runner .ssh directory exists
+  file:
+    path: "{{ github_runner_ssh_dir }}"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0700"
+  tags: [apply]
+
+- name: Install runner SSH keypair
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: "{{ github_runner_ssh_key_path }}", dest: "{{ github_runner_ssh_key_dest }}", mode: "0600" }
+    - { src: "{{ github_runner_ssh_key_path }}.pub", dest: "{{ github_runner_ssh_key_dest }}.pub", mode: "0644" }
+  loop_control:
+    label: "{{ item.dest }}"
+  when: github_runner_ssh_key_path | length > 0
+  tags: [apply]
+
+# Seed known_hosts so ansible.cfg's host_key_checking=True holds for the
+# runner without a manual ssh-keyscan on every fresh host.
+- name: Seed runner known_hosts with the infra fleet host keys
+  shell:
+    cmd: >-
+      ssh-keyscan -T 5 -6
+      {% for name, p in peers.items() if p.ipv6 is defined and p.ipv6 != '::' %}{{ p.ipv6 }} {% endfor %}
+      > {{ github_runner_ssh_dir }}/known_hosts 2>/dev/null
+  changed_when: true
+  when: github_runner_ssh_key_path | length > 0
+  tags: [apply]
+
+- name: Fix runner known_hosts ownership
+  file:
+    path: "{{ github_runner_ssh_dir }}/known_hosts"
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0644"
+  when: github_runner_ssh_key_path | length > 0
+  tags: [apply]
+
 - name: Check whether runner is already installed
   stat:
     path: "{{ github_runner_install_dir }}/config.sh"
