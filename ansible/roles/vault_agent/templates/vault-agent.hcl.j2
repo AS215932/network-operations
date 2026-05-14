@@ -30,26 +30,19 @@ auto_auth {
   }
 }
 
+{% for t in vault_agent_templates %}
 template {
-  source      = "{{ vault_agent_template_dir }}/noc-agent.env.ctmpl"
-  destination = "{{ vault_agent_env_destination }}"
+  source      = "{{ vault_agent_template_dir }}/{{ t.name }}"
+  destination = "{{ t.destination }}"
   perms       = 0640
-  command     = "/bin/sh -c 'chgrp noc-agent {{ vault_agent_env_destination }} && chmod 0640 {{ vault_agent_env_destination }} && {{ vault_agent_reload_command }}'"
+  command     = "/bin/sh -c 'chgrp {{ t.group }} {{ t.destination }} && chmod 0640 {{ t.destination }} && {{ t.reload_command }}'"
 
   wait {
     min = "2s"
     max = "10s"
   }
 }
+{% if not loop.last %}
 
-template {
-  source      = "{{ vault_agent_template_dir }}/google-subject.jwt.ctmpl"
-  destination = "{{ vault_agent_google_subject_token_destination }}"
-  perms       = 0640
-  command     = "/bin/sh -c 'chgrp noc-agent {{ vault_agent_google_subject_token_destination }} && chmod 0640 {{ vault_agent_google_subject_token_destination }} && {{ vault_agent_reload_command }}'"
-
-  wait {
-    min = "2s"
-    max = "10s"
-  }
-}
+{% endif %}
+{% endfor %}
