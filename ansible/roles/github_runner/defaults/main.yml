@@ -37,6 +37,20 @@ github_runner_name: "{{ inventory_hostname }}-runner"
 # across reboots, so this is only needed once.
 github_runner_registration_token: ""
 
+# Vault Agent secret delivery for apply.yml runs. The runner authenticates
+# with its own AppRole and Vault Agent renders github_runner_secrets_env,
+# which .github/workflows/apply.yml sources so ansible-playbook --tags apply
+# picks up the secrets its target playbooks read from the environment.
+# AppRole bootstrap: docs/runbooks/bootstrap-runner-vault.md.
+github_runner_vault_enabled: true
+github_runner_vault_role_id: "{{ lookup('env', 'VAULT_CI_RUNNER_ROLE_ID') | default('', true) }}"
+github_runner_vault_secret_id: "{{ lookup('env', 'VAULT_CI_RUNNER_SECRET_ID') | default('', true) }}"
+github_runner_secrets_env: /etc/github-runner/secrets.env
+# secrets.env is read fresh by apply.yml on every job, not from the runner's
+# process environment — so a secret rotation needs no runner restart (and a
+# restart would kill in-flight CI jobs). Keep this a no-op.
+github_runner_vault_reload_command: /bin/true
+
 # Toolchain installed on the runner (consumed by workflows). Kept minimal —
 # workflows install role-specific deps as needed.
 github_runner_packages:
