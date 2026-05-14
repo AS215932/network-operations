@@ -9,9 +9,12 @@ Workflows match the runner label set `self-hosted, linux, x64, hyrule-infra`.
 |----------|---------|---------|----|
 | `lint.yml` | `pull_request`, `push` to `main` | yamllint + ansible-lint + shellcheck + Jinja2 syntax | 0b |
 | `render-check.yml` | `pull_request` touching `ansible/**`, `configs/**` | render every playbook + assert `ansible/generated/` is fresh | 0b |
-| `ai-review.yml` | `pull_request` | Claude API review on diff, file:line comments | 0c |
-| `auto-merge.yml` | `pull_request_target` on `labeled` | auto-merge trivial-class PRs (generated/, docs/, research-comment) | 0d |
 | `apply.yml` | `workflow_dispatch` | manual gated apply (pre-snapshot, `--tags apply`, post-snapshot, diff) | 0e |
+
+AI review is handled by the repo's **hosted review service** (configured in
+GitHub repo settings), not a workflow we maintain — there is no `ai-review.yml`.
+There is also no auto-merge: every PR, including rendered-artifact and
+docs-only ones, gets a human merge click.
 
 ## Lint config
 
@@ -42,3 +45,28 @@ VM is provisioned and the runner registered, jobs queue indefinitely. That's
 expected — the first time the runner comes online, all pending PR runs
 unfreeze together. Document this in the PR description if you're opening one
 during the bootstrap window.
+
+## First-time bootstrap
+
+The foundation PRs lint and render-check *themselves*, so the first merges
+can't be gated by checks that don't exist on `main` yet. Bootstrap order:
+
+1. **Provision the `ci` VM and register the runner** —
+   [docs/ci/provision.md](./provision.md). Until this is done, every workflow
+   job queues.
+2. **Wire the runner's Vault AppRole** —
+   [docs/runbooks/bootstrap-runner-vault.md](../runbooks/bootstrap-runner-vault.md),
+   so `apply.yml` can source `/etc/github-runner/secrets.env`.
+3. **Merge the foundation PRs in order, with admin bypass** (branch
+   protection isn't on yet, so this is just the normal merge button):
+   `0a` (ci VM + `github_runner` role) → `0b` (lint + render-check) →
+   `0e` (apply) → `0f` (runner Vault wiring + CODEOWNERS).
+4. **Enable branch protection on `main`** once `0f` is merged and no
+   foundation PRs are in flight. Require the `lint` and `render-check`
+   status checks plus the hosted review service's check (read its exact
+   context name off a recent PR's checks list first), and set
+   `required_approving_review_count: 1` — since there is no auto-merge,
+   every PR needs a human approval.
+
+`enforce_admins` should stay **off** so a broken workflow can still be
+force-merged to unblock the lane.
