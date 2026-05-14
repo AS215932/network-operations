@@ -10,12 +10,14 @@ github_runner_owner: AS215932
 github_runner_repo: network-operations
 
 # Pinned runner version. Bump deliberately; mismatches with the GHA control
-# plane cause silent registration failures.
-github_runner_version: "2.319.1"
+# plane cause silent registration failures. Must be recent enough that the
+# runner's installdependencies.sh knows the host's libicu (Debian 13 trixie
+# ships libicu76 — anything before ~2.330 only probes up to libicu72).
+github_runner_version: "2.334.0"
 github_runner_arch: x64
 github_runner_tarball_url: >-
   https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-linux-{{ github_runner_arch }}-{{ github_runner_version }}.tar.gz
-github_runner_tarball_sha256: ""
+github_runner_tarball_sha256: "048024cd2c848eb6f14d5646d56c13a4def2ae7ee3ad12122bee960c56f3d271"
 
 github_runner_user: runner
 github_runner_group: runner
