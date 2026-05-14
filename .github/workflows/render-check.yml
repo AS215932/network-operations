@@ -1,0 +1,52 @@
+---
+name: render-check
+
+# Renders every playbook in --tags validate --connection=local mode and
+# asserts that the checked-in ansible/generated/ output matches what the
+# render produces. Catches stale generated/ checkins (the operator forgot
+# to commit a re-render) and template typos that don't surface until apply.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ansible/**'
+      - 'configs/**'
+      - 'docs/network-flows.md'
+      - 'scripts/ci/render-all.sh'
+      - '.github/workflows/render-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ansible/**'
+      - 'configs/**'
+      - 'docs/network-flows.md'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  render:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render every playbook (validate-only, no apply)
+        run: scripts/ci/render-all.sh
+
+      - name: Assert generated/ matches HEAD
+        run: |
+          set -e
+          if ! git diff --exit-code ansible/generated/; then
+            echo "::error::ansible/generated/ is stale. Re-run scripts/ci/render-all.sh locally and commit the diff." >&2
+            exit 1
+          fi
+
+      - name: Upload render output (debugging)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-output
+          path: ansible/generated/
+          retention-days: 7

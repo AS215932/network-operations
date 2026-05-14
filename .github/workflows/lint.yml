@@ -1,0 +1,74 @@
+---
+name: lint
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  yamllint:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - uses: actions/checkout@v4
+      - name: yamllint
+        run: yamllint -c .yamllint .
+
+  ansible-lint:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    # roles_path lives in ansible/ansible.cfg, which isn't picked up when lint
+    # runs from the repo root — point ansible at ansible/roles explicitly so
+    # syntax-check can resolve role references.
+    env:
+      ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
+    steps:
+      - uses: actions/checkout@v4
+      - name: ansible-lint
+        run: ansible-lint -c .ansible-lint ansible/playbooks/ ansible/roles/
+
+  shellcheck:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          set -e
+          # Skip generated/, but lint all hand-written scripts.
+          mapfile -t scripts < <(find scripts -type f \( -name '*.sh' -o -name '*.bash' \) -print)
+          if [ "${#scripts[@]}" -gt 0 ]; then
+            shellcheck "${scripts[@]}"
+          else
+            echo "no shell scripts found, skipping"
+          fi
+
+  jinja-syntax:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - uses: actions/checkout@v4
+      - name: jinja2 syntax check
+        run: |
+          python3 - <<'EOF'
+          import sys
+          from pathlib import Path
+          from jinja2 import Environment, FileSystemLoader, TemplateSyntaxError
+
+          repo = Path(".")
+          j2_files = [p for p in repo.rglob("*.j2")
+                      if "/generated/" not in str(p)
+                      and not str(p).startswith(".git")]
+
+          fail = 0
+          for p in j2_files:
+              env = Environment(loader=FileSystemLoader(p.parent))
+              try:
+                  env.parse(p.read_text())
+              except TemplateSyntaxError as e:
+                  print(f"::error file={p},line={e.lineno}::{e.message}")
+                  fail = 1
+          sys.exit(fail)
+          EOF
