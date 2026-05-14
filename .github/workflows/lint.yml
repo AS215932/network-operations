@@ -21,6 +21,11 @@ jobs:
 
   ansible-lint:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
+    # roles_path lives in ansible/ansible.cfg, which isn't picked up when lint
+    # runs from the repo root — point ansible at ansible/roles explicitly so
+    # syntax-check can resolve role references.
+    env:
+      ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
       - uses: actions/checkout@v4
       - name: ansible-lint

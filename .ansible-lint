@@ -14,6 +14,10 @@ skip_list:
   - role-name              # roles named with underscores (vault_agent, hyrule_mcp) — intentional
   - command-instead-of-shell  # we use shell freely for run-once provisioning
   - var-naming[no-role-prefix]  # role-prefixed vars are convention here
+  - name[casing]           # handler/task names are lowercase by convention here
+  - name[play]             # site.yml import_playbook plays are intentionally unnamed
+  - name[template]         # mid-name Jinja (e.g. "... for {{ user }} (note)") is fine
+  - command-instead-of-module  # curl|bash run-once installers are intentional
 
 # Rules we treat as warnings rather than errors during the soft launch:
 warn_list:

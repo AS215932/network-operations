@@ -22,6 +22,16 @@ rules:
     max-spaces-inside: 1
   brackets:
     max-spaces-inside: 1
+  # Inventory dicts are column-aligned by convention (peers:, host_vars).
+  # Keep these visible but non-fatal during the soft launch.
+  colons:
+    level: warning
+  commas:
+    level: warning
+  # ansible-lint requires these to be enabled for its yamllint integration.
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
 
 ignore: |
   ansible/generated/
