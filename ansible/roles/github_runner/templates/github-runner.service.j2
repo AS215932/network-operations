@@ -10,11 +10,14 @@ User={{ github_runner_user }}
 Group={{ github_runner_group }}
 WorkingDirectory={{ github_runner_install_dir }}
 ExecStart={{ github_runner_install_dir }}/run.sh
-Restart=on-failure
-RestartSec=10s
+# run.sh exits 0 when the runner self-updates or is reconfigured; on-failure
+# would leave the service dead after that. always — matches GitHub's own
+# generated unit — so the runner comes back regardless of exit code.
+Restart=always
+RestartSec=5s
 KillMode=process
 KillSignal=SIGTERM
-TimeoutStopSec=30
+TimeoutStopSec=5min
 Environment=HOME={{ github_runner_home }}
 
 # Hardening
