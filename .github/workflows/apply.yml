@@ -1,0 +1,163 @@
+---
+name: apply
+
+# Manual gated deployment. Run with:
+#   gh workflow run apply.yml -F playbook=firewall -F limit=cr1-de1 -F dry_run=true
+#
+# The first invocation each session must be approved via the `production`
+# environment protection rule (set up once: settings → environments).
+# A required reviewer (the user) approves; the workflow then runs the
+# pre-snapshot → render/apply → post-snapshot → diff sequence and posts
+# the diff to the run summary + as a comment on the named PR (if any).
+
+on:
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: Playbook to apply (matches ansible/playbooks/<name>.yml)
+        type: choice
+        required: true
+        options:
+          - firewall
+          - monitoring
+          - icinga2
+          - logs
+          - noc
+          - vault
+          - ci
+          - knot
+          - extmon
+          - rtr_routing
+          - networkd_resolved
+          - mail_openbsd
+          - freebsd_resolv
+          - noc_mcp_key
+      limit:
+        description: Ansible --limit pattern (host or group)
+        type: string
+        required: true
+        default: ""
+      dry_run:
+        description: Dry-run only (render + check, no apply)
+        type: boolean
+        required: true
+        default: true
+      pr_number:
+        description: PR number to post the diff to (optional)
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  apply:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    # `production` is an environment with a required reviewer rule.
+    # The job pauses until the reviewer approves.
+    environment: production
+    timeout-minutes: 30
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Source Vault-rendered secrets
+        run: |
+          # Vault Agent on `ci` renders /etc/github-runner/secrets.env. Sourced
+          # here so playbooks pick up DISCORD_WEBHOOK_URL, ICINGA_API_*, etc.
+          if [ -r /etc/github-runner/secrets.env ]; then
+            set -a; . /etc/github-runner/secrets.env; set +a
+            # Re-export for subsequent steps via GITHUB_ENV.
+            grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+          else
+            echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
+          fi
+
+      - name: Pre-deploy Icinga snapshot
+        working-directory: ansible
+        run: |
+          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+            --tags snapshot \
+            -e snapshot_phase=pre
+
+      - name: Render-only (dry run)
+        if: ${{ inputs.dry_run }}
+        working-directory: ansible
+        run: |
+          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+            --tags validate \
+            --connection=local \
+            --skip-tags=snapshot \
+            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+
+      - name: Apply
+        if: ${{ !inputs.dry_run }}
+        working-directory: ansible
+        run: |
+          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+            --tags apply \
+            -e "${{ inputs.playbook }}_apply=true" \
+            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+
+      - name: Post-deploy Icinga snapshot
+        if: ${{ !inputs.dry_run }}
+        working-directory: ansible
+        run: |
+          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+            --tags snapshot \
+            -e snapshot_phase=post
+
+      - name: Capture snapshot diff
+        if: ${{ !inputs.dry_run }}
+        id: diff
+        run: |
+          set -e
+          shopt -s nullglob
+          snapshots_root=ansible/generated/snapshots
+          if [ ! -d "$snapshots_root" ]; then
+            echo "::warning::no snapshots directory found at $snapshots_root"
+            echo "diff=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Two most recent snapshot dirs are pre/post.
+          mapfile -t dirs < <(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -2)
+          if [ "${#dirs[@]}" -lt 2 ]; then
+            echo "::warning::need 2 snapshot dirs, found ${#dirs[@]}"
+            exit 0
+          fi
+          {
+            echo "## Icinga snapshot diff"
+            echo
+            echo '```diff'
+            diff -ruN "${dirs[1]}" "${dirs[0]}" || true
+            echo '```'
+          } > /tmp/diff.md
+          {
+            echo "diff<<EOF"
+            cat /tmp/diff.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post diff to workflow summary
+        if: ${{ !inputs.dry_run }}
+        run: cat /tmp/diff.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post diff as PR comment
+        if: ${{ !inputs.dry_run && inputs.pr_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ inputs.pr_number }}" \
+            --repo "${{ github.repository }}" \
+            --body-file /tmp/diff.md
+
+      - name: Upload snapshots as artifact
+        if: ${{ !inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}
+          path: ansible/generated/snapshots/
+          retention-days: 30
