@@ -118,7 +118,9 @@
   become: true
   become_user: "{{ noc_agent_user }}"
   ignore_errors: true  # First run will fail until the deploy key is registered on GitHub.
-  notify: restart noc-agent
+  notify:
+    - restart noc-agent
+    - restart noc-agent-bot
   tags: [apply]
 
 - name: Check for noc-agent pyproject.toml (set after a successful clone)
@@ -136,7 +138,9 @@
   become: true
   become_user: "{{ noc_agent_user }}"
   when: noc_agent_pyproject.stat.exists
-  notify: restart noc-agent
+  notify:
+    - restart noc-agent
+    - restart noc-agent-bot
   tags: [apply]
 
 - name: Render /opt/noc-agent/.env
@@ -148,7 +152,10 @@
     mode: "0640"
   when: noc_agent_secret_backend == 'env'
   no_log: true
-  notify: restart noc-agent
+  notify:
+    - restart xo-mcp
+    - restart noc-agent
+    - restart noc-agent-bot
   tags: [apply]
 
 - name: Install Google external-account WIF config for noc-agent
@@ -159,7 +166,9 @@
     group: "{{ noc_agent_group }}"
     mode: "0640"
   when: noc_agent_google_wif_enabled | bool
-  notify: restart noc-agent
+  notify:
+    - restart noc-agent
+    - restart noc-agent-bot
   tags: [apply]
 
 - name: Install /etc/systemd/system/noc-agent.service
@@ -172,6 +181,19 @@
   notify:
     - reload systemd
     - restart noc-agent
+    - restart noc-agent-bot
+  tags: [apply]
+
+- name: Install /etc/systemd/system/noc-agent-bot.service
+  copy:
+    src: "{{ playbook_dir }}/../../configs/noc-agent-bot.service"
+    dest: /etc/systemd/system/noc-agent-bot.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart noc-agent-bot
   tags: [apply]
 
 - name: Enable and start noc-agent
@@ -186,9 +208,32 @@
   ignore_errors: "{{ ansible_check_mode }}"
   tags: [apply]
 
+- name: Enable and start noc-agent-bot
+  systemd:
+    name: noc-agent-bot
+    state: started
+    enabled: true
+    daemon_reload: true
+  when:
+    - noc_agent_pyproject.stat.exists
+    - noc_agent_secret_backend == 'env'
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: [apply]
+
 - name: Enable noc-agent for Vault Agent managed start
   systemd:
     name: noc-agent
+    enabled: true
+    daemon_reload: true
+  when:
+    - noc_agent_pyproject.stat.exists
+    - noc_agent_secret_backend == 'vault'
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: [apply]
+
+- name: Enable noc-agent-bot for Vault Agent managed start
+  systemd:
+    name: noc-agent-bot
     enabled: true
     daemon_reload: true
   when:

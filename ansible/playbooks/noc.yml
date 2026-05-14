@@ -55,6 +55,7 @@
   roles:
     - hyrule_mcp
     - noc_agent
+    - xo_mcp
     - role: vault_agent
       vars:
         vault_agent_name: noc-agent
@@ -63,7 +64,11 @@
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
         vault_agent_google_subject_token_destination: "{{ noc_agent_google_subject_token_path }}"
-        vault_agent_reload_command: /bin/systemctl restart noc-agent.service
+        vault_agent_reload_command: >-
+          /bin/systemctl restart hyrule-mcp.service &&
+          /bin/systemctl restart xo-mcp.service &&
+          /bin/systemctl restart noc-agent.service &&
+          /bin/systemctl restart noc-agent-bot.service
       when: noc_agent_secret_backend == 'vault'
   tags: [noc]
 

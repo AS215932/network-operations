@@ -219,7 +219,10 @@
   become_user: "{{ hyrule_mcp_app_user }}"
   ignore_errors: true  # First run will fail until the deploy key is registered on GitHub.
   tags: [apply]
-  notify: restart noc-agent
+  notify:
+    - restart hyrule-mcp
+    - restart noc-agent
+    - restart noc-agent-bot
 
 - name: Check for hyrule-mcp pyproject.toml (set after a successful clone)
   stat:
@@ -240,6 +243,7 @@
   notify:
     - restart hyrule-mcp
     - restart noc-agent
+    - restart noc-agent-bot
 
 - name: Install /etc/systemd/system/hyrule-mcp.service
   copy:
@@ -252,3 +256,5 @@
   notify:
     - reload systemd
     - restart hyrule-mcp
+    - restart noc-agent
+    - restart noc-agent-bot

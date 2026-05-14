@@ -1,10 +1,10 @@
-# /etc/systemd/system/noc-agent.service
+# /etc/systemd/system/noc-agent-bot.service
 # Deploy to: noc VM
 
 [Unit]
-Description=AS215932 NOC Agent (Alertmanager + Icinga webhooks → PydanticAI investigation → Discord)
-After=network.target hyrule-mcp.service xo-mcp.service
-Wants=hyrule-mcp.service xo-mcp.service
+Description=AS215932 NOC Agent Discord Bot
+After=network.target hyrule-mcp.service xo-mcp.service noc-agent.service
+Wants=hyrule-mcp.service xo-mcp.service noc-agent.service
 
 [Service]
 Type=exec
@@ -13,17 +13,12 @@ Group=noc-agent
 WorkingDirectory=/opt/noc-agent
 EnvironmentFile=/opt/noc-agent/.env
 Environment=PYTHONPATH=/opt/noc-agent
-ExecStart=/opt/noc-agent/.venv/bin/uvicorn app.main:app \
-    --host :: \
-    --port 8000 \
-    --workers 2 \
-    --log-level info \
-    --access-log
+ExecStart=/opt/noc-agent/.venv/bin/noc-agent-bot
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=noc-agent
+SyslogIdentifier=noc-agent-bot
 
 # Security hardening
 ProtectSystem=strict

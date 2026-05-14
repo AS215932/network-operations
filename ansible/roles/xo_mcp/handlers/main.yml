@@ -3,9 +3,9 @@
   systemd:
     daemon_reload: true
 
-- name: restart hyrule-mcp
+- name: restart xo-mcp
   systemd:
-    name: hyrule-mcp
+    name: xo-mcp
     state: restarted
     enabled: true
   ignore_errors: "{{ ansible_check_mode }}"
