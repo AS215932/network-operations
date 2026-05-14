@@ -10,9 +10,13 @@ Wants=network-online.target
 Type=simple
 User=root
 Group=root
-ExecStartPre=/bin/mkdir -p /run/noc-agent
-ExecStartPre=/bin/chgrp noc-agent /run/noc-agent
-ExecStartPre=/bin/chmod 0750 /run/noc-agent
+{# Recreate the consumer's volatile (/run) dirs on boot — tmpfs is wiped.
+   Persistent dirs (e.g. /etc/*) are handled by the role's file task. #}
+{% for d in vault_agent_extra_dirs if d.path.startswith('/run/') %}
+ExecStartPre=/bin/mkdir -p {{ d.path }}
+ExecStartPre=/bin/chgrp {{ d.group | default('root') }} {{ d.path }}
+ExecStartPre=/bin/chmod {{ d.mode | default('0750') }} {{ d.path }}
+{% endfor %}
 ExecStart=/usr/bin/vault agent -config={{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
