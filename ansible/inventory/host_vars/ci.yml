@@ -12,16 +12,10 @@ firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 
 # Monitoring — register on mon (new host, not in legacy infra-vms.conf).
+# The runner-health check lives in configs/mon/icinga2/services/github-runner.conf
+# (Prometheus query on node_systemd_unit_state) — no by_ssh trust plumbing needed.
 monitoring_register: true
 monitoring_role: ci
-monitoring_extra_services:
-  - name: github-runner-online
-    check_command: by_ssh
-    interval: 5m
-    retry: 1m
-    notes: "Runner service is active and connected to GitHub"
-    vars:
-      by_ssh_command: "systemctl is-active --quiet github-runner.service"
 
 # Logs — ship journald to log VM.
 logs_register: true
