@@ -1,0 +1,11 @@
+# Code owners for AS215932/network-operations.
+# GitHub auto-requests review from these owners on matching PRs. Pairs with
+# the branch-protection required-approval rule (docs/ci/workflows.md).
+
+*                       @AS215932/ops
+
+# Live router + firewall configs — the highest-blast-radius paths.
+/configs/rtr/           @AS215932/ops
+/configs/cr1-de1/       @AS215932/ops
+/configs/cr1-nl1/       @AS215932/ops
+/ansible/roles/firewall/ @AS215932/ops
