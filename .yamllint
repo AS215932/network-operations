@@ -1,0 +1,28 @@
+---
+# Permissive yamllint config — starts soft so existing repo passes.
+# Ratchet specific rules to "error" via follow-up issues as the codebase
+# converges.
+
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  document-start: disable
+  truthy:
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+
+ignore: |
+  ansible/generated/
+  autoinstall/generated/
