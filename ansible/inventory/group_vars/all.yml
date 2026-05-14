@@ -83,10 +83,13 @@ wg_ports:
   - 1340
 
 # --- SSH source set used by every host's input chain ---
-# Permits the ops workstation directly plus any client connected to the VPN.
+# Permits the ops workstation directly, any client connected to the VPN, and
+# the ci runner (apply.yml SSHes to the fleet for snapshots + --tags apply).
 ssh_allow_sources_v6:
   - "{{ ops_prefix_v6 }}"
   - "{{ vpn_clients_subnet }}"
+  - "{{ peers.ci.ipv6 }}/128"
+  - "{{ peers.noc.ipv6 }}/128"
 ssh_allow_sources_v4:
   - "{{ ops_prefix_v4 }}"
 

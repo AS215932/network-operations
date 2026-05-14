@@ -1,0 +1,28 @@
+---
+# Add id_ci.pub to authorized_keys on every host. The user the key is
+# authorized for is determined by ssh_users in group_vars/all.yml (root for
+# rtr/xoa, svag elsewhere). The key is restricted via from="..." to only
+# accept connections originating from ci's overlay address.
+
+- name: Read id_ci public key from controller
+  slurp:
+    src: "{{ ci_runner_key_pub_path }}"
+  register: ci_runner_key_pub
+  delegate_to: localhost
+  run_once: true
+  become: false
+  tags: [apply]
+
+- name: Determine target SSH user for this host
+  set_fact:
+    ci_runner_target_user: "{{ ssh_users[inventory_hostname] | default(ssh_users.default) }}"
+  tags: [apply]
+
+- name: Authorize id_ci for {{ ci_runner_target_user }} (restricted to ci's address)
+  authorized_key:
+    user: "{{ ci_runner_target_user }}"
+    key: "{{ ci_runner_key_pub.content | b64decode | trim }}"
+    key_options: 'from="{{ ci_runner_key_from_address }}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
+    state: present
+    comment: "ci runner on ci.as215932.net (managed by ansible/roles/ci_runner_key)"
+  tags: [apply]

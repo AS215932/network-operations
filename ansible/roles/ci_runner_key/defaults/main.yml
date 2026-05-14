@@ -1,0 +1,7 @@
+---
+# Path on the ansible controller to the public half of the ci-runner keypair.
+ci_runner_key_pub_path: "{{ ci_runner_key_path }}.pub"
+
+# Restricts the key so it only works when the connection comes from ci's
+# overlay address — a leaked key is useless from anywhere else.
+ci_runner_key_from_address: "{{ peers.ci.ipv6 }}"

@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: ci_runner_key
+  author: AS215932 ops
+  description: Distribute id_ci.pub to all AS215932 hosts (restricted to the ci VM source)
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+    - name: FreeBSD
+      versions: ["14", "15"]
+    - name: OpenBSD
+      versions: ["7"]
+dependencies: []

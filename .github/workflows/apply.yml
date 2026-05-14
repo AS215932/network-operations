@@ -61,6 +61,10 @@ jobs:
     timeout-minutes: 30
     env:
       ANSIBLE_FORCE_COLOR: "true"
+      # The runner SSHes to the infra fleet with its own key (placed +
+      # known_hosts-seeded by the github_runner role); overrides ansible.cfg's
+      # workstation default of ~/.ssh/id_servify.
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
     steps:
       - uses: actions/checkout@v4
 
