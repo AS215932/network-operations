@@ -27,11 +27,16 @@ fi
 host="$1"; port="$2"
 
 body="$(mktemp)"
-trap 'rm -f "$body"' EXIT
+err_log="$(mktemp)"
+trap 'rm -f "$body" "$err_log"' EXIT
 
+# Keep curl's stderr (TLS handshake, connection refused, timeout reason)
+# so the alert body has something actionable instead of a generic
+# "exit non-zero".
 code="$(curl -sS --max-time 10 -o "$body" -w '%{http_code}' \
-    "http://[$host]:$port/health/model" 2>/dev/null)" || {
-    echo "CRITICAL - /health/model unreachable from mon (curl exit non-zero)"
+    "http://[$host]:$port/health/model" 2>"$err_log")" || {
+    reason="$(tr '\n' ' ' < "$err_log" | sed 's/  */ /g')"
+    echo "CRITICAL - /health/model unreachable from mon: ${reason:-curl exit non-zero}"
     exit 2
 }
 
@@ -46,8 +51,10 @@ status=$(field '.status')
 quota=$(field '.quota_monitoring')
 primary=$(field '.primary_model')
 err=$(jq -r '.error // ""' "$body" 2>/dev/null || true)
-missing=$(jq -r '.missing | join(",") // ""' "$body" 2>/dev/null || true)
-[ "$missing" = "null" ] && missing=""
+# `(.missing // [])` short-circuits when .missing is null or absent, so
+# `join` always receives a list — avoids the jq error
+# `Cannot iterate over null` that `.missing | join(",")` raises.
+missing=$(jq -r '(.missing // []) | join(",")' "$body" 2>/dev/null || true)
 
 detail="primary=$primary status=$status quota=$quota"
 [ -n "$missing" ] && detail="$detail missing=$missing"
