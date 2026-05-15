@@ -5,6 +5,9 @@ pid_file = "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.pid"
 
 vault {
   address = "{{ vault_agent_vault_addr }}"
+{% if vault_agent_vault_tls_skip_verify | default(false) | bool %}
+  tls_skip_verify = true
+{% endif %}
 
   retry {
     num_retries = 12

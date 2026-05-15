@@ -166,6 +166,25 @@ scrape_configs:
       - target_label: __address__
         replacement: "[::1]:9115"
 
+  # Internal Vault probe — goes direct to [::c0]:8200, bypassing Caddy.
+  # Pair this with the public probe above to distinguish "Caddy down"
+  # (public fails, internal ok) from "Vault down" (both fail). Cert SAN
+  # doesn't cover the literal IPv6, so this uses http_2xx_skip_verify.
+  - job_name: blackbox-vault-internal
+    metrics_path: /probe
+    params:
+      module: [http_2xx_skip_verify]
+    static_configs:
+      - targets:
+          - "https://[2a0c:b641:b50:2::c0]:8200/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
   # --- Centralized logging pipeline (log VM at ::b0) ---
   # Vector exposes its own internal metrics on :8686 (parallel to node_exporter
   # on :9100, scraped via the node-infra job above). Loki exposes ingester /
