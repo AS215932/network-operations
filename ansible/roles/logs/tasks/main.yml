@@ -10,6 +10,7 @@
 #   logs_register: true     — host is in scope; skipped otherwise.
 #   logs_aggregator: true   — host is the central aggregator (Vector + Loki).
 #   logs_use_openbsd_syslogd: true — use native syslogd forward, no Vector.
+#   logs_use_freebsd_syslogd: true — same on FreeBSD core routers.
 
 - name: Skip hosts not opted in to logs role
   meta: end_host
@@ -33,11 +34,21 @@
     - not (logs_aggregator | bool)
   tags: [apply]
 
-- name: Apply — Vector agent (FreeBSD)
+- name: Apply — FreeBSD syslogd @@host TCP forward (preferred for routers)
+  include_tasks: freebsd_syslog.yml
+  when:
+    - logs_apply | bool
+    - ansible_os_family == "FreeBSD"
+    - logs_use_freebsd_syslogd | default(false) | bool
+    - not (logs_aggregator | bool)
+  tags: [apply]
+
+- name: Apply — Vector agent (FreeBSD, legacy fallback — vector pkg not in modern FreeBSD)
   include_tasks: vector_freebsd.yml
   when:
     - logs_apply | bool
     - ansible_os_family == "FreeBSD"
+    - not (logs_use_freebsd_syslogd | default(false) | bool)
     - not (logs_aggregator | bool)
   tags: [apply]
 

@@ -1,0 +1,14 @@
+---
+# FreeBSD `cr1-*` cores: native syslogd `@@host:port` TCP forward to the
+# Vector aggregator. No Vector binary, no Rust toolchain — modern FreeBSD
+# doesn't ship a `vector` package and we'd rather not maintain a port.
+
+- name: Render syslog.conf
+  template:
+    src: syslog.conf.freebsd.j2
+    dest: /etc/syslog.conf
+    owner: root
+    group: wheel
+    mode: "0644"
+  notify: reload syslogd freebsd
+  tags: [apply]

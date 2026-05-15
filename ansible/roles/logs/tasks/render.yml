@@ -31,7 +31,7 @@
   when: logs_aggregator | bool
   tags: [validate, diff, apply]
 
-- name: Render Vector agent config (every host except OpenBSD-syslogd-forwarders and the aggregator)
+- name: Render Vector agent config (every host except syslogd-forwarders and the aggregator)
   delegate_to: localhost
   become: false
   template:
@@ -41,6 +41,7 @@
   when:
     - not (logs_aggregator | bool)
     - not (logs_use_openbsd_syslogd | bool)
+    - not (logs_use_freebsd_syslogd | default(false) | bool)
   tags: [validate, diff, apply]
 
 - name: Render OpenBSD syslog.conf (mail only)
@@ -51,4 +52,14 @@
     dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/syslog.conf"
     mode: "0644"
   when: logs_use_openbsd_syslogd | bool
+  tags: [validate, diff, apply]
+
+- name: Render FreeBSD syslog.conf (cr1-* routers)
+  delegate_to: localhost
+  become: false
+  template:
+    src: syslog.conf.freebsd.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/syslog.conf"
+    mode: "0644"
+  when: logs_use_freebsd_syslogd | default(false) | bool
   tags: [validate, diff, apply]
