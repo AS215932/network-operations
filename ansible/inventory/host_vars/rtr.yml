@@ -60,10 +60,12 @@ monitoring_check_vars:
 monitoring_check_scripts:
   - check_jool_success_delta.sh
 
-# mon's nagios user pubkey, added to rtr's root authorized_keys for the
-# by_ssh checks. Set MONITORING_BY_SSH_PUBKEY in secrets.local.sh until
-# the icinga2 role lands a Vault-rendered pubkey distribution path.
-monitoring_by_ssh_user: root
+# mon's icinga2 by_ssh pubkey, authorized for the dedicated `monitoring`
+# user (created by the monitoring role). The role default is now
+# `monitoring` — no per-host override needed. Privileged checks (jool)
+# are wrapped in sudo, gated by the sudoers-monitoring drop. Set
+# MONITORING_BY_SSH_PUBKEY in secrets.local.sh until the icinga2 role
+# lands a Vault-rendered pubkey distribution path.
 monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
 
 # --- Logs --- (ships journald to log VM via Vector)

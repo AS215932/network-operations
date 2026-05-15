@@ -1,0 +1,54 @@
+---
+# Dedicated `monitoring` system user for icinga2 by_ssh checks.
+#
+# Replaces the older convention of authorizing root@<host> (rtr) and the
+# never-existed `nagios` user (cr1.*). Human SSH stays as svag, root,
+# etc. — those are untouched. This user has nologin shell and is only
+# reachable via the by_ssh pubkey provisioned below.
+#
+# Privileged checks (FRR vtysh, jool stats, etc.) get a sudoers/doas drop
+# scoped to /usr/local/lib/nagios/plugins/* so the trust surface stays
+# narrow.
+
+- name: Ensure dedicated monitoring user exists
+  user:
+    name: monitoring
+    system: yes
+    shell: "{{ monitoring_user_shell }}"
+    home: "{{ monitoring_user_home }}"
+    create_home: yes
+    comment: "icinga2 by_ssh remote user (managed by hyrule-infra)"
+  register: monitoring_user
+  tags: [apply]
+
+# Use the primary group the OS assigned to the monitoring user (looked up
+# from the `user` task's return value). Don't hardcode `group: monitoring`
+# — on some platforms `useradd -r` puts a system user in a shared system
+# group, and on FreeBSD `pw` may assign a different gid name.
+- name: Ensure monitoring user .ssh dir exists
+  file:
+    path: "{{ monitoring_user_home }}/.ssh"
+    state: directory
+    owner: monitoring
+    group: "{{ monitoring_user.group }}"
+    mode: "0700"
+  tags: [apply]
+
+- name: Authorize mon's icinga2 by_ssh pubkey for the monitoring user
+  authorized_key:
+    user: monitoring
+    key: "{{ monitoring_by_ssh_pubkey }}"
+    comment: "icinga2 by_ssh from mon"
+    state: present
+  tags: [apply]
+
+- name: Drop privilege-escalation rule for plugin scripts
+  template:
+    src: "{{ monitoring_user_privesc_template }}"
+    dest: "{{ monitoring_user_privesc_dest }}"
+    owner: root
+    group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
+    mode: "{{ monitoring_user_privesc_mode }}"
+    validate: "{{ '/usr/sbin/visudo -cf %s' if ansible_os_family != 'FreeBSD' else omit }}"
+  when: monitoring_user_privesc_template is defined
+  tags: [apply]

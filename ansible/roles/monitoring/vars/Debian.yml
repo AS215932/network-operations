@@ -2,3 +2,12 @@
 monitoring_pkg: prometheus-node-exporter
 monitoring_node_service: prometheus-node-exporter
 monitoring_node_env_path: /etc/default/prometheus-node-exporter
+
+# Dedicated by_ssh remote user. Created by the monitoring role when
+# monitoring_by_ssh_pubkey is set; the icinga2 daemon on mon logs in as
+# this user to run by_ssh checks. Per-OS shell path differs.
+monitoring_user_shell: /usr/sbin/nologin
+monitoring_user_home: /var/lib/monitoring
+monitoring_user_privesc_template: sudoers-monitoring.j2
+monitoring_user_privesc_dest: /etc/sudoers.d/monitoring
+monitoring_user_privesc_mode: "0440"

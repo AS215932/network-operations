@@ -28,6 +28,13 @@ firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
   - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }
 
+# mon's icinga2 by_ssh pubkey, authorized for the dedicated `monitoring`
+# user. Provisioned by the monitoring role on next apply; until then the
+# egress-* checks fail with "Host key verification failed" because no
+# user/known_hosts pairing exists. Set MONITORING_BY_SSH_PUBKEY in
+# secrets.local.sh.
+monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
+
 # --- Logs --- (issue #17: FreeBSD doesn't ship a vector pkg in modern
 # versions; ship via native syslogd @@host:6514 TCP forward instead.)
 logs_register: true

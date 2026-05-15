@@ -108,6 +108,28 @@ Rule shape:
 For pf-only constructs that don't fit the data model (e.g. `match all scrub`,
 new transit pass rules), use `firewall_extra_raw_pf:` (string) in host_vars.
 
+## Monitoring user — dedicated `monitoring` system account on every host
+
+The `monitoring` role provisions a dedicated `monitoring` system user
+(nologin shell, home under `/var/lib/monitoring` on Linux,
+`/var/db/monitoring` on FreeBSD) on any host where
+`monitoring_by_ssh_pubkey` is set. mon's icinga2 daemon SSHes in as this
+user for `by_ssh` checks; the pubkey is dropped into
+`~monitoring/.ssh/authorized_keys`. Human SSH (`svag`, `root`) is
+untouched.
+
+Privileged checks (FRR vtysh, jool stats) need root. A scoped
+sudoers (Linux) / doas (FreeBSD) drop allows `monitoring` to invoke
+exactly `/usr/local/lib/nagios/plugins/*` as root, nothing else. In
+Icinga, those `vars.by_ssh_command` strings prepend `sudo`. The new
+convention replaces the old per-host `monitoring_by_ssh_user: root`
+override on rtr (now removed) and the never-existed `nagios` user on
+cr1.*.
+
+The first connection from icinga2 to a new by_ssh target fails with
+*"Host key verification failed"* until mon's `~icinga2/.ssh/known_hosts`
+is populated; the role does this via `ssh-keyscan` delegated to mon.
+
 ## Memory ops should know about
 
 - [SSH user is heterogeneous](../../.claude/projects/-home-svag-Dev/memory/project_as215932_ssh_users.md): rtr/xoa accept root, others use svag.

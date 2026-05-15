@@ -1,0 +1,6 @@
+# {{ monitoring_user_privesc_dest }}
+# Managed by ansible/roles/monitoring. Scoped to the nagios-plugins dir
+# so icinga2 by_ssh checks that need root (FRR vtysh, jool stats, etc.)
+# can call exactly those scripts via `sudo` and nothing else.
+monitoring ALL=(root) NOPASSWD: /usr/local/lib/nagios/plugins/*
+Defaults!/usr/local/lib/nagios/plugins/* !requiretty
