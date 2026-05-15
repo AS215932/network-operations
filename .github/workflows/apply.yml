@@ -80,11 +80,16 @@ jobs:
             echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
           fi
 
+      # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
+      # user on every host (created + NOPASSWD-root by the ci_runner_key role)
+      # and escalates with sudo — never root, never the operator's svag. An
+      # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Pre-deploy Icinga snapshot
         working-directory: ansible
         run: |
           ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
             --tags snapshot \
+            -e ansible_user=ci \
             -e snapshot_phase=pre
 
       - name: Render-only (dry run)
@@ -103,6 +108,7 @@ jobs:
         run: |
           ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
             --tags apply \
+            -e ansible_user=ci \
             -e "${{ inputs.playbook }}_apply=true" \
             ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
 
@@ -112,6 +118,7 @@ jobs:
         run: |
           ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
             --tags snapshot \
+            -e ansible_user=ci \
             -e snapshot_phase=post
 
       - name: Capture snapshot diff

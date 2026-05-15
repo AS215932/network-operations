@@ -4,12 +4,14 @@
 #
 # Skipped silently if mon is unreachable or the script doesn't exist yet;
 # this keeps the firewall play usable before the icinga_master role lands.
+#
+# Connects as mon's inventory user (svag from the workstation, ci from the
+# runner) and escalates with sudo — never a hardcoded root login, which only
+# ever worked with the operator's broadly-authorized id_servify.
 
 - name: "{{ snapshot_phase | capitalize }}-deploy Icinga snapshot"
   delegate_to: mon
-  become: false
-  vars:
-    ansible_user: root
+  become: true
   shell: |
     if [ -x /usr/local/bin/icinga-snapshot ]; then
       /usr/local/bin/icinga-snapshot {{ snapshot_phase }} firewall-rollout
