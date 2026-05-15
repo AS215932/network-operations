@@ -30,10 +30,10 @@ scrape_configs:
       module: [http_2xx_v6]
     static_configs:
       - targets:
-          - 'https://servify.network/'
-          - 'https://www.servify.network/'
-          - 'https://api.servify.network/healthz'
-          - 'https://hyrule.servify.network/'
+          - 'https://hyrule.host/'
+          - 'https://www.hyrule.host/'
+          - 'https://cloud.hyrule.host/health'
+          - 'https://api.hyrule.host/health'
           - 'https://mon.servify.network/'
     relabel_configs:
       - source_labels: [__address__]
@@ -141,6 +141,102 @@ scrape_configs:
       - targets: ['54.38.14.218:53']
         labels:
           zone: 'servify.network'
+          nameserver: 'ns2-v4'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-hyrule_host-ns1'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_hyrule_host]
+    static_configs:
+      - targets: ['[2a0c:b641:b50:2::10]:53']
+        labels:
+          zone: 'hyrule.host'
+          nameserver: 'ns1'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-hyrule_host-ns2-v6'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_hyrule_host]
+    static_configs:
+      - targets: ['[2001:41d0:304:300::7bfb]:53']
+        labels:
+          zone: 'hyrule.host'
+          nameserver: 'ns2-v6'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-hyrule_host-ns2-v4'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_hyrule_host]
+    static_configs:
+      - targets: ['54.38.14.218:53']
+        labels:
+          zone: 'hyrule.host'
+          nameserver: 'ns2-v4'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-deploy_hyrule_host-ns1'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_deploy_hyrule_host]
+    static_configs:
+      - targets: ['[2a0c:b641:b50:2::10]:53']
+        labels:
+          zone: 'deploy.hyrule.host'
+          nameserver: 'ns1'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-deploy_hyrule_host-ns2-v6'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_deploy_hyrule_host]
+    static_configs:
+      - targets: ['[2001:41d0:304:300::7bfb]:53']
+        labels:
+          zone: 'deploy.hyrule.host'
+          nameserver: 'ns2-v6'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '127.0.0.1:9115'
+  - job_name: 'blackbox-dns-deploy_hyrule_host-ns2-v4'
+    metrics_path: /probe
+    params:
+      module: [dns_soa_deploy_hyrule_host]
+    static_configs:
+      - targets: ['54.38.14.218:53']
+        labels:
+          zone: 'deploy.hyrule.host'
           nameserver: 'ns2-v4'
     relabel_configs:
       - source_labels: [__address__]

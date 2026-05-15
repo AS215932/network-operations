@@ -6,8 +6,8 @@
 
 set -euo pipefail
 
-DOMAIN="${1:-servify.network}"
-API_DOMAIN="api.${DOMAIN}"
+DOMAIN="${1:-hyrule.host}"
+API_DOMAIN="cloud.${DOMAIN}"
 DEV_BYPASS="${2:-}"
 PASS=0
 FAIL=0
@@ -34,11 +34,11 @@ echo ""
 
 # --- DNS ---
 echo "--- DNS ---"
-check "servify.network AAAA record resolves" dig +short "$DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "api.servify.network AAAA record resolves" dig +short "$API_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "deploy.servify.network NS record exists" dig +short "deploy.$DOMAIN" NS | grep -q .
+check "$DOMAIN AAAA record resolves" dig +short "$DOMAIN" AAAA | grep -q "2a0c:b641:b5"
+check "$API_DOMAIN AAAA record resolves" dig +short "$API_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
+check "deploy.$DOMAIN NS record exists" dig +short "deploy.$DOMAIN" NS | grep -q .
 # Also check A records for dual-stack
-check "servify.network A record resolves (dual-stack)" dig +short "$DOMAIN" A | grep -q .
+check "$DOMAIN A record resolves (dual-stack)" dig +short "$DOMAIN" A | grep -q .
 
 # --- HTTPS (prefer IPv6) ---
 echo ""
@@ -64,8 +64,8 @@ check "Static assets load (htmx)" curl -6 -sf "https://$DOMAIN/static/htmx.min.j
 # --- Monitoring ---
 echo ""
 echo "--- Monitoring ---"
-check "grafana.servify.network returns 200 (IPv6)" curl -6 -sf "https://grafana.$DOMAIN/api/health" -o /dev/null
-check "mon.servify.network returns 200 (IPv6)" curl -6 -sf "https://mon.$DOMAIN/" -o /dev/null
+check "grafana.servify.network returns 200 (IPv6)" curl -6 -sf "https://grafana.servify.network/api/health" -o /dev/null
+check "mon.servify.network returns 200 (IPv6)" curl -6 -sf "https://mon.servify.network/" -o /dev/null
 check "Prometheus targets reachable" curl -6 -sf "http://[2a0c:b641:b50:2::50]:9090/api/v1/targets" -o /dev/null
 
 # --- VM Provisioning (requires dev bypass) ---

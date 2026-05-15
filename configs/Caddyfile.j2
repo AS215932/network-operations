@@ -13,8 +13,8 @@
     email {{ acme_email | default('admin@servify.network') }}
 }
 
-# API — api.servify.network
-api.servify.network {
+# API — cloud.hyrule.host (canonical) and api.hyrule.host (compatibility)
+cloud.hyrule.host, api.hyrule.host {
     tls {
         dns rfc2136 {
             server [2a0c:b641:b50:2::10]:53
@@ -46,11 +46,11 @@ api.servify.network {
     }
 }
 
-# Web frontend — servify.network (+ www redirect to apex).
+# Web frontend — hyrule.host (+ www redirect to apex).
 # Both subjects share one site block so the TLS/proxy/header config isn't
 # duplicated. Caddy issues per-subject certs (not a SAN). Matches the
 # as215932.net block below.
-servify.network, www.servify.network {
+hyrule.host, www.hyrule.host {
     tls {
         dns rfc2136 {
             server [2a0c:b641:b50:2::10]:53
@@ -61,8 +61,8 @@ servify.network, www.servify.network {
         propagation_delay 60s
     }
 
-    @www host www.servify.network
-    redir @www https://servify.network{uri} permanent
+    @www host www.hyrule.host
+    redir @www https://hyrule.host{uri} permanent
 
     reverse_proxy [2a0c:b641:b50:2::30]:8080 {
         transport http {
@@ -262,7 +262,7 @@ vault.as215932.net {
 }
 
 # Wildcard for customer VM subdomains (future — HTTPS proxy to VMs)
-# *.deploy.servify.network {
+# *.deploy.hyrule.host {
 #     tls {
 #         dns rfc2136 { ... }
 #     }

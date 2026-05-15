@@ -101,15 +101,16 @@ scrape_configs:
 
   # --- DNS auth checks: SOA queries against ns1 + ns2 for each managed zone. ---
 {% for zone in extmon_dns_zones %}
+{% set zone_name = zone.name if zone is mapping else zone %}
 {% for ns in extmon_dns_targets %}
-  - job_name: 'blackbox-dns-{{ zone | replace(".", "_") }}-{{ ns.name }}'
+  - job_name: 'blackbox-dns-{{ zone_name | replace(".", "_") }}-{{ ns.name }}'
     metrics_path: /probe
     params:
-      module: [dns_soa_{{ zone | replace('.', '_') }}]
+      module: [dns_soa_{{ zone_name | replace('.', '_') }}]
     static_configs:
       - targets: ['{{ ns.server }}']
         labels:
-          zone: '{{ zone }}'
+          zone: '{{ zone_name }}'
           nameserver: '{{ ns.name }}'
     relabel_configs:
       - source_labels: [__address__]

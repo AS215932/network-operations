@@ -67,15 +67,17 @@ modules:
         - send: "QUIT"
 
 {% for zone in extmon_dns_zones %}
-  dns_soa_{{ zone | replace('.', '_') }}:
+{% set zone_name = zone.name if zone is mapping else zone %}
+{% set expected_soa_mname = zone.expected_soa_mname | default('ns1.' ~ zone_name) %}
+  dns_soa_{{ zone_name | replace('.', '_') }}:
     prober: dns
     timeout: 5s
     dns:
       preferred_ip_protocol: ip6
       ip_protocol_fallback: true
-      query_name: {{ zone }}
+      query_name: {{ zone_name }}
       query_type: SOA
       validate_answer_rrs:
         fail_if_not_matches_regexp:
-          - ".*ns1\\.{{ zone }}\\..*"
+          - ".*{{ expected_soa_mname }}\\..*"
 {% endfor %}

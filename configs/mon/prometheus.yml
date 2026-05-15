@@ -153,8 +153,8 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-          - "https://servify.network/"
-          - "https://api.servify.network/health"
+          - "https://hyrule.host/"
+          - "https://cloud.hyrule.host/health"
           - "https://grafana.servify.network/api/health"
           - "https://mon.servify.network/"
           - "https://vault.as215932.net/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"

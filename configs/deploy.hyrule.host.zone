@@ -1,0 +1,16 @@
+; /var/lib/knot/zones/deploy.hyrule.host.zone
+; Deploy to: dns VM (2a0c:b641:b50:2::10)
+
+$ORIGIN deploy.hyrule.host.
+$TTL 300
+
+@       IN  SOA   ns1.servify.network. admin.servify.network. (
+                  2026051501 ; serial (YYYYMMDDNN)
+                  3600       ; refresh (1h)
+                  900        ; retry (15m)
+                  604800     ; expire (7d)
+                  300 )      ; negative TTL (5m)
+
+; Dynamic customer VM AAAA records are written here by hyrule-cloud via RFC 2136.
+@       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.

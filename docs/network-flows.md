@@ -95,7 +95,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| proxy | TCP | 8080 | servify.network landing page |
+| proxy | TCP | 8080 | hyrule.host landing page |
 | proxy | TCP | 8081 | as215932.net info site |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |

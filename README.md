@@ -26,6 +26,12 @@ AS215932 is a solo project to build and operate a full-stack ISP with modern BGP
 - RPKI ROA configured
 - IRR objects registered (RIPE Database)
 
+## Domain Policy
+
+- `hyrule.host` is customer-facing Hyrule Cloud/product identity: product site, public Hyrule Cloud API, and customer VM subdomains.
+- `servify.network` is infrastructure identity: nameservers, underlay/management references, provider relationships, internal UIs, and partner-facing hostnames.
+- `as215932.net` is AS215932 overlay/routing identity only. DNS records in this zone must point only at prefixes owned by AS215932.
+
 ### Internet Exchange Points
 
 *Active IXP presence at multiple locations - see [PeeringDB](https://www.peeringdb.com/asn/215932) for current list*
