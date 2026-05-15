@@ -170,6 +170,12 @@ scrape_configs:
   # Pair this with the public probe above to distinguish "Caddy down"
   # (public fails, internal ok) from "Vault down" (both fail). Cert SAN
   # doesn't cover the literal IPv6, so this uses http_2xx_skip_verify.
+  #
+  # The address below is the same value as `peers.vault.ipv6` in
+  # ansible/inventory/group_vars/all.yml; prometheus.yml is not
+  # Ansible-templated today (every scrape target here is a literal v6
+  # address — same convention as the surrounding node-* / blackbox jobs),
+  # so if Vault ever moves, update both locations together.
   - job_name: blackbox-vault-internal
     metrics_path: /probe
     params:
