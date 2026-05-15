@@ -18,14 +18,19 @@
     home: "{{ monitoring_user_home }}"
     create_home: yes
     comment: "icinga2 by_ssh remote user (managed by hyrule-infra)"
+  register: monitoring_user
   tags: [apply]
 
+# Use the primary group the OS assigned to the monitoring user (looked up
+# from the `user` task's return value). Don't hardcode `group: monitoring`
+# — on some platforms `useradd -r` puts a system user in a shared system
+# group, and on FreeBSD `pw` may assign a different gid name.
 - name: Ensure monitoring user .ssh dir exists
   file:
     path: "{{ monitoring_user_home }}/.ssh"
     state: directory
     owner: monitoring
-    group: monitoring
+    group: "{{ monitoring_user.group }}"
     mode: "0700"
   tags: [apply]
 

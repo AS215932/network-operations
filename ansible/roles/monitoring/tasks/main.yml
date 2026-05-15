@@ -39,17 +39,34 @@
 # Pre-populate mon's icinga2 known_hosts with the public host keys of every
 # by_ssh target. Without this, the first connection from icinga2 fails
 # strict host-key checking with "Host key verification failed" (issue
-# observed on cr1.nl1 / cr1.de1 — they had never been keyscanned). Runs
-# delegated to mon so the keyscan happens from mon's network position.
+# observed on cr1.nl1 / cr1.de1 — they had never been keyscanned). The
+# keyscan runs *on mon* (delegate_to + command, not lookup('pipe', ...)
+# which would execute on the controller) so the host keys reflect what
+# mon will actually see when it later opens the by_ssh connection.
+- name: Scan target host keys from mon
+  command: "ssh-keyscan -t ed25519,rsa -T 5 {{ ansible_host | default(inventory_hostname) }}"
+  delegate_to: "{{ monitoring_mon_host }}"
+  register: by_ssh_host_keyscan
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - monitoring_apply | default(false) | bool
+    - monitoring_by_ssh_pubkey is defined
+    - monitoring_by_ssh_pubkey | length > 0
+  tags: [apply]
+
 - name: Populate mon's icinga2 known_hosts for by_ssh
   known_hosts:
     path: "{{ monitoring_by_ssh_known_hosts_path }}"
     name: "{{ ansible_host | default(inventory_hostname) }}"
-    key: "{{ lookup('pipe', 'ssh-keyscan -t ed25519,rsa -T 5 ' ~ (ansible_host | default(inventory_hostname))) }}"
+    key: "{{ by_ssh_host_keyscan.stdout }}"
     state: present
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
+    - by_ssh_host_keyscan.stdout is defined
+    - by_ssh_host_keyscan.stdout | length > 0
   tags: [apply]
