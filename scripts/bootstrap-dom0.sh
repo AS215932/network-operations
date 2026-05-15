@@ -2,6 +2,11 @@
 # bootstrap-dom0.sh — Initial XCP-NG dom0 configuration
 # Run this on the XCP-NG host after fresh install via IPMI/KVM.
 #
+# This script is the FIRST-RUN bootstrap (no Ansible reach yet — dom0 needs
+# to be at a known address with a known SSH key first). After it completes,
+# convergence moves to ansible/roles/dom0 + ansible/playbooks/dom0.yml,
+# which is idempotent and can be re-run.
+#
 # Creates internal networks (bridges) and configures dom0 IPv6 on the
 # management network using AS215932 public space (2a0c:b641:b50::/44).
 # The default xenbr0 (bridged to physical NIC) is created by XCP-NG installer.

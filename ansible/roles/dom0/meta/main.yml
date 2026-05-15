@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: dom0
+  description: XCP-NG dom0 bring-up — internal networks + dom0 mgmt v6
+  author: AS215932 ops
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions:
+        - "7"   # XCP-NG 8.x is CentOS 7-derived
+dependencies: []

@@ -1,0 +1,95 @@
+---
+# dom0 role — XCP-NG hypervisor bring-up.
+# Translates scripts/bootstrap-dom0.sh into idempotent Ansible tasks.
+#
+# Out of scope (filed as follow-ups):
+#   - node_exporter installation on dom0 — needs the monitoring role to grow
+#     a RedHat / XCP-NG branch (issue #24 part 2).
+#   - Vector agent on dom0 — same constraint, needs logs role RedHat path.
+#   - OVH virtualMac drift check — separate small role.
+
+- name: Validate this is XCP-NG dom0
+  command: which xe
+  register: xe_present
+  changed_when: false
+  failed_when: xe_present.rc != 0
+  tags: [validate, apply]
+
+- name: Capture host UUID
+  command: xe host-list --minimal
+  register: dom0_host_uuid
+  changed_when: false
+  tags: [apply]
+
+- name: Set dom0 memory cap (effective on next reboot)
+  command: >-
+    /opt/xensource/libexec/xen-cmdline
+    --set-xen
+    dom0_mem={{ dom0_memory_mb }}M,max:{{ dom0_memory_mb }}M
+  register: dom0_mem_set
+  # xen-cmdline doesn't have a clean idempotency flag; treat as changed always
+  # but record the call. A reboot is needed to actually apply.
+  changed_when: true
+  when: dom0_apply | bool
+  tags: [apply]
+
+- name: Ensure internal Xen networks exist
+  shell: |
+    set -e
+    name="{{ item.name }}"
+    desc="{{ item.description }}"
+    existing=$(xe network-list name-label="$name" --minimal 2>/dev/null || true)
+    if [ -n "$existing" ]; then
+      echo "exists:$existing"
+      exit 0
+    fi
+    uuid=$(xe network-create name-label="$name" name-description="$desc")
+    echo "created:$uuid"
+  loop: "{{ dom0_networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: dom0_network_results
+  changed_when: "'created:' in dom0_network_results.stdout | default('')"
+  when: dom0_apply | bool
+  tags: [apply]
+
+- name: Resolve xenbr-mgmt bridge name
+  shell: |
+    net=$(xe network-list name-label=xenbr-mgmt --minimal)
+    xe network-param-get uuid="$net" param-name=bridge
+  register: dom0_mgmt_bridge
+  changed_when: false
+  when: dom0_apply | bool
+  tags: [apply]
+
+- name: Assign dom0 mgmt v6 (runtime)
+  shell: |
+    set -e
+    bridge="{{ dom0_mgmt_bridge.stdout }}"
+    addr="{{ dom0_mgmt_addr }}"
+    if ! ip -6 addr show "$bridge" 2>/dev/null | grep -q "${addr%/*}"; then
+      ip -6 addr add "$addr" dev "$bridge"
+      ip link set "$bridge" up
+      echo "applied"
+    else
+      echo "noop"
+    fi
+  register: dom0_mgmt_runtime
+  changed_when: dom0_mgmt_runtime.stdout == "applied"
+  when: dom0_apply | bool
+  tags: [apply]
+
+- name: Persist dom0 mgmt v6 across reboots (CentOS-style ifcfg)
+  copy:
+    dest: "/etc/sysconfig/network-scripts/ifcfg-{{ dom0_mgmt_bridge.stdout }}"
+    content: |
+      DEVICE={{ dom0_mgmt_bridge.stdout }}
+      BOOTPROTO=static
+      IPV6INIT=yes
+      IPV6ADDR={{ dom0_mgmt_addr }}
+      ONBOOT=yes
+    owner: root
+    group: root
+    mode: "0644"
+  when: dom0_apply | bool
+  tags: [apply]

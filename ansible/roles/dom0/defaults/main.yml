@@ -1,0 +1,20 @@
+---
+dom0_apply: false
+
+# Internal Xen networks managed by this role. The default xenbr0 (bridged
+# to the physical NIC) is created by the XCP-NG installer and not touched.
+dom0_networks:
+  - name: xenbr-mgmt
+    description: "Management (2a0c:b641:b50:0::/64) — XO, dom0"
+  - name: xenbr-transit
+    description: "Transit (2a0c:b641:b50:1::/64) — fw <-> rtr"
+  - name: xenbr-infra
+    description: "Infrastructure (2a0c:b641:b50:2::/64) — api, web, dns, etc."
+  - name: xenbr-vm
+    description: "Customer VMs (2a0c:b641:b51::/48) — tenant VMs"
+
+# dom0's own management address on xenbr-mgmt.
+dom0_mgmt_addr: "2a0c:b641:b50::1/64"
+
+# dom0 memory cap (XCP-NG's xen-cmdline). Requires reboot to take effect.
+dom0_memory_mb: 4096

@@ -1,0 +1,16 @@
+---
+# dom0 — XCP-NG hypervisor on the OVH RISE-S server.
+# Underlay-only; not on AS215932 overlay. Reached via mgmt v4 from xoa
+# and via the public IPv4 (193.70.32.138) from outside.
+#
+# This role only manages dom0's internal Xen networks + mgmt v6 today.
+# node_exporter / Vector / Icinga registration on dom0 require the
+# monitoring + logs roles to grow a RedHat / XCP-NG branch — filed as
+# follow-up to issue #24.
+#
+# ansible_python_interpreter is XCP-NG-shipped: /usr/bin/python (CentOS 7
+# vintage) or /usr/libexec/platform-python depending on minor version.
+ansible_python_interpreter: /usr/bin/python
+
+# No firewall, monitoring, or logs role registration here yet — see role
+# defaults dom0_apply: false.
