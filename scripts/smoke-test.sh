@@ -6,8 +6,12 @@
 
 set -euo pipefail
 
-DOMAIN="${1:-hyrule.host}"
-API_DOMAIN="cloud.${DOMAIN}"
+CUSTOMER_DOMAIN="${1:-hyrule.host}"
+CUSTOMER_API_DOMAIN="cloud.${CUSTOMER_DOMAIN}"
+CUSTOMER_DEPLOY_DOMAIN="deploy.${CUSTOMER_DOMAIN}"
+INFRA_DOMAIN="servify.network"
+GRAFANA_DOMAIN="grafana.${INFRA_DOMAIN}"
+MON_DOMAIN="mon.${INFRA_DOMAIN}"
 DEV_BYPASS="${2:-}"
 PASS=0
 FAIL=0
@@ -28,44 +32,47 @@ check() {
 }
 
 echo "=== Hyrule Cloud Smoke Tests ==="
-echo "Domain: $DOMAIN"
-echo "API:    $API_DOMAIN"
+echo "Customer domain: $CUSTOMER_DOMAIN"
+echo "Customer API:    $CUSTOMER_API_DOMAIN"
+echo "Infra domain:    $INFRA_DOMAIN"
 echo ""
 
 # --- DNS ---
 echo "--- DNS ---"
-check "$DOMAIN AAAA record resolves" dig +short "$DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "$API_DOMAIN AAAA record resolves" dig +short "$API_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "deploy.$DOMAIN NS record exists" dig +short "deploy.$DOMAIN" NS | grep -q .
+check "$CUSTOMER_DOMAIN AAAA record resolves" dig +short "$CUSTOMER_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
+check "$CUSTOMER_API_DOMAIN AAAA record resolves" dig +short "$CUSTOMER_API_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
+check "$CUSTOMER_DEPLOY_DOMAIN NS record exists" dig +short "$CUSTOMER_DEPLOY_DOMAIN" NS | grep -q .
 # Also check A records for dual-stack
-check "$DOMAIN A record resolves (dual-stack)" dig +short "$DOMAIN" A | grep -q .
+check "$CUSTOMER_DOMAIN A record resolves (dual-stack)" dig +short "$CUSTOMER_DOMAIN" A | grep -q .
 
 # --- HTTPS (prefer IPv6) ---
 echo ""
 echo "--- HTTPS ---"
-check "https://$DOMAIN returns 200 (IPv6)" curl -6 -sf "https://$DOMAIN/" -o /dev/null
-check "https://$API_DOMAIN/health returns 200 (IPv6)" curl -6 -sf "https://$API_DOMAIN/health" -o /dev/null
-check "https://$DOMAIN returns 200 (IPv4 fallback)" curl -4 -sf "https://$DOMAIN/" -o /dev/null
+check "https://$CUSTOMER_DOMAIN returns 200 (IPv6)" curl -6 -sf "https://$CUSTOMER_DOMAIN/" -o /dev/null
+check "https://$CUSTOMER_API_DOMAIN/health returns 200 (IPv6)" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/health" -o /dev/null
+check "https://$CUSTOMER_DOMAIN returns 200 (IPv4 fallback)" curl -4 -sf "https://$CUSTOMER_DOMAIN/" -o /dev/null
 
 # --- API Endpoints ---
 echo ""
 echo "--- API Endpoints ---"
-check "GET /v1/pricing returns JSON" curl -6 -sf "https://$API_DOMAIN/v1/pricing" | python3 -m json.tool
-check "GET /v1/os/list returns JSON" curl -6 -sf "https://$API_DOMAIN/v1/os/list" | python3 -m json.tool
-check "x402 manifest at /.well-known/x402.json" curl -6 -sf "https://$API_DOMAIN/.well-known/x402.json" | python3 -m json.tool
+check "GET /v1/pricing returns JSON" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/pricing" | python3 -m json.tool
+check "GET /v1/os/list returns JSON" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/os/list" | python3 -m json.tool
+check "x402 manifest at /.well-known/x402.json" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/.well-known/x402.json" | python3 -m json.tool
 
 # --- Web Frontend ---
 echo ""
 echo "--- Web Frontend ---"
-check "Homepage contains Hyrule" curl -6 -sf "https://$DOMAIN/" | grep -qi "hyrule"
-check "API proxy works (/api/v1/pricing)" curl -6 -sf "https://$DOMAIN/api/v1/pricing" | python3 -m json.tool
-check "Static assets load (htmx)" curl -6 -sf "https://$DOMAIN/static/htmx.min.js" -o /dev/null
+check "Homepage contains Hyrule" curl -6 -sf "https://$CUSTOMER_DOMAIN/" | grep -qi "hyrule"
+check "API proxy works (/api/v1/pricing)" curl -6 -sf "https://$CUSTOMER_DOMAIN/api/v1/pricing" | python3 -m json.tool
+check "Static assets load (htmx)" curl -6 -sf "https://$CUSTOMER_DOMAIN/static/htmx.min.js" -o /dev/null
 
 # --- Monitoring ---
 echo ""
 echo "--- Monitoring ---"
-check "grafana.servify.network returns 200 (IPv6)" curl -6 -sf "https://grafana.servify.network/api/health" -o /dev/null
-check "mon.servify.network returns 200 (IPv6)" curl -6 -sf "https://mon.servify.network/" -o /dev/null
+# Monitoring UIs remain under the infrastructure domain by policy; the
+# customer-domain argument above intentionally does not alter these checks.
+check "$GRAFANA_DOMAIN returns 200 (IPv6)" curl -6 -sf "https://$GRAFANA_DOMAIN/api/health" -o /dev/null
+check "$MON_DOMAIN returns 200 (IPv6)" curl -6 -sf "https://$MON_DOMAIN/" -o /dev/null
 check "Prometheus targets reachable" curl -6 -sf "http://[2a0c:b641:b50:2::50]:9090/api/v1/targets" -o /dev/null
 
 # --- VM Provisioning (requires dev bypass) ---
@@ -73,7 +80,7 @@ if [ -n "$DEV_BYPASS" ]; then
     echo ""
     echo "--- VM Provisioning ---"
 
-    CREATE_RESP=$(curl -6 -sf -X POST "https://$API_DOMAIN/v1/vm/create" \
+    CREATE_RESP=$(curl -6 -sf -X POST "https://$CUSTOMER_API_DOMAIN/v1/vm/create" \
         -H "Content-Type: application/json" \
         -H "X-DEV-BYPASS: $DEV_BYPASS" \
         -d '{
@@ -93,7 +100,7 @@ if [ -n "$DEV_BYPASS" ]; then
             # Poll for ready status (max 120s)
             echo "  Waiting for VM to become ready (max 120s)..."
             for i in $(seq 1 24); do
-                STATUS=$(curl -6 -sf "https://$API_DOMAIN/v1/vm/$VM_ID" | \
+                STATUS=$(curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" | \
                     python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || true)
                 if [ "$STATUS" = "ready" ]; then
                     break
@@ -106,14 +113,14 @@ if [ -n "$DEV_BYPASS" ]; then
                 ((PASS++))
 
                 # Check DNS AAAA record
-                HOSTNAME=$(curl -6 -sf "https://$API_DOMAIN/v1/vm/$VM_ID" | \
+                HOSTNAME=$(curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" | \
                     python3 -c "import sys,json; print(json.load(sys.stdin).get('hostname',''))" 2>/dev/null || true)
                 if [ -n "$HOSTNAME" ]; then
                     check "DNS AAAA record for $HOSTNAME" dig +short "$HOSTNAME" AAAA | grep -q "2a0c:b641:b5"
                 fi
 
                 # Check IPv6 is from our prefix
-                VM_IP=$(curl -6 -sf "https://$API_DOMAIN/v1/vm/$VM_ID" | \
+                VM_IP=$(curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" | \
                     python3 -c "import sys,json; print(json.load(sys.stdin).get('ipv6',''))" 2>/dev/null || true)
                 if [ -n "$VM_IP" ]; then
                     check "VM IPv6 is in AS215932 space" echo "$VM_IP" | grep -q "2a0c:b641:b5"
@@ -125,7 +132,7 @@ if [ -n "$DEV_BYPASS" ]; then
 
             # Cleanup
             echo "  Cleaning up test VM..."
-            curl -6 -sf -X DELETE "https://$API_DOMAIN/v1/vm/$VM_ID" \
+            curl -6 -sf -X DELETE "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" \
                 -H "X-DEV-BYPASS: $DEV_BYPASS" >/dev/null 2>&1 || true
             green "Test VM cleanup requested"
             ((PASS++))
