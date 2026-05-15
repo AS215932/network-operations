@@ -5,3 +5,9 @@ ci_runner_key_pub_path: "{{ ci_runner_key_path }}.pub"
 # Restricts the key so it only works when the connection comes from ci's
 # overlay address — a leaked key is useless from anywhere else.
 ci_runner_key_from_address: "{{ peers.ci.ipv6 }}"
+
+# Dedicated deploy user the ci runner connects as — never root, never the
+# operator's svag. Gets NOPASSWD root (sudo on Linux, doas on BSD) so
+# apply.yml's playbooks can escalate. apply.yml passes -e ansible_user=ci.
+ci_runner_user: ci
+ci_runner_user_shell: /bin/bash

@@ -1,8 +1,9 @@
 ---
-# Add id_ci.pub to authorized_keys on every host. The user the key is
-# authorized for is determined by ssh_users in group_vars/all.yml (root for
-# rtr/xoa, svag elsewhere). The key is restricted via from="..." to only
-# accept connections originating from ci's overlay address.
+# Set up CI runner SSH access on this host: a dedicated `ci` deploy user with
+# NOPASSWD root, and id_ci.pub authorized for it — from="<ci-ipv6>"-restricted
+# so a leaked key is useless from anywhere else. apply.yml connects as this
+# user (-e ansible_user=ci) and escalates with sudo/doas; it never logs in as
+# root or as the operator's svag.
 
 - name: Read id_ci public key from controller
   slurp:
@@ -13,16 +14,57 @@
   become: false
   tags: [apply]
 
-- name: Determine target SSH user for this host
-  set_fact:
-    ci_runner_target_user: "{{ ssh_users[inventory_hostname] | default(ssh_users.default) }}"
+- name: Ensure the ci deploy user exists
+  user:
+    name: "{{ ci_runner_user }}"
+    shell: "{{ ci_runner_user_shell }}"
+    create_home: true
+    state: present
   tags: [apply]
 
-- name: Authorize id_ci for {{ ci_runner_target_user }} (restricted to ci's address)
+- name: Authorize id_ci for the ci deploy user (restricted to ci's address)
   authorized_key:
-    user: "{{ ci_runner_target_user }}"
+    user: "{{ ci_runner_user }}"
     key: "{{ ci_runner_key_pub.content | b64decode | trim }}"
     key_options: 'from="{{ ci_runner_key_from_address }}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding'
     state: present
     comment: "ci runner on ci.as215932.net (managed by ansible/roles/ci_runner_key)"
+  tags: [apply]
+
+- name: Grant the ci deploy user NOPASSWD sudo (Linux)
+  copy:
+    dest: /etc/sudoers.d/ci-runner
+    content: "{{ ci_runner_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: ansible_os_family not in ["FreeBSD", "OpenBSD"]
+  tags: [apply]
+
+- name: Grant the ci deploy user NOPASSWD doas (BSD)
+  lineinfile:
+    path: "{{ '/usr/local/etc/doas.conf' if ansible_os_family == 'FreeBSD' else '/etc/doas.conf' }}"
+    line: "permit nopass {{ ci_runner_user }} as root"
+    create: true
+    owner: root
+    group: wheel
+    mode: "0644"
+    validate: "doas -C %s"
+  when: ansible_os_family in ["FreeBSD", "OpenBSD"]
+  tags: [apply]
+
+# PR #62 authorized id_ci for the host's normal SSH user (svag/root via
+# ssh_users) before the dedicated user existed — drop that stale entry.
+- name: Determine the legacy SSH user id_ci was previously authorized for
+  set_fact:
+    ci_runner_legacy_user: "{{ ssh_users[inventory_hostname] | default(ssh_users.default) }}"
+  tags: [apply]
+
+- name: Remove id_ci from the legacy user's authorized_keys
+  authorized_key:
+    user: "{{ ci_runner_legacy_user }}"
+    key: "{{ ci_runner_key_pub.content | b64decode | trim }}"
+    state: absent
+  when: ci_runner_legacy_user != ci_runner_user
   tags: [apply]
