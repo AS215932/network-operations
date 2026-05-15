@@ -11,7 +11,19 @@ vault_agent_token_sink: "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.token"
 vault_agent_template_dir: "{{ vault_agent_config_dir }}/templates"
 vault_agent_env_destination: /opt/noc-agent/.env
 vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt
+# Backward-compat alias: callers that set vault_agent_reload_command still work —
+# both per-template commands fall back to it. New callers should set the
+# per-template variant directly.
 vault_agent_reload_command: /bin/systemctl try-restart noc-agent.service
+# Env-template reload runs whenever Vault re-renders /opt/noc-agent/.env.
+# Defaults to vault_agent_reload_command for backward compat.
+vault_agent_env_reload_command: "{{ vault_agent_reload_command }}"
+# JWT-template reload runs whenever Vault re-renders the WIF subject token.
+# Defaults to /bin/true because Google's identity_pool.Credentials re-reads
+# the source credential file on every STS exchange — no consumer restart needed.
+# Issue #26: prior to this default, vault-agent restarted noc-agent every
+# ~4-5 min on JWT renewal (TTL 45 min, renew at 10% remaining).
+vault_agent_jwt_reload_command: /bin/true
 vault_agent_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
 vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
 
@@ -26,12 +38,13 @@ vault_agent_templates:
     name: noc-agent.env.ctmpl
     destination: "{{ vault_agent_env_destination }}"
     group: noc-agent
-    reload_command: "{{ vault_agent_reload_command }}"
+    reload_command: "{{ vault_agent_env_reload_command }}"
   - src: google-subject.jwt.ctmpl.j2
     name: google-subject.jwt.ctmpl
     destination: "{{ vault_agent_google_subject_token_destination }}"
     group: noc-agent
-    reload_command: "{{ vault_agent_reload_command }}"
+    # /bin/true by default — JWT re-renders must not bounce the consumer (#26).
+    reload_command: "{{ vault_agent_jwt_reload_command }}"
 
 # Extra directories the consumer needs created beyond the Vault Agent
 # config/run/template dirs. Default = noc-agent's runtime dirs.
