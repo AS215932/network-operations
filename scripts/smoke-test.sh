@@ -24,10 +24,22 @@ check() {
     shift
     if "$@" >/dev/null 2>&1; then
         green "$desc"
-        ((PASS++))
+        ((PASS += 1))
     else
         red "$desc"
-        ((FAIL++))
+        ((FAIL += 1))
+    fi
+}
+
+check_shell() {
+    local desc="$1"
+    shift
+    if bash -o pipefail -c "$*" >/dev/null 2>&1; then
+        green "$desc"
+        ((PASS += 1))
+    else
+        red "$desc"
+        ((FAIL += 1))
     fi
 }
 
@@ -39,11 +51,11 @@ echo ""
 
 # --- DNS ---
 echo "--- DNS ---"
-check "$CUSTOMER_DOMAIN AAAA record resolves" dig +short "$CUSTOMER_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "$CUSTOMER_API_DOMAIN AAAA record resolves" dig +short "$CUSTOMER_API_DOMAIN" AAAA | grep -q "2a0c:b641:b5"
-check "$CUSTOMER_DEPLOY_DOMAIN NS record exists" dig +short "$CUSTOMER_DEPLOY_DOMAIN" NS | grep -q .
+check_shell "$CUSTOMER_DOMAIN AAAA record resolves" "dig +short '$CUSTOMER_DOMAIN' AAAA | grep -q '2a0c:b641:b5'"
+check_shell "$CUSTOMER_API_DOMAIN AAAA record resolves" "dig +short '$CUSTOMER_API_DOMAIN' AAAA | grep -q '2a0c:b641:b5'"
+check_shell "$CUSTOMER_DEPLOY_DOMAIN NS record exists" "dig +short '$CUSTOMER_DEPLOY_DOMAIN' NS | grep -q ."
 # Also check A records for dual-stack
-check "$CUSTOMER_DOMAIN A record resolves (dual-stack)" dig +short "$CUSTOMER_DOMAIN" A | grep -q .
+check_shell "$CUSTOMER_DOMAIN A record resolves (dual-stack)" "dig +short '$CUSTOMER_DOMAIN' A | grep -q ."
 
 # --- HTTPS (prefer IPv6) ---
 echo ""
@@ -55,15 +67,15 @@ check "https://$CUSTOMER_DOMAIN returns 200 (IPv4 fallback)" curl -4 -sf "https:
 # --- API Endpoints ---
 echo ""
 echo "--- API Endpoints ---"
-check "GET /v1/pricing returns JSON" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/pricing" | python3 -m json.tool
-check "GET /v1/os/list returns JSON" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/os/list" | python3 -m json.tool
-check "x402 manifest at /.well-known/x402.json" curl -6 -sf "https://$CUSTOMER_API_DOMAIN/.well-known/x402.json" | python3 -m json.tool
+check_shell "GET /v1/pricing returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/pricing' | python3 -m json.tool"
+check_shell "GET /v1/os/list returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/os/list' | python3 -m json.tool"
+check_shell "x402 manifest at /.well-known/x402.json" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -m json.tool"
 
 # --- Web Frontend ---
 echo ""
 echo "--- Web Frontend ---"
-check "Homepage contains Hyrule" curl -6 -sf "https://$CUSTOMER_DOMAIN/" | grep -qi "hyrule"
-check "API proxy works (/api/v1/pricing)" curl -6 -sf "https://$CUSTOMER_DOMAIN/api/v1/pricing" | python3 -m json.tool
+check_shell "Homepage contains Hyrule" "curl -6 -sf 'https://$CUSTOMER_DOMAIN/' | grep -i 'hyrule' >/dev/null"
+check_shell "API proxy works (/api/v1/pricing)" "curl -6 -sf 'https://$CUSTOMER_DOMAIN/api/v1/pricing' | python3 -m json.tool"
 check "Static assets load (htmx)" curl -6 -sf "https://$CUSTOMER_DOMAIN/static/htmx.min.js" -o /dev/null
 
 # --- Monitoring ---
@@ -92,10 +104,10 @@ if [ -n "$DEV_BYPASS" ]; then
         }' 2>/dev/null || echo "FAILED")
 
     if echo "$CREATE_RESP" | python3 -m json.tool >/dev/null 2>&1; then
-        VM_ID=$(echo "$CREATE_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
+        VM_ID=$(echo "$CREATE_RESP" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data.get('vm_id') or data.get('id',''))" 2>/dev/null || true)
         if [ -n "$VM_ID" ]; then
             green "VM creation accepted (id: $VM_ID)"
-            ((PASS++))
+            ((PASS += 1))
 
             # Poll for ready status (max 120s)
             echo "  Waiting for VM to become ready (max 120s)..."
@@ -110,24 +122,24 @@ if [ -n "$DEV_BYPASS" ]; then
 
             if [ "$STATUS" = "ready" ]; then
                 green "VM reached ready status"
-                ((PASS++))
+                ((PASS += 1))
 
                 # Check DNS AAAA record
                 HOSTNAME=$(curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" | \
                     python3 -c "import sys,json; print(json.load(sys.stdin).get('hostname',''))" 2>/dev/null || true)
                 if [ -n "$HOSTNAME" ]; then
-                    check "DNS AAAA record for $HOSTNAME" dig +short "$HOSTNAME" AAAA | grep -q "2a0c:b641:b5"
+                    check_shell "DNS AAAA record for $HOSTNAME" "dig +short '$HOSTNAME' AAAA | grep -q '2a0c:b641:b5'"
                 fi
 
                 # Check IPv6 is from our prefix
                 VM_IP=$(curl -6 -sf "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" | \
                     python3 -c "import sys,json; print(json.load(sys.stdin).get('ipv6',''))" 2>/dev/null || true)
                 if [ -n "$VM_IP" ]; then
-                    check "VM IPv6 is in AS215932 space" echo "$VM_IP" | grep -q "2a0c:b641:b5"
+                    check_shell "VM IPv6 is in AS215932 space" "echo '$VM_IP' | grep -q '2a0c:b641:b5'"
                 fi
             else
                 red "VM did not reach ready status (current: $STATUS)"
-                ((FAIL++))
+                ((FAIL += 1))
             fi
 
             # Cleanup
@@ -135,14 +147,14 @@ if [ -n "$DEV_BYPASS" ]; then
             curl -6 -sf -X DELETE "https://$CUSTOMER_API_DOMAIN/v1/vm/$VM_ID" \
                 -H "X-DEV-BYPASS: $DEV_BYPASS" >/dev/null 2>&1 || true
             green "Test VM cleanup requested"
-            ((PASS++))
+            ((PASS += 1))
         else
             red "VM creation returned no ID"
-            ((FAIL++))
+            ((FAIL += 1))
         fi
     else
         red "VM creation failed: $CREATE_RESP"
-        ((FAIL++))
+        ((FAIL += 1))
     fi
 else
     echo ""
