@@ -9,7 +9,11 @@
 #   ansible-playbook playbooks/monitoring.yml --tags apply -e '{"monitoring_apply":true}'
 
 - name: Monitoring — apply
-  hosts: linux:openbsd
+  # Include FreeBSD so the cr1.* core routers pick up the monitoring role
+  # (node_exporter via pkg, dedicated `monitoring` by_ssh user from #69).
+  # `linux:openbsd` alone silently no-ops on cr1.* (hosts: pattern doesn't
+  # match → "skipping: no hosts matched"), which masked the missing user.
+  hosts: linux:openbsd:freebsd
   serial: 1
   gather_facts: false
   become: true
