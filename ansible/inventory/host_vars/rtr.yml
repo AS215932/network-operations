@@ -54,6 +54,18 @@ monitoring_check_vars:
   prom_instance_frr: "[{{ peers.rtr.ipv6 }}]:9342"
   site: "ovh1"
 
+# Per-host by_ssh check scripts (issue #20). Deployed to
+# /usr/local/lib/nagios/plugins/ — mon's icinga2 by_ssh services reference them
+# at that absolute path. See configs/mon/icinga2/services/rtr-checks.conf.
+monitoring_check_scripts:
+  - check_jool_success_delta.sh
+
+# mon's nagios user pubkey, added to rtr's root authorized_keys for the
+# by_ssh checks. Set MONITORING_BY_SSH_PUBKEY in secrets.local.sh until
+# the icinga2 role lands a Vault-rendered pubkey distribution path.
+monitoring_by_ssh_user: root
+monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: router

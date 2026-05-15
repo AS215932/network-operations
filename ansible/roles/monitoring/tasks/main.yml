@@ -14,3 +14,27 @@
   include_tasks: register.yml
   when: monitoring_register | bool
   tags: [validate, diff, apply]
+
+# Per-host by_ssh check scripts installed under /usr/local/lib/nagios/plugins/.
+# Only hosts that opt in via `monitoring_check_scripts` get them. The
+# CheckCommand on mon references the absolute path.
+- name: Install monitoring check scripts on host
+  include_tasks: check_scripts.yml
+  when:
+    - monitoring_apply | default(false) | bool
+    - monitoring_check_scripts | default([]) | length > 0
+  tags: [apply]
+
+# mon's nagios user needs a key in authorized_keys on hosts that get
+# by_ssh services. Gated to keep the trust surface narrow.
+- name: Authorize mon's nagios SSH key for by_ssh checks
+  authorized_key:
+    user: "{{ monitoring_by_ssh_user | default('root') }}"
+    key: "{{ monitoring_by_ssh_pubkey }}"
+    comment: "icinga2 by_ssh from mon"
+    state: present
+  when:
+    - monitoring_apply | default(false) | bool
+    - monitoring_by_ssh_pubkey is defined
+    - monitoring_by_ssh_pubkey | length > 0
+  tags: [apply]
