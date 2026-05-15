@@ -15,34 +15,28 @@
 #   ansible-playbook playbooks/icinga2.yml --tags apply \
 #       -e '{"icinga2_apply":true}' --limit mon
 
-- name: icinga2 — pre-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+- name: icinga2 — render + apply
+  hosts: mon
+  gather_facts: true
+  become: true
+  pre_tasks:
     - name: Pre-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: pre
-  tags: [snapshot, always]
-
-- name: icinga2 — render + apply
-  hosts: mon
-  gather_facts: true
-  become: true
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - icinga2
-  tags: [icinga2]
-
-- name: icinga2 — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+  post_tasks:
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: post
-  tags: [snapshot, always]
+      run_once: true
+      tags: [snapshot, always]
+  tags: [icinga2]

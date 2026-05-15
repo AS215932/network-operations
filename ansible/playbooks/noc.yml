@@ -21,23 +21,29 @@
 #   set -a; source ../secrets.local.sh; set +a
 #   ansible-playbook playbooks/noc.yml --tags apply -e '{"noc_apply":true}' --limit noc
 
-- name: noc — pre-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+- name: noc — apply hyrule-mcp + noc-agent
+  hosts: noc
+  serial: 1
+  gather_facts: true
+  become: true
+  pre_tasks:
     - name: Pre-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: pre
-  tags: [snapshot, always]
-
-- name: noc — apply hyrule-mcp + noc-agent
-  hosts: noc
-  serial: 1
-  gather_facts: true
-  become: true
+      run_once: true
+      tags: [snapshot, always]
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
   vars:
     gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') }}"
     noc_discord_webhook: "{{ lookup('env', 'NOC_DISCORD_WEBHOOK') }}"
@@ -72,15 +78,3 @@
           /bin/systemctl restart noc-agent-bot.service
       when: noc_agent_secret_backend == 'vault'
   tags: [noc]
-
-- name: noc — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-  tags: [snapshot, always]

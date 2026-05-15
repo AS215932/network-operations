@@ -8,35 +8,29 @@
 # Apply: source ../secrets.local.sh first.
 #   ansible-playbook playbooks/monitoring.yml --tags apply -e '{"monitoring_apply":true}'
 
-- name: Monitoring — pre-deploy snapshot
-  hosts: localhost
+- name: Monitoring — apply
+  hosts: linux:openbsd
+  serial: 1
   gather_facts: false
-  tasks:
+  become: true
+  pre_tasks:
     - name: Pre-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: pre
-  tags: [snapshot, always]
-
-- name: Monitoring — apply
-  hosts: linux:openbsd
-  serial: 1
-  gather_facts: false
-  become: true
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - monitoring
-  tags: [monitoring]
-
-- name: Monitoring — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
+  post_tasks:
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall
         tasks_from: snapshot
       vars:
         snapshot_phase: post
-  tags: [snapshot, always]
+      run_once: true
+      tags: [snapshot, always]
+  tags: [monitoring]
