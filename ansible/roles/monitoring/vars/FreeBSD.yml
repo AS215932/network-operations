@@ -2,3 +2,10 @@
 monitoring_pkg: node_exporter
 monitoring_node_service: node_exporter
 monitoring_node_env_path: /etc/rc.conf.d/node_exporter
+
+# Dedicated by_ssh remote user (FreeBSD variant). doas, not sudo.
+monitoring_user_shell: /usr/sbin/nologin
+monitoring_user_home: /var/db/monitoring
+monitoring_user_privesc_template: doas-monitoring.conf.j2
+monitoring_user_privesc_dest: /usr/local/etc/doas.d/monitoring.conf
+monitoring_user_privesc_mode: "0440"

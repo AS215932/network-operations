@@ -25,14 +25,29 @@
     - monitoring_check_scripts | default([]) | length > 0
   tags: [apply]
 
-# mon's nagios user needs a key in authorized_keys on hosts that get
-# by_ssh services. Gated to keep the trust surface narrow.
-- name: Authorize mon's nagios SSH key for by_ssh checks
-  authorized_key:
-    user: "{{ monitoring_by_ssh_user | default('root') }}"
-    key: "{{ monitoring_by_ssh_pubkey }}"
-    comment: "icinga2 by_ssh from mon"
+# Provision the dedicated `monitoring` system user on hosts that get
+# by_ssh services, install mon's icinga2 pubkey, and drop the per-OS
+# privesc rule. Gated to keep the trust surface narrow.
+- name: Provision by_ssh remote user (monitoring)
+  include_tasks: by_ssh_user.yml
+  when:
+    - monitoring_apply | default(false) | bool
+    - monitoring_by_ssh_pubkey is defined
+    - monitoring_by_ssh_pubkey | length > 0
+  tags: [apply]
+
+# Pre-populate mon's icinga2 known_hosts with the public host keys of every
+# by_ssh target. Without this, the first connection from icinga2 fails
+# strict host-key checking with "Host key verification failed" (issue
+# observed on cr1.nl1 / cr1.de1 — they had never been keyscanned). Runs
+# delegated to mon so the keyscan happens from mon's network position.
+- name: Populate mon's icinga2 known_hosts for by_ssh
+  known_hosts:
+    path: "{{ monitoring_by_ssh_known_hosts_path }}"
+    name: "{{ ansible_host | default(inventory_hostname) }}"
+    key: "{{ lookup('pipe', 'ssh-keyscan -t ed25519,rsa -T 5 ' ~ (ansible_host | default(inventory_hostname))) }}"
     state: present
+  delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
     - monitoring_by_ssh_pubkey is defined

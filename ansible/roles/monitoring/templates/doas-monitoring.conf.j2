@@ -1,0 +1,9 @@
+# {{ monitoring_user_privesc_dest }}
+# Managed by ansible/roles/monitoring. Scoped to the nagios-plugins dir
+# so icinga2 by_ssh checks that need root can call exactly those scripts
+# via `doas` and nothing else.
+#
+# doas requires an explicit cmd path; wildcards in cmd are not supported,
+# so each privileged plugin must be enumerated here. The current cr1.*
+# egress check (plain ping6) does not need root and is not listed.
+permit nopass monitoring as root cmd /usr/local/lib/nagios/plugins/check_jool_success_delta.sh

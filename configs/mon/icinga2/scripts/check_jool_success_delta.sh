@@ -7,8 +7,9 @@
 # overlay traffic is reaching it" — that's how the cr1-de1 NDP outage
 # would have shown up if we'd had this check during it.
 #
-# State stored under /var/lib/icinga2/jool-success-prev. Owned by the
-# nagios user (the by_ssh login).
+# State stored under /var/lib/icinga2/jool-success-prev. Invoked via sudo
+# from the `monitoring` by_ssh user (jool stats need root); state file
+# is written as root.
 #
 # Exit codes:
 #   0 OK

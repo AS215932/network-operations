@@ -32,3 +32,9 @@ monitoring_disks:
 # on mon. Required keys: name, check_command. Optional: vars (dict), interval, retry, notes.
 # Hostname and address derive automatically from the host being registered.
 monitoring_extra_services: []
+
+# by_ssh known_hosts target on mon. Debian's icinga2 package runs as the
+# `nagios` user but stores SSH state under /var/lib/icinga2; the daemon's
+# HOME is set to this directory. Override per-inventory if the package
+# changes layout.
+monitoring_by_ssh_known_hosts_path: /var/lib/icinga2/.ssh/known_hosts
