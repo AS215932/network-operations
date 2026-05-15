@@ -75,7 +75,29 @@ modules:
       query_type: SOA
       validate_answer_rrs:
         fail_if_not_matches_regexp:
-          - ".*ns1\\.servify.network\\..*"
+          - ".*ns1.servify.network\\..*"
+  dns_soa_hyrule_host:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: true
+      query_name: hyrule.host
+      query_type: SOA
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - ".*ns1.servify.network\\..*"
+  dns_soa_deploy_hyrule_host:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: true
+      query_name: deploy.hyrule.host
+      query_type: SOA
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - ".*ns1.servify.network\\..*"
   dns_soa_as215932_net:
     prober: dns
     timeout: 5s
@@ -86,4 +108,4 @@ modules:
       query_type: SOA
       validate_answer_rrs:
         fail_if_not_matches_regexp:
-          - ".*ns1\\.as215932.net\\..*"
+          - ".*ns1.servify.network\\..*"

@@ -317,8 +317,8 @@ Rolling back is the same pattern with a git ref:
 35. Create proxy VM via XO CloudConfig: 1 vCPU, 1GB, 10GB, infra network, `::40`
 36. Install Caddy (built with `xcaddy --with github.com/caddy-dns/rfc2136`)
 37. Deploy Caddyfile:
-    - `servify.network` → `http://[2a0c:b641:b50:2::30]:8080` (web)
-    - `api.servify.network` → `http://[2a0c:b641:b50:2::20]:8402` (api)
+    - `hyrule.host` → `http://[2a0c:b641:b50:2::30]:8080` (web)
+    - `cloud.hyrule.host` → `http://[2a0c:b641:b50:2::20]:8402` (api)
     - DNS-01 ACME via RFC 2136 against Knot DNS (`::10`)
 38. Deploy systemd unit, start service
 
@@ -356,8 +356,9 @@ firewall/NAT design instead. Use `2a0c:b641:b50:2::1` as the VM resolver;
 `dns`/`ns1` is authoritative-only.
 
 The dedicated OVH failover IPv4 for mail is `51.91.236.215`; its PTR is
-configured in OVH as `mail.as215932.net`. The DNS A record and SPF `ip4:`
-mechanism live in `configs/as215932.net.zone`.
+configured in OVH as `mail.as215932.net`. The DNS AAAA record and SPF `ip6:`
+mechanism live in `configs/as215932.net.zone`; `as215932.net` records must not
+point at addresses outside AS215932-owned prefixes.
 
 Render and review:
 
@@ -395,7 +396,7 @@ BGP policy: `TRANSIT-IN` (as-path filter), `TRANSIT-OUT` (prefix-list). iBGP pee
 ### Phase 10: Smoke Test
 
 ```bash
-./scripts/smoke-test.sh servify.network <dev-bypass-secret>
+./scripts/smoke-test.sh hyrule.host <dev-bypass-secret>
 ```
 
 ## Key Notes

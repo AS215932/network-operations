@@ -1,7 +1,7 @@
 ---
-# dns — Knot authoritative DNS (primary "ns1") for as215932.net, servify.network,
-# and reverse zones. Reachable from public internet (via DNAT on rtr for v4 +
-# direct on v6).
+# dns — Knot authoritative DNS (primary "ns1") for customer, infrastructure,
+# AS215932, and reverse zones. Reachable from public internet (via DNAT on rtr
+# for v4 + direct on v6).
 
 # --- Knot role ---
 knot_role: primary

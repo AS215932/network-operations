@@ -34,7 +34,7 @@ reaches Discord directly via outbound TLS — no inbound exposure required.
 
 Configured in [`roles/extmon/defaults/main.yml`](../ansible/roles/extmon/defaults/main.yml):
 
-- `extmon_http_targets` — public HTTPS endpoints (servify.network, api,
+- `extmon_http_targets` — public HTTPS endpoints (hyrule.host, cloud,
   hyrule, mon).
 - `extmon_icmp_v4_targets` — failover IPs that *must* be reachable from the
   open internet (`46.105.40.223`, `51.91.236.215`, `54.38.14.218`).

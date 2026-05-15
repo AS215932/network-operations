@@ -12,7 +12,10 @@ This repo contains live router configs, service templates, provisioning scripts,
 - **Prefix**: `2a0c:b641:b50::/44`
 - **Internal networking is IPv6-only** — no RFC1918. All VMs use public AS215932 addresses.
 - IPv4 exists only on dom0's WAN bridge (OVH-provided /32).
-- Domain: `servify.network` (public services), `as215932.net` (infrastructure names), `deploy.servify.network` (dynamic VM records)
+- Domain policy:
+  `AGENTS.md` is canonical. Keep customer-facing Hyrule Cloud identity under
+  `hyrule.host`, infrastructure identity under `servify.network`, and AS215932
+  overlay/routing identity under `as215932.net`.
 
 ## Architecture
 

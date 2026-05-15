@@ -1,0 +1,32 @@
+; /var/lib/knot/zones/hyrule.host.zone
+; Deploy to: dns VM (2a0c:b641:b50:2::10)
+
+$ORIGIN hyrule.host.
+$TTL 3600
+
+@       IN  SOA   ns1.servify.network. admin.servify.network. (
+                  2026051501 ; serial (YYYYMMDDNN)
+                  3600       ; refresh (1h)
+                  900        ; retry (15m)
+                  604800     ; expire (7d)
+                  300 )      ; negative TTL (5m)
+
+; Nameservers are infrastructure identity, intentionally under servify.network.
+@       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.
+
+; Hyrule Cloud customer-facing product site via Caddy on proxy.
+@       IN  A     46.105.40.223
+@       IN  AAAA  2a0c:b641:b50:2::40
+www     IN  A     46.105.40.223
+www     IN  AAAA  2a0c:b641:b50:2::40
+
+; Hyrule Cloud API via Caddy on proxy. cloud is canonical; api is compatibility.
+cloud   IN  A     46.105.40.223
+cloud   IN  AAAA  2a0c:b641:b50:2::40
+api     IN  A     46.105.40.223
+api     IN  AAAA  2a0c:b641:b50:2::40
+
+; Delegate customer VM records to the deploy.hyrule.host zone served by Knot.
+deploy  IN  NS    ns1.servify.network.
+deploy  IN  NS    ns2.servify.network.

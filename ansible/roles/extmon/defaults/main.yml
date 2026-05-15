@@ -24,10 +24,10 @@ extmon_alert_repeat_interval: 1h
 
 # Public HTTPS endpoints — full TLS handshake + 2xx/3xx response.
 extmon_http_targets:
-  - https://servify.network/
-  - https://www.servify.network/
-  - https://api.servify.network/healthz
-  - https://hyrule.servify.network/
+  - https://hyrule.host/
+  - https://www.hyrule.host/
+  - https://cloud.hyrule.host/health
+  - https://api.hyrule.host/health
   - https://mon.servify.network/
 
 # Pure ICMP-v4. Failover IPs that must be reachable from the open internet.
@@ -61,8 +61,14 @@ extmon_dns_targets:
     name: ns2-v4
 
 extmon_dns_zones:
-  - servify.network
-  - as215932.net
+  - name: servify.network
+    expected_soa_mname: ns1.servify.network
+  - name: hyrule.host
+    expected_soa_mname: ns1.servify.network
+  - name: deploy.hyrule.host
+    expected_soa_mname: ns1.servify.network
+  - name: as215932.net
+    expected_soa_mname: ns1.servify.network
 
 # --- OVH expiry collector (C/L0b) ---
 extmon_ovh_collector_interval: "*-*-* *:0/15:00"   # every 15 minutes

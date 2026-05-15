@@ -26,6 +26,13 @@ AS215932 is a solo project to build and operate a full-stack ISP with modern BGP
 - RPKI ROA configured
 - IRR objects registered (RIPE Database)
 
+## Domain Policy
+
+`AGENTS.md` is the canonical domain-policy reference for this repo. In short:
+`hyrule.host` is customer-facing Hyrule Cloud identity, `servify.network` is
+infrastructure identity, and `as215932.net` is AS215932 overlay/routing identity
+only.
+
 ### Internet Exchange Points
 
 *Active IXP presence at multiple locations - see [PeeringDB](https://www.peeringdb.com/asn/215932) for current list*
