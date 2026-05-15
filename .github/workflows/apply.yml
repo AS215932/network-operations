@@ -153,11 +153,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Post diff to workflow summary
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.diff.outputs.diff != '' }}
         run: cat /tmp/diff.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Post diff as PR comment
-        if: ${{ !inputs.dry_run && inputs.pr_number != '' }}
+        if: ${{ !inputs.dry_run && inputs.pr_number != '' && steps.diff.outputs.diff != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
