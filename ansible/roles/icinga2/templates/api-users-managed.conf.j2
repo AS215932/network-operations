@@ -1,0 +1,19 @@
+// /etc/icinga2/conf.d/api-users-managed.conf — managed by ansible (roles/icinga2)
+//
+// Additive ApiUser definitions. The original /etc/icinga2/conf.d/api-users.conf
+// (containing the default `root` ApiUser from `icinga2 api setup`) is left
+// untouched. This file only adds scoped users that hyrule-infra owns end-to-end.
+//
+// Per issue #15: hyrule-mcp on `noc` must NOT authenticate as `root`
+// (permissions = ["*"]) once HYRULE_MCP_ENABLE_ACTIONS=1 flips. The
+// `noc-agent` ApiUser below carries exactly the permissions the MCP tools
+// actually need.
+
+object ApiUser "noc-agent" {
+  password = "{{ icinga2_noc_agent_api_password }}"
+  permissions = [
+    "actions/acknowledge-problem",
+    "objects/query/Host",
+    "objects/query/Service",
+  ]
+}
