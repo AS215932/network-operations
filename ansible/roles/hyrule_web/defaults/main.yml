@@ -1,0 +1,43 @@
+---
+# hyrule-web — FastAPI/Jinja2 frontend deployed on the web VM at :8080,
+# fronted by Caddy on proxy. Code lives in AS215932/hyrule-web on GitHub.
+#
+# Apply: ansible-playbook playbooks/web.yml --tags apply \
+#          -e hyrule_web_apply=true -e hyrule_web_version=<sha>
+# Validate (no-op): ansible-playbook playbooks/web.yml --tags validate \
+#          --connection=local --limit web --skip-tags=snapshot
+
+hyrule_web_apply: false
+
+# User/group must match the systemd unit (configs/hyrule-web.service):
+# both are literally `hyrule` (not `hyrule-web`). Service runs ProtectSystem=
+# strict + ReadWritePaths=/opt/hyrule-web, so the install dir must be writable
+# by this user.
+hyrule_web_app_user: hyrule
+hyrule_web_app_group: hyrule
+
+hyrule_web_install_dir: /opt/hyrule-web
+hyrule_web_etc_dir: /etc/hyrule-web
+hyrule_web_state_dir: /var/lib/hyrule-web
+
+# The role uses the per-app deploy-key SSH alias (see ssh_config.j2) instead
+# of github.com directly, so the key in IdentityFile is unambiguous.
+hyrule_web_repo: git@github-hyrule-web:AS215932/hyrule-web.git
+# Override per-deploy via -e hyrule_web_version=<sha>. The deploy.yml workflow
+# passes ${{ github.sha }} so production deploys are SHA-pinned; rollback is
+# the same flag with an older SHA.
+hyrule_web_version: main
+
+hyrule_web_deploy_key_path: "{{ hyrule_web_state_dir }}/.ssh/id_hyrule_web"
+
+hyrule_web_service_name: hyrule-web
+hyrule_web_listen_url: http://127.0.0.1:8080/
+
+# Base apt packages on the target. uv is installed separately via the
+# upstream script (same idiom as hyrule_mcp).
+hyrule_web_packages:
+  - python3
+  - python3-venv
+  - git
+  - ca-certificates
+  - curl

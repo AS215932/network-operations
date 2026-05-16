@@ -1,0 +1,31 @@
+---
+# Flush handlers so the systemd-active assert and the HTTP probe see the
+# *post-restart* state, not the pre-restart state. Without flush_handlers,
+# Ansible runs handlers at end-of-play and these checks would race the restart.
+
+- name: Flush handlers before health check
+  ansible.builtin.meta: flush_handlers
+
+- name: Check hyrule-web systemd state
+  ansible.builtin.systemd:
+    name: "{{ hyrule_web_service_name }}"
+  register: hyrule_web_service
+
+- name: Assert hyrule-web service is active
+  ansible.builtin.assert:
+    that:
+      - hyrule_web_service.status.ActiveState == "active"
+    fail_msg: >-
+      hyrule-web.service is {{ hyrule_web_service.status.ActiveState }};
+      expected "active". Check journalctl -u hyrule-web on the target.
+
+- name: HTTP health check (local loopback)
+  ansible.builtin.uri:
+    url: "{{ hyrule_web_listen_url }}"
+    status_code: 200
+    return_content: false
+    timeout: 5
+  register: hyrule_web_http
+  retries: 5
+  delay: 2
+  until: hyrule_web_http.status == 200

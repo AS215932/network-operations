@@ -1,0 +1,12 @@
+---
+# Validate always runs (cheap assertions; safe with --connection=local).
+# Apply is gated on hyrule_web_apply=true so default playbook invocations
+# never mutate the live web service.
+- name: Validate hyrule_web inputs and reusable configs
+  ansible.builtin.import_tasks: validate.yml
+  tags: [validate, always]
+
+- name: Apply hyrule_web role
+  ansible.builtin.import_tasks: apply.yml
+  when: hyrule_web_apply | bool
+  tags: [apply]

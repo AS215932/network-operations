@@ -1,0 +1,48 @@
+---
+# hyrule-web — apply the hyrule_web role on the web VM.
+#
+# Validate (no live changes; runs from controller):
+#   ansible-playbook playbooks/web.yml --tags validate \
+#     --connection=local --limit web --skip-tags=snapshot
+#
+# Apply (live deploy):
+#   ansible-playbook playbooks/web.yml --tags apply \
+#     -e hyrule_web_apply=true \
+#     -e hyrule_web_version=<sha-or-ref> \
+#     --limit web
+#
+# The deploy.yml workflow in AS215932/hyrule-web invokes the apply variant
+# with hyrule_web_version=${{ github.sha }} so production deploys are pinned
+# to the exact commit that passed CI.
+
+- name: hyrule-web — apply
+  hosts: web
+  serial: 1
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - role: hyrule_web
+      tags: [hyrule_web]
+  post_tasks:
+    # Flush handlers so the post-snapshot reflects the new service state.
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [hyrule_web]

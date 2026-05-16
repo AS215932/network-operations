@@ -1,0 +1,39 @@
+---
+# Assertions that run on every invocation. Cheap, controller-local where
+# possible, and they make `--tags validate` a real safety net rather than
+# a no-op rubber stamp.
+
+- name: Assert hyrule_web_version is set to a non-empty ref
+  ansible.builtin.assert:
+    that:
+      - hyrule_web_version is defined
+      - hyrule_web_version | length > 0
+    fail_msg: >-
+      hyrule_web_version must be set to a branch, tag, or commit SHA.
+      The deploy workflow normally passes the triggering commit SHA;
+      for local runs pass -e hyrule_web_version=main (or a SHA for rollback).
+
+- name: Stat reusable configs on the controller (hyrule-web.service)
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../../configs/hyrule-web.service"
+  register: hyrule_web_service_file
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Stat reusable configs on the controller (hyrule-web.env.j2)
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../../configs/hyrule-web.env.j2"
+  register: hyrule_web_env_template
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Assert reusable configs are present
+  ansible.builtin.assert:
+    that:
+      - hyrule_web_service_file.stat.exists
+      - hyrule_web_env_template.stat.exists
+    fail_msg: >-
+      configs/hyrule-web.{service,env.j2} must exist in the hyrule-infra repo;
+      the role refuses to apply without them.

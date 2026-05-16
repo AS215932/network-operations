@@ -1,0 +1,59 @@
+---
+# Prereqs: base packages, uv, user/group, directories. Pattern matches
+# ansible/roles/hyrule_mcp/tasks/main.yml so a future operator can read either
+# role and recognise the shape.
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ hyrule_web_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install uv (Python package manager)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+
+- name: Ensure hyrule group exists
+  ansible.builtin.group:
+    name: "{{ hyrule_web_app_group }}"
+    system: true
+
+# home= aligns with hyrule_web_state_dir so the deploy key lives at a path the
+# role's other tasks reference directly via hyrule_web_deploy_key_path.
+- name: Ensure hyrule user exists
+  ansible.builtin.user:
+    name: "{{ hyrule_web_app_user }}"
+    group: "{{ hyrule_web_app_group }}"
+    home: "{{ hyrule_web_state_dir }}"
+    shell: /bin/bash
+    system: true
+    create_home: true
+
+- name: Ensure runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_web_app_user) }}"
+    group: "{{ item.group | default(hyrule_web_app_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_web_install_dir }}", mode: "0755" }
+    - { path: "{{ hyrule_web_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_web_state_dir }}", mode: "0750" }
+    - { path: "{{ hyrule_web_state_dir }}/.ssh", mode: "0700" }
+
+- name: Bootstrap per-app deploy key and SSH config
+  ansible.builtin.import_tasks: bootstrap_key.yml
+
+- name: Checkout hyrule-web at the requested ref
+  ansible.builtin.import_tasks: checkout.yml
+
+- name: Sync runtime (uv, env, systemd unit)
+  ansible.builtin.import_tasks: runtime.yml
+
+- name: Post-deploy health check
+  ansible.builtin.import_tasks: health.yml

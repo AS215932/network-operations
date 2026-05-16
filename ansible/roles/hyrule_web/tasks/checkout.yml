@@ -1,0 +1,16 @@
+---
+# Clone (first run) or fetch + checkout (subsequent) at the requested ref.
+# version: accepts a branch, tag, or SHA — the deploy.yml workflow passes
+# ${{ github.sha }} so production deploys are pinned to a specific commit.
+
+- name: Checkout hyrule-web at the requested ref
+  ansible.builtin.git:
+    repo: "{{ hyrule_web_repo }}"
+    dest: "{{ hyrule_web_install_dir }}"
+    version: "{{ hyrule_web_version }}"
+    update: true
+    force: true
+    accept_hostkey: false
+  become: true
+  become_user: "{{ hyrule_web_app_user }}"
+  notify: restart hyrule-web
