@@ -11,17 +11,72 @@
       - git
       - ca-certificates
       - curl
-      - redis-server
+      - gpg
     state: present
     update_cache: true
     cache_valid_time: 3600
   tags: [apply]
 
-- name: Ensure Redis checkpoint store is enabled
-  systemd:
+- name: Install Redis apt signing key
+  shell: >-
+    curl -fsSL {{ noc_agent_redis_repo_key_url }} |
+    gpg --dearmor -o {{ noc_agent_redis_repo_keyring }}
+  args:
+    creates: "{{ noc_agent_redis_repo_keyring }}"
+  tags: [apply]
+
+- name: Ensure Redis apt signing key is readable
+  file:
+    path: "{{ noc_agent_redis_repo_keyring }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [apply]
+
+- name: Add Redis apt repository
+  apt_repository:
+    repo: "deb [signed-by={{ noc_agent_redis_repo_keyring }}] {{ noc_agent_redis_repo_url }} {{ noc_agent_redis_repo_suite }} main"
+    filename: redis
+    state: present
+    update_cache: true
+  tags: [apply]
+
+- name: Remove broken Redis Stack package
+  apt:
+    name: redis-stack-server
+    state: absent
+    purge: true
+    autoremove: true
+  tags: [apply]
+
+- name: Install Redis 8 server
+  apt:
     name: redis-server
+    state: present
+  tags: [apply]
+
+- name: Keep Redis 8 bound to localhost
+  lineinfile:
+    path: "/etc/redis/redis.conf"
+    regexp: '^#?\s*bind\s+'
+    line: "bind 127.0.0.1 ::1"
+  notify: restart redis-server
+  tags: [apply]
+
+- name: Keep Redis 8 protected mode enabled
+  lineinfile:
+    path: "/etc/redis/redis.conf"
+    regexp: '^#?\s*protected-mode\s+'
+    line: "protected-mode yes"
+  notify: restart redis-server
+  tags: [apply]
+
+- name: Ensure Redis 8 service is started
+  systemd:
+    name: "redis-server"
     state: started
     enabled: true
+    daemon_reload: true
   tags: [apply]
 
 - name: Check if Node.js is already installed

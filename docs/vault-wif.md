@@ -7,6 +7,7 @@ This is the v1 secret architecture for the NOC Agent:
 - Vault issues a short-lived OIDC identity token at `identity/oidc/token/google-wif-noc-agent`.
 - Google Workload Identity Federation exchanges that token for a short-lived Google access token.
 - `GOOGLE_APPLICATION_CREDENTIALS=/etc/noc-agent/google-wif.json` makes the standard Google client libraries use ADC without a static service-account key.
+- Infra-side Vault Agent traffic uses the internal plain-HTTP Vault listener on the vault VM's internal port 8200; the public `vault.as215932.net` route remains for external operators and CI.
 
 ## One-time rollout
 

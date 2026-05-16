@@ -1,11 +1,10 @@
 ---
 vault_agent_name: noc-agent
-# Direct internal IPv6 so the secrets plane survives a Caddy/proxy outage.
-# The public hostname stays for external consumers (CI, ops workstation);
-# infra-side renewals run over the AS215932 /64, where MITM requires
-# already being inside the subnet — tls_skip_verify is acceptable.
-vault_agent_vault_addr: "https://[{{ peers.vault.ipv6 }}]:8200"
-vault_agent_vault_tls_skip_verify: true
+# Direct internal IPv6 over the plain-HTTP Vault listener. The public hostname
+# stays for external consumers (CI, ops workstation); infra-side renewals bypass
+# Caddy so a proxy outage does not break the secrets plane.
+vault_agent_vault_addr: "http://[{{ peers.vault.ipv6 }}]:8200"
+vault_agent_vault_tls_skip_verify: false
 vault_agent_config_dir: "/etc/vault-agent.d"
 vault_agent_run_dir: "/run/vault-agent"
 vault_agent_role_id: ""

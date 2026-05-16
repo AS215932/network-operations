@@ -68,9 +68,9 @@
       vars:
         vault_agent_name: noc-agent
         # vault_agent_vault_addr inherits the role default
-        # (https://[{{ peers.vault.ipv6 }}]:8200 + tls_skip_verify) so noc's
-        # secrets plane survives a Caddy/proxy outage. The public
-        # vault.as215932.net Caddy route stays intact for external consumers.
+        # (http://[{{ peers.vault.ipv6 }}]:8200) so noc's secrets plane
+        # survives a Caddy/proxy outage. The public vault.as215932.net route
+        # stays intact for external consumers.
         vault_agent_role_id: "{{ lookup('env', 'VAULT_NOC_AGENT_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
