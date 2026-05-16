@@ -4,10 +4,20 @@
 
 github_runner_apply: false
 
-# Repo this runner attaches to. The runner registers against this repo's
-# /actions/runners API surface.
+# Scope: 'org' registers the runner against the AS215932 org so any allowed
+# repo can use it (controlled by github_runner_group). 'repo' registers against
+# a single repo's /actions/runners API surface — the legacy mode.
+github_runner_scope: org
+
+# Org and (optional) repo name. When scope=org, github_runner_repo is unused
+# for registration but kept for the fail-fast help text.
 github_runner_owner: AS215932
 github_runner_repo: network-operations
+
+# Runner group on the org. Restrict allowed repos in the org settings UI
+# (Settings → Actions → Runner groups → <name> → Repository access).
+# Ignored when scope=repo.
+github_runner_group_name: hyrule-ci
 
 # Pinned runner version. Bump deliberately; mismatches with the GHA control
 # plane cause silent registration failures. Must be recent enough that the
@@ -24,16 +34,20 @@ github_runner_group: runner
 github_runner_home: /var/lib/github-runner
 github_runner_install_dir: "{{ github_runner_home }}/runner"
 
-# Labels the workflows match against. The 'hyrule-infra' label scopes runs to
-# this runner so other repos in the org cannot squat the pool.
+# Labels the workflows match against. With scope=org these are shared across
+# every repo in the runner group; pick a generic namespace (`hyrule`) and let
+# repo isolation come from the runner group ACL, not labels.
 github_runner_labels:
   - self-hosted
   - linux
   - "{{ github_runner_arch }}"
-  - hyrule-infra
+  - hyrule
 github_runner_name: "{{ inventory_hostname }}-runner"
 
-# Registration token must be passed in at first apply via -e or env var:
+# Registration token must be passed in at first apply via -e or env var.
+# For scope=org:
+#   gh api -X POST /orgs/{owner}/actions/runners/registration-token --jq .token
+# For scope=repo:
 #   gh api -X POST /repos/{owner}/{repo}/actions/runners/registration-token --jq .token
 # After the runner is registered the .runner / .credentials files persist
 # across reboots, so this is only needed once.

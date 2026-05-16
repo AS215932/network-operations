@@ -1,9 +1,19 @@
 ---
 # Self-hosted GitHub Actions runner for AS215932 CI.
-# First-apply needs a registration token (1 hour TTL):
+# First-apply needs a registration token (1 hour TTL). With github_runner_scope=org
+# (default), the runner registers against the AS215932 org and any repo in the
+# `github_runner_group_name` runner group can use it; with scope=repo it
+# registers against owner/repo as before.
+#
+# Org-scope token:
+#   export GH_RUNNER_TOKEN=$(gh api -X POST \
+#     /orgs/{{ github_runner_owner }}/actions/runners/registration-token \
+#     --jq .token)
+# Repo-scope token:
 #   export GH_RUNNER_TOKEN=$(gh api -X POST \
 #     /repos/{{ github_runner_owner }}/{{ github_runner_repo }}/actions/runners/registration-token \
 #     --jq .token)
+#
 #   ansible-playbook playbooks/ci.yml --tags apply \
 #     -e github_runner_apply=true \
 #     -e github_runner_registration_token="$GH_RUNNER_TOKEN"
@@ -137,22 +147,27 @@
   fail:
     msg: |
       github_runner_registration_token is empty and the runner is not yet registered.
+      {% if github_runner_scope == 'org' %}
+      Run: gh api -X POST /orgs/{{ github_runner_owner }}/actions/runners/registration-token --jq .token
+      {% else %}
       Run: gh api -X POST /repos/{{ github_runner_owner }}/{{ github_runner_repo }}/actions/runners/registration-token --jq .token
+      {% endif %}
       Then re-apply with -e github_runner_registration_token=<token>.
   when:
     - not github_runner_registered.stat.exists
     - github_runner_registration_token | length == 0
   tags: [apply]
 
-- name: Register runner against repo
+- name: Register runner
   command: >-
     ./config.sh
     --unattended
     --replace
-    --url https://github.com/{{ github_runner_owner }}/{{ github_runner_repo }}
+    --url https://github.com/{{ github_runner_owner }}{% if github_runner_scope == 'repo' %}/{{ github_runner_repo }}{% endif %}
     --token {{ github_runner_registration_token }}
     --name {{ github_runner_name }}
     --labels {{ github_runner_labels | join(',') }}
+    {% if github_runner_scope == 'org' %}--runnergroup {{ github_runner_group_name }}{% endif %}
     --work _work
   args:
     chdir: "{{ github_runner_install_dir }}"
