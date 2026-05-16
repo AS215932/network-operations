@@ -23,6 +23,7 @@ nodejs_lts_setup_url: "https://deb.nodesource.com/setup_lts.x"
 
 # langgraph-checkpoint-redis. Keep it bound to localhost for noc-agent only.
 noc_agent_redis_repo_suite: "{{ ansible_distribution_release | lower }}"
+noc_agent_redis_repo_key_source: /usr/share/keyrings/redis-archive-key.asc
 noc_agent_redis_repo_keyring: /usr/share/keyrings/redis-archive-keyring.gpg
 noc_agent_redis_repo_key_url: https://packages.redis.io/gpg
 noc_agent_redis_repo_url: https://packages.redis.io/deb

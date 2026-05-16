@@ -17,12 +17,32 @@
     cache_valid_time: 3600
   tags: [apply]
 
+- name: Download Redis apt signing key
+  get_url:
+    url: "{{ noc_agent_redis_repo_key_url }}"
+    dest: "{{ noc_agent_redis_repo_key_source }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: noc_agent_redis_repo_key_download
+  tags: [apply]
+
+- name: Check if Redis apt signing keyring exists
+  stat:
+    path: "{{ noc_agent_redis_repo_keyring }}"
+  register: noc_agent_redis_repo_keyring_stat
+  tags: [apply]
+
 - name: Install Redis apt signing key
-  shell: >-
-    curl -fsSL {{ noc_agent_redis_repo_key_url }} |
-    gpg --dearmor -o {{ noc_agent_redis_repo_keyring }}
-  args:
-    creates: "{{ noc_agent_redis_repo_keyring }}"
+  command:
+    argv:
+      - gpg
+      - --dearmor
+      - --yes
+      - --output
+      - "{{ noc_agent_redis_repo_keyring }}"
+      - "{{ noc_agent_redis_repo_key_source }}"
+  when: noc_agent_redis_repo_key_download.changed or not noc_agent_redis_repo_keyring_stat.stat.exists
   tags: [apply]
 
 - name: Ensure Redis apt signing key is readable
@@ -60,6 +80,7 @@
     path: "/etc/redis/redis.conf"
     regexp: '^#?\s*bind\s+'
     line: "bind 127.0.0.1 ::1"
+    backup: true
   notify: restart redis-server
   tags: [apply]
 
@@ -68,6 +89,7 @@
     path: "/etc/redis/redis.conf"
     regexp: '^#?\s*protected-mode\s+'
     line: "protected-mode yes"
+    backup: true
   notify: restart redis-server
   tags: [apply]
 
