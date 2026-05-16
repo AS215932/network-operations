@@ -22,16 +22,17 @@
     name: "{{ hyrule_web_app_group }}"
     system: true
 
-# home= aligns with hyrule_web_state_dir so the deploy key lives at a path the
-# role's other tasks reference directly via hyrule_web_deploy_key_path.
+# Don't pass `home:` — on first install we accept the user module's default
+# (/home/<user>); on hosts where the user already exists, changing home
+# would force a usermod that fails while the service is running. The deploy
+# key + SSH config live under hyrule_web_state_dir regardless of the user's
+# home, owned by hyrule_web_app_user.
 - name: Ensure hyrule user exists
   ansible.builtin.user:
     name: "{{ hyrule_web_app_user }}"
     group: "{{ hyrule_web_app_group }}"
-    home: "{{ hyrule_web_state_dir }}"
     shell: /bin/bash
     system: true
-    create_home: true
 
 - name: Ensure runtime directories exist
   ansible.builtin.file:
