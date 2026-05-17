@@ -1,0 +1,21 @@
+---
+- name: Validate VM catalog
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../vars/networks.yml
+    - ../vars/vm_catalog.yml
+  tasks:
+    - name: Assert IPv6 addresses are valid
+      assert:
+        that:
+          - (item.value.networks | selectattr('name', 'equalto', 'infra') | first).ipv6 is string
+        fail_msg: "Invalid IPv6 address for {{ item.key }}"
+      loop: "{{ vm_catalog | dict2items }}"
+      when: item.value.networks is defined and (item.value.networks | selectattr('name', 'equalto', 'infra') | list | length) > 0
+
+    - name: Validate OS families
+      assert:
+        that:
+          - item.value.os_family in ['linux', 'freebsd', 'openbsd']
+      loop: "{{ vm_catalog | dict2items }}"

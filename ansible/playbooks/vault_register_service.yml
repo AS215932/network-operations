@@ -1,0 +1,42 @@
+---
+- name: Register Vault Services
+  hosts: localhost
+  gather_facts: false
+  vars:
+    vault_services:
+      hermes-agent:
+        policy: hermes-agent
+        kv_path: kv/data/hermes-agent
+        approle: true
+  tasks:
+    - name: Ensure Vault service policies are defined
+      command: "vault policy write {{ item.value.policy }} -"
+      args:
+        stdin: |
+          path "{{ item.value.kv_path }}" {
+            capabilities = ["read"]
+          }
+      loop: "{{ vault_services | dict2items }}"
+
+    - name: Ensure AppRole is enabled
+      command: "vault auth enable approle"
+      failed_when: false
+      changed_when: false
+
+    - name: Create AppRole for service
+      command: "vault write auth/approle/role/{{ item.key }} token_policies={{ item.value.policy }}"
+      loop: "{{ vault_services | dict2items }}"
+      when: item.value.approle
+
+    - name: Get Role ID for service
+      command: "vault read -field=role_id auth/approle/role/{{ item.key }}/role-id"
+      register: approle_role_ids
+      loop: "{{ vault_services | dict2items }}"
+      when: item.value.approle
+      changed_when: false
+
+    - name: Print Role IDs
+      debug:
+        msg: "Service: {{ item.item.key }}, Role ID: {{ item.stdout }}"
+      loop: "{{ approle_role_ids.results }}"
+      when: item.item.value.approle

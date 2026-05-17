@@ -1,0 +1,15 @@
+---
+- name: hermes — apply hermes-agent
+  hosts: hermes
+  serial: 1
+  gather_facts: true
+  become: true
+  vars:
+    hermes_discord_bot_token: "{{ lookup('env', 'HERMES_DISCORD_BOT_TOKEN') | default('', true) }}"
+    hermes_signal_api_credentials: "{{ lookup('env', 'HERMES_SIGNAL_API_CREDENTIALS') | default('', true) }}"
+    hermes_llm_api_key: "{{ lookup('env', 'HERMES_LLM_API_KEY') | default('', true) }}"
+  roles:
+    - role: vault_agent
+      when: hermes_agent_secret_backend == 'vault'
+    - role: hermes_agent
+  tags: [hermes]

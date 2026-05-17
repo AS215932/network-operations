@@ -1,0 +1,22 @@
+version: 2
+ethernets:
+{% for net in vm_def.networks %}
+  {{ net.device }}:
+    addresses:
+{% if net.ipv6 is defined %}
+      - "{{ net.ipv6 }}/{{ net.prefix | default('64') }}"
+{% endif %}
+{% if net.ipv4 is defined %}
+      - "{{ net.ipv4 }}/{{ net.prefix_v4 | default('24') }}"
+{% endif %}
+{% if net.name == 'infra' %}
+    nameservers:
+      addresses:
+        - "2a0c:b641:b50:2::1"
+      search:
+        - "as215932.net"
+    routes:
+      - to: "::/0"
+        via: "2a0c:b641:b50:2::1"
+{% endif %}
+{% endfor %}

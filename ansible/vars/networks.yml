@@ -1,0 +1,12 @@
+as215932_networks:
+  infra:
+    network: xenbr_infra
+    ipv6_prefix: "2a0c:b641:b50:2::/64"
+    gateway6: "2a0c:b641:b50:2::1"
+    dns:
+      - "2a0c:b641:b50:2::1"
+    search:
+      - as215932.net
+  mgmt:
+    network: xenbr_mgmt
+    ipv4_prefix: "10.0.0.0/24"

@@ -1,0 +1,26 @@
+# GENERATED FROM vm_catalog.yml - DO NOT EDIT
+generated_peers:
+  api:
+    ipv6: 2a0c:b641:b50:2::20
+  ci:
+    ipv6: 2a0c:b641:b50:2::d0
+  dns:
+    ipv6: 2a0c:b641:b50:2::10
+  hermes:
+    ipv6: 2a0c:b641:b50:2::e0
+  irc:
+    ipv6: 2a0c:b641:b50:2::80
+  log:
+    ipv6: 2a0c:b641:b50:2::b0
+  mon:
+    ipv6: 2a0c:b641:b50:2::50
+  noc:
+    ipv6: 2a0c:b641:b50:2::a0
+  proxy:
+    ipv6: 2a0c:b641:b50:2::40
+  vault:
+    ipv6: 2a0c:b641:b50:2::c0
+  vpn:
+    ipv6: 2a0c:b641:b50:2::60
+  web:
+    ipv6: 2a0c:b641:b50:2::30

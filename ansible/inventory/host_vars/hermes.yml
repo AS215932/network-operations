@@ -1,0 +1,13 @@
+---
+monitoring_register: true
+logs_register: true
+monitoring_role: hermes
+logs_role: hermes
+
+vault_agent_name: hermes-agent
+vault_agent_role_id: "{{ lookup('env', 'VAULT_HERMES_AGENT_ROLE_ID') | default('', true) }}"
+vault_agent_secret_id: "{{ lookup('env', 'VAULT_HERMES_AGENT_SECRET_ID') | default('', true) }}"
+vault_agent_env_destination: /opt/hermes-agent/.env
+vault_agent_reload_command: /bin/systemctl restart hermes-agent.service
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

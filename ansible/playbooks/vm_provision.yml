@@ -1,0 +1,10 @@
+---
+- name: Provision VM through Xen Orchestra
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - ../vars/xo.yml
+    - ../vars/networks.yml
+    - ../vars/vm_catalog.yml
+  roles:
+    - role: xo_vm

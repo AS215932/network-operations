@@ -1,0 +1,81 @@
+---
+- name: Set VM definition from catalog
+  set_fact:
+    vm_def: "{{ vm_catalog[vm] }}"
+
+- name: Render cloud-config (user-data)
+  template:
+    src: "linux-user-data.yml.j2"
+    dest: "/tmp/{{ vm }}-user-data.yml"
+  delegate_to: localhost
+
+- name: Render network-config
+  template:
+    src: "linux-network-config-v2.yml.j2"
+    dest: "/tmp/{{ vm }}-network-config.yml"
+  delegate_to: localhost
+
+- name: Check if VM exists
+  command: "xo-cli vm.get name_label={{ vm }} id"
+  register: vm_exists
+  failed_when: false
+  changed_when: false
+  delegate_to: localhost
+
+- name: Create VM
+  command: >
+    xo-cli vm.create
+    name_label="{{ vm }}"
+    name_description="{{ vm_def.description }}"
+    template="{{ xo_templates[vm_def.xo.template] }}"
+    VIFs="json:[{% for net in vm_def.networks %}{\"network\":\"{{ xo_networks[net.network] }}\"}{% if not loop.last %},{% endif %}{% endfor %}]"
+    CPUs.number={{ vm_def.resources.vcpus }}
+    memory={{ vm_def.resources.memory }}
+    bootAfterCreate=false
+    destroyCloudConfigVdiAfterBoot={{ vm_def.xo.destroy_cloud_config_vdi_after_boot | default('true') | lower }}
+    cloudConfig=@/tmp/{{ vm }}-user-data.yml
+    networkConfig=@/tmp/{{ vm }}-network-config.yml
+  register: vm_create
+  when: vm_exists.rc != 0
+  delegate_to: localhost
+
+- name: Get VM ID
+  command: "xo-cli vm.get name_label={{ vm }} id"
+  register: vm_id_cmd
+  delegate_to: localhost
+  changed_when: false
+
+- name: Set VM ID fact
+  set_fact:
+    vm_id: "{{ vm_id_cmd.stdout | from_json }}"
+
+- name: Set boot order
+  command: "xo-cli vm.setBootOrder vm={{ vm_id }} order={{ vm_def.xo.boot_order | default('c') }}"
+  when: vm_create.changed
+  delegate_to: localhost
+
+- name: Get Root VDI
+  shell: "xo-cli list-objects type=VBD VM={{ vm_id }} is_cd_drive=false | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d[0]['VDI'] if d else '')\""
+  register: root_vdi
+  changed_when: false
+  delegate_to: localhost
+  when: vm_create.changed
+
+- name: Resize root VDI
+  command: "xo-cli vdi.set id={{ root_vdi.stdout }} size={{ vm_def.resources.disks[0].size }}"
+  when: vm_create.changed and root_vdi.stdout != ""
+  delegate_to: localhost
+
+- name: Start VM
+  command: "xo-cli vm.start id={{ vm_id }}"
+  when: vm_create.changed
+  delegate_to: localhost
+
+- name: Wait for SSH
+  wait_for:
+    host: "{{ vm_def.networks[0].ipv6 if vm_def.networks[0].ipv6 is defined else vm_def.networks[0].ipv4 }}"
+    port: 22
+    state: started
+    timeout: 300
+  delegate_to: localhost
+  when: vm_create.changed

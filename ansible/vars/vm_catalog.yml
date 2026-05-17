@@ -1,0 +1,456 @@
+vm_catalog:
+  dns:
+    description: "Authoritative DNS (Knot)"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 1073741824
+      disks:
+        - name: root
+          size: 10737418240
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::10"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - public_facing
+        - nameservers
+        - dns
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  api:
+    description: "hyrule-cloud API + Postgres"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 2
+      memory: 4294967296
+      disks:
+        - name: root
+          size: 42949672960
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::20"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - api
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  web:
+    description: "hyrule-web frontend"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 2147483648
+      disks:
+        - name: root
+          size: 21474836480
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::30"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - web
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  proxy:
+    description: "TLS reverse proxy (Caddy)"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 1073741824
+      disks:
+        - name: root
+          size: 10737418240
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::40"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - public_facing
+        - proxy
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  mon:
+    description: "Monitoring (Icinga2 + Prometheus + Grafana)"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 2
+      memory: 4294967296
+      disks:
+        - name: root
+          size: 42949672960
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::50"
+      - name: mgmt
+        network: xenbr_mgmt
+        device: enX1
+        ipv4: "10.0.0.50" # Assumption or DHCP
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - mon
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  vpn:
+    description: "WireGuard VPN"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 1073741824
+      disks:
+        - name: root
+          size: 10737418240
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::60"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - public_facing
+        - vpn
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  irc:
+    description: "Soju IRC bouncer"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 1073741824
+      disks:
+        - name: root
+          size: 10737418240
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::80"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - irc
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  noc:
+    description: "noc-agent (FastAPI :8000) + hyrule-mcp (stdio child)"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 2
+      memory: 4294967296
+      disks:
+        - name: root
+          size: 42949672960
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::a0"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - noc
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  log:
+    description: "Centralized log aggregation (Vector aggregator + Loki)"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 2
+      memory: 2147483648
+      disks:
+        - name: root
+          size: 21474836480
+        - name: data
+          size: 53687091200 # 50 GiB
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::b0"
+      - name: mgmt
+        network: xenbr_mgmt
+        device: enX1
+        ipv4: "10.0.0.60"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - log
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  vault:
+    description: "Vault secret plane"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 2147483648
+      disks:
+        - name: root
+          size: 21474836480
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::c0"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - vault
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: false
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  ci:
+    description: "GitHub Actions self-hosted runner"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+    resources:
+      vcpus: 1
+      memory: 2147483648
+      disks:
+        - name: root
+          size: 21474836480
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::d0"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - ci
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles: []
+    flows:
+      inbound: []
+      outbound: []
+
+  hermes:
+    description: "Hermes agent / messaging automation"
+    os_family: linux
+    os_distribution: debian
+    os_version: "13"
+    xo:
+      template: debian_13_cloudinit
+      sr: default_ssd
+      boot_firmware: uefi
+      boot_order: c
+      destroy_cloud_config_vdi_after_boot: true
+    resources:
+      vcpus: 1
+      memory: 2147483648
+      disks:
+        - name: root
+          size: 21474836480
+    networks:
+      - name: infra
+        network: xenbr_infra
+        device: enX0
+        ipv6: "2a0c:b641:b50:2::e0"
+    ansible:
+      groups:
+        - linux
+        - infra_vms
+        - hermes
+    features:
+      monitoring: true
+      logging: true
+      vault_agent: true
+      firewall: true
+    service_roles:
+      - hermes_agent
+    flows:
+      inbound:
+        - name: ssh_admin
+          proto: tcp
+          port: 22
+          source_group: admin_hosts
+          reason: SSH administration
+        - name: prometheus_node_exporter
+          proto: tcp
+          port: 9100
+          source_host: mon
+          reason: Prometheus scrape
+      outbound:
+        - name: vault_agent
+          proto: tcp
+          port: 443
+          dest_host: vault
+          reason: Vault secret retrieval
+        - name: discord_api
+          proto: tcp
+          port: 443
+          dest: internet
+          reason: Discord bot API
+        - name: signal_api
+          proto: tcp
+          port: 443
+          dest: internet
+          reason: Signal integration
+        - name: llm_api
+          proto: tcp
+          port: 443
+          dest: internet
+          reason: LLM API calls

@@ -1,0 +1,20 @@
+#cloud-config
+hostname: "{{ vm }}"
+fqdn: "{{ vm }}.as215932.net"
+manage_etc_hosts: true
+
+users:
+  - name: svag
+    groups: sudo
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqhNk5JGwvgtQQgt+bs5t9zOz0XX1sVUZV8NeYdM2IE svag@Z"
+  - name: root
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqhNk5JGwvgtQQgt+bs5t9zOz0XX1sVUZV8NeYdM2IE svag@Z"
+
+ssh_pwauth: false
+disable_root: false
+package_update: true
+package_upgrade: true
