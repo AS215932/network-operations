@@ -310,3 +310,15 @@ the explicit rules will already be in place.
 3. Re-render: `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local`.
 4. Review the diff under `ansible/generated/<host>/`.
 5. Commit. Apply happens in a follow-up PR with `--tags apply` once review passes.
+
+## Generated from vm_catalog.yml flows
+
+### hermes
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| admin_hosts | TCP | 22 | SSH administration |
+| mon | TCP | 9100 | Prometheus scrape |
+
+**Outbound (cross-cutting):** hermes → vault TCP/443 (Vault secret retrieval), hermes → internet TCP/443 (Discord bot API), hermes → internet TCP/443 (Signal integration), hermes → internet TCP/443 (LLM API calls).
+

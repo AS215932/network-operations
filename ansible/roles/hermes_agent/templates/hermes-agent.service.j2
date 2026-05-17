@@ -1,0 +1,17 @@
+[Unit]
+Description=Hermes Agent
+After=network.target
+
+[Service]
+Type=simple
+User={{ hermes_agent_user }}
+Group={{ hermes_agent_group }}
+WorkingDirectory={{ hermes_agent_install_dir }}
+EnvironmentFile={{ hermes_agent_install_dir }}/.env
+# Assuming the entrypoint is `uv run python main.py` or similar
+ExecStart=/usr/local/bin/uv run python app/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+---
+hermes_agent_user: hermes-agent
+hermes_agent_group: hermes-agent
+hermes_agent_install_dir: /opt/hermes-agent
+hermes_agent_repo: "git@github-hermes-agent:AS215932/hermes-agent.git"
+hermes_agent_version: main
+hermes_agent_secret_backend: vault

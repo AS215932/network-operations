@@ -1,0 +1,11 @@
+---
+- name: Wait for connection
+  wait_for_connection:
+    timeout: 300
+
+- name: Gather facts
+  setup:
+
+- name: Include OS-specific bootstrap
+  include_role:
+    name: "base_{{ ansible_system | lower }}"

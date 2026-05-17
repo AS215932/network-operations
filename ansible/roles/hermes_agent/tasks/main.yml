@@ -1,0 +1,115 @@
+---
+- name: Ensure base packages are installed
+  apt:
+    name:
+      - python3
+      - python3-venv
+      - git
+      - curl
+      - docker.io
+    state: present
+    update_cache: true
+
+- name: Create hermes-agent group
+  group:
+    name: "{{ hermes_agent_group }}"
+    system: true
+
+- name: Create hermes-agent user
+  user:
+    name: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_group }}"
+    system: true
+    create_home: yes
+    home: /var/lib/hermes-agent
+    shell: /usr/sbin/nologin
+
+- name: Install uv if not present
+  shell: "curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh"
+  args:
+    creates: /usr/local/bin/uv
+
+- name: Ensure hermes-agent install dir exists
+  file:
+    path: "{{ hermes_agent_install_dir }}"
+    state: directory
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_group }}"
+    mode: "0755"
+
+- name: Generate deploy key for hermes-agent
+  command: "ssh-keygen -t ed25519 -N '' -C 'hermes-agent@{{ inventory_hostname }} deploy:hermes-agent' -f /var/lib/hermes-agent/.ssh/id_hermes-agent"
+  args:
+    creates: /var/lib/hermes-agent/.ssh/id_hermes-agent
+  become: true
+  become_user: "{{ hermes_agent_user }}"
+
+- name: Ensure signal-cli state dir exists
+  file:
+    path: /var/lib/signal-cli
+    state: directory
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_group }}"
+    mode: "0755"
+
+- name: Configure SSH for hermes-agent clones
+  blockinfile:
+    path: /var/lib/hermes-agent/.ssh/config
+    create: true
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_group }}"
+    mode: "0600"
+    block: |
+      Host github-hermes-agent
+        Hostname github.com
+        User git
+        IdentityFile /var/lib/hermes-agent/.ssh/id_hermes-agent
+        IdentitiesOnly yes
+
+- name: Render .env file
+  template:
+    src: "env.j2"
+    dest: "{{ hermes_agent_install_dir }}/.env"
+    owner: "{{ hermes_agent_user }}"
+    group: "{{ hermes_agent_group }}"
+    mode: "0600"
+  notify: restart hermes-agent
+
+- name: Install hermes-agent.service
+  template:
+    src: "hermes-agent.service.j2"
+    dest: "/etc/systemd/system/hermes-agent.service"
+  notify:
+    - daemon reload
+    - restart hermes-agent
+
+- name: Install signal-cli-rest-api.service
+  copy:
+    dest: "/etc/systemd/system/signal-cli-rest-api.service"
+    content: |
+      [Unit]
+      Description=Signal CLI REST API
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Restart=always
+      ExecStart=/usr/bin/docker run --rm -p 8080:8080 -v /var/lib/signal-cli:/home/.local/share/signal-cli -e 'MODE=json-rpc' bbernhard/signal-cli-rest-api:latest
+      ExecStop=/usr/bin/docker stop -t 2 signal-cli-rest-api
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - daemon reload
+
+- name: Enable and start signal-cli-rest-api
+  systemd:
+    name: signal-cli-rest-api
+    enabled: true
+    state: started
+
+- name: Enable and start hermes-agent
+  systemd:
+    name: hermes-agent
+    enabled: true
+    state: started

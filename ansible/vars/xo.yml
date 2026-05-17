@@ -1,0 +1,9 @@
+xo_templates:
+  debian_13_cloudinit: "8937845a-c13e-f6c0-678e-441f2eb07418"
+
+xo_storage:
+  default_ssd: "2581856f-cc58-3c8d-017b-35a121d75d70"
+
+xo_networks:
+  xenbr_infra: "8a4fbd9c-f56e-d6d1-5bae-83452d88b089"
+  xenbr_mgmt: "90aefc6a-eff2-cadc-5002-2af725b17bca"

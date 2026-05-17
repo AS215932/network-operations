@@ -1,0 +1,7 @@
+---
+- name: Bootstrap new guests
+  hosts: "{{ vm | default('all') }}"
+  gather_facts: false
+  become: true
+  roles:
+    - guest_bootstrap
