@@ -1,0 +1,12 @@
+---
+# Validate always runs (cheap assertions; safe with --connection=local).
+# Apply is gated on hyrule_cloud_apply=true so default playbook invocations
+# never mutate the live api service.
+- name: Validate hyrule_cloud inputs and reusable configs
+  ansible.builtin.import_tasks: validate.yml
+  tags: [validate, always]
+
+- name: Apply hyrule_cloud role
+  ansible.builtin.import_tasks: apply.yml
+  when: hyrule_cloud_apply | bool
+  tags: [apply]

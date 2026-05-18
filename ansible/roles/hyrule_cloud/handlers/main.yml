@@ -1,0 +1,10 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart hyrule-cloud
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_service_name }}"
+    state: restarted
+    enabled: true

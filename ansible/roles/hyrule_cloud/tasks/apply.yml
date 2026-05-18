@@ -1,0 +1,70 @@
+---
+# Prereqs: base packages, uv, user/group, directories. Pattern matches
+# ansible/roles/hyrule_web/tasks/apply.yml so a future operator can read either
+# role and recognise the shape.
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ hyrule_cloud_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install uv (Python package manager)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+
+- name: Ensure hyrule group exists
+  ansible.builtin.group:
+    name: "{{ hyrule_cloud_app_group }}"
+    system: true
+
+# Don't pass `home:` — on first install we accept the user module's default
+# (/home/<user>); on hosts where the user already exists, changing home
+# would force a usermod that fails while the service is running. The deploy
+# key + SSH config live under hyrule_cloud_state_dir regardless of the
+# user's home, owned by hyrule_cloud_app_user.
+- name: Ensure hyrule user exists
+  ansible.builtin.user:
+    name: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    shell: /bin/bash
+    system: true
+
+- name: Ensure runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_cloud_app_user) }}"
+    group: "{{ item.group | default(hyrule_cloud_app_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_cloud_install_dir }}", mode: "0755" }
+    - { path: "{{ hyrule_cloud_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_cloud_state_dir }}", mode: "0750" }
+    - { path: "{{ hyrule_cloud_state_dir }}/.ssh", mode: "0700" }
+
+# The pre-existing /opt/hyrule-cloud checkout was made by root historically
+# (alembic_version=001 came from there), so git sees a dubious-ownership
+# warning when run as the hyrule user. Allow it once; idempotent.
+- name: Mark /opt/hyrule-cloud as a safe.directory for the hyrule user
+  ansible.builtin.command:
+    cmd: git config --global --add safe.directory {{ hyrule_cloud_install_dir }}
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  changed_when: false
+
+- name: Bootstrap per-app deploy key and SSH config
+  ansible.builtin.import_tasks: bootstrap_key.yml
+
+- name: Checkout hyrule-cloud at the requested ref
+  ansible.builtin.import_tasks: checkout.yml
+
+- name: Sync runtime (uv, env, systemd unit, toy-table cleanup)
+  ansible.builtin.import_tasks: runtime.yml
+
+- name: Post-deploy health check
+  ansible.builtin.import_tasks: health.yml

@@ -1,0 +1,132 @@
+---
+# One-shot cleanup of the hand-applied toy `accounts` and `crypto_intents`
+# tables on api's hyrule DB. These were created via db_patch{1,2,3}.py before
+# the alembic chain caught up (alembic_version still says 001 because the
+# patches never registered a revision). The Wave 2 deploy's migration 003
+# (auth_and_ownership) and 004 (intent_engine) will try to `create_table` for
+# both and fail loudly if they still exist.
+#
+# Run BEFORE the first Wave 2 apply:
+#   ansible-playbook playbooks/cloud_toy_cleanup.yml \
+#     -e cloud_toy_cleanup_apply=true --limit api
+#
+# This playbook is read-only by default. Pass cloud_toy_cleanup_apply=true to
+# actually run the DROPs. It refuses to drop a non-empty table — if any row
+# appeared since the 2026-05-18 audit, the drop fails and the operator
+# investigates before re-trying.
+
+- name: hyrule-cloud — toy table cleanup (one-shot, pre-Wave-2)
+  hosts: api
+  gather_facts: false
+  become: true
+
+  vars:
+    cloud_toy_cleanup_apply: false
+
+  tasks:
+    - name: Snapshot alembic_version on api hyrule DB
+      ansible.builtin.command:
+        cmd: sudo -u postgres psql hyrule -tAc "SELECT version_num FROM alembic_version;"
+      register: alembic_version_result
+      changed_when: false
+
+    # Use to_regclass so the query stays valid even if a table is missing
+    # (e.g. an earlier partial cleanup). Tagged output (`accounts=N
+    # intents=M`) is matched with a regex before parsing so a missing /
+    # malformed line trips a clean assertion, not a template error.
+    - name: Snapshot row counts for accounts + crypto_intents
+      ansible.builtin.command:
+        cmd: >-
+          sudo -u postgres psql hyrule -tAc
+          "SELECT 'accounts=' ||
+              CASE WHEN to_regclass('accounts') IS NULL
+                   THEN '0' ELSE (SELECT count(*)::text FROM accounts) END
+           || ' intents=' ||
+              CASE WHEN to_regclass('crypto_intents') IS NULL
+                   THEN '0' ELSE (SELECT count(*)::text FROM crypto_intents) END;"
+      register: toy_row_counts
+      changed_when: false
+      failed_when: false
+
+    - name: Assert the row-count query succeeded
+      ansible.builtin.assert:
+        that:
+          - toy_row_counts.rc == 0
+          - toy_row_counts.stdout is regex('^accounts=\d+ intents=\d+$')
+        fail_msg: >-
+          Could not parse row counts from psql. rc={{ toy_row_counts.rc }};
+          stdout={{ toy_row_counts.stdout | default('(empty)') | trim }};
+          stderr={{ toy_row_counts.stderr | default('') | trim }}.
+          Inspect the DB connection / postgres role before re-running.
+
+    - name: Parse row counts
+      ansible.builtin.set_fact:
+        toy_accounts_rows: "{{ (toy_row_counts.stdout | regex_search('accounts=(\\d+)', '\\1'))[0] | int }}"
+        toy_intents_rows: "{{ (toy_row_counts.stdout | regex_search('intents=(\\d+)', '\\1'))[0] | int }}"
+
+    - name: Report current state
+      ansible.builtin.debug:
+        msg: |
+          alembic_version  = {{ alembic_version_result.stdout | trim }}
+          accounts rows    = {{ toy_accounts_rows }}
+          crypto_intents   = {{ toy_intents_rows }}
+          cleanup_apply    = {{ cloud_toy_cleanup_apply }}
+
+    - name: Refuse to proceed if alembic_version != "001"
+      ansible.builtin.assert:
+        that:
+          - (alembic_version_result.stdout | trim) == "001"
+        fail_msg: >-
+          alembic_version is "{{ alembic_version_result.stdout | trim }}",
+          not "001". Either migrations have already advanced (cleanup not
+          needed) or DB is in an unexpected state. Investigate before forcing.
+
+    - name: Refuse to drop non-empty tables
+      ansible.builtin.assert:
+        that:
+          - toy_accounts_rows == 0
+          - toy_intents_rows == 0
+        fail_msg: >-
+          Refusing to drop non-empty toy tables. accounts={{ toy_accounts_rows }},
+          crypto_intents={{ toy_intents_rows }}. Inspect rows before retrying.
+
+    - name: Drop toy crypto_intents table + status enum
+      ansible.builtin.command:
+        cmd: >-
+          sudo -u postgres psql hyrule -v ON_ERROR_STOP=1 -c
+          "DROP TABLE IF EXISTS crypto_intents;
+           DROP TYPE IF EXISTS crypto_intent_status;"
+      when: cloud_toy_cleanup_apply | bool
+      register: drop_intents
+      changed_when: drop_intents.rc == 0
+
+    - name: Drop toy accounts table
+      ansible.builtin.command:
+        cmd: >-
+          sudo -u postgres psql hyrule -v ON_ERROR_STOP=1 -c
+          "DROP TABLE IF EXISTS accounts;"
+      when: cloud_toy_cleanup_apply | bool
+      register: drop_accounts
+      changed_when: drop_accounts.rc == 0
+
+    - name: Verify drop
+      ansible.builtin.command:
+        cmd: >-
+          sudo -u postgres psql hyrule -tAc
+          "SELECT to_regclass('accounts'),
+                  to_regclass('crypto_intents'),
+                  (SELECT to_regtype('crypto_intent_status'));"
+      register: post_drop_state
+      changed_when: false
+      when: cloud_toy_cleanup_apply | bool
+
+    - name: Assert toy tables are gone
+      ansible.builtin.assert:
+        that:
+          - "'accounts' not in post_drop_state.stdout"
+          - "'crypto_intents' not in post_drop_state.stdout"
+          - "'crypto_intent_status' not in post_drop_state.stdout"
+        fail_msg: >-
+          Post-drop check still sees one of the toy artifacts:
+          {{ post_drop_state.stdout }}
+      when: cloud_toy_cleanup_apply | bool
