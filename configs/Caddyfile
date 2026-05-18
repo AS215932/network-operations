@@ -1,0 +1,270 @@
+# /etc/caddy/Caddyfile — Hyrule Cloud TLS reverse proxy
+# Deploy to: proxy VM (2a0c:b641:b50:2::40)
+# Requires: caddy built with github.com/caddy-dns/rfc2136
+#   xcaddy build --with github.com/caddy-dns/rfc2136
+#
+# All backends are IPv6-only on AS215932 public space.
+#
+# Variables to fill:
+#   admin@servify.network      — Let's Encrypt contact email
+#   vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=     — Base64 TSIG secret
+
+{
+    email admin@servify.network
+}
+
+# API — cloud.hyrule.host (canonical) and api.hyrule.host (compatibility)
+cloud.hyrule.host, api.hyrule.host {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::20]:8402 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/api.log
+    }
+}
+
+# Web frontend — hyrule.host (+ www redirect to apex).
+# Both subjects share one site block so the TLS/proxy/header config isn't
+# duplicated. Caddy issues per-subject certs (not a SAN). Matches the
+# as215932.net block below.
+hyrule.host, www.hyrule.host {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    @www host www.hyrule.host
+    redir @www https://hyrule.host{uri} permanent
+
+    reverse_proxy [2a0c:b641:b50:2::30]:8080 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/web.log
+    }
+}
+
+# Grafana — grafana.servify.network
+grafana.servify.network {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::50]:3000 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/grafana.log
+    }
+}
+
+# Icinga Web — mon.servify.network
+mon.servify.network {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::50]:80 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/mon.log
+    }
+}
+
+# AS215932 info site — apex + www share one site block so the TLS config,
+# reverse proxy, headers, and redirect logic aren't duplicated. Caddy still
+# issues one cert per subject (Caddyfile site blocks don't produce SAN certs);
+# propagation_delay above masks Openprovider's slow secondary AXFR.
+# Static HTML served by nginx on the web VM (port 8081).
+as215932.net, www.as215932.net {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    @www host www.as215932.net
+    redir @www https://as215932.net{uri} permanent
+
+    reverse_proxy [2a0c:b641:b50:2::30]:8081 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # No JS anywhere on the site; lock it down so Tor Safest mode is happy.
+        Content-Security-Policy "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        Referrer-Policy "no-referrer"
+        X-Content-Type-Options "nosniff"
+    }
+
+    log {
+        output file /var/log/caddy/as215932.log
+    }
+}
+
+# Xen Orchestra — xo.servify.network
+xo.servify.network {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::70]:80 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/xo.log
+    }
+}
+
+# Vault — machine secret plane for AS215932 workloads.
+vault.as215932.net {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key vLFkcfnJZux1BQuoaavvrwNS97vyhomvN6NEle92qG8=
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [2a0c:b641:b50:2::c0]:8200 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+
+    log {
+        output file /var/log/caddy/vault.log
+    }
+}
+
+# Wildcard for customer VM subdomains (future — HTTPS proxy to VMs)
+# *.deploy.hyrule.host {
+#     tls {
+#         dns rfc2136 { ... }
+#     }
+#     # Route to customer VMs based on subdomain lookup
+# }
