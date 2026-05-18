@@ -30,22 +30,46 @@
       register: alembic_version_result
       changed_when: false
 
+    # Use to_regclass so the query stays valid even if a table is missing
+    # (e.g. an earlier partial cleanup). Tagged output (`accounts=N
+    # intents=M`) is matched with a regex before parsing so a missing /
+    # malformed line trips a clean assertion, not a template error.
     - name: Snapshot row counts for accounts + crypto_intents
       ansible.builtin.command:
         cmd: >-
           sudo -u postgres psql hyrule -tAc
-          "SELECT COALESCE((SELECT count(*) FROM accounts),0)
-           || ' ' || COALESCE((SELECT count(*) FROM crypto_intents),0);"
+          "SELECT 'accounts=' ||
+              CASE WHEN to_regclass('accounts') IS NULL
+                   THEN '0' ELSE (SELECT count(*)::text FROM accounts) END
+           || ' intents=' ||
+              CASE WHEN to_regclass('crypto_intents') IS NULL
+                   THEN '0' ELSE (SELECT count(*)::text FROM crypto_intents) END;"
       register: toy_row_counts
       changed_when: false
       failed_when: false
+
+    - name: Assert the row-count query succeeded
+      ansible.builtin.assert:
+        that:
+          - toy_row_counts.rc == 0
+          - toy_row_counts.stdout is regex('^accounts=\d+ intents=\d+$')
+        fail_msg: >-
+          Could not parse row counts from psql. rc={{ toy_row_counts.rc }};
+          stdout={{ toy_row_counts.stdout | default('(empty)') | trim }};
+          stderr={{ toy_row_counts.stderr | default('') | trim }}.
+          Inspect the DB connection / postgres role before re-running.
+
+    - name: Parse row counts
+      ansible.builtin.set_fact:
+        toy_accounts_rows: "{{ (toy_row_counts.stdout | regex_search('accounts=(\\d+)', '\\1'))[0] | int }}"
+        toy_intents_rows: "{{ (toy_row_counts.stdout | regex_search('intents=(\\d+)', '\\1'))[0] | int }}"
 
     - name: Report current state
       ansible.builtin.debug:
         msg: |
           alembic_version  = {{ alembic_version_result.stdout | trim }}
-          accounts rows    = {{ toy_row_counts.stdout.split(' ')[0] | default('?') }}
-          crypto_intents   = {{ toy_row_counts.stdout.split(' ')[1] | default('?') }}
+          accounts rows    = {{ toy_accounts_rows }}
+          crypto_intents   = {{ toy_intents_rows }}
           cleanup_apply    = {{ cloud_toy_cleanup_apply }}
 
     - name: Refuse to proceed if alembic_version != "001"
@@ -60,11 +84,11 @@
     - name: Refuse to drop non-empty tables
       ansible.builtin.assert:
         that:
-          - (toy_row_counts.stdout.split(' ')[0] | int) == 0
-          - (toy_row_counts.stdout.split(' ')[1] | int) == 0
+          - toy_accounts_rows == 0
+          - toy_intents_rows == 0
         fail_msg: >-
-          Refusing to drop non-empty toy tables. Counts are
-          "{{ toy_row_counts.stdout | trim }}". Inspect rows before retrying.
+          Refusing to drop non-empty toy tables. accounts={{ toy_accounts_rows }},
+          crypto_intents={{ toy_intents_rows }}. Inspect rows before retrying.
 
     - name: Drop toy crypto_intents table + status enum
       ansible.builtin.command:
