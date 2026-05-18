@@ -1,0 +1,40 @@
+---
+# --no-dev: skip pytest/ruff/mypy on the production venv. Those run in CI.
+# changed_when: false because we want git/template/unit tasks to drive the
+# restart notification — uv's "Audited"/"Resolved" stdout is noisy and would
+# fire spurious restarts.
+
+- name: Check for hyrule-cloud pyproject.toml (gated on a successful clone)
+  ansible.builtin.stat:
+    path: "{{ hyrule_cloud_install_dir }}/pyproject.toml"
+  register: hyrule_cloud_pyproject
+
+- name: Sync hyrule-cloud production dependencies via uv
+  ansible.builtin.command:
+    cmd: /usr/local/bin/uv sync --frozen --no-dev
+    chdir: "{{ hyrule_cloud_install_dir }}"
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  changed_when: false
+  when: hyrule_cloud_pyproject.stat.exists
+  notify: restart hyrule-cloud
+
+- name: Render hyrule-cloud environment file
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../../configs/hyrule-cloud.env.j2"
+    dest: "{{ hyrule_cloud_install_dir }}/.env"
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0640"
+  notify: restart hyrule-cloud
+
+- name: Install /etc/systemd/system/hyrule-cloud.service
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/hyrule-cloud.service"
+    dest: /etc/systemd/system/hyrule-cloud.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart hyrule-cloud

@@ -1,0 +1,16 @@
+---
+# Clone (first run) or fetch + checkout (subsequent) at the requested ref.
+# version: accepts a branch, tag, or SHA — the deploy.yml workflow passes
+# ${{ github.sha }} so production deploys are pinned to a specific commit.
+
+- name: Checkout hyrule-cloud at the requested ref
+  ansible.builtin.git:
+    repo: "{{ hyrule_cloud_repo }}"
+    dest: "{{ hyrule_cloud_install_dir }}"
+    version: "{{ hyrule_cloud_version }}"
+    update: true
+    force: true
+    accept_hostkey: false
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  notify: restart hyrule-cloud

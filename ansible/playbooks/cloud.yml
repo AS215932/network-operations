@@ -1,0 +1,53 @@
+---
+# hyrule-cloud — apply the hyrule_cloud role on the api VM.
+#
+# Validate (no live changes; runs from controller):
+#   ansible-playbook playbooks/cloud.yml --tags validate \
+#     --connection=local --limit api --skip-tags=snapshot
+#
+# Apply (live deploy):
+#   ansible-playbook playbooks/cloud.yml --tags apply \
+#     -e hyrule_cloud_apply=true \
+#     -e hyrule_cloud_version=<sha-or-ref> \
+#     --limit api
+#
+# The deploy.yml workflow in AS215932/hyrule-cloud invokes the apply variant
+# with hyrule_cloud_version=${{ github.sha }} so production deploys are pinned
+# to the exact commit that passed CI.
+#
+# Wave 2 prerequisite: the toy `accounts` and `crypto_intents` tables created
+# via hand-applied db_patch{1,2,3}.py scripts must be dropped before Wave 2's
+# migration 003/004 run. Use the one-shot playbooks/cloud_toy_cleanup.yml
+# (idempotent, refuses to drop non-empty tables) before the Wave 2 deploy.
+
+- name: hyrule-cloud — apply
+  hosts: api
+  serial: 1
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - role: hyrule_cloud
+      tags: [hyrule_cloud]
+  post_tasks:
+    # Flush handlers so the post-snapshot reflects the new service state.
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [hyrule_cloud]

@@ -1,0 +1,57 @@
+---
+# Generate the per-app deploy key on the target VM (idempotent — the
+# openssh_keypair module is a no-op if the key exists). On creation, print
+# the pubkey and the URL where the operator must register it. The subsequent
+# git clone fails loud if the key isn't registered yet — but the debug from
+# this task is one task above it in the playbook log, so the operator sees
+# what to do.
+
+- name: Generate hyrule-cloud deploy SSH keypair (idempotent)
+  community.crypto.openssh_keypair:
+    path: "{{ hyrule_cloud_deploy_key_path }}"
+    type: ed25519
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0600"
+    comment: "hyrule@api deploy:hyrule-cloud"
+  register: hyrule_cloud_keypair
+
+- name: Slurp deploy public key
+  ansible.builtin.slurp:
+    src: "{{ hyrule_cloud_deploy_key_path }}.pub"
+  register: hyrule_cloud_pubkey
+
+# Surface the registration instruction every run on first-create (changed),
+# and on demand by always being available in the play log even on no-op runs.
+- name: Show deploy public key registration instructions (on key create)
+  ansible.builtin.debug:
+    msg: |
+      hyrule-cloud deploy key (read-only) — add to:
+        https://github.com/AS215932/hyrule-cloud/settings/keys
+      Pubkey:
+        {{ hyrule_cloud_pubkey.content | b64decode | trim }}
+  when: hyrule_cloud_keypair.changed
+
+# StrictHostKeyChecking yes + UserKnownHostsFile — never accept_hostkey at
+# runtime. Seed the host key explicitly so git clone doesn't prompt.
+- name: Seed github.com host key into known_hosts
+  ansible.builtin.known_hosts:
+    name: github.com
+    key: "{{ lookup('pipe', 'ssh-keyscan -t ed25519 github.com 2>/dev/null') }}"
+    path: "{{ hyrule_cloud_state_dir }}/.ssh/known_hosts"
+    state: present
+
+- name: Ensure known_hosts ownership
+  ansible.builtin.file:
+    path: "{{ hyrule_cloud_state_dir }}/.ssh/known_hosts"
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0644"
+
+- name: Render SSH config for the github-hyrule-cloud alias
+  ansible.builtin.template:
+    src: ssh_config.j2
+    dest: "{{ hyrule_cloud_state_dir }}/.ssh/config"
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0600"

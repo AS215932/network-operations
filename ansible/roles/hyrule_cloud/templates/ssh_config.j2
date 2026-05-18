@@ -1,0 +1,10 @@
+# Managed by ansible/roles/hyrule_cloud. Per-app deploy-key alias for cloning
+# AS215932/hyrule-cloud. Strict host-key checking against the seeded known_hosts.
+
+Host github-hyrule-cloud
+    HostName github.com
+    User git
+    IdentityFile {{ hyrule_cloud_deploy_key_path }}
+    IdentitiesOnly yes
+    StrictHostKeyChecking yes
+    UserKnownHostsFile {{ hyrule_cloud_state_dir }}/.ssh/known_hosts

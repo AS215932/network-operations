@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: hyrule_cloud
+  description: >-
+    Deploy hyrule-cloud (FastAPI) on the api VM. SHA-pinned checkout from
+    AS215932/hyrule-cloud, uv-managed venv, env file rendered from Vault
+    secrets, systemd unit ownership, post-deploy health probe.
+  author: AS215932 ops
+  license: proprietary
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Debian
+      versions:
+        - "13"
+dependencies: []
