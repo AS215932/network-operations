@@ -52,6 +52,15 @@
     mode: "0750"
   tags: [apply]
 
+- name: Ensure runner diagnostics directory exists
+  file:
+    path: "{{ github_runner_diag_dir }}"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0750"
+  tags: [apply]
+
 - name: Ensure runner .ssh directory exists
   file:
     path: "{{ github_runner_ssh_dir }}"
@@ -189,6 +198,28 @@
   notify:
     - reload systemd
     - restart github-runner
+  tags: [apply]
+
+- name: Install tmpfiles policy for runner diagnostics retention
+  template:
+    src: github-runner-diag.tmpfiles.j2
+    dest: /etc/tmpfiles.d/github-runner-diag.conf
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [apply]
+
+- name: Ensure systemd tmpfiles cleanup timer is enabled
+  systemd:
+    name: systemd-tmpfiles-clean.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]
+
+- name: Apply runner diagnostics retention policy
+  command: systemd-tmpfiles --clean /etc/tmpfiles.d/github-runner-diag.conf
+  changed_when: false
   tags: [apply]
 
 - name: Enable and start runner

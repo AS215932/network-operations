@@ -1,0 +1,4 @@
+# Managed by ansible/roles/github_runner
+# The self-hosted runner accumulates per-start diagnostics under _diag and does
+# not rotate them itself. Keep one week's worth to avoid filling the ci VM disk.
+e {{ github_runner_diag_dir }} - {{ github_runner_user }} {{ github_runner_group }} {{ github_runner_diag_retention }} -

@@ -80,6 +80,9 @@ ansible-playbook playbooks/ci.yml --tags apply \
 After this, `.runner` and `.credentials` persist under
 `/var/lib/github-runner/runner/`. The runner survives reboots; the
 registration token is not needed again unless you tear down and re-register.
+The role also installs a `systemd-tmpfiles` retention policy for
+`/var/lib/github-runner/runner/_diag`, pruning diagnostics older than 7 days
+so runner logs do not fill the VM disk.
 
 ## 5. Verify
 

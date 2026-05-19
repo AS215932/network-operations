@@ -33,6 +33,8 @@ github_runner_user: runner
 github_runner_group: runner
 github_runner_home: /var/lib/github-runner
 github_runner_install_dir: "{{ github_runner_home }}/runner"
+github_runner_diag_dir: "{{ github_runner_install_dir }}/_diag"
+github_runner_diag_retention: 7d
 
 # Labels the workflows match against. With scope=org these are shared across
 # every repo in the runner group; pick a generic namespace (`hyrule`) and let
@@ -42,6 +44,7 @@ github_runner_labels:
   - linux
   - "{{ github_runner_arch }}"
   - hyrule
+  - hyrule-infra
 github_runner_name: "{{ inventory_hostname }}-runner"
 
 # Registration token must be passed in at first apply via -e or env var.
