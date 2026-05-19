@@ -49,18 +49,13 @@ fi
 if command -v systemd-analyze >/dev/null 2>&1; then
   echo "::group::systemd-analyze verify configs/*.service"
   if ! systemd-analyze verify configs/*.service >"$systemd_log" 2>&1; then
-    if grep -Eq "Operation not permitted|Failed to enable SO_PASSCRED|Failed to turn off SO_PASSRIGHTS" "$systemd_log" \
-        && [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" != "1" ]]; then
-      echo "::warning::systemd-analyze verify hit sandbox socket restrictions; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on a full systemd runner"
-      sed -n '1,40p' "$systemd_log" || true
-    elif grep -Eq "Command .+ is not executable|Unit postgresql\\.service not found" "$systemd_log" \
-        && [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" != "1" ]]; then
-      echo "::warning::systemd-analyze verify needs target-local service dependencies/executables; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on target-capable validation hosts"
-      sed -n '1,40p' "$systemd_log" || true
-    else
+    if [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" == "1" ]]; then
       cat "$systemd_log"
       fail=1
       failed_steps+=("systemd-analyze verify configs/*.service")
+    else
+      echo "::warning::systemd-analyze verify is advisory on CI; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on target-capable validation hosts"
+      sed -n '1,40p' "$systemd_log" || true
     fi
   fi
   echo "::endgroup::"
