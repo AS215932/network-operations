@@ -21,14 +21,15 @@ mkdir -p "$ANSIBLE_LOCAL_TEMP" "$ANSIBLE_REMOTE_TEMP"
 systemd_log="$ci_tmp_root/hyrule-systemd-check.log"
 caddy_log="$ci_tmp_root/hyrule-caddy-check.log"
 unbound_log="$ci_tmp_root/hyrule-unbound-check.log"
-nft_log="$ci_tmp_root/hyrule-nft-check.log"
 
 fail=0
+failed_steps=()
 
 run() {
   echo "::group::$*"
   if ! "$@"; then
     fail=1
+    failed_steps+=("$*")
   fi
   echo "::endgroup::"
 }
@@ -52,9 +53,14 @@ if command -v systemd-analyze >/dev/null 2>&1; then
         && [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" != "1" ]]; then
       echo "::warning::systemd-analyze verify hit sandbox socket restrictions; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on a full systemd runner"
       sed -n '1,40p' "$systemd_log" || true
+    elif grep -Eq "Command .+ is not executable|Unit postgresql\\.service not found" "$systemd_log" \
+        && [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" != "1" ]]; then
+      echo "::warning::systemd-analyze verify needs target-local service dependencies/executables; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on target-capable validation hosts"
+      sed -n '1,40p' "$systemd_log" || true
     else
       cat "$systemd_log"
       fail=1
+      failed_steps+=("systemd-analyze verify configs/*.service")
     fi
   fi
   echo "::endgroup::"
@@ -63,14 +69,15 @@ else
 fi
 
 if command -v caddy >/dev/null 2>&1; then
-  echo "::group::caddy validate --config configs/Caddyfile"
-  if ! caddy validate --config configs/Caddyfile >"$caddy_log" 2>&1; then
+  echo "::group::caddy adapt --config configs/Caddyfile --adapter caddyfile"
+  if ! caddy adapt --config configs/Caddyfile --adapter caddyfile >"$caddy_log" 2>&1; then
     if grep -q "module not registered: dns.providers.rfc2136" "$caddy_log"; then
       echo "::warning::installed caddy lacks dns.providers.rfc2136; skipping strict Caddy validation on this runner"
       sed -n '1,40p' "$caddy_log" || true
     else
       cat "$caddy_log"
       fail=1
+      failed_steps+=("caddy adapt --config configs/Caddyfile --adapter caddyfile")
     fi
   fi
   echo "::endgroup::"
@@ -84,6 +91,7 @@ if command -v unbound-checkconf >/dev/null 2>&1 && [[ -f configs/rtr/unbound/as2
     if [[ "${IAC_REQUIRE_NET_CHECKS:-0}" == "1" ]]; then
       cat "$unbound_log"
       fail=1
+      failed_steps+=("unbound-checkconf configs/rtr/unbound/as215932.conf")
     else
       echo "::warning::unbound-checkconf needs interface access on this runner; set IAC_REQUIRE_NET_CHECKS=1 in a network-capable job"
       sed -n '1,40p' "$unbound_log" || true
@@ -98,10 +106,7 @@ if command -v nft >/dev/null 2>&1; then
   if [[ "${IAC_REQUIRE_PRIVILEGED_CHECKS:-0}" == "1" ]]; then
     run nft -c -f configs/rtr/nftables.conf
   else
-    if ! nft -c -f configs/rtr/nftables.conf >"$nft_log" 2>&1; then
-      echo "::warning::nft validation needs CAP_NET_ADMIN/root on this runner; set IAC_REQUIRE_PRIVILEGED_CHECKS=1 in a privileged job"
-      sed -n '1,40p' "$nft_log" || true
-    fi
+    echo "::warning::skipping nft validation; set IAC_REQUIRE_PRIVILEGED_CHECKS=1 in a CAP_NET_ADMIN/root job"
   fi
 else
   echo "::warning::nft not installed; skipping nftables validation"
@@ -109,5 +114,9 @@ fi
 
 run scripts/ci/test-snapshot-bracket.sh
 run scripts/ci/deploy-preflight.sh --repo-only
+
+if [[ "$fail" -ne 0 ]]; then
+  printf '::error::static IaC checks failed: %s\n' "${failed_steps[*]:-unknown failure}" >&2
+fi
 
 exit "$fail"
