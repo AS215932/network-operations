@@ -35,6 +35,23 @@ github_runner_home: /var/lib/github-runner
 github_runner_install_dir: "{{ github_runner_home }}/runner"
 github_runner_diag_dir: "{{ github_runner_install_dir }}/_diag"
 github_runner_diag_retention: 7d
+github_runner_storage_enabled: false
+github_runner_data_disk_device: /dev/xvdi
+github_runner_data_disk_partition_number: 1
+github_runner_data_disk_partition: >-
+  {{ github_runner_data_disk_device }}{{ github_runner_data_disk_partition_number }}
+github_runner_data_disk_fstype: ext4
+github_runner_data_disk_mount_opts: defaults,nofail
+github_runner_data_disk_stage_mount: /mnt/github-runner-data
+github_runner_tmp_dir: "{{ github_runner_home }}/tmp"
+github_runner_tmp_retention: 7d
+github_runner_bootstrap_dir: "{{ github_runner_home }}/bootstrap"
+github_runner_bootstrap_retention: 3d
+github_runner_docker_data_root: "{{ github_runner_home }}/docker"
+github_runner_docker_prune_enabled: true
+github_runner_docker_prune_interval: daily
+github_runner_docker_prune_randomized_delay: 15m
+github_runner_docker_prune_until: 168h
 
 # Labels the workflows match against. With scope=org these are shared across
 # every repo in the runner group; pick a generic namespace (`hyrule`) and let
@@ -86,12 +103,40 @@ github_runner_packages:
   - ansible-lint
   - yamllint
   - shellcheck
+  - docker.io
+  - goss
   - python3-jsonschema
   - python3-jinja2
+  - python3-yaml
+  - python3-pytest
   - python3-pip
   - python3-venv
+  - bind9-utils
+  - nftables
+  - unbound
+  - golang-go
   - jq
   - git
+  - parted
   - rsync
   - openssh-client
   - gh
+
+# Heavy IaC gates. containerlab is installed from its upstream .deb because it
+# is not packaged in Debian; Caddy is built with the RFC2136 DNS provider so
+# `caddy validate` can parse configs/Caddyfile.
+github_runner_containerlab_version: "0.75.0"
+github_runner_containerlab_deb_url: >-
+  https://github.com/srl-labs/containerlab/releases/download/
+  v{{ github_runner_containerlab_version }}/containerlab_
+  {{ github_runner_containerlab_version }}_linux_amd64.deb
+github_runner_containerlab_deb_path: >-
+  {{ github_runner_bootstrap_dir }}/containerlab_{{ github_runner_containerlab_version }}_linux_amd64.deb
+github_runner_containerlab_admin_group: clab_admins
+github_runner_xcaddy_path: /usr/local/bin/xcaddy
+github_runner_caddy_path: /usr/local/bin/caddy
+github_runner_caddy_build_dir: "{{ github_runner_tmp_dir }}/caddy-build"
+github_runner_caddy_go_cache: "{{ github_runner_tmp_dir }}/go-cache-caddy"
+github_runner_caddy_go_path: "{{ github_runner_tmp_dir }}/go-path-caddy"
+github_runner_tarball_path: >-
+  {{ github_runner_bootstrap_dir }}/actions-runner-{{ github_runner_version }}.tar.gz

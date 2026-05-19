@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Docker garbage collection for the ci runner
+
+[Timer]
+OnCalendar={{ github_runner_docker_prune_interval }}
+Persistent=true
+RandomizedDelaySec={{ github_runner_docker_prune_randomized_delay }}
+
+[Install]
+WantedBy=timers.target

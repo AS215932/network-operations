@@ -1,0 +1,8 @@
+[Unit]
+Description=Prune unused Docker data on the ci runner host
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker system prune --all --force --volumes --filter until={{ github_runner_docker_prune_until }}

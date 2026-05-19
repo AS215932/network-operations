@@ -4,7 +4,7 @@ The `ci` VM hosts the self-hosted GitHub Actions runner that powers every
 workflow in `.github/workflows/`. It must exist before the workflows can
 do any work — until then the workflow jobs sit queued.
 
-Reasonable size: **1 vCPU, 2 GB RAM, 20 GB disk** (Debian 13). The runner is
+Reasonable size: **1 vCPU, 2 GB RAM, 20 GB root disk + 50 GB runner data disk** (Debian 13). The runner is
 mostly I/O-bound during `ansible-playbook --tags validate` jobs.
 
 ## 1. Provision the VM via Xen Orchestra
@@ -15,9 +15,11 @@ via overlay v6 `2a0c:b641:b50:2::70` or the dom0 jump `193.70.32.138`) — see
 `vm.start` sequence. The `ci` VM follows it with these parameters:
 
 - Template: **Debian 13 cloud-init**. Name: `ci`. 1 vCPU, 2 GiB RAM,
-  20 GiB disk on `local_storage`.
+  20 GiB root disk on `local_storage` plus a second 50 GiB data disk attached
+  at VBD position `8` so the guest sees it as `/dev/xvdi`.
 - VIF on `xenbr-infra` (overlay). Static IPv6 `2a0c:b641:b50:2::d0`
-  (matches `peers.ci.ipv6` in `group_vars/all.yml`).
+  (matches `peers.ci.ipv6` in `group_vars/all.yml` and
+  `ci.as215932.net`).
 - Cloud-init user-data from `autoinstall/debian-cloud-init.yaml.j2`;
   hostname `ci.as215932.net`; `id_servify.pub` authorized for root.
 
@@ -26,6 +28,10 @@ path if you prefer.
 
 Start the VM, wait for cloud-init to finish, and verify `ssh svag@ci` works
 over overlay v6.
+
+If you are retrofitting the existing `ci` host rather than building a fresh VM,
+attach the new 50 GiB VDI in Xen Orchestra first and place it at VBD position
+`8` so the guest sees `/dev/xvdi` before you re-apply the role.
 
 ## 2. Bootstrap firewall + monitoring + logs
 
@@ -80,9 +86,11 @@ ansible-playbook playbooks/ci.yml --tags apply \
 After this, `.runner` and `.credentials` persist under
 `/var/lib/github-runner/runner/`. The runner survives reboots; the
 registration token is not needed again unless you tear down and re-register.
-The role also installs a `systemd-tmpfiles` retention policy for
-`/var/lib/github-runner/runner/_diag`, pruning diagnostics older than 7 days
-so runner logs do not fill the VM disk.
+The role manages the dedicated `/dev/xvdi` data disk, mounts it at
+`/var/lib/github-runner`, migrates existing runner and Docker data onto it on
+the first apply after the disk is attached, and keeps transient content bounded:
+`_diag` is pruned after 7 days, runner bootstrap/build scratch is pruned after a
+few days, and a systemd timer runs `docker system prune` with a 7-day cutoff.
 
 ## 5. Verify
 
@@ -92,10 +100,24 @@ gh api /repos/AS215932/network-operations/actions/runners \
 ```
 
 Expect an entry with `name=ci-runner`, `status=online`, and labels including
-`self-hosted, linux, x64, hyrule-infra`.
+`self-hosted, linux, x64, hyrule, hyrule-infra`. Existing registrations do not
+always pick up label changes; if `hyrule-infra` or `hyrule` is missing, delete
+the stale GitHub runner registration and re-apply the role with a fresh token.
 
 `mcp__hyrule__icinga_get_host_state host=ci` should show the host UP with
 the `github-runner-online` service OK.
+
+Also verify the storage cutover directly on the host:
+
+```bash
+findmnt /var/lib/github-runner
+df -h /var/lib/github-runner
+docker info --format '{{ .DockerRootDir }}'
+systemctl status github-runner-docker-prune.timer
+```
+
+Expect `/var/lib/github-runner` to be backed by `/dev/xvdi1` and Docker to use
+`/var/lib/github-runner/docker`.
 
 ## Tear down / re-register
 

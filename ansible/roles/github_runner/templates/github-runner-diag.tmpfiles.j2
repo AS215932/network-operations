@@ -1,4 +1,6 @@
 # Managed by ansible/roles/github_runner
-# The self-hosted runner accumulates per-start diagnostics under _diag and does
-# not rotate them itself. Keep one week's worth to avoid filling the ci VM disk.
+# The self-hosted runner accumulates per-start diagnostics and short-lived build
+# scratch under the runner data disk. Keep the transient content bounded.
 e {{ github_runner_diag_dir }} - {{ github_runner_user }} {{ github_runner_group }} {{ github_runner_diag_retention }} -
+e {{ github_runner_tmp_dir }} - root root {{ github_runner_tmp_retention }} -
+e {{ github_runner_bootstrap_dir }} - root root {{ github_runner_bootstrap_retention }} -

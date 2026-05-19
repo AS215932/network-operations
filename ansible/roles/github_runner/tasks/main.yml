@@ -33,6 +33,179 @@
     system: true
   tags: [apply]
 
+- name: Ensure runner data disk device exists
+  stat:
+    path: "{{ github_runner_data_disk_device }}"
+  register: github_runner_data_disk_device_stat
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Fail if runner data disk device is missing
+  fail:
+    msg: >-
+      github_runner_storage_enabled is true but {{ github_runner_data_disk_device }}
+      is not present on the host. Attach the 50 GiB ci runner disk first.
+  when:
+    - github_runner_storage_enabled | bool
+    - not (github_runner_data_disk_device_stat.stat.isblk | default(false))
+  tags: [apply]
+
+- name: Ensure runner data disk staging mount exists
+  file:
+    path: "{{ github_runner_data_disk_stage_mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Ensure runner data disk partition exists
+  community.general.parted:
+    device: "{{ github_runner_data_disk_device }}"
+    label: gpt
+    number: "{{ github_runner_data_disk_partition_number }}"
+    part_start: 1MiB
+    part_end: 100%
+    state: present
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Ensure runner data disk filesystem exists
+  community.general.filesystem:
+    dev: "{{ github_runner_data_disk_partition }}"
+    fstype: "{{ github_runner_data_disk_fstype }}"
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Check current runner home mount source
+  command: findmnt -n -o SOURCE --target "{{ github_runner_home }}"
+  register: github_runner_home_mount_source
+  changed_when: false
+  failed_when: false
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Set runner storage migration flag
+  set_fact:
+    github_runner_storage_migration_needed: >-
+      {{ (github_runner_home_mount_source.stdout | default('') | trim)
+         != github_runner_data_disk_partition }}
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Mount runner data disk on staging path during migration
+  mount:
+    path: "{{ github_runner_data_disk_stage_mount }}"
+    src: "{{ github_runner_data_disk_partition }}"
+    fstype: "{{ github_runner_data_disk_fstype }}"
+    opts: "{{ github_runner_data_disk_mount_opts }}"
+    state: mounted
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Stop runner services before data-disk migration
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - github-runner
+    - vault-agent-github-runner
+    - docker
+  failed_when: false
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Check current runner home contents before migration
+  stat:
+    path: "{{ github_runner_home }}"
+  register: github_runner_home_stat
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Copy existing runner data to staging disk
+  command: >-
+    rsync -aHAX --delete {{ github_runner_home }}/ {{ github_runner_data_disk_stage_mount }}/
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+    - github_runner_home_stat.stat.exists | default(false)
+  changed_when: true
+  tags: [apply]
+
+- name: Check current Docker data root before migration
+  stat:
+    path: /var/lib/docker
+  register: github_runner_root_docker_stat
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Copy existing Docker data to staging disk
+  command: >-
+    rsync -aHAX --delete /var/lib/docker/ {{ github_runner_data_disk_stage_mount }}/docker/
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+    - github_runner_root_docker_stat.stat.exists | default(false)
+  changed_when: true
+  tags: [apply]
+
+- name: Unmount runner data disk staging path after migration copy
+  mount:
+    path: "{{ github_runner_data_disk_stage_mount }}"
+    state: unmounted
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Remove old runner home before mounting data disk
+  file:
+    path: "{{ github_runner_home }}"
+    state: absent
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+  tags: [apply]
+
+- name: Ensure runner home mountpoint exists
+  file:
+    path: "{{ github_runner_home }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Mount runner data disk at runner home
+  mount:
+    path: "{{ github_runner_home }}"
+    src: "{{ github_runner_data_disk_partition }}"
+    fstype: "{{ github_runner_data_disk_fstype }}"
+    opts: "{{ github_runner_data_disk_mount_opts }}"
+    state: mounted
+  when: github_runner_storage_enabled | bool
+  tags: [apply]
+
+- name: Remove legacy root-disk Docker data after migration
+  file:
+    path: /var/lib/docker
+    state: absent
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
+    - github_runner_root_docker_stat.stat.exists | default(false)
+  tags: [apply]
+
 - name: Ensure runner user exists
   user:
     name: "{{ github_runner_user }}"
@@ -40,7 +213,147 @@
     home: "{{ github_runner_home }}"
     shell: /usr/sbin/nologin
     system: true
-    create_home: true
+    create_home: false
+  tags: [apply]
+
+- name: Ensure runner home exists on the mounted filesystem
+  file:
+    path: "{{ github_runner_home }}"
+    state: directory
+    owner: "{{ github_runner_user }}"
+    group: "{{ github_runner_group }}"
+    mode: "0750"
+  tags: [apply]
+
+- name: Ensure runner auxiliary directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ github_runner_bootstrap_dir }}", owner: root, group: root, mode: "0755" }
+    - { path: "{{ github_runner_tmp_dir }}", owner: root, group: root, mode: "1777" }
+    - { path: "{{ github_runner_docker_data_root }}", owner: root, group: root, mode: "0711" }
+  tags: [apply]
+
+- name: Install Docker daemon config for runner data disk
+  template:
+    src: docker-daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart docker
+  tags: [apply]
+
+- name: Ensure runner is in docker group
+  user:
+    name: "{{ github_runner_user }}"
+    groups: docker
+    append: true
+  tags: [apply]
+
+- name: Enable and start Docker for Containerlab/Batfish gates
+  systemd:
+    name: docker
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]
+
+- name: Ensure sbin validators are visible in runner PATH
+  file:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    state: link
+    force: true
+  loop:
+    - { src: /usr/sbin/nft, dest: /usr/local/bin/nft }
+    - { src: /usr/sbin/unbound-checkconf, dest: /usr/local/bin/unbound-checkconf }
+  tags: [apply]
+
+- name: Check whether containerlab is installed
+  command: containerlab version
+  register: github_runner_containerlab_check
+  changed_when: false
+  failed_when: false
+  tags: [apply]
+
+- name: Download containerlab package
+  get_url:
+    url: "{{ github_runner_containerlab_deb_url }}"
+    dest: "{{ github_runner_containerlab_deb_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: github_runner_containerlab_check.rc != 0
+  tags: [apply]
+
+- name: Install containerlab package
+  apt:
+    deb: "{{ github_runner_containerlab_deb_path }}"
+  when: github_runner_containerlab_check.rc != 0
+  tags: [apply]
+
+- name: Ensure runner is in containerlab admin group
+  user:
+    name: "{{ github_runner_user }}"
+    groups: "{{ github_runner_containerlab_admin_group }}"
+    append: true
+  tags: [apply]
+
+- name: Install xcaddy builder
+  command: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+  environment:
+    GOBIN: "{{ github_runner_xcaddy_path | dirname }}"
+  args:
+    creates: "{{ github_runner_xcaddy_path }}"
+  tags: [apply]
+
+- name: Check whether Caddy has RFC2136 DNS provider
+  shell: >-
+    {{ github_runner_caddy_path }} list-modules 2>/dev/null |
+    grep -qx dns.providers.rfc2136
+  register: github_runner_caddy_rfc2136_check
+  changed_when: false
+  failed_when: false
+  tags: [apply]
+
+- name: Ensure Caddy build directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ github_runner_caddy_build_dir }}"
+    - "{{ github_runner_caddy_go_cache }}"
+    - "{{ github_runner_caddy_go_path }}"
+  when: github_runner_caddy_rfc2136_check.rc != 0
+  tags: [apply]
+
+- name: Build Caddy with RFC2136 DNS provider
+  command: >-
+    {{ github_runner_xcaddy_path }} build
+    --output {{ github_runner_caddy_path }}
+    --with github.com/caddy-dns/rfc2136
+  environment:
+    TMPDIR: "{{ github_runner_caddy_build_dir }}"
+    GOCACHE: "{{ github_runner_caddy_go_cache }}"
+    GOPATH: "{{ github_runner_caddy_go_path }}"
+  when: github_runner_caddy_rfc2136_check.rc != 0
+  tags: [apply]
+
+- name: Ensure custom Caddy binary is executable
+  file:
+    path: "{{ github_runner_caddy_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: github_runner_caddy_rfc2136_check.rc != 0
   tags: [apply]
 
 - name: Ensure runner install directory exists
@@ -115,7 +428,7 @@
 - name: Download runner tarball
   get_url:
     url: "{{ github_runner_tarball_url }}"
-    dest: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    dest: "{{ github_runner_tarball_path }}"
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_group }}"
     mode: "0644"
@@ -125,7 +438,7 @@
 
 - name: Extract runner tarball
   unarchive:
-    src: "/tmp/actions-runner-{{ github_runner_version }}.tar.gz"
+    src: "{{ github_runner_tarball_path }}"
     dest: "{{ github_runner_install_dir }}"
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_group }}"
@@ -198,6 +511,37 @@
   notify:
     - reload systemd
     - restart github-runner
+  tags: [apply]
+
+- name: Install Docker prune service
+  template:
+    src: github-runner-docker-prune.service.j2
+    dest: /etc/systemd/system/github-runner-docker-prune.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  when: github_runner_docker_prune_enabled | bool
+  tags: [apply]
+
+- name: Install Docker prune timer
+  template:
+    src: github-runner-docker-prune.timer.j2
+    dest: /etc/systemd/system/github-runner-docker-prune.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  when: github_runner_docker_prune_enabled | bool
+  tags: [apply]
+
+- name: Enable Docker prune timer
+  systemd:
+    name: github-runner-docker-prune.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: github_runner_docker_prune_enabled | bool
   tags: [apply]
 
 - name: Install tmpfiles policy for runner diagnostics retention

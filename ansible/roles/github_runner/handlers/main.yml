@@ -7,3 +7,8 @@
   systemd:
     name: github-runner
     state: restarted
+
+- name: restart docker
+  systemd:
+    name: docker
+    state: restarted

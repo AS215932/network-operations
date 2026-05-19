@@ -19,12 +19,13 @@ KillMode=process
 KillSignal=SIGTERM
 TimeoutStopSec=5min
 Environment=HOME={{ github_runner_home }}
+Environment=TMPDIR={{ github_runner_tmp_dir }}
 
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths={{ github_runner_install_dir }} {{ github_runner_home }} /tmp /var/tmp
+ReadWritePaths={{ github_runner_install_dir }} {{ github_runner_home }}
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

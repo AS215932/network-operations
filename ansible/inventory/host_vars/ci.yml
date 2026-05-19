@@ -7,6 +7,13 @@
 #
 # First-time provisioning runbook: docs/ci/provision.md
 
+github_runner_storage_enabled: true
+github_runner_data_disk_device: /dev/xvdi
+
+monitoring_disks:
+  "disk /": { mountpoint: "/" }
+  "disk /var/lib/github-runner": { mountpoint: "/var/lib/github-runner" }
+
 firewall_extra_rules:
   # node_exporter scrape from mon only.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

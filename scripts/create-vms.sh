@@ -8,6 +8,8 @@ SSH_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqhNk5JGwvgtQQgt+bs5t9zOz0XX1sVUZV
 
 create_vm() {
   local NAME=$1 DESC="$2" VCPU=$3 MEM=$4 DISK=$5 IPV6=$6
+  local DATA_DISK="${7:-}"
+  local DATA_VBD_POSITION="${8:-1}"
 
   echo "Creating $NAME..."
 
@@ -63,6 +65,21 @@ ethernets:
     echo "$NAME disk resized to $DISK"
   fi
 
+  if [ -n "$DATA_DISK" ]; then
+    DATA_VDI=$(xo-cli vdi.create \
+      name_label="${NAME}-data" \
+      name_description="${NAME} runner data disk" \
+      size="$DATA_DISK" \
+      sr="$SR")
+    xo-cli vbd.create \
+      vm="$VM_ID" \
+      vdi="$DATA_VDI" \
+      bootable=false \
+      type=Disk \
+      position="$DATA_VBD_POSITION"
+    echo "$NAME attached extra data disk at VBD position $DATA_VBD_POSITION: $DATA_VDI"
+  fi
+
   # Set UEFI boot order: disk only (no PXE)
   xo-cli vm.setBootOrder vm="$VM_ID" order=c
 
@@ -78,7 +95,7 @@ create_vm mon "Monitoring (Icinga2 + Prometheus + Grafana)" 2 4294967296 4294967
 create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
 create_vm vault "Vault secret plane" 1 2147483648 21474836480 "2a0c:b641:b50:2::c0"
-create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0"
+create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
 
 # mon needs a second NIC on xenbr-mgmt to scrape dom0/XOA (underlay-only hosts).
 # After create_vm, add it manually:
