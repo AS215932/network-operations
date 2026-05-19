@@ -75,6 +75,7 @@
   community.general.filesystem:
     dev: "{{ github_runner_data_disk_partition }}"
     fstype: "{{ github_runner_data_disk_fstype }}"
+    resizefs: true
   when: github_runner_storage_enabled | bool
   tags: [apply]
 
