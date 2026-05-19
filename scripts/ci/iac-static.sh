@@ -12,9 +12,16 @@ if [[ -z "$ci_tmp_root" ]]; then
   ci_tmp_root="${GITHUB_WORKSPACE:-$repo_root}/.tmp"
 fi
 
+mkdir -p "$ci_tmp_root"
+export TMPDIR="${TMPDIR:-$ci_tmp_root}"
 export ANSIBLE_LOCAL_TEMP="${ANSIBLE_LOCAL_TEMP:-$ci_tmp_root/ansible-local}"
 export ANSIBLE_REMOTE_TEMP="${ANSIBLE_REMOTE_TEMP:-$ci_tmp_root/ansible-remote}"
 mkdir -p "$ANSIBLE_LOCAL_TEMP" "$ANSIBLE_REMOTE_TEMP"
+
+systemd_log="$ci_tmp_root/hyrule-systemd-check.log"
+caddy_log="$ci_tmp_root/hyrule-caddy-check.log"
+unbound_log="$ci_tmp_root/hyrule-unbound-check.log"
+nft_log="$ci_tmp_root/hyrule-nft-check.log"
 
 fail=0
 
@@ -40,13 +47,13 @@ fi
 
 if command -v systemd-analyze >/dev/null 2>&1; then
   echo "::group::systemd-analyze verify configs/*.service"
-  if ! systemd-analyze verify configs/*.service >/tmp/hyrule-systemd-check.log 2>&1; then
-    if grep -Eq "Operation not permitted|Failed to enable SO_PASSCRED|Failed to turn off SO_PASSRIGHTS" /tmp/hyrule-systemd-check.log \
+  if ! systemd-analyze verify configs/*.service >"$systemd_log" 2>&1; then
+    if grep -Eq "Operation not permitted|Failed to enable SO_PASSCRED|Failed to turn off SO_PASSRIGHTS" "$systemd_log" \
         && [[ "${IAC_REQUIRE_SYSTEMD_CHECKS:-0}" != "1" ]]; then
       echo "::warning::systemd-analyze verify hit sandbox socket restrictions; set IAC_REQUIRE_SYSTEMD_CHECKS=1 on a full systemd runner"
-      sed -n '1,40p' /tmp/hyrule-systemd-check.log || true
+      sed -n '1,40p' "$systemd_log" || true
     else
-      cat /tmp/hyrule-systemd-check.log
+      cat "$systemd_log"
       fail=1
     fi
   fi
@@ -57,12 +64,12 @@ fi
 
 if command -v caddy >/dev/null 2>&1; then
   echo "::group::caddy validate --config configs/Caddyfile"
-  if ! caddy validate --config configs/Caddyfile >/tmp/hyrule-caddy-check.log 2>&1; then
-    if grep -q "module not registered: dns.providers.rfc2136" /tmp/hyrule-caddy-check.log; then
+  if ! caddy validate --config configs/Caddyfile >"$caddy_log" 2>&1; then
+    if grep -q "module not registered: dns.providers.rfc2136" "$caddy_log"; then
       echo "::warning::installed caddy lacks dns.providers.rfc2136; skipping strict Caddy validation on this runner"
-      sed -n '1,40p' /tmp/hyrule-caddy-check.log || true
+      sed -n '1,40p' "$caddy_log" || true
     else
-      cat /tmp/hyrule-caddy-check.log
+      cat "$caddy_log"
       fail=1
     fi
   fi
@@ -73,13 +80,13 @@ fi
 
 if command -v unbound-checkconf >/dev/null 2>&1 && [[ -f configs/rtr/unbound/as215932.conf ]]; then
   echo "::group::unbound-checkconf configs/rtr/unbound/as215932.conf"
-  if ! unbound-checkconf configs/rtr/unbound/as215932.conf >/tmp/hyrule-unbound-check.log 2>&1; then
+  if ! unbound-checkconf configs/rtr/unbound/as215932.conf >"$unbound_log" 2>&1; then
     if [[ "${IAC_REQUIRE_NET_CHECKS:-0}" == "1" ]]; then
-      cat /tmp/hyrule-unbound-check.log
+      cat "$unbound_log"
       fail=1
     else
       echo "::warning::unbound-checkconf needs interface access on this runner; set IAC_REQUIRE_NET_CHECKS=1 in a network-capable job"
-      sed -n '1,40p' /tmp/hyrule-unbound-check.log || true
+      sed -n '1,40p' "$unbound_log" || true
     fi
   fi
   echo "::endgroup::"
@@ -91,9 +98,9 @@ if command -v nft >/dev/null 2>&1; then
   if [[ "${IAC_REQUIRE_PRIVILEGED_CHECKS:-0}" == "1" ]]; then
     run nft -c -f configs/rtr/nftables.conf
   else
-    if ! nft -c -f configs/rtr/nftables.conf >/tmp/hyrule-nft-check.log 2>&1; then
+    if ! nft -c -f configs/rtr/nftables.conf >"$nft_log" 2>&1; then
       echo "::warning::nft validation needs CAP_NET_ADMIN/root on this runner; set IAC_REQUIRE_PRIVILEGED_CHECKS=1 in a privileged job"
-      sed -n '1,40p' /tmp/hyrule-nft-check.log || true
+      sed -n '1,40p' "$nft_log" || true
     fi
   fi
 else
