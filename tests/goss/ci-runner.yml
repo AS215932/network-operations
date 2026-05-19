@@ -1,0 +1,19 @@
+---
+service:
+  github-runner:
+    enabled: true
+    running: true
+  vault-agent-github-runner:
+    enabled: true
+    running: true
+
+file:
+  /etc/github-runner/secrets.env:
+    exists: true
+    mode: "0640"
+    owner: root
+    group: runner
+    contains:
+      - /^DISCORD_WEBHOOK_URL=.+/
+      - /^ICINGA_API_USER=.+/
+      - /^ICINGA_API_PASSWORD=.+/

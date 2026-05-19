@@ -7,9 +7,11 @@ Workflows match the runner label set `self-hosted, linux, x64, hyrule-infra`.
 
 | Workflow | Trigger | Purpose | PR |
 |----------|---------|---------|----|
-| `lint.yml` | `pull_request`, `push` to `main` | yamllint + ansible-lint + shellcheck + Jinja2 syntax | 0b |
-| `render-check.yml` | `pull_request` touching `ansible/**`, `configs/**` | render every playbook + assert `ansible/generated/` is fresh | 0b |
-| `apply.yml` | `workflow_dispatch` | manual gated apply (pre-snapshot, `--tags apply`, post-snapshot, diff) | 0e |
+| `lint.yml` | `pull_request`, `push` to `main` | yamllint + ansible-lint + shellcheck + Jinja2 syntax + static IaC contracts | 0b |
+| `render-check.yml` | `pull_request` touching `ansible/**`, `configs/**` | render every playbook + deploy preflight + assert `ansible/generated/` is fresh | 0b |
+| `iac-tests.yml` | `pull_request`, `push` to `main`, manual | DNS/inventory/Vault/FRR tests, render idempotency; Batfish/Containerlab run manually or when repo vars enable them | current |
+| `drift-detection.yml` | nightly + manual | `ansible-playbook --check --diff`; alerts NOC, never auto-applies | current |
+| `apply.yml` | `workflow_dispatch` | manual gated apply with runner preflight, snapshots, postflight Goss, diff | 0e |
 
 AI review is handled by the repo's **hosted review service** (configured in
 GitHub repo settings), not a workflow we maintain — there is no `ai-review.yml`.
@@ -62,7 +64,8 @@ can't be gated by checks that don't exist on `main` yet. Bootstrap order:
    `0a` (ci VM + `github_runner` role) → `0b` (lint + render-check) →
    `0e` (apply) → `0f` (runner Vault wiring + CODEOWNERS).
 4. **Enable branch protection on `main`** once `0f` is merged and no
-   foundation PRs are in flight. Require the `lint` and `render-check`
+   foundation PRs are in flight. Require the `lint`, `render-check`, and
+   `iac-tests / static-iac` and `iac-tests / ansible-idempotency`
    status checks plus the hosted review service's check (read its exact
    context name off a recent PR's checks list first), and set
    `required_approving_review_count: 1` — since there is no auto-merge,

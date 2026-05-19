@@ -56,8 +56,13 @@ vault kv put kv/ci-runner \
     icinga_noc_agent_api_password="..."
 ```
 
-When a playbook enters CI scope and needs another secret, add the key here
-and a matching line in the ctmpl template — keep both in lockstep.
+Do **not** store `XO_TOKEN` or `XCPNG_XO_TOKEN` here. Hyrule Cloud receives
+XCP-ng/Openprovider/payment/database secrets through its own target-side Vault
+Agent on the `api` VM; see
+[bootstrap-hyrule-cloud-vault.md](./bootstrap-hyrule-cloud-vault.md).
+
+When a playbook enters CI scope and needs another runner-scoped secret, add
+the key here and a matching line in the ctmpl template — keep both in lockstep.
 
 ## 4. Fetch role_id + secret_id
 
@@ -92,6 +97,7 @@ persist on the host, so subsequent applies converge without the env vars.
 ```bash
 ssh root@2a0c:b641:b50:2::d0 systemctl status vault-agent-github-runner
 ssh root@2a0c:b641:b50:2::d0 'ls -l /etc/github-runner/secrets.env'   # 0640 runner:runner
+ssh root@2a0c:b641:b50:2::d0 '/path/to/network-operations/scripts/ci/deploy-preflight.sh --runner'
 ```
 
 Then run the `apply.yml` smoke test from

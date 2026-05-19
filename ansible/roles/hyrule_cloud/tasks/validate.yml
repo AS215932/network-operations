@@ -21,10 +21,10 @@
   become: false
   changed_when: false
 
-- name: Stat reusable configs on the controller (hyrule-cloud.env.j2)
+- name: Stat reusable configs on the controller (hyrule-cloud Vault template)
   ansible.builtin.stat:
-    path: "{{ playbook_dir }}/../../configs/hyrule-cloud.env.j2"
-  register: hyrule_cloud_env_template
+    path: "{{ playbook_dir }}/../roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
+  register: hyrule_cloud_vault_env_template
   delegate_to: localhost
   become: false
   changed_when: false
@@ -33,7 +33,8 @@
   ansible.builtin.assert:
     that:
       - hyrule_cloud_service_file.stat.exists
-      - hyrule_cloud_env_template.stat.exists
+      - hyrule_cloud_vault_env_template.stat.exists
     fail_msg: >-
-      configs/hyrule-cloud.{service,env.j2} must exist in the hyrule-infra
-      repo; the role refuses to apply without them.
+      configs/hyrule-cloud.service and the Vault Agent hyrule-cloud env
+      template must exist in the hyrule-infra repo; the role refuses to apply
+      without them.

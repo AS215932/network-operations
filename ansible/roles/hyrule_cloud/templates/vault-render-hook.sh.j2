@@ -1,0 +1,29 @@
+#!/bin/sh
+# Managed by ansible/roles/hyrule_cloud.
+set -eu
+
+env_file="{{ hyrule_cloud_env_file }}"
+service="{{ hyrule_cloud_service_name }}.service"
+
+if [ ! -s "$env_file" ]; then
+  echo "hyrule-cloud Vault render produced an empty env file" >&2
+  exit 1
+fi
+
+for key in{% for key in hyrule_cloud_required_env_keys %} {{ key }}{% endfor %}; do
+  if ! grep -Eq "^${key}=.+" "$env_file"; then
+    echo "hyrule-cloud Vault render missing required key ${key}" >&2
+    exit 1
+  fi
+  if grep -Eq "^${key}=<no value>$" "$env_file"; then
+    echo "hyrule-cloud Vault render has unresolved key ${key}" >&2
+    exit 1
+  fi
+done
+
+chgrp "{{ hyrule_cloud_app_group }}" "$env_file"
+chmod 0640 "$env_file"
+
+if systemctl list-unit-files "$service" >/dev/null 2>&1; then
+  systemctl try-restart "$service"
+fi

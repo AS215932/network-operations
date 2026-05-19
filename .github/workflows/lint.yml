@@ -74,3 +74,10 @@ jobs:
                   fail = 1
           sys.exit(fail)
           EOF
+
+  iac-static:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    steps:
+      - uses: actions/checkout@v4
+      - name: static IaC tests
+        run: scripts/ci/iac-static.sh

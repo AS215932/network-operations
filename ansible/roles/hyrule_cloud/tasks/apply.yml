@@ -66,5 +66,9 @@
 - name: Sync runtime (uv, env, systemd unit, toy-table cleanup)
   ansible.builtin.import_tasks: runtime.yml
 
+- name: Set up Vault Agent secret rendering
+  ansible.builtin.import_tasks: vault.yml
+  when: hyrule_cloud_vault_enabled | bool
+
 - name: Post-deploy health check
   ansible.builtin.import_tasks: health.yml

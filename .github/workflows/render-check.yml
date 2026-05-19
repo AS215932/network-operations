@@ -35,6 +35,9 @@ jobs:
       - name: Render every playbook (validate-only, no apply)
         run: scripts/ci/render-all.sh
 
+      - name: Repo deploy preflight
+        run: scripts/ci/deploy-preflight.sh --repo-only
+
       - name: Assert generated/ matches HEAD
         run: |
           set -e

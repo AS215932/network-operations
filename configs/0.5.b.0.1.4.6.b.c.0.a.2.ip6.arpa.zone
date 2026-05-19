@@ -19,7 +19,7 @@ $ORIGIN 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026050801 ; serial
+                  2026051901 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
@@ -59,5 +59,20 @@ $TTL 3600
 ; --- :2::90 — mail ---
 0.9.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  mail.as215932.net.
 
+; --- :2::a0 — noc ---
+0.a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  noc.as215932.net.
+
+; --- :2::b0 — log ---
+0.b.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  log.as215932.net.
+
 ; --- :2::c0 — vault ---
 0.c.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  vault-node.as215932.net.
+
+; --- :2::d0 — ci ---
+0.d.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  ci.as215932.net.
+
+; --- ::a — cr1-nl1 loopback ---
+a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  cr1-nl1.as215932.net.
+
+; --- ::b — cr1-de1 loopback ---
+b.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  cr1-de1.as215932.net.

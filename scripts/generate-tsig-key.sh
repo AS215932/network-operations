@@ -8,7 +8,7 @@
 # Copy the output secret to:
 #   - configs/knot.conf.j2 ({{ tsig_secret }})
 #   - configs/Caddyfile.j2 ({{ tsig_secret }})
-#   - configs/hyrule-cloud.env.j2 (HYRULE_DNS_TSIG_KEY)
+#   - Vault kv/hyrule-cloud key `tsig_secret` (HYRULE_DNS_TSIG_KEY)
 
 set -euo pipefail
 

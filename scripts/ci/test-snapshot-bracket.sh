@@ -12,6 +12,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../../ansible"
+export ANSIBLE_LOCAL_TEMP="${ANSIBLE_LOCAL_TEMP:-/tmp/ansible-local}"
+export ANSIBLE_REMOTE_TEMP="${ANSIBLE_REMOTE_TEMP:-/tmp/ansible-remote}"
+mkdir -p "$ANSIBLE_LOCAL_TEMP" "$ANSIBLE_REMOTE_TEMP"
 
 # Per-playbook test limit. Picks a host that's actually in each playbook's
 # main hosts: selector. The point of the test is "snapshot fires under
@@ -41,10 +44,12 @@ for pb in "${!test_limits[@]}"; do
   )
   if ! grep -q 'Pre-deploy Icinga snapshot' <<<"${out}"; then
     echo "::error::${pb}.yml does NOT trigger pre-deploy snapshot under --limit ${limit}"
+    sed -n '1,80p' <<<"${out}"
     fail=1
   fi
   if ! grep -q 'Post-deploy Icinga snapshot' <<<"${out}"; then
     echo "::error::${pb}.yml does NOT trigger post-deploy snapshot under --limit ${limit}"
+    sed -n '1,80p' <<<"${out}"
     fail=1
   fi
   echo "::endgroup::"

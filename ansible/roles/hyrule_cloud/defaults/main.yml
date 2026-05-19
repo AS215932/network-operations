@@ -36,6 +36,35 @@ hyrule_cloud_service_name: hyrule-cloud
 # the unit; loopback works.
 hyrule_cloud_listen_url: http://[::1]:8402/health
 
+# Runtime secrets are rendered on the target VM by Vault Agent. CI should pass
+# a short-lived response-wrapped SecretID as VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID
+# for first bootstrap/re-bootstrap; a direct SecretID remains as an emergency
+# fallback only.
+hyrule_cloud_env_file: "{{ hyrule_cloud_install_dir }}/.env"
+hyrule_cloud_vault_enabled: true
+hyrule_cloud_vault_role_name: hyrule-cloud
+hyrule_cloud_vault_role_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_ROLE_ID') | default('', true) }}"
+hyrule_cloud_vault_wrapped_secret_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID') | default('', true) }}"
+hyrule_cloud_vault_secret_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_SECRET_ID') | default('', true) }}"
+hyrule_cloud_vault_secret_id_response_wrapping_path: >-
+  {{ ('auth/approle/role/' ~ hyrule_cloud_vault_role_name ~ '/secret-id')
+     if (hyrule_cloud_vault_wrapped_secret_id | length > 0) else '' }}
+hyrule_cloud_vault_render_hook: /usr/local/sbin/hyrule-cloud-vault-render-hook
+hyrule_cloud_required_env_keys:
+  - XCPNG_XO_TOKEN
+  - XCPNG_DEFAULT_SR_UUID
+  - XCPNG_DEFAULT_NETWORK_UUID
+  - XCPNG_TEMPLATES
+  - OPENPROVIDER_USERNAME
+  - OPENPROVIDER_PASSWORD
+  - OPENPROVIDER_OWNER_HANDLE
+  - OPENPROVIDER_ADMIN_HANDLE
+  - OPENPROVIDER_TECH_HANDLE
+  - OPENPROVIDER_BILLING_HANDLE
+  - PAYMENT_RECEIVER_ADDRESS
+  - HYRULE_DNS_TSIG_KEY
+  - HYRULE_DATABASE_URL
+
 # Base apt packages on the target. uv is installed separately via the
 # upstream script (same idiom as hyrule_web / hyrule_mcp).
 hyrule_cloud_packages:

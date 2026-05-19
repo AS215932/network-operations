@@ -1,0 +1,57 @@
+---
+# Hyrule Cloud runtime secrets live in Vault, not in the CI runner
+# environment. Vault Agent renders /opt/hyrule-cloud/.env on the target and
+# bounces the service when a valid render changes.
+
+- name: Set hyrule-cloud Vault Agent SecretID bootstrap value
+  ansible.builtin.set_fact:
+    hyrule_cloud_vault_agent_secret_id: >-
+      {{ hyrule_cloud_vault_wrapped_secret_id
+         if (hyrule_cloud_vault_wrapped_secret_id | length > 0)
+         else hyrule_cloud_vault_secret_id }}
+  no_log: true
+
+- name: Set up Vault Agent for hyrule-cloud secret delivery
+  ansible.builtin.include_role:
+    name: vault_agent
+  vars:
+    vault_agent_name: hyrule-cloud
+    vault_agent_role_id: "{{ hyrule_cloud_vault_role_id }}"
+    vault_agent_secret_id: "{{ hyrule_cloud_vault_agent_secret_id }}"
+    vault_agent_secret_id_response_wrapping_path: "{{ hyrule_cloud_vault_secret_id_response_wrapping_path }}"
+    vault_agent_templates:
+      - src: hyrule-cloud.env.ctmpl.j2
+        name: hyrule-cloud.env.ctmpl
+        destination: "{{ hyrule_cloud_env_file }}"
+        group: "{{ hyrule_cloud_app_group }}"
+        reload_command: "{{ hyrule_cloud_vault_render_hook }}"
+    vault_agent_extra_dirs:
+      - path: "{{ hyrule_cloud_install_dir }}"
+        group: "{{ hyrule_cloud_app_group }}"
+        mode: "0755"
+      - path: "{{ hyrule_cloud_etc_dir }}"
+        group: "{{ hyrule_cloud_app_group }}"
+        mode: "0750"
+  no_log: "{{ hyrule_cloud_vault_agent_secret_id | length > 0 }}"
+
+- name: Wait for Vault Agent to render hyrule-cloud env file
+  ansible.builtin.wait_for:
+    path: "{{ hyrule_cloud_env_file }}"
+    timeout: 45
+
+- name: Stat Vault-rendered hyrule-cloud env file
+  ansible.builtin.stat:
+    path: "{{ hyrule_cloud_env_file }}"
+  register: hyrule_cloud_rendered_env
+
+- name: Assert Vault-rendered hyrule-cloud env file is usable
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_rendered_env.stat.exists
+      - hyrule_cloud_rendered_env.stat.size | int > 0
+      - hyrule_cloud_rendered_env.stat.mode == "0640"
+      - hyrule_cloud_rendered_env.stat.gr_name == hyrule_cloud_app_group
+    fail_msg: >-
+      {{ hyrule_cloud_env_file }} was not rendered with the expected
+      root:{{ hyrule_cloud_app_group }} 0640 access. Check
+      vault-agent-hyrule-cloud.service and the kv/data/hyrule-cloud secret.

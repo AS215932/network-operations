@@ -1,0 +1,22 @@
+---
+service:
+  hyrule-cloud:
+    enabled: true
+    running: true
+
+port:
+  tcp6:8402:
+    listening: true
+
+file:
+  /opt/hyrule-cloud/.env:
+    exists: true
+    mode: "0640"
+    group: hyrule
+    contains:
+      - /^XCPNG_XO_TOKEN=.+/
+      - /^HYRULE_DATABASE_URL=.+/
+
+http:
+  http://[::1]:8402/health:
+    status: 200

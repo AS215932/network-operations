@@ -125,9 +125,9 @@ VMs use an offline prep step between `vdi.set` and `vm.start`:
 
 The builder VM is persistent and dedicated to image preparation. `hyrule-cloud`
 serializes OpenBSD prep jobs with an in-process lock, so only one target VDI is
-attached to the builder at a time. Configure it in `configs/hyrule-cloud.env.j2`
-with `XCPNG_OPENBSD_BUILDER_*`. The default builder SSH user is `svag`; it must
-be in `wheel` with passwordless `doas` for the resize command.
+attached to the builder at a time. Configure it in the `kv/hyrule-cloud` Vault
+entry with `xcpng_openbsd_builder_*`. The default builder SSH user is `svag`;
+it must be in `wheel` with passwordless `doas` for the resize command.
 
 For infrastructure VMs provisioned outside `hyrule-cloud`, run the same flow
 after resizing the target VDI and before first boot:
@@ -273,15 +273,17 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
 ### Phase 5: API Server (hyrule-cloud)
 
 25. Create api VM via XO CloudConfig: 2 vCPU, 4GB, 40GB, infra network, `::20`
-26. Populate secrets in `secrets.local.sh` at the repo root (gitignored) —
-    see the header of `scripts/bootstrap-app.sh` for the required variable list.
-27. Run `./scripts/bootstrap-app.sh cloud`. The script installs Postgres 17,
-    creates the `hyrule` role/db, generates a per-VM deploy key (prints it
-    for you to paste into the GitHub repo's Deploy keys page), clones
-    `AS215932/hyrule-cloud`, renders and installs `/opt/hyrule-cloud/.env`
-    from `configs/hyrule-cloud.env.j2`, installs the systemd unit, and runs
-    the first `uv sync`. It does not start the service — inspect logs first.
-28. `ssh root@[::20] systemctl start hyrule-cloud` once verified.
+26. Bootstrap the Hyrule Cloud Vault policy/AppRole and populate
+    `kv/hyrule-cloud`; see
+    `docs/runbooks/bootstrap-hyrule-cloud-vault.md`.
+27. Run `ansible/playbooks/cloud.yml` with `hyrule_cloud_apply=true`,
+    `hyrule_cloud_version=<sha>`, `VAULT_HYRULE_CLOUD_ROLE_ID`, and a short
+    lived `VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID`. The role generates the deploy
+    key, clones `AS215932/hyrule-cloud`, installs `vault-agent-hyrule-cloud`,
+    renders `/opt/hyrule-cloud/.env` from Vault, installs the systemd unit, and
+    runs the health check.
+28. Verify `systemctl status vault-agent-hyrule-cloud hyrule-cloud` and the
+    `/health` endpoint.
 
 ### Phase 6: Web Frontend (hyrule-web)
 

@@ -68,6 +68,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Runner deploy preflight
+        run: scripts/ci/deploy-preflight.sh --runner
+
       - name: Source Vault-rendered secrets
         run: |
           # Vault Agent on `ci` renders /etc/github-runner/secrets.env. Sourced
@@ -120,6 +123,10 @@ jobs:
             --tags snapshot \
             -e ansible_user=ci \
             -e snapshot_phase=post
+
+      - name: Post-deploy Goss validation
+        if: ${{ !inputs.dry_run }}
+        run: scripts/ci/goss-validate.sh "${{ inputs.playbook }}" "${{ inputs.limit }}"
 
       - name: Capture snapshot diff
         if: ${{ !inputs.dry_run }}

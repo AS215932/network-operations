@@ -119,14 +119,22 @@
   no_log: true
   tags: [apply]
 
+- name: Check for existing Vault Agent token sink
+  stat:
+    path: "{{ vault_agent_token_sink }}"
+  register: vault_agent_existing_token_sink
+  no_log: true
+  tags: [apply]
+
 - name: Assert Vault AppRole bootstrap credentials are present
   assert:
     that:
       - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-      - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists
+      - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
     fail_msg: >-
-      Vault Agent needs VAULT_NOC_AGENT_ROLE_ID and VAULT_NOC_AGENT_SECRET_ID
-      for the first deploy, or existing root-only AppRole files on the host.
+      Vault Agent {{ vault_agent_name }} needs role_id and secret_id bootstrap
+      values for the first deploy, or existing root-only AppRole files on the
+      host.
   tags: [apply]
 
 - name: Enable and start Vault Agent
@@ -137,5 +145,5 @@
     daemon_reload: true
   when:
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists
+    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
   tags: [apply]

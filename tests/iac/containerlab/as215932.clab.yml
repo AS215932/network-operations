@@ -1,0 +1,28 @@
+---
+name: as215932
+
+topology:
+  kinds:
+    linux:
+      image: quay.io/frrouting/frr:10.4.1
+      binds:
+        - /lib/modules:/lib/modules:ro
+
+  nodes:
+    rtr:
+      kind: linux
+      binds:
+        - ./configs/rtr/frr.conf:/etc/frr/frr.conf:ro
+    cr1-nl1:
+      kind: linux
+      binds:
+        - ./configs/cr1-nl1/frr.conf:/etc/frr/frr.conf:ro
+    cr1-de1:
+      kind: linux
+      binds:
+        - ./configs/cr1-de1/frr.conf:/etc/frr/frr.conf:ro
+
+  links:
+    - endpoints: ["rtr:eth1", "cr1-nl1:eth1"]
+    - endpoints: ["rtr:eth2", "cr1-de1:eth1"]
+    - endpoints: ["cr1-nl1:eth2", "cr1-de1:eth2"]

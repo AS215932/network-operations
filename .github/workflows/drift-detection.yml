@@ -1,0 +1,58 @@
+---
+name: drift-detection
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-drift:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 45
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Source runner-scoped secrets
+        run: |
+          set -euo pipefail
+          scripts/ci/deploy-preflight.sh --runner
+          set -a
+          . /etc/github-runner/secrets.env
+          set +a
+          grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+
+      - name: Check production drift
+        id: drift
+        working-directory: ansible
+        run: |
+          set -euo pipefail
+          playbooks=(firewall monitoring logs icinga2 ci rtr_routing networkd_resolved)
+          status=0
+          for playbook in "${playbooks[@]}"; do
+            echo "::group::drift ${playbook}"
+            if ! ansible-playbook "playbooks/${playbook}.yml" \
+                --check --diff \
+                --tags apply \
+                -e ansible_user=ci \
+                -e "${playbook}_apply=true"; then
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+      - name: Alert NOC on drift failure
+        if: failure() && env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ env.DISCORD_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg content "AS215932 drift detection failed: ${RUN_URL}" '{content: $content}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL"

@@ -1,0 +1,69 @@
+---
+as215932_prefix: "2a0c:b641:b50::/44"
+infra_subnet: "2a0c:b641:b50:2::/64"
+vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+customer_subnet: "2a0c:b641:b51::/48"
+mgmt_v4: "10.0.0.0/24"
+
+peers:
+  rtr:
+    ipv6: "2a0c:b641:b50:2::1"
+    loopback: "2a0c:b641:b50::d"
+  dns: { ipv6: "2a0c:b641:b50:2::10" }
+  api: { ipv6: "2a0c:b641:b50:2::20" }
+  web: { ipv6: "2a0c:b641:b50:2::30" }
+  proxy: { ipv6: "2a0c:b641:b50:2::40" }
+  mon: { ipv6: "2a0c:b641:b50:2::50" }
+  vpn: { ipv6: "2a0c:b641:b50:2::60" }
+  xoa:
+    ipv6: "2a0c:b641:b50:2::70"
+    mgmt_v4: "10.0.0.10"
+  irc: { ipv6: "2a0c:b641:b50:2::80" }
+  mail: { ipv6: "2a0c:b641:b50:2::90" }
+  noc: { ipv6: "2a0c:b641:b50:2::a0" }
+  log:
+    ipv6: "2a0c:b641:b50:2::b0"
+    mgmt_v4: "10.0.0.60"
+  vault: { ipv6: "2a0c:b641:b50:2::c0" }
+  ci: { ipv6: "2a0c:b641:b50:2::d0" }
+  cr1_nl1:
+    loopback: "2a0c:b641:b50::a"
+  cr1_de1:
+    loopback: "2a0c:b641:b50::b"
+
+github_runner_secrets_env: /etc/github-runner/secrets.env
+github_runner_arch: x64
+
+vault_agent_name: hyrule-cloud
+vault_agent_vault_addr: "http://[2a0c:b641:b50:2::c0]:8200"
+vault_agent_vault_tls_skip_verify: false
+vault_agent_config_dir: /etc/vault-agent.d
+vault_agent_run_dir: /run/vault-agent
+vault_agent_role_id_file: /etc/vault-agent.d/hyrule-cloud-role-id
+vault_agent_secret_id_file: /etc/vault-agent.d/hyrule-cloud-secret-id
+vault_agent_secret_id_response_wrapping_path: auth/approle/role/hyrule-cloud/secret-id
+vault_agent_token_sink: /run/vault-agent/hyrule-cloud.token
+vault_agent_template_dir: /etc/vault-agent.d/templates
+vault_agent_templates:
+  - name: hyrule-cloud.env.ctmpl
+    destination: /opt/hyrule-cloud/.env
+    group: hyrule
+    reload_command: /usr/local/sbin/hyrule-cloud-vault-render-hook
+
+hyrule_cloud_env_file: /opt/hyrule-cloud/.env
+hyrule_cloud_service_name: hyrule-cloud
+hyrule_cloud_app_group: hyrule
+hyrule_cloud_required_env_keys:
+  - XCPNG_XO_TOKEN
+  - XCPNG_DEFAULT_SR_UUID
+  - XCPNG_DEFAULT_NETWORK_UUID
+  - XCPNG_TEMPLATES
+  - OPENPROVIDER_USERNAME
+  - OPENPROVIDER_PASSWORD
+  - OPENPROVIDER_OWNER_HANDLE
+  - OPENPROVIDER_ADMIN_HANDLE
+  - OPENPROVIDER_TECH_HANDLE
+  - OPENPROVIDER_BILLING_HANDLE
+  - PAYMENT_RECEIVER_ADDRESS
+  - HYRULE_DNS_TSIG_KEY
+  - HYRULE_DATABASE_URL

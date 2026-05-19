@@ -19,14 +19,13 @@
   when: hyrule_cloud_pyproject.stat.exists
   notify: restart hyrule-cloud
 
-- name: Render hyrule-cloud environment file
+- name: Install Vault render hook for hyrule-cloud environment file
   ansible.builtin.template:
-    src: "{{ playbook_dir }}/../../configs/hyrule-cloud.env.j2"
-    dest: "{{ hyrule_cloud_install_dir }}/.env"
-    owner: "{{ hyrule_cloud_app_user }}"
-    group: "{{ hyrule_cloud_app_group }}"
-    mode: "0640"
-  notify: restart hyrule-cloud
+    src: vault-render-hook.sh.j2
+    dest: "{{ hyrule_cloud_vault_render_hook }}"
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Install /etc/systemd/system/hyrule-cloud.service
   ansible.builtin.copy:

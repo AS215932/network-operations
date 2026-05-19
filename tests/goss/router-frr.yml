@@ -1,0 +1,11 @@
+---
+service:
+  frr:
+    enabled: true
+    running: true
+
+command:
+  "vtysh -c 'show bgp summary'":
+    exit-status: 0
+    stdout:
+      - /BGP router identifier/

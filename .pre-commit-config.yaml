@@ -1,0 +1,38 @@
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: yamllint
+        name: yamllint
+        entry: yamllint -c .yamllint
+        language: system
+        types: [yaml]
+
+      - id: ansible-lint
+        name: ansible-lint
+        entry: ansible-lint -c .ansible-lint ansible/playbooks/ ansible/roles/
+        language: system
+        pass_filenames: false
+        files: ^ansible/
+
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck --severity=error
+        language: system
+        types: [shell]
+
+      - id: iac-static
+        name: iac static contract tests
+        entry: scripts/ci/iac-static.sh
+        language: system
+        pass_filenames: false
+        files: ^(\.github/workflows/|ansible/|configs/|scripts/ci/|tests/iac/)
