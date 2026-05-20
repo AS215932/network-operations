@@ -19,9 +19,16 @@ ExecStart={{ xo_mcp_install_dir }}/node_modules/.bin/supergateway \
     --port {{ xo_mcp_port }} \
     --streamableHttpPath {{ xo_mcp_path }} \
     --healthEndpoint {{ xo_mcp_health_path }} \
+    --stateful \
+    --sessionTimeout {{ xo_mcp_session_timeout_ms }} \
     --logLevel info
 Restart=always
 RestartSec=5
+# The stdio MCP server is a child process tree; stop/restart must reap the
+# whole gateway session instead of leaving npm/node children behind.
+KillMode=control-group
+TasksMax={{ xo_mcp_tasks_max }}
+MemoryMax={{ xo_mcp_memory_max }}
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=xo-mcp
