@@ -5,6 +5,9 @@ xo_mcp_install_dir: /opt/xo-mcp
 xo_mcp_port: 8766
 xo_mcp_path: /mcp
 xo_mcp_health_path: /health
+xo_mcp_session_timeout_ms: 120000
+xo_mcp_tasks_max: 256
+xo_mcp_memory_max: 1536M
 xo_mcp_allowed_remote_ips:
   - "46.105.40.223"
   - "{{ peers.proxy.ipv6 }}"
