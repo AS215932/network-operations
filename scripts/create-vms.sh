@@ -94,6 +94,7 @@ create_vm proxy "TLS reverse proxy (Caddy)" 1 1073741824 10737418240 "2a0c:b641:
 create_vm mon "Monitoring (Icinga2 + Prometheus + Grafana)" 2 4294967296 42949672960 "2a0c:b641:b50:2::50"
 create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
+create_vm noc "Autonomous NOC agent + hyrule-mcp" 1 8589934592 21474836480 "2a0c:b641:b50:2::a0"
 create_vm vault "Vault secret plane" 1 2147483648 21474836480 "2a0c:b641:b50:2::c0"
 create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
 
