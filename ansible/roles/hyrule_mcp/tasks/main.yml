@@ -32,6 +32,8 @@
   user:
     name: "{{ hyrule_mcp_app_user }}"
     group: "{{ hyrule_mcp_app_group }}"
+    groups: systemd-journal
+    append: true
     home: /var/lib/noc-agent
     shell: /bin/bash
     system: true

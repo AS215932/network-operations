@@ -8,6 +8,7 @@ After=network.target
 Type=exec
 User=noc-agent
 Group=noc-agent
+SupplementaryGroups=systemd-journal
 WorkingDirectory=/opt/hyrule-mcp
 EnvironmentFile=/opt/noc-agent/.env
 Environment=HYRULE_MCP_TRANSPORT=http
