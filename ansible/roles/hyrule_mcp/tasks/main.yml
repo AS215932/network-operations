@@ -28,6 +28,12 @@
     system: true
   tags: [apply]
 
+- name: Ensure systemd journal reader group exists
+  group:
+    name: systemd-journal
+    system: true
+  tags: [apply]
+
 - name: Ensure noc-agent system user exists
   user:
     name: "{{ hyrule_mcp_app_user }}"
