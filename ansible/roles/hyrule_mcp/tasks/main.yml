@@ -28,10 +28,18 @@
     system: true
   tags: [apply]
 
+- name: Ensure systemd journal reader group exists
+  group:
+    name: systemd-journal
+    system: true
+  tags: [apply]
+
 - name: Ensure noc-agent system user exists
   user:
     name: "{{ hyrule_mcp_app_user }}"
     group: "{{ hyrule_mcp_app_group }}"
+    groups: systemd-journal
+    append: true
     home: /var/lib/noc-agent
     shell: /bin/bash
     system: true
