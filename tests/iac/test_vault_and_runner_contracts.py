@@ -36,6 +36,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("secret_id_response_wrapping_path", hcl)
         self.assertIn("remove_secret_id_file_after_reading = true", hcl)
 
+    def test_hyrule_mcp_users_can_read_systemd_journals(self):
+        service = (REPO / "configs/hyrule-mcp.service").read_text()
+        hyrule_mcp_tasks = (REPO / "ansible/roles/hyrule_mcp/tasks/main.yml").read_text()
+        noc_mcp_key_tasks = (REPO / "ansible/roles/noc_mcp_key/tasks/main.yml").read_text()
+
+        self.assertIn("SupplementaryGroups=systemd-journal", service)
+        self.assertRegex(hyrule_mcp_tasks, re.compile(r"groups:\s*systemd-journal"))
+        self.assertRegex(noc_mcp_key_tasks, re.compile(r"groups:\s*systemd-journal"))
+
 
 if __name__ == "__main__":
     unittest.main()
