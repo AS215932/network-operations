@@ -77,3 +77,14 @@ hyrule_cloud_packages:
   # already has it because PostgreSQL is installed locally; listing it
   # here makes the role portable to a fresh host.
   - libpq-dev
+  # Block E (Wave 4): the native-crypto deps have no wheels for the api's
+  # Python and build C extensions from source on `uv sync` — bip-utils pulls
+  # ed25519-blake2b (needs gcc + Python.h) and coincurve builds a bundled
+  # libsecp256k1 (needs the autotools/libffi/pkg-config chain).
+  - build-essential
+  - python3-dev
+  - libffi-dev
+  - pkg-config
+  - autoconf
+  - automake
+  - libtool
