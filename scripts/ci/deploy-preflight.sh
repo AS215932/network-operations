@@ -86,9 +86,13 @@ check_runner_host() {
 
   local runner_file=/var/lib/github-runner/runner/.runner
   if [[ -r "$runner_file" ]]; then
-    for label in self-hosted linux x64 hyrule hyrule-infra; do
-      grep -q "\"${label}\"" "$runner_file" || error "registered runner label missing: ${label}"
-    done
+    if grep -q '"labels"' "$runner_file"; then
+      for label in self-hosted linux x64 hyrule hyrule-infra; do
+        grep -q "\"${label}\"" "$runner_file" || error "registered runner label missing: ${label}"
+      done
+    else
+      warn "$runner_file does not expose labels; GitHub accepted the job's runs-on labels"
+    fi
   else
     warn "$runner_file not readable; skipping registered label check"
   fi
