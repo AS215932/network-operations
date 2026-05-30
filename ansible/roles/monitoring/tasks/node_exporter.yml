@@ -21,6 +21,40 @@
   notify: restart node_exporter
   tags: [apply]
 
+- name: Install node_exporter (FreeBSD)
+  community.general.pkgng:
+    name: "{{ monitoring_pkg }}"
+    state: present
+  when: ansible_os_family == "FreeBSD"
+  tags: [apply]
+
+- name: Ensure node_exporter dedicated log file exists (FreeBSD)
+  file:
+    path: /var/log/node_exporter.log
+    state: touch
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: ansible_os_family == "FreeBSD"
+  tags: [apply]
+
+- name: Configure node_exporter rc settings and daemon logging (FreeBSD)
+  copy:
+    dest: "{{ monitoring_node_env_path }}"
+    content: |
+      node_exporter_enable="YES"
+      node_exporter_flags="--web.listen-address={{ monitoring_node_listen }}"
+      node_exporter_syslog_output_enable="YES"
+      node_exporter_syslog_output_priority="info"
+      node_exporter_syslog_output_facility="daemon"
+      node_exporter_daemon_flags="-o /var/log/node_exporter.log"
+    owner: root
+    group: wheel
+    mode: "0644"
+  when: ansible_os_family == "FreeBSD"
+  notify: restart node_exporter
+  tags: [apply]
+
 - name: Install node_exporter (OpenBSD)
   community.general.openbsd_pkg:
     name: "{{ monitoring_pkg }}"

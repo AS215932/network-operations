@@ -48,6 +48,19 @@ class MockRenderTest(unittest.TestCase):
         ):
             self.assertIn(f".Data.data.{key}", rendered)
 
+    def test_hyrule_mcp_hosts_renders_freebsd_metadata_and_aliases(self):
+        rendered = self.render(REPO / "configs/hyrule-mcp-hosts.yml.j2")
+        self.assertIn("cr1-nl1:", rendered)
+        self.assertIn("os_family: freebsd", rendered)
+        self.assertIn("init_system: service", rendered)
+        self.assertIn('      - "cr1.nl1"', rendered)
+        self.assertIn('      - "cr1_nl1"', rendered)
+
+    def test_freebsd_node_exporter_task_configures_daemon_log_file(self):
+        task_file = (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text()
+        self.assertIn("/var/log/node_exporter.log", task_file)
+        self.assertIn("node_exporter_daemon_flags", task_file)
+
 
 if __name__ == "__main__":
     unittest.main()

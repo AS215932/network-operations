@@ -5,10 +5,26 @@ default_user: {{ ssh_users.default }}
 ssh_key: /var/lib/hyrule-mcp/.ssh/id_noc_mcp
 
 hosts:
+{% set inventory_groups = groups | default({}) %}
+{% set freebsd_hosts = inventory_groups.get('freebsd', []) %}
+{% set openbsd_hosts = inventory_groups.get('openbsd', []) %}
 {% for name, peer in peers.items() %}
+{% set canonical = name | replace('_', '-') %}
 {% set address = peer.ipv6 | default(peer.loopback) | default(peer.ipv4) %}
-{% set user = ssh_users[name] | default(ssh_users.default) %}
-  {{ name }}:
+{% set user = ssh_users[canonical] | default(ssh_users[name] | default(ssh_users.default)) %}
+{% set os_family = 'freebsd' if canonical in freebsd_hosts else 'openbsd' if canonical in openbsd_hosts else 'linux' %}
+  {{ canonical }}:
     address: "{{ address }}"
     user: {{ user }}
+    os_family: {{ os_family }}
+    init_system: {{ 'service' if os_family == 'freebsd' else 'rcctl' if os_family == 'openbsd' else 'systemd' }}
+    firewall: {{ 'pf' if os_family in ['freebsd', 'openbsd'] else 'nft' }}
+    aliases:
+{% if name != canonical %}
+      - "{{ name }}"
+{% endif %}
+{% if canonical.startswith('cr1-') %}
+      - "{{ canonical | replace('-', '.') }}"
+      - "{{ canonical | replace('-', '_') }}"
+{% endif %}
 {% endfor %}
