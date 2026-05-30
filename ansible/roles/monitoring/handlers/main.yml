@@ -12,7 +12,9 @@
   when: ansible_os_family == "OpenBSD"
 
 - name: restart node_exporter (FreeBSD)
-  command: "service {{ monitoring_node_service }} restart"
+  ansible.builtin.service:
+    name: "{{ monitoring_node_service }}"
+    state: restarted
   listen: restart node_exporter
   when: ansible_os_family == "FreeBSD"
 

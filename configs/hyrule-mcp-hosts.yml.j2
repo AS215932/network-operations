@@ -19,12 +19,18 @@ hosts:
     os_family: {{ os_family }}
     init_system: {{ 'service' if os_family == 'freebsd' else 'rcctl' if os_family == 'openbsd' else 'systemd' }}
     firewall: {{ 'pf' if os_family in ['freebsd', 'openbsd'] else 'nft' }}
+{% if name != canonical or canonical.startswith('cr1-') %}
     aliases:
 {% if name != canonical %}
       - "{{ name }}"
 {% endif %}
 {% if canonical.startswith('cr1-') %}
       - "{{ canonical | replace('-', '.') }}"
+{% if name != (canonical | replace('-', '_')) %}
       - "{{ canonical | replace('-', '_') }}"
+{% endif %}
+{% endif %}
+{% else %}
+    aliases: []
 {% endif %}
 {% endfor %}

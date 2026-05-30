@@ -54,12 +54,12 @@ class MockRenderTest(unittest.TestCase):
         self.assertIn("os_family: freebsd", rendered)
         self.assertIn("init_system: service", rendered)
         self.assertIn('      - "cr1.nl1"', rendered)
-        self.assertIn('      - "cr1_nl1"', rendered)
+        self.assertIn("aliases: []", rendered)
 
-    def test_freebsd_node_exporter_task_configures_daemon_log_file(self):
+    def test_freebsd_node_exporter_task_configures_syslog_output(self):
         task_file = (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text()
-        self.assertIn("/var/log/node_exporter.log", task_file)
-        self.assertIn("node_exporter_daemon_flags", task_file)
+        self.assertIn('node_exporter_syslog_output_enable="YES"', task_file)
+        self.assertIn('node_exporter_syslog_output_facility="daemon"', task_file)
 
 
 if __name__ == "__main__":
