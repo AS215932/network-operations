@@ -11,6 +11,13 @@
   listen: restart node_exporter
   when: ansible_os_family == "OpenBSD"
 
+- name: restart node_exporter (FreeBSD)
+  ansible.builtin.service:
+    name: "{{ monitoring_node_service }}"
+    state: restarted
+  listen: restart node_exporter
+  when: ansible_os_family == "FreeBSD"
+
 - name: reload icinga2
   command: icinga2 daemon -C
   changed_when: false

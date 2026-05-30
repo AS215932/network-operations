@@ -31,6 +31,18 @@ peers:
   cr1_de1:
     loopback: "2a0c:b641:b50::b"
 
+groups:
+  freebsd:
+    - cr1-nl1
+    - cr1-de1
+  openbsd:
+    - mail
+
+ssh_users:
+  cr1-nl1: svag
+  cr1-de1: svag
+  default: svag
+
 github_runner_secrets_env: /etc/github-runner/secrets.env
 github_runner_arch: x64
 
