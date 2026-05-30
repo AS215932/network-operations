@@ -6,6 +6,7 @@ import yaml
 
 
 REPO = Path(__file__).resolve().parents[2]
+JOURNAL_GROUP = "systemd-journal"
 
 
 class VaultAndRunnerContractsTest(unittest.TestCase):
@@ -35,6 +36,44 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
         self.assertIn("secret_id_response_wrapping_path", hcl)
         self.assertIn("remove_secret_id_file_after_reading = true", hcl)
+
+    def test_hyrule_mcp_users_can_read_systemd_journals(self):
+        service = (REPO / "configs/hyrule-mcp.service").read_text()
+        hyrule_mcp_tasks = yaml.safe_load((REPO / "ansible/roles/hyrule_mcp/tasks/main.yml").read_text())
+        noc_mcp_key_tasks = yaml.safe_load((REPO / "ansible/roles/noc_mcp_key/tasks/main.yml").read_text())
+
+        self.assertIn(f"SupplementaryGroups={JOURNAL_GROUP}", service)
+        self.assertEqual(
+            _task_by_name(hyrule_mcp_tasks, "Ensure systemd journal reader group exists")["group"]["name"],
+            JOURNAL_GROUP,
+        )
+        self.assertIn(
+            JOURNAL_GROUP,
+            _groups_for(_task_by_name(hyrule_mcp_tasks, "Ensure noc-agent system user exists")["user"]["groups"]),
+        )
+        self.assertEqual(
+            _task_by_name(noc_mcp_key_tasks, "Ensure systemd journal reader group exists")["group"]["name"],
+            JOURNAL_GROUP,
+        )
+        self.assertIn(
+            JOURNAL_GROUP,
+            _groups_for(
+                _task_by_name(noc_mcp_key_tasks, "Grant MCP SSH user read access to systemd journals")["user"]["groups"]
+            ),
+        )
+
+
+def _task_by_name(tasks, name):
+    for task in tasks:
+        if task.get("name") == name:
+            return task
+    raise AssertionError(f"task not found: {name}")
+
+
+def _groups_for(value):
+    if isinstance(value, list):
+        return {str(item) for item in value}
+    return {part.strip() for part in str(value).replace(",", " ").split() if part.strip()}
 
 
 if __name__ == "__main__":

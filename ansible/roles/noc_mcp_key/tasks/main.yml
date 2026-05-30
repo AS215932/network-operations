@@ -18,6 +18,23 @@
     noc_mcp_target_user: "{{ ssh_users[inventory_hostname] | default(ssh_users.default) }}"
   tags: [apply]
 
+- name: Ensure systemd journal reader group exists
+  group:
+    name: systemd-journal
+    system: true
+  when: "'linux' in group_names"
+  tags: [apply]
+
+- name: Grant MCP SSH user read access to systemd journals
+  user:
+    name: "{{ noc_mcp_target_user }}"
+    groups: systemd-journal
+    append: true
+  when:
+    - "'linux' in group_names"
+    - noc_mcp_target_user != "root"
+  tags: [apply]
+
 - name: Authorize id_noc_mcp for {{ noc_mcp_target_user }} (restricted to noc's address)
   authorized_key:
     user: "{{ noc_mcp_target_user }}"
