@@ -48,6 +48,11 @@ on:
         type: string
         required: false
         default: ""
+      bootstrap_ci_runner_key:
+        description: Connect as inventory users for first-time ci-runner-key bootstrap
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -116,7 +121,7 @@ jobs:
           playbook="${{ inputs.playbook }}"
           apply_var="${playbook//-/_}_apply=true"
           user_args=(-e ansible_user=ci)
-          if [ "${playbook}" = "ci-runner-key" ]; then
+          if [ "${playbook}" = "ci-runner-key" ] && [ "${{ inputs.bootstrap_ci_runner_key }}" = "true" ]; then
             user_args=()
           fi
           ansible-playbook "playbooks/${playbook}.yml" \

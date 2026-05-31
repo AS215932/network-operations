@@ -25,10 +25,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
 
         self.assertIn("- ci-runner-key", workflow)
+        self.assertIn("bootstrap_ci_runner_key:", workflow)
+        self.assertIn("Connect as inventory users for first-time ci-runner-key bootstrap", workflow)
         self.assertIn("CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci", workflow)
         self.assertIn('apply_var="${playbook//-/_}_apply=true"', workflow)
         self.assertIn('user_args=(-e ansible_user=ci)', workflow)
-        self.assertIn('if [ "${playbook}" = "ci-runner-key" ]; then', workflow)
+        self.assertIn(
+            'if [ "${playbook}" = "ci-runner-key" ] && [ "${{ inputs.bootstrap_ci_runner_key }}" = "true" ]; then',
+            workflow,
+        )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
 
