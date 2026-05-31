@@ -25,6 +25,7 @@ on:
           - noc
           - vault
           - ci
+          - ci-runner-key
           - knot
           - extmon
           - rtr_routing
@@ -65,6 +66,9 @@ jobs:
       # known_hosts-seeded by the github_runner role); overrides ansible.cfg's
       # workstation default of ~/.ssh/id_servify.
       ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+      # ci-runner-key.yml reads CI_KEY_PATH and distributes its public half to
+      # target hosts. In apply.yml runs the key already exists on the runner.
+      CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
       - uses: actions/checkout@v4
 
@@ -109,10 +113,12 @@ jobs:
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          playbook="${{ inputs.playbook }}"
+          apply_var="${playbook//-/_}_apply=true"
+          ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             -e ansible_user=ci \
-            -e "${{ inputs.playbook }}_apply=true" \
+            -e "${apply_var}" \
             ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
 
       - name: Post-deploy Icinga snapshot
