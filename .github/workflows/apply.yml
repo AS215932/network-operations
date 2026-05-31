@@ -115,9 +115,13 @@ jobs:
         run: |
           playbook="${{ inputs.playbook }}"
           apply_var="${playbook//-/_}_apply=true"
+          user_args=(-e ansible_user=ci)
+          if [ "${playbook}" = "ci-runner-key" ]; then
+            user_args=()
+          fi
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
-            -e ansible_user=ci \
+            "${user_args[@]}" \
             -e "${apply_var}" \
             ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
 
