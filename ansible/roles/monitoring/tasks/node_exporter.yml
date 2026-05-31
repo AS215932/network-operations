@@ -34,6 +34,7 @@
     content: |
       node_exporter_enable="YES"
       node_exporter_listen_address="{{ monitoring_node_listen }}"
+      node_exporter_args=""
       node_exporter_flags="-S -s info -l daemon"
     owner: root
     group: wheel
