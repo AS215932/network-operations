@@ -11,10 +11,17 @@
   listen: restart node_exporter
   when: ansible_os_family == "OpenBSD"
 
-- name: restart node_exporter (FreeBSD)
-  ansible.builtin.service:
-    name: "{{ monitoring_node_service }}"
-    state: restarted
+- name: stop node_exporter before FreeBSD restart
+  ansible.builtin.command: "pkill -x {{ monitoring_node_service }}"
+  register: monitoring_freebsd_node_exporter_pkill
+  changed_when: monitoring_freebsd_node_exporter_pkill.rc == 0
+  failed_when: monitoring_freebsd_node_exporter_pkill.rc not in [0, 1]
+  listen: restart node_exporter
+  when: ansible_os_family == "FreeBSD"
+
+- name: start node_exporter (FreeBSD)
+  ansible.builtin.command: "service {{ monitoring_node_service }} onestart"
+  changed_when: true
   listen: restart node_exporter
   when: ansible_os_family == "FreeBSD"
 
