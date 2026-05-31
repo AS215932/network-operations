@@ -5,7 +5,7 @@ icinga2_apply: false
 # Discord webhook URL. Sourced from secrets.local.sh / Vault — never
 # committed in cleartext. The previous arrangement (literal const in
 # notifications.conf) leaked the secret into git.
-icinga2_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL') | default('') }}"
+icinga2_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL') | default(lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL'), true) | default('') }}"
 
 # noc-agent webhook (in-cluster, IPv6-only, no auth). Stays as a config
 # constant since it carries no secret.

@@ -29,8 +29,9 @@
 - name: Pre-flight — fail if discord webhook URL is empty for apply
   fail:
     msg: |
-      icinga2_discord_webhook_url is empty. Set DISCORD_WEBHOOK_URL in
-      secrets.local.sh and re-source it before running --tags apply.
+      icinga2_discord_webhook_url is empty. Set DISCORD_WEBHOOK_URL or
+      MON_DISCORD_WEBHOOK_URL in secrets.local.sh and re-source it before
+      running --tags apply.
   when:
     - icinga2_apply | bool
     - icinga2_discord_webhook_url == ""
