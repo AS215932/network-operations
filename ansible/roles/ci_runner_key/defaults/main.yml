@@ -10,4 +10,4 @@ ci_runner_key_from_address: "{{ peers.ci.ipv6 }}"
 # operator's svag. Gets NOPASSWD root (sudo on Linux, doas on BSD) so
 # apply.yml's playbooks can escalate. apply.yml passes -e ansible_user=ci.
 ci_runner_user: ci
-ci_runner_user_shell: /bin/bash
+ci_runner_user_shell: /bin/sh

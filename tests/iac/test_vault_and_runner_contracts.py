@@ -38,6 +38,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("ansible_become", freebsd_vars)
         self.assertEqual(freebsd_vars["ansible_become_method"], "doas")
 
+    def test_ci_runner_deploy_user_uses_portable_shell(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/ci_runner_key/defaults/main.yml").read_text())
+
+        self.assertEqual(defaults["ci_runner_user_shell"], "/bin/sh")
+
     def test_runner_known_hosts_is_seeded_without_controller_key_path(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
 
