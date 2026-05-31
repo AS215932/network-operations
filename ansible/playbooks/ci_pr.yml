@@ -1,0 +1,55 @@
+---
+# ci-pr rollout — installs the UNPRIVILEGED self-hosted GitHub Actions runner on
+# the ci-pr VM (customer-isolated segment, 2a0c:b641:b51::c1).
+#
+# Applied from the OPS WORKSTATION, NOT the privileged `ci` runner: ci-pr has no
+# id_ci, so the `ci` deploy user cannot reach it — and it must not. Vault is
+# disabled for ci-pr, so no secrets.local.sh env is required beyond the runner
+# registration token. See docs/ci/provision-ci-pr.md.
+#
+# Prerequisites:
+#   - ci-pr VM provisioned and reachable at peers.ci_pr.ipv6 (2a0c:b641:b51::c1).
+#   - Org runner registration token (1 h TTL); the runner joins the `public-pr`
+#     group via github_runner_group_name in host_vars/ci-pr.yml:
+#       export GH_RUNNER_TOKEN=$(gh api -X POST \
+#         /orgs/AS215932/actions/runners/registration-token --jq .token)
+#     Once registered, .runner / .credentials persist in the install dir.
+#
+# Apply (from the ops workstation):
+#   ansible-playbook playbooks/ci_pr.yml --tags apply \
+#     -e github_runner_apply=true \
+#     -e github_runner_registration_token="$GH_RUNNER_TOKEN" \
+#     --limit ci-pr
+
+- name: ci-pr — pre-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+  tags: [snapshot, always]
+
+- name: ci-pr — apply unprivileged self-hosted runner
+  hosts: ci-pr
+  serial: 1
+  gather_facts: true
+  become: true
+  roles:
+    - github_runner
+  tags: [ci_pr]
+
+- name: ci-pr — post-deploy snapshot
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+  tags: [snapshot, always]

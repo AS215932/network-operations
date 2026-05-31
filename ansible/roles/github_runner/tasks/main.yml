@@ -280,6 +280,7 @@
   register: github_runner_containerlab_check
   changed_when: false
   failed_when: false
+  when: github_runner_containerlab_enabled | bool
   tags: [apply]
 
 - name: Download containerlab package
@@ -289,13 +290,17 @@
     owner: root
     group: root
     mode: "0644"
-  when: github_runner_containerlab_check.rc != 0
+  when:
+    - github_runner_containerlab_enabled | bool
+    - github_runner_containerlab_check.rc | default(1) != 0
   tags: [apply]
 
 - name: Install containerlab package
   apt:
     deb: "{{ github_runner_containerlab_deb_path }}"
-  when: github_runner_containerlab_check.rc != 0
+  when:
+    - github_runner_containerlab_enabled | bool
+    - github_runner_containerlab_check.rc | default(1) != 0
   tags: [apply]
 
 - name: Ensure runner is in containerlab admin group
@@ -303,6 +308,7 @@
     name: "{{ github_runner_user }}"
     groups: "{{ github_runner_containerlab_admin_group }}"
     append: true
+  when: github_runner_containerlab_enabled | bool
   tags: [apply]
 
 - name: Install xcaddy builder
@@ -311,6 +317,7 @@
     GOBIN: "{{ github_runner_xcaddy_path | dirname }}"
   args:
     creates: "{{ github_runner_xcaddy_path }}"
+  when: github_runner_caddy_rfc2136_enabled | bool
   tags: [apply]
 
 - name: Check whether Caddy has RFC2136 DNS provider
@@ -320,6 +327,7 @@
   register: github_runner_caddy_rfc2136_check
   changed_when: false
   failed_when: false
+  when: github_runner_caddy_rfc2136_enabled | bool
   tags: [apply]
 
 - name: Ensure Caddy build directories exist
@@ -333,7 +341,9 @@
     - "{{ github_runner_caddy_build_dir }}"
     - "{{ github_runner_caddy_go_cache }}"
     - "{{ github_runner_caddy_go_path }}"
-  when: github_runner_caddy_rfc2136_check.rc != 0
+  when:
+    - github_runner_caddy_rfc2136_enabled | bool
+    - github_runner_caddy_rfc2136_check.rc | default(1) != 0
   tags: [apply]
 
 - name: Build Caddy with RFC2136 DNS provider
@@ -345,7 +355,9 @@
     TMPDIR: "{{ github_runner_caddy_build_dir }}"
     GOCACHE: "{{ github_runner_caddy_go_cache }}"
     GOPATH: "{{ github_runner_caddy_go_path }}"
-  when: github_runner_caddy_rfc2136_check.rc != 0
+  when:
+    - github_runner_caddy_rfc2136_enabled | bool
+    - github_runner_caddy_rfc2136_check.rc | default(1) != 0
   tags: [apply]
 
 - name: Ensure custom Caddy binary is executable
@@ -354,7 +366,9 @@
     owner: root
     group: root
     mode: "0755"
-  when: github_runner_caddy_rfc2136_check.rc != 0
+  when:
+    - github_runner_caddy_rfc2136_enabled | bool
+    - github_runner_caddy_rfc2136_check.rc | default(1) != 0
   tags: [apply]
 
 - name: Ensure runner install directory exists

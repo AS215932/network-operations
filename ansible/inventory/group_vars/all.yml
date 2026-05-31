@@ -43,6 +43,10 @@ peers:
     mgmt_v4: "10.0.0.60"
   vault:   { ipv6: "2a0c:b641:b50:2::c0" }
   ci:      { ipv6: "2a0c:b641:b50:2::d0" }
+  # ci-pr — unprivileged PR runner, customer-isolated segment (not infra).
+  # Key matches inventory_hostname (the monitoring template does
+  # peers[inventory_hostname]); referenced via peers['ci-pr'] where needed.
+  ci-pr:   { ipv6: "2a0c:b641:b51::c1" }
   ns2:
     ipv4: "54.38.14.218"
     ipv6: "2001:41d0:304:300::7bfb"

@@ -28,7 +28,8 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp (stdio child) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0`, `10.0.0.60` (mgmt) | — | Vector aggregator + Loki (centralized logs) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane (proxied as `vault.as215932.net`) |
-| ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner |
+| ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
+| ci-pr | Debian 13 | `2a0c:b641:b51::c1` (customer-isolated) | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
@@ -46,7 +47,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::70`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
-| `2a0c:b641:b51::/48` | Customer VM allocations |
+| `2a0c:b641:b51::/48` | Customer VM allocations (also `::c1` = ci-pr, the unprivileged PR runner) |
 | `10.0.0.0/24` | Mgmt v4 (dom0 ↔ XOA XAPI) |
 | `10.0.2.0/24` | Legacy v4 DNAT targets on rtr |
 | `2a02:a442:1016::/48`, `77.166.211.126/32` | Ops-prefix (KPN home, used for SSH and AXFR allow) |
@@ -177,6 +178,22 @@ Self-hosted GitHub Actions runner. Picks up workflow jobs from
 | ops-prefix, vpn-clients | TCP | 22 | SSH (operator access for runner troubleshooting) |
 
 Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch action images), ci → api.anthropic.com TCP/443 (AI review), ci → every infra host TCP/22 (apply runs via `ansible-playbook --tags apply`), ci → mon TCP/9090 (Prometheus query during render-check), ci → log TCP/6000 (Vector agent).
+
+### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
+
+Unprivileged self-hosted GitHub Actions runner for **untrusted PR code**
+(PR-Agent, Semgrep, and — after Wave 4 — all `pull_request` lint/test/build
+jobs). Deliberately on the **customer-isolated** vm bridge: rtr drops
+`enX3 → {enX2 infra, enX0 mgmt}`, so a compromised PR job cannot reach the
+management overlay. No Vault, no `id_ci`, no `secrets.env`, no Containerlab —
+treated as disposable.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| mon | TCP | 9100 | node_exporter scrape (infra→customer, pull-only) |
+| ops-prefix, vpn-clients | TCP | 22 | SSH (operator access; apply runs from the ops workstation, not the privileged runner) |
+
+Outbound (cross-cutting): ci-pr → github.com TCP/443 (runner queue, action images), ci-pr → openrouter.ai TCP/443 (PR-Agent LLM), ci-pr → PyPI/npm/ghcr/Docker Hub TCP/443 (toolchain + semgrep image), ci-pr → rtr (`2a0c:b641:b51::1`) TCP+UDP/53 (Unbound + DNS64). **No** log shipping: `ci-pr → log:6000` is customer→infra and is dropped by the isolation, so ci-pr keeps logs in local journald only.
 
 ### log (`2a0c:b641:b50:2::b0` overlay, `10.0.0.60` mgmt)
 

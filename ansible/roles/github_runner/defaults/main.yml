@@ -124,6 +124,13 @@ github_runner_packages:
   - openssh-client
   - gh
 
+# Heavy IaC gates. Enabled by default so the privileged `ci` runner keeps
+# building the Containerlab/Batfish labs and the RFC2136 Caddy. The unprivileged
+# `ci-pr` runner sets both false — it never runs labs, and dropping them keeps
+# its toolchain (and attack surface) minimal.
+github_runner_containerlab_enabled: true
+github_runner_caddy_rfc2136_enabled: true
+
 # Heavy IaC gates. containerlab is installed from its upstream .deb because it
 # is not packaged in Debian; Caddy is built with the RFC2136 DNS provider so
 # `caddy validate` can parse configs/Caddyfile.

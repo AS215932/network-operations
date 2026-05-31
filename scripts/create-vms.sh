@@ -10,6 +10,10 @@ create_vm() {
   local NAME=$1 DESC="$2" VCPU=$3 MEM=$4 DISK=$5 IPV6=$6
   local DATA_DISK="${7:-}"
   local DATA_VBD_POSITION="${8:-1}"
+  # Network + gateway default to infra; ci-pr overrides them to land on the
+  # customer-isolated vm bridge (xenbr-vm) with the rtr enX3 gateway.
+  local NETWORK="${9:-$INFRA}"
+  local GATEWAY="${10:-2a0c:b641:b50:2::1}"
 
   echo "Creating $NAME..."
 
@@ -39,18 +43,18 @@ ethernets:
       - ${IPV6}/64
     nameservers:
       addresses:
-        - 2a0c:b641:b50:2::1
+        - ${GATEWAY}
       search:
         - as215932.net
     routes:
       - to: ::/0
-        via: 2a0c:b641:b50:2::1"
+        via: ${GATEWAY}"
 
   VM_ID=$(xo-cli vm.create \
     name_label="$NAME" \
     name_description="$DESC" \
     template=$TEMPLATE \
-    VIFs="json:[{\"network\":\"$INFRA\"}]" \
+    VIFs="json:[{\"network\":\"$NETWORK\"}]" \
     CPUs.number=$VCPU \
     memory=$MEM \
     bootAfterCreate=false \
@@ -96,6 +100,20 @@ create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
 create_vm vault "Vault secret plane" 1 2147483648 21474836480 "2a0c:b641:b50:2::c0"
 create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
+
+# ci-pr — UNPRIVILEGED PR runner on the CUSTOMER-isolated vm bridge (xenbr-vm),
+# NOT infra. Resolve the vm-bridge network UUID and export VM_NET before running:
+#   xo-cli --list-objects type=network \
+#     | python3 -c 'import sys,json; [print(n["uuid"],n["name_label"]) for n in json.load(sys.stdin)]'
+#   export VM_NET=<uuid of the xenbr-vm / "vm" network>
+# Args 7,8 (data disk/VBD) are empty; args 9,10 are NETWORK + GATEWAY.
+VM_NET="${VM_NET:-}"
+if [ -n "$VM_NET" ]; then
+  create_vm ci-pr "Unprivileged PR runner (PR-Agent/Semgrep/PR CI)" \
+    1 2147483648 21474836480 "2a0c:b641:b51::c1" "" "" "$VM_NET" "2a0c:b641:b51::1"
+else
+  echo "SKIP ci-pr: export VM_NET=<xenbr-vm network UUID> to create it (see docs/ci/provision-ci-pr.md)."
+fi
 
 # mon needs a second NIC on xenbr-mgmt to scrape dom0/XOA (underlay-only hosts).
 # After create_vm, add it manually:

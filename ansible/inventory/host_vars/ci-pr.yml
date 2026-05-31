@@ -1,0 +1,47 @@
+---
+# ci-pr — UNPRIVILEGED self-hosted GitHub Actions runner for untrusted PR code
+# (PR-Agent, Semgrep, and — after Wave 4 — all pull_request lint/test/build jobs).
+#
+# Deliberately on the CUSTOMER-ISOLATED segment (2a0c:b641:b51::/48, rtr enX3):
+# rtr's forward chain drops enX3 -> { enX2 infra, enX0 mgmt }, so a compromised
+# PR job here cannot reach the management overlay. Treat ci-pr as DISPOSABLE.
+#
+# Hard isolation vs the privileged `ci` runner:
+#   - github_runner_vault_enabled: false  -> no Vault AppRole, no secrets.env
+#   - github_runner_ssh_key_path: ""      -> no id_ci fleet deploy key
+#   - containerlab/xcaddy disabled         -> no lab toolchain
+#   - no infra/mgmt reachability (customer isolation enforced on rtr)
+#
+# Monitoring works (mon -> ci-pr:9100 is infra->customer = permitted, pull-only).
+# Log shipping does NOT (ci-pr -> log:6000 is customer->infra = dropped by the
+# isolation), so logs_register stays false — local journald only. Turning it on
+# would require punching a ci-pr->log hole in the customer isolation; don't.
+#
+# Runbook: docs/ci/provision-ci-pr.md. Flows: docs/network-flows.md -> "### ci-pr".
+
+# --- github_runner role: UNPRIVILEGED profile ---
+github_runner_group_name: public-pr
+github_runner_labels:
+  - self-hosted
+  - linux
+  - "{{ github_runner_arch }}"
+  - hyrule-public-pr
+github_runner_vault_enabled: false        # no AppRole, no /etc/github-runner/secrets.env
+github_runner_ssh_key_path: ""            # no id_ci deploy key
+github_runner_containerlab_enabled: false # labs stay on the privileged `ci` runner
+github_runner_caddy_rfc2136_enabled: false
+github_runner_storage_enabled: false      # no separate data disk
+
+# --- Firewall: default-deny inbound + node_exporter scrape from mon only ---
+# node_exporter is pull-only; mon -> ci-pr is infra->customer, which rtr permits.
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape (mon, pull-only)" }
+
+# --- Monitoring: register on mon (Icinga host + node_exporter scrape) ---
+monitoring_register: true
+monitoring_role: ci
+
+# --- Logs: OFF. Pushing to the log VM (customer->infra) is dropped by the
+# customer isolation; shipping would require weakening that boundary. The logs
+# role end_hosts itself when logs_register is false — local journald only.
+logs_register: false
