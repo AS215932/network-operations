@@ -21,6 +21,17 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             if "runs-on:" in text:
                 self.assertIn("hyrule-infra", text, workflow)
 
+    def test_runner_known_hosts_is_seeded_without_controller_key_path(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
+
+        seed_task = _task_by_name(tasks, "Seed runner known_hosts with the infra fleet host keys")
+        self.assertIsNotNone(seed_task)
+        self.assertNotIn("when", seed_task)
+
+        ownership_task = _task_by_name(tasks, "Fix runner known_hosts ownership")
+        self.assertIsNotNone(ownership_task)
+        self.assertNotIn("when", ownership_task)
+
     def test_hyrule_cloud_policy_is_dedicated(self):
         policy = (REPO / "configs/vault/policies/hyrule-cloud.hcl").read_text()
         self.assertIn('path "kv/data/hyrule-cloud"', policy)
