@@ -43,6 +43,13 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertEqual(defaults["ci_runner_user_shell"], "/bin/sh")
 
+    def test_freebsd_router_inventory_uses_loopback_addresses(self):
+        inventory = yaml.safe_load((REPO / "ansible/inventory/hosts.yml").read_text())
+        freebsd_hosts = inventory["all"]["children"]["freebsd"]["hosts"]
+
+        self.assertEqual(freebsd_hosts["cr1-nl1"]["ansible_host"], "2a0c:b641:b50::a")
+        self.assertEqual(freebsd_hosts["cr1-de1"]["ansible_host"], "2a0c:b641:b50::b")
+
     def test_runner_known_hosts_is_seeded_without_controller_key_path(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
 
