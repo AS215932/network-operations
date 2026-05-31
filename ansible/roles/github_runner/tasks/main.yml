@@ -403,10 +403,30 @@
 # runner without a manual ssh-keyscan on every fresh host.
 - name: Seed runner known_hosts with the infra fleet host keys
   shell:
-    cmd: >-
-      ssh-keyscan -T 5 -6
-      {% for name, p in peers.items() if p.ipv6 is defined and p.ipv6 != '::' %}{{ p.ipv6 }} {% endfor %}
-      > {{ github_runner_ssh_dir }}/known_hosts 2>/dev/null
+    cmd: |
+      set -euo pipefail
+      tmp="$(mktemp)"
+      {% set ns = namespace(targets=[]) %}
+      {% for host in groups['all'] | default([]) %}
+      {% set target = hostvars[host].ansible_host | default(host) %}
+      {% if target not in ['0.0.0.0', '::'] %}
+      {% set _ = ns.targets.append(target) %}
+      {% endif %}
+      {% endfor %}
+      {% for p in peers.values() %}
+      {% for attr in ['ipv6', 'loopback', 'underlay'] %}
+      {% if p[attr] is defined and p[attr] not in ['0.0.0.0', '::'] %}
+      {% set _ = ns.targets.append(p[attr]) %}
+      {% endif %}
+      {% endfor %}
+      {% endfor %}
+      {% for target in ns.targets | unique %}
+      ssh-keyscan -T 5 {{ target | quote }} >> "$tmp" 2>/dev/null || true
+      {% endfor %}
+      sort -u "$tmp" > {{ github_runner_ssh_dir }}/known_hosts
+      rm -f "$tmp"
+      test -s {{ github_runner_ssh_dir }}/known_hosts
+    executable: /bin/bash
   changed_when: true
   when: github_runner_ssh_key_path | length > 0
   tags: [apply]
