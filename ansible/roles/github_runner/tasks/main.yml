@@ -428,7 +428,6 @@
       test -s {{ github_runner_ssh_dir }}/known_hosts
     executable: /bin/bash
   changed_when: true
-  when: github_runner_ssh_key_path | length > 0
   tags: [apply]
 
 - name: Fix runner known_hosts ownership
@@ -437,7 +436,6 @@
     owner: "{{ github_runner_user }}"
     group: "{{ github_runner_group }}"
     mode: "0644"
-  when: github_runner_ssh_key_path | length > 0
   tags: [apply]
 
 - name: Check whether runner is already installed
