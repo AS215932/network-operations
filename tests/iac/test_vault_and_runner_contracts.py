@@ -32,6 +32,12 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
 
+    def test_freebsd_playbooks_can_opt_into_become(self):
+        freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())
+
+        self.assertNotIn("ansible_become", freebsd_vars)
+        self.assertEqual(freebsd_vars["ansible_become_method"], "doas")
+
     def test_runner_known_hosts_is_seeded_without_controller_key_path(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
 
