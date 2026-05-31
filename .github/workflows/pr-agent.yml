@@ -1,0 +1,47 @@
+---
+name: pr-agent
+
+# Advisory AI PR review (replaces hosted Sourcery). Runs on the UNPRIVILEGED
+# `hyrule-public-pr` runner only, with read + PR/issue-comment permissions and
+# our own OpenRouter key. Never deploys, never writes code, never auto-merges.
+# Config (model/fallback/instructions): .pr_agent.toml. Design: docs/ci/pr-agent.md.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-agent:
+    # Public-fork policy: auto-review ONLY for same-repo (internal) PRs, and
+    # slash commands ONLY from trusted authors. This keeps OPENROUTER_API_KEY
+    # off untrusted fork PRs and stops anyone from burning the OpenRouter
+    # budget via /ask, /improve, etc.
+    if: >
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    timeout-minutes: 12
+    steps:
+      - name: PR-Agent
+        uses: The-PR-Agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7  # v0.35.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR-Agent reads the OpenRouter key from openrouter__key; litellm also
+          # honours OPENROUTER_API_KEY. Set both from the org secret.
+          OPENROUTER__KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
