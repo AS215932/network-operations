@@ -38,8 +38,11 @@ export VM_NET=<that-uuid>
 bash scripts/create-vms.sh   # or copy just the ci-pr block
 ```
 
-cloud-init assigns `2a0c:b641:b51::c1/64`, gateway + DNS `2a0c:b641:b51::1`
-(rtr Unbound/DNS64). Start the VM, wait for cloud-init, and verify
+cloud-init assigns `2a0c:b641:b51::c1/64`, default route via the customer
+gateway `2a0c:b641:b51::1`, and **DNS `2a0c:b641:b50:2::1`** — rtr's Unbound
+listens only on that infra address (reachable from the customer segment via
+rtr's INPUT path / the `customer→:53` rule), not on the gateway. Start the VM,
+wait for cloud-init, and verify
 `ssh svag@2a0c:b641:b51::c1` works over global IPv6.
 
 ## 2. Bootstrap firewall + monitoring (from the ops workstation)

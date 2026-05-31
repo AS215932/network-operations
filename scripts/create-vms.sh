@@ -14,6 +14,11 @@ create_vm() {
   # customer-isolated vm bridge (xenbr-vm) with the rtr enX3 gateway.
   local NETWORK="${9:-$INFRA}"
   local GATEWAY="${10:-2a0c:b641:b50:2::1}"
+  # Resolver is rtr's Unbound, which listens ONLY on the infra address
+  # 2a0c:b641:b50:2::1 — NOT on per-segment gateways. Customer-segment hosts
+  # reach it via rtr's INPUT path (the customer->:53 firewall rule). So DNS must
+  # default to the infra Unbound address, independent of the routing gateway.
+  local DNS_SERVER="${11:-2a0c:b641:b50:2::1}"
 
   echo "Creating $NAME..."
 
@@ -43,7 +48,7 @@ ethernets:
       - ${IPV6}/64
     nameservers:
       addresses:
-        - ${GATEWAY}
+        - ${DNS_SERVER}
       search:
         - as215932.net
     routes:
@@ -107,6 +112,8 @@ create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:
 #     | python3 -c 'import sys,json; [print(n["uuid"],n["name_label"]) for n in json.load(sys.stdin)]'
 #   export VM_NET=<uuid of the xenbr-vm / "vm" network>
 # Args 7,8 (data disk/VBD) are empty; args 9,10 are NETWORK + GATEWAY.
+# Arg 11 (DNS_SERVER) defaults to the infra Unbound address — correct for the
+# customer segment too — so ci-pr does not need to pass it.
 VM_NET="${VM_NET:-}"
 if [ -n "$VM_NET" ]; then
   create_vm ci-pr "Unprivileged PR runner (PR-Agent/Semgrep/PR CI)" \
