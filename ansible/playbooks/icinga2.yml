@@ -11,7 +11,7 @@
 #       --connection=local --skip-tags=snapshot --limit mon
 #
 # Apply (live):
-#   set -a; source ../secrets.local.sh; set +a    # provides DISCORD_WEBHOOK_URL
+#   set -a; source ../secrets.local.sh; set +a    # provides MON_DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL
 #   ansible-playbook playbooks/icinga2.yml --tags apply \
 #       -e '{"icinga2_apply":true}' --limit mon
 
