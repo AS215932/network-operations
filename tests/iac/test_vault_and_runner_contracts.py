@@ -21,6 +21,14 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             if "runs-on:" in text:
                 self.assertIn("hyrule-infra", text, workflow)
 
+    def test_apply_workflow_can_gate_ci_runner_key_bootstrap(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+
+        self.assertIn("- ci-runner-key", workflow)
+        self.assertIn("CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci", workflow)
+        self.assertIn('apply_var="${playbook//-/_}_apply=true"', workflow)
+        self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
     def test_runner_known_hosts_is_seeded_without_controller_key_path(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
 
