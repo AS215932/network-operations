@@ -58,6 +58,8 @@ class MockRenderTest(unittest.TestCase):
 
     def test_freebsd_node_exporter_task_configures_syslog_output(self):
         task_file = (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text()
+        self.assertIn('node_exporter_user="nobody"', task_file)
+        self.assertIn('node_exporter_group="nobody"', task_file)
         self.assertIn('node_exporter_listen_address="{{ monitoring_node_listen }}"', task_file)
         self.assertIn('node_exporter_args=""', task_file)
         self.assertIn('node_exporter_flags="-S -s info -l daemon"', task_file)
