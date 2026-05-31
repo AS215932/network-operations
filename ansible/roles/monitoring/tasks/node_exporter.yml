@@ -33,10 +33,8 @@
     dest: "{{ monitoring_node_env_path }}"
     content: |
       node_exporter_enable="YES"
-      node_exporter_flags="--web.listen-address={{ monitoring_node_listen }}"
-      node_exporter_syslog_output_enable="YES"
-      node_exporter_syslog_output_priority="info"
-      node_exporter_syslog_output_facility="daemon"
+      node_exporter_listen_address="{{ monitoring_node_listen }}"
+      node_exporter_flags="-S -s info -l daemon"
     owner: root
     group: wheel
     mode: "0644"
