@@ -55,10 +55,19 @@ fi
 fail=0
 for pb in "${playbooks[@]}"; do
   echo "::group::render ${pb}"
+  # NOTE: skip only `snapshot` here, NOT `apply`. The controller-render tasks
+  # that write ansible/generated/<host>/* are tagged `[validate, diff, apply]`
+  # (they re-render the review artifact during a real apply too). Because
+  # --skip-tags wins over --tags in Ansible, adding `apply` to --skip-tags
+  # silently skipped those render tasks, so this script produced nothing and
+  # the render check passed trivially (issue #109). The live-mutation tasks are
+  # all gated on `*_apply | default(false)` and tagged `[apply]`-only, so they
+  # are not selected by `--tags validate` — render stays side-effect-free.
+  # This matches the documented manual workflow in CLAUDE.md.
   if ! ansible-playbook "${pb}" \
        --tags validate \
        --connection=local \
-       --skip-tags=snapshot,apply; then
+       --skip-tags=snapshot; then
     echo "::error::render failed: ${pb}"
     fail=1
   fi
