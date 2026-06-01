@@ -56,17 +56,16 @@ monitoring_extra_services:
       http_expect_body_regex: '"status":"ok"'
 
   - name: noc-agent-mail-health
-    check_command: http
+    # Custom check: surfaces /health/mail's JSON body (IMAP reason / error) in
+    # the alert instead of just the HTTP code.
+    # CheckCommand defined in configs/mon/icinga2/services/noc-agent-mail-health.conf.
+    check_command: noc_agent_mail_health
     interval: 2m
     retry: 30s
     notes: "NOC mailbox IMAP login/select used by mail polling"
     vars:
-      http_address: "{{ peers.noc.ipv6 }}"
-      http_port: 8000
-      http_uri: "/health/mail"
-      http_ipv6: true
-      http_timeout: 15
-      http_expect_body_regex: '"status":"ok"'
+      noc_mail_host: "{{ peers.noc.ipv6 }}"
+      noc_mail_port: 8000
 
   - name: noc-agent-model-health
     # Custom check: surfaces /health/model's JSON body in the alert.
