@@ -60,6 +60,6 @@
   command: "atrm {{ _firewall_at_job.stdout }}"
   changed_when: false
   when:
-    - firewall_apply
+    - firewall_apply | default(false) | bool
     - _firewall_at_job.stdout | default('') | length > 0
   tags: [apply]
