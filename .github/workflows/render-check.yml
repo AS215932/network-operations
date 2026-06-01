@@ -41,8 +41,12 @@ jobs:
       - name: Assert generated/ matches HEAD
         run: |
           set -e
-          if ! git diff --exit-code ansible/generated/; then
-            echo "::error::ansible/generated/ is stale. Re-run scripts/ci/render-all.sh locally and commit the diff." >&2
+          # Catch BOTH modified tracked files and brand-new untracked renders
+          # (a never-committed generated file slips past `git diff --exit-code`).
+          if [ -n "$(git status --porcelain ansible/generated/)" ]; then
+            echo "::error::ansible/generated/ is stale or has uncommitted renders. Re-run scripts/ci/render-all.sh locally and commit the diff." >&2
+            git status --porcelain ansible/generated/ >&2
+            git diff ansible/generated/ >&2 || true
             exit 1
           fi
 
