@@ -1,5 +1,6 @@
 ---
-# Default posture for the seven Debian VMs behind rtr.
-firewall_input_policy: accept    # logging-only on first run; flip to drop in a follow-up PR
-firewall_log_only: true
+# Default posture for Debian/OpenBSD infrastructure VMs behind rtr.
+# Log-only observation is complete; Linux service hosts enforce default-deny.
+firewall_input_policy: drop
+firewall_log_only: false
 firewall_allow_node_exporter_from_mon: true

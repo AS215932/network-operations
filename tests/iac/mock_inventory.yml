@@ -2,8 +2,18 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+wg_link_prefix: "2a0c:b641:b50:ff00::/56"
+router_loopback_subnet: "2a0c:b641:b50::/64"
 customer_subnet: "2a0c:b641:b51::/48"
 mgmt_v4: "10.0.0.0/24"
+legacy_infra_v4: "10.0.2.0/24"
+customer_isolation_block_v6:
+  - "{{ infra_subnet }}"
+  - "{{ router_loopback_subnet }}"
+  - "{{ wg_link_prefix }}"
+customer_isolation_block_v4:
+  - "{{ mgmt_v4 }}"
+  - "{{ legacy_infra_v4 }}"
 
 peers:
   rtr:

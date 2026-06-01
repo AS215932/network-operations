@@ -19,6 +19,27 @@ the right VRF from boot, no runtime migration. The overlay netdev is
 `05-overlay.netdev` (kind=vrf, table=200); each member interface
 declares `VRF=overlay` in its `[Network]` block.
 
+## Firewall matching in the overlay VRF
+
+Customer VM isolation is enforced in rtr's nftables forward path. Do not rely
+only on `iifname enX3 oifname enX2`: both `enX2` (infra) and `enX3` (customer)
+are enslaved to the same `overlay` VRF, and netfilter/device exposure can differ
+between VRF master and slave devices. The managed rules therefore include
+VRF-safe destination-prefix drops. The same caveat applies to host-input
+routing protocols: OSPFv3 packets may appear with `IN=overlay`, so rtr's input
+filter allows proto 89 on both the VRF master (`overlay`) and WG slaves
+(`wg0`/`wg1`).
+
+- IPv6 forwarded from `2a0c:b641:b51::/48` to infra/router ranges
+  (`2a0c:b641:b50:2::/64`, `2a0c:b641:b50::/64`, `2a0c:b641:b50:ff00::/56`)
+  is dropped before any broad forward accepts.
+- IPv4 forwarded from the customer bridge (`enX3`) to mgmt/legacy infra
+  (`10.0.0.0/24`, `10.0.2.0/24`) is dropped before the public DNAT allows.
+
+`ci-pr` (`2a0c:b641:b51::c1`) is the acceptance canary: `ci-pr → mon:9100`
+must time out, while DNS to rtr on the customer gateway and public HTTPS egress
+must still work.
+
 ## IPv4 DNAT VRF leak
 
 The infra subnet `10.0.2.0/24` lives on `enX2` (overlay VRF). External

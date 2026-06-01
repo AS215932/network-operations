@@ -13,13 +13,13 @@
     src: "{{ 'nftables-rtr.conf.j2' if inventory_hostname == 'rtr' else 'nftables.conf.j2' }}"
     dest: "{{ firewall_conf_path }}.new"
     mode: "0644"
-  when: firewall_apply
+  when: firewall_apply | default(false) | bool
   tags: [apply]
 
 - name: Syntax check rendered nftables config
   command: "{{ firewall_validate_cmd }} {{ firewall_conf_path }}.new"
   changed_when: false
-  when: firewall_apply
+  when: firewall_apply | default(false) | bool
   tags: [apply]
 
 - name: Backup currently-loaded ruleset before swap
@@ -30,7 +30,7 @@
       cp {{ firewall_conf_path }} {{ firewall_backup_path }}
     fi
   changed_when: false
-  when: firewall_apply
+  when: firewall_apply | default(false) | bool
   tags: [apply]
 
 - name: Schedule rollback watchdog (3 min) — cancels on success
@@ -39,7 +39,7 @@
       | at now + 3 minutes 2>&1 | awk '/job/ {print $2}'
   register: _firewall_at_job
   changed_when: false
-  when: firewall_apply
+  when: firewall_apply | default(false) | bool
   tags: [apply]
 
 - name: Move new config into place
@@ -48,7 +48,7 @@
     dest: "{{ firewall_conf_path }}"
     remote_src: true
     mode: "0644"
-  when: firewall_apply
+  when: firewall_apply | default(false) | bool
   notify: reload nftables
   tags: [apply]
 

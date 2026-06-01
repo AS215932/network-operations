@@ -5,8 +5,10 @@ untrusted PR code — PR-Agent, Semgrep, and (after Wave 4) every `pull_request`
 lint/test/build job. It is deliberately **disposable** and **isolated**:
 
 - On the **customer segment** `2a0c:b641:b51::c1/64` (rtr `enX3`/`xenbr-vm`), so
-  rtr's `iifname enX3 oifname {enX2,enX0} drop` cuts it off from the infra and
-  management overlays. A compromised PR job here cannot reach production.
+  rtr drops customer-sourced forwarded packets to the infra/router prefixes and
+  drops `enX3` forwarding to the infra/mgmt bridges. The primary rule matches
+  destination prefixes, not only `oifname`, so it remains effective under the
+  overlay VRF. A compromised PR job here cannot reach production.
 - **No** Vault AppRole, **no** `/etc/github-runner/secrets.env`, **no** `id_ci`
   deploy key, **no** Containerlab/xcaddy — see `host_vars/ci-pr.yml`.
 - Registered in the **`public-pr`** org runner group (label `hyrule-public-pr`),

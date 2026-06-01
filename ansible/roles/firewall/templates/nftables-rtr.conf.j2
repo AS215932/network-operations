@@ -46,10 +46,11 @@ table ip filter {
     chain forward {
         type filter hook forward priority filter; policy accept;
 
-        # Customer VM isolation: drop forwarding from the customer VM bridge
-        # to the infra and management bridges. Documented in CLAUDE.md but
-        # missing from the previous live config — added here.
-        iifname enX3 oifname { enX2, enX0 } drop
+        # Customer VM isolation: packets from the customer bridge must not
+        # reach infrastructure/mgmt ranges.  Match destination prefixes first
+        # so enforcement does not depend solely on VRF slave oifname exposure.
+        iifname enX3 ip daddr { {{ customer_isolation_block_v4 | join(', ') }} } counter drop comment "customer→infra/mgmt v4 isolation"
+        iifname enX3 oifname { enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
 
         # Allow established/related
         ct state established,related accept
@@ -88,8 +89,12 @@ table inet filter {
     chain forward {
         type filter hook forward priority filter; policy accept;
 
-        # Customer VM isolation for IPv6 — mirror of the v4 rule above.
-        iifname enX3 oifname { enX2, enX0 } drop
+        # Customer VM isolation for IPv6.  The source/destination-prefix rule is
+        # VRF-safe (does not rely on oifname); the bridge rule catches spoofed
+        # customer packets seen with the physical vm-bridge ingress device.
+        ip6 saddr {{ customer_subnet }} ip6 daddr { {{ customer_isolation_block_v6 | join(', ') }} } counter drop comment "customer→infra/router v6 isolation"
+        iifname enX3 ip6 daddr { {{ customer_isolation_block_v6 | join(', ') }} } counter drop comment "customer→infra/router v6 bridge isolation"
+        iifname enX3 oifname { enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
     }
 
     chain output {
