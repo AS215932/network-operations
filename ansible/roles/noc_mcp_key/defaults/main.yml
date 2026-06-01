@@ -4,3 +4,12 @@ noc_mcp_key_pub_path: "{{ noc_mcp_key_path }}.pub"
 
 # Restricts the key so it only works when the connection comes from noc's overlay address.
 noc_mcp_key_from_address: "{{ peers.noc.ipv6 }}"
+
+# Extra reader groups to add the MCP SSH user to, per host, so the read-only
+# diagnostic MCP can introspect sensitive-but-not-secret root-owned config dirs
+# (e.g. /etc/icinga2/conf.d is 0750 root:nagios — the *structure* isn't a
+# secret, only specific password values are). Set in host_vars/<host>.yml.
+# Only applied for non-root MCP users (root needs nothing). Groups must already
+# exist on the host. Keep this view-only — do NOT add groups that confer write
+# or secret access. See issue #49.
+noc_mcp_reader_groups: []

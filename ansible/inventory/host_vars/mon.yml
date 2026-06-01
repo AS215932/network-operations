@@ -19,6 +19,13 @@ firewall_extra_rules:
   # Blackbox is localhost-only (Prometheus runs on the same box). Loopback is
   # already accepted by the base firewall rules.
 
+# Let the read-only diagnostic MCP (SSHes in as svag) traverse/read
+# /etc/icinga2/conf.d (0750 root:nagios) to correlate alerts with check
+# definitions. View-only group membership; the config structure isn't secret.
+# See issue #49 + roles/noc_mcp_key.
+noc_mcp_reader_groups:
+  - nagios
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: mon

@@ -35,6 +35,19 @@
     - noc_mcp_target_user != "root"
   tags: [apply]
 
+# Per-host reader groups (e.g. nagios on mon for /etc/icinga2/conf.d) so the
+# read-only diagnostic MCP can introspect root-owned config dirs without a
+# blanket loosen. View-only; see issue #49 and noc_mcp_reader_groups in defaults.
+- name: Grant MCP SSH user membership in per-host config reader groups
+  user:
+    name: "{{ noc_mcp_target_user }}"
+    groups: "{{ noc_mcp_reader_groups }}"
+    append: true
+  when:
+    - noc_mcp_target_user != "root"
+    - noc_mcp_reader_groups | length > 0
+  tags: [apply]
+
 - name: Authorize id_noc_mcp for {{ noc_mcp_target_user }} (restricted to noc's address)
   authorized_key:
     user: "{{ noc_mcp_target_user }}"
