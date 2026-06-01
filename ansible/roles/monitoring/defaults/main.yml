@@ -23,6 +23,11 @@ monitoring_mon_host: mon
 # Override per-host via host_vars if a different bind is needed.
 monitoring_node_listen: ":9100"
 
+# Expose node_systemd_service_restart_total (one extra series per systemd unit)
+# so crash/restart loops are visible to Prometheus/Icinga (#92). On by default;
+# set false in host_vars on a high-cardinality node to cap scrape cost.
+monitoring_node_restart_metrics: true
+
 # Disks to monitor. Each key is the Icinga service name suffix; mountpoint is
 # read by the prom_disk apply rule on mon. Default = root only.
 monitoring_disks:

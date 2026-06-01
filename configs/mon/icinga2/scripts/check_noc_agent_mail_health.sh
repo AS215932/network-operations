@@ -28,6 +28,12 @@ if [ "$#" -ne 2 ]; then
 fi
 host="$1"; port="$2"
 
+# Fail diagnosably if the plugin's own deps are missing, rather than emitting a
+# confusing parse/curl error.
+for dep in curl jq; do
+    command -v "$dep" >/dev/null 2>&1 || { echo "UNKNOWN - required tool '$dep' not found on mon"; exit 3; }
+done
+
 body="$(mktemp)"
 err_log="$(mktemp)"
 trap 'rm -f "$body" "$err_log"' EXIT
@@ -51,10 +57,12 @@ field() {
 status=$(field '.status')
 mbox=$(field '.mailbox')
 count=$(field '.message_count')
-err=$(jq -r '.error // ""' "$body" 2>/dev/null || true)
+# Go through field() too, so a malformed body fails the same way for every key
+# ("?"). On the happy path .error is absent → "?" → omitted from the detail.
+err=$(field '.error')
 
 detail="status=$status mailbox=$mbox count=$count"
-[ -n "$err" ] && detail="$detail err=$err"
+[ -n "$err" ] && [ "$err" != "?" ] && detail="$detail err=$err"
 
 case "$code" in
     200) echo "OK - $detail"; exit 0 ;;
