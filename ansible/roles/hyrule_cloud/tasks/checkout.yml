@@ -13,4 +13,6 @@
     accept_hostkey: false
   become: true
   become_user: "{{ hyrule_cloud_app_user }}"
-  notify: restart hyrule-cloud
+  # No `notify: restart` here. A retry where the SHA is already checked out
+  # reports `ok` and would notify nothing, leaving the OLD process running
+  # (#96). The restart is now unconditional in health.yml on every apply.
