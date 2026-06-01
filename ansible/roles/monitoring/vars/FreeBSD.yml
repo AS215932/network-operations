@@ -4,7 +4,12 @@ monitoring_node_service: node_exporter
 monitoring_node_env_path: /etc/rc.conf.d/node_exporter
 
 # Dedicated by_ssh remote user (FreeBSD variant). doas, not sudo.
-monitoring_user_shell: /usr/sbin/nologin
+# Must be a real shell: icinga2's by_ssh runs `ssh monitoring@host <cmd>`, and
+# FreeBSD's /usr/sbin/nologin rejects command execution outright ("This account
+# is currently not available."), so every by_ssh check fails. /bin/sh is the
+# minimal shell that lets the dedicated, key-only, doas-scoped user run plugins.
+# (cr1.{nl1,de1} were bootstrapped to /bin/sh by hand 2026-05-15 — issue #80.)
+monitoring_user_shell: /bin/sh
 monitoring_user_home: /var/db/monitoring
 monitoring_user_privesc_template: doas-monitoring.conf.j2
 monitoring_user_privesc_dest: /usr/local/etc/doas.d/monitoring.conf
