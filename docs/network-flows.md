@@ -87,7 +87,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| proxy | TCP | 8402 | hyrule-cloud API upstream |
+| proxy, web, mon | TCP | 8402 | hyrule-cloud API upstream and backend health checks |
 | mon | TCP | 9100 | node_exporter |
 | mon | TCP | 9187 | postgres_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
@@ -96,8 +96,8 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| proxy | TCP | 8080 | hyrule.host landing page |
-| proxy | TCP | 8081 | as215932.net info site |
+| proxy, mon | TCP | 8080 | hyrule.host landing page and backend health check |
+| proxy, mon | TCP | 8081 | as215932.net info site and backend health check |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
@@ -115,7 +115,8 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 |------|-------|------|---------|
 | proxy | TCP | 3000 | Grafana via Caddy |
 | self | TCP | 9100 | node_exporter (Prometheus self-scrape) |
-| localhost only | TCP | 5665, 9090, 9115 | Icinga2 API / Prometheus / blackbox |
+| noc | TCP | 5665, 9090 | Icinga2 API / Prometheus query API for noc-agent |
+| localhost only | TCP | 9115 | blackbox exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 
 ### vpn (`2a0c:b641:b50:2::60`)
@@ -130,7 +131,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| proxy | TCP | 443 | XO web UI |
+| proxy | TCP | 80, 443 | XO web UI (Caddy upstream currently targets :80; :443 kept for appliance UI compatibility) |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 80, 443 | XAPI back-channel |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
@@ -184,9 +185,13 @@ Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch ac
 Unprivileged self-hosted GitHub Actions runner for **untrusted PR code**
 (PR-Agent, Semgrep, and — after Wave 4 — all `pull_request` lint/test/build
 jobs). Deliberately on the **customer-isolated** vm bridge: rtr drops
-`enX3 → {enX2 infra, enX0 mgmt}`, so a compromised PR job cannot reach the
-management overlay. No Vault, no `id_ci`, no `secrets.env`, no Containerlab —
-treated as disposable.
+forwarded packets from `2a0c:b641:b51::/48` to infra/router ranges
+(`2a0c:b641:b50:2::/64`, `2a0c:b641:b50::/64`, WG `/56`) and drops `enX3`
+forwarding to mgmt/legacy infra v4 (`10.0.0.0/24`, `10.0.2.0/24`). This is
+matched by destination prefix, not only `oifname`, so it remains effective when
+VRF forwarding exposes the `overlay` master/slave devices differently in
+netfilter. No Vault, no `id_ci`, no `secrets.env`, no Containerlab — treated as
+disposable.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
@@ -295,13 +300,13 @@ exceptions are:
 | Public → mail | in | 80 tcp | ACME HTTP-01 for mail.as215932.net |
 | ops-prefix, vpn-clients, noc → mail | in | 993 tcp | Private mailbox access and noc-agent polling |
 | ops-prefix, vpn-clients → mail | in | 4190 tcp | Private Sieve access |
-| ops-prefix, vpn-clients → all | in | 22 tcp | SSH |
+| ops-prefix, vpn-clients, ci, noc, mon → all | in | 22 tcp | SSH (ops access, CI apply runs, MCP access, Icinga SSH checks) |
 | all infra → log | out | 6000 tcp | Vector agent → aggregator (Loki ingest path) |
 | mail → log | out | 6514 tcp | OpenBSD syslogd `@@` forward (TCP only, no UDP) |
 | ns2 → log | out | 6000 tcp | Off-net Vector agent → aggregator over public IPv6 |
 | dom0 → log | out | 6000 tcp | Hypervisor Vector agent → aggregator over mgmt v4 |
 | mon → log | out | 3100, 8686 tcp | Grafana query + Vector metrics scrape |
-| noc, mon, api, web → vault | out | 8200 tcp | vault-agent → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
+| noc, mon, api, web, ci → vault | out | 8200 tcp | vault-agent / health checks → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
 | mon → routers | out | 22 tcp (by_ssh) | icinga2 by_ssh checks, logged in as the dedicated `monitoring` system user. Privileged plugins (jool stats) are wrapped in `sudo`/`doas`, scoped to `/usr/local/lib/nagios/plugins/*` by the role-rendered drop. |
 
 ---

@@ -12,8 +12,12 @@ firewall_extra_rules:
   # Self-scrape (mon scrapes its own node_exporter).
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter self-scrape" }
 
-  # Prometheus / blackbox / Icinga2 are localhost-only (Grafana/Prometheus run
-  # on the same box). No external allow rules; loopback already accepted.
+  # NOC automation queries Prometheus and Icinga's REST API directly.
+  - { proto: tcp, dport: 9090, src: "{{ peers.noc.ipv6 }}", comment: "Prometheus API from noc-agent" }
+  - { proto: tcp, dport: 5665, src: "{{ peers.noc.ipv6 }}", comment: "Icinga2 API from noc-agent" }
+
+  # Blackbox is localhost-only (Prometheus runs on the same box). Loopback is
+  # already accepted by the base firewall rules.
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
