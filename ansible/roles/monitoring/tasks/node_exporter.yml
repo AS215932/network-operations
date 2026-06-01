@@ -13,7 +13,12 @@
     path: "{{ monitoring_node_env_path }}"
     create: true
     regexp: '^ARGS='
-    line: 'ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd"'
+    # --collector.systemd.enable-restarts-metrics exposes
+    # node_systemd_service_restart_total{name="<unit>"} so a crash/restart loop
+    # is visible to Prometheus/Icinga. Without it a flapping unit that bounces
+    # back to active=1 between samples is invisible (issue #92). Enabled
+    # fleet-wide on Linux — the blind spot is not specific to github-runner.
+    line: 'ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd --collector.systemd.enable-restarts-metrics"'
     owner: root
     group: root
     mode: "0644"
