@@ -2,3 +2,11 @@ ovh.conf
 openprovider.conf
 secrets.local.sh
 __pycache__/
+
+# Rendered Knot configs embed the TSIG secret (key.secret). Everything else
+# under ansible/generated/ is intentionally tracked (render-check diffs it),
+# but knot.conf must never be committed — a `git commit -a` after a real
+# `playbooks/knot.yml` apply would publish the live TSIG. See issue #84.
+# (knot is not in render-all.sh's default set, so untracking it doesn't weaken
+# the render guard.)
+ansible/generated/**/knot.conf
