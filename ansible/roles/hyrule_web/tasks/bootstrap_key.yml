@@ -37,12 +37,12 @@
   ansible.builtin.known_hosts:
     name: github.com
     key: "{{ lookup('pipe', 'ssh-keyscan -t ed25519 github.com 2>/dev/null') }}"
-    path: "{{ hyrule_web_state_dir }}/.ssh/known_hosts"
+    path: "{{ hyrule_web_ssh_dir }}/known_hosts"
     state: present
 
 - name: Ensure known_hosts ownership
   ansible.builtin.file:
-    path: "{{ hyrule_web_state_dir }}/.ssh/known_hosts"
+    path: "{{ hyrule_web_ssh_dir }}/known_hosts"
     owner: "{{ hyrule_web_app_user }}"
     group: "{{ hyrule_web_app_group }}"
     mode: "0644"
@@ -50,7 +50,7 @@
 - name: Render SSH config for the github-hyrule-web alias
   ansible.builtin.template:
     src: ssh_config.j2
-    dest: "{{ hyrule_web_state_dir }}/.ssh/config"
+    dest: "{{ hyrule_web_ssh_dir }}/config"
     owner: "{{ hyrule_web_app_user }}"
     group: "{{ hyrule_web_app_group }}"
     mode: "0600"

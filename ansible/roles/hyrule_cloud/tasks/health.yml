@@ -1,10 +1,20 @@
 ---
-# Flush handlers so the systemd-active assert and the HTTP probe see the
-# *post-restart* state, not the pre-restart state. Without flush_handlers,
-# Ansible runs handlers at end-of-play and these checks would race the restart.
+# Flush handlers first so any `reload systemd` (changed unit file) runs before
+# we restart. Then restart UNCONDITIONALLY: the deploy must guarantee the
+# running process is on the requested ref, but a retry where the checkout SHA
+# was already current, or a deps-only change, notifies no restart handler and
+# leaves the OLD process running (#96). This runs after vault.yml so the
+# restarted process sees the freshly-rendered env, and before the asserts so
+# they observe post-restart state.
 
-- name: Flush handlers before health check
+- name: Flush handlers (reload systemd if the unit changed) before restart
   ansible.builtin.meta: flush_handlers
+
+- name: Restart hyrule-cloud (deterministic on every apply)
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_service_name }}"
+    state: restarted
+    enabled: true
 
 - name: Check hyrule-cloud systemd state
   ansible.builtin.systemd:

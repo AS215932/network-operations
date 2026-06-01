@@ -17,7 +17,9 @@
   become_user: "{{ hyrule_cloud_app_user }}"
   changed_when: false
   when: hyrule_cloud_pyproject.stat.exists
-  notify: restart hyrule-cloud
+  # No `notify: restart` — `changed_when: false` means this task never reports
+  # changed, so the handler would never fire anyway (dead notify, #96). The
+  # restart is unconditional in health.yml on every apply.
 
 - name: Install Vault render hook for hyrule-cloud environment file
   ansible.builtin.template:
@@ -34,6 +36,8 @@
     owner: root
     group: root
     mode: "0644"
+  # reload systemd if the unit file changed; the restart itself is
+  # unconditional in health.yml (after vault.yml renders the env), so it is
+  # deliberately not notified here (#96).
   notify:
     - reload systemd
-    - restart hyrule-cloud
