@@ -13,9 +13,14 @@ and applies a delta-reload so iBGP/OSPF sessions are not flapped.
 4. Backs up the currently-loaded config.
 5. Schedules an `at(1)` watchdog (default 5 min) that restores + reloads the
    backup if the play does not cancel it — covers a lockout from a bad policy.
-6. Moves the new config into place and fires the handler chain:
-   **validate → reload → `clear bgp ipv6 unicast * soft`**.
+6. Moves the new config into place, **reloads** (FRR integrated delta-reload —
+   no restart), then **`clear bgp ipv6 unicast * soft`** to re-apply policy.
 7. Cancels the watchdog once the reload completes cleanly.
+
+The reload runs on **every** apply (not gated on the file changing): `frr-reload`
+diffs against the *running daemon*, so a converged daemon is a cheap no-op, while
+a daemon left stale by a prior run still gets converged. This avoids the trap
+where the on-disk file already matches the repo but the daemon never ingested it.
 
 `serial: 1` and the pre/post Icinga snapshot bracket are on the playbook
 (`playbooks/frr.yml`), matching the `firewall` role.
@@ -25,15 +30,17 @@ and applies a delta-reload so iBGP/OSPF sessions are not flapped.
 | | FreeBSD (cr1-nl1, cr1-de1) | Debian (rtr) |
 |---|---|---|
 | `frr_conf_path` | `/usr/local/etc/frr/frr.conf` | `/etc/frr/frr.conf` |
-| `frr_reload_cmd` | `service frr reload` | `systemctl reload frr` |
+| `frr_reload_cmd` | `frr-reload.py --reload …` (direct) | `systemctl reload frr` |
 | `frr_validate_cmd` | `vtysh -C -f` | `vtysh -C -f` |
 
-> The FreeBSD `frr_reload_cmd` (`service frr reload`) assumes the frr port's rc
-> script wires a `reload` verb. If a first apply shows it does not, override in
-> `host_vars`/`group_vars` to call frr-reload directly:
-> `/usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin --confdir /usr/local/etc/frr /usr/local/etc/frr/frr.conf`.
-> The syntax check + backup + watchdog make a wrong reload command safe (it
-> reverts), but confirm it before relying on the pipeline for FreeBSD.
+> FreeBSD's `service frr reload` does **not** invoke FRR's integrated reload — on
+> first use it silently applied nothing. So the FreeBSD `frr_reload_cmd` calls
+> `/usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin --confdir
+> /usr/local/etc/frr --stdout /usr/local/etc/frr/frr.conf` directly (the same
+> tool Debian's `systemctl reload frr` runs internally). Confirmed working on
+> cr1-de1 (FRR 10.4.1 / FreeBSD 15). Always verify the change actually took with
+> `vtysh -c 'show route-map …'` after — a reload returning rc 0 is not proof the
+> running config converged.
 
 ## Key variables (`defaults/main.yml`)
 
