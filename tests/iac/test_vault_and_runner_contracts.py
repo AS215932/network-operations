@@ -15,11 +15,40 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         labels = {str(label).replace("{{ github_runner_arch }}", defaults["github_runner_arch"]) for label in defaults["github_runner_labels"]}
         self.assertTrue({"self-hosted", "linux", "x64", "hyrule", "hyrule-infra"} <= labels)
 
-    def test_infra_workflows_target_hyrule_infra_runner_label(self):
+    def test_pull_request_jobs_use_the_unprivileged_runner(self):
+        # Two-runner model (Wave 4): every job reachable on a `pull_request`
+        # event must run on the unprivileged ci-pr runner (hyrule-public-pr),
+        # never on a privileged self-hosted label (hyrule / hyrule-infra). The
+        # heavy labs (batfish, containerlab-frr) may keep the privileged label
+        # ONLY because they are if-gated off pull_request (workflow_dispatch /
+        # repo var). Privileged deploy workflows (apply, drift-detection) are not
+        # pull_request-triggered, so they legitimately stay on hyrule-infra.
+        privileged = {"hyrule", "hyrule-infra"}
         for workflow in (REPO / ".github/workflows").glob("*.yml"):
-            text = workflow.read_text()
-            if "runs-on:" in text:
-                self.assertIn("hyrule-infra", text, workflow)
+            spec = yaml.safe_load(workflow.read_text())
+            triggers = spec.get("on", spec.get(True))  # PyYAML maps `on:` -> True
+            if not _triggers_on_pull_request(triggers):
+                continue
+            for job_name, job in (spec.get("jobs") or {}).items():
+                runs_on = job.get("runs-on")
+                labels = set(runs_on) if isinstance(runs_on, list) else {runs_on}
+                offending = labels & privileged
+                if not offending:
+                    continue
+                cond = str(job.get("if", ""))
+                self.assertTrue(
+                    "workflow_dispatch" in cond or "vars." in cond,
+                    f"{workflow.name}:{job_name} uses privileged label {offending} on a "
+                    f"pull_request workflow without an if-gate restricting it off PRs",
+                )
+
+    def test_privileged_deploy_workflows_stay_on_ci_runner(self):
+        # apply/drift must keep the privileged runner and must NOT leak onto the
+        # unprivileged ci-pr runner (they carry Vault + id_ci).
+        for name in ("apply.yml", "drift-detection.yml"):
+            text = (REPO / ".github/workflows" / name).read_text()
+            self.assertIn("hyrule-infra", text, name)
+            self.assertNotIn("hyrule-public-pr", text, name)
 
     def test_apply_workflow_can_gate_ci_runner_key_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
@@ -119,6 +148,21 @@ def _groups_for(value):
     if isinstance(value, list):
         return {str(item) for item in value}
     return {part.strip() for part in str(value).replace(",", " ").split() if part.strip()}
+
+
+def _triggers_on_pull_request(triggers):
+    # `on:` may be a string ("pull_request"), a list, or a mapping
+    # ({pull_request: {...}, push: {...}}); PyYAML also turns the bare key `on`
+    # into the boolean True, which the caller resolves before passing here.
+    if triggers is None:
+        return False
+    if isinstance(triggers, str):
+        return triggers == "pull_request"
+    if isinstance(triggers, dict):
+        return "pull_request" in triggers
+    if isinstance(triggers, (list, tuple, set)):
+        return "pull_request" in triggers
+    return False
 
 
 if __name__ == "__main__":
