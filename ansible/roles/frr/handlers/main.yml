@@ -1,0 +1,20 @@
+---
+# Handlers listening on the same topic fire in definition order, so a notify of
+# "reload frr" runs: validate (parse the in-place file) → reload (delta apply)
+# → clear bgp soft (re-evaluate policy without bouncing sessions).
+
+- name: validate frr
+  command: "{{ frr_validate_cmd }} {{ frr_conf_path }}"
+  changed_when: false
+  listen: reload frr
+
+- name: reload frr
+  command: "{{ frr_reload_cmd }}"
+  changed_when: false
+  listen: reload frr
+
+- name: clear bgp soft
+  command: "{{ frr_clear_bgp_cmd }}"
+  changed_when: false
+  when: frr_clear_bgp | default(true) | bool
+  listen: reload frr

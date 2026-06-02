@@ -21,7 +21,7 @@ case "$playbook" in
     echo "::notice::hyrule-cloud Goss spec is staged, but target-side execution is paused with the cloud/web refactor"
     exit 0
     ;;
-  rtr_routing|firewall)
+  rtr_routing|firewall|frr)
     echo "::notice::router Goss spec is staged; remote target execution must be wired before making it a hard apply gate"
     exit 0
     ;;

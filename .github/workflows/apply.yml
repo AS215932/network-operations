@@ -28,6 +28,7 @@ on:
           - ci-runner-key
           - knot
           - extmon
+          - frr
           - rtr_routing
           - networkd_resolved
           - mail_openbsd
