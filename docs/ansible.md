@@ -108,6 +108,41 @@ Rule shape:
 For pf-only constructs that don't fit the data model (e.g. `match all scrub`,
 new transit pass rules), use `firewall_extra_raw_pf:` (string) in host_vars.
 
+## FRR config deploys (`frr` role)
+
+FRR configs were historically pushed to the routers by hand (scp + reload). The
+`frr` role (`ansible/roles/frr/`, playbook `playbooks/frr.yml`) brings them under
+the same gated pipeline as `firewall`. The committed `configs/<host>/frr.conf`
+stays the **single source of truth** — the role pushes that file verbatim and
+delta-reloads it; it does not template/render the config.
+
+The apply path mirrors the firewall role: stage `<conf>.new` → `vtysh -C -f`
+syntax check → backup → schedule an `at(1)` rollback watchdog
+(`frr_watchdog_minutes`, default 5) → swap into place → handler chain
+**validate → reload → `clear bgp ipv6 unicast * soft`** → cancel the watchdog.
+`serial: 1` and the pre/post Icinga snapshot bracket are on the play, so a bad
+policy change blocks the next router instead of taking the mesh down.
+
+```bash
+cd ansible
+# Validate-only (no connection, no change) — confirms each targeted host has a
+# committed configs/<host>/frr.conf to deploy:
+ansible-playbook playbooks/frr.yml --tags validate --connection=local --skip-tags=snapshot
+
+# Apply to one router (Icinga-bracketed):
+ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
+```
+
+Or via the gated workflow: `gh workflow run apply.yml -F playbook=frr -F limit=rtr -F dry_run=false`.
+
+**Rollout order:** `--limit rtr` first (Debian; `systemctl reload frr` is certain),
+then `--limit cr1-de1`, then `--limit cr1-nl1`. The FreeBSD `frr_reload_cmd`
+(`service frr reload`) assumes the frr port's rc script has a `reload` verb —
+**confirm on the first FreeBSD apply**; if absent, override `frr_reload_cmd` in
+host_vars to call `/usr/local/lib/frr/frr-reload.py --reload` directly (see the
+role README). The syntax check + backup + watchdog make a wrong reload command
+self-reverting, but the first FreeBSD apply is the point to verify it.
+
 ## Monitoring user — dedicated `monitoring` system account on every host
 
 The `monitoring` role provisions a dedicated `monitoring` system user

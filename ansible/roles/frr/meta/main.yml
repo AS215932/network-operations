@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  role_name: frr
+  author: AS215932 ops
+  description: >-
+    Deploy the committed FRRouting config (configs/<host>/frr.conf) to the
+    routers and hot-reload it, with a syntax check, backup, at(1) rollback
+    watchdog, and a soft BGP clear — no full daemon restart, no session flap.
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+    - name: FreeBSD
+      versions: ["14", "15"]
+dependencies: []

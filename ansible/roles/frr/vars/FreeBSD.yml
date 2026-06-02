@@ -1,0 +1,12 @@
+---
+# FreeBSD core routers (cr1-nl1, cr1-de1) — frr package under /usr/local.
+frr_conf_path: /usr/local/etc/frr/frr.conf
+frr_backup_path: /usr/local/etc/frr/frr.conf.backup
+# Standalone parse check of a config file (no daemon connection needed).
+frr_validate_cmd: "vtysh -C -f"
+# Hot-reload (delta apply via frr-reload). If the frr port's rc script lacks a
+# `reload` verb, override to the direct script in host_vars/group_vars:
+#   frr_reload_cmd: "/usr/local/lib/frr/frr-reload.py --reload
+#     --bindir /usr/local/bin --confdir /usr/local/etc/frr
+#     /usr/local/etc/frr/frr.conf"
+frr_reload_cmd: "service frr reload"

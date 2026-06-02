@@ -1,0 +1,62 @@
+---
+# Live config push + hot-reload. Mirrors the firewall role's pf/nftables apply:
+# stage → syntax-check → backup → schedule rollback watchdog → swap → reload
+# (validate → reload → clear bgp soft handler chain) → cancel watchdog.
+#
+# FRR is assumed already installed + running on a router. We never install or
+# restart the daemon here — only push config and delta-reload, so iBGP/OSPF
+# sessions are not flapped.
+
+- name: Check FRR + watchdog prerequisites are present
+  command: sh -c 'command -v vtysh >/dev/null 2>&1 && command -v at >/dev/null 2>&1 && command -v atrm >/dev/null 2>&1'
+  changed_when: false
+  tags: [apply]
+
+- name: Stage new FRR config on host (.new)
+  copy:
+    src: "{{ frr_config_src_dir }}/{{ inventory_hostname }}/frr.conf"
+    dest: "{{ frr_conf_path }}.new"
+    mode: "0640"
+  tags: [apply]
+
+- name: Syntax-check the staged FRR config
+  command: "{{ frr_validate_cmd }} {{ frr_conf_path }}.new"
+  changed_when: false
+  tags: [apply]
+
+- name: Backup the currently-loaded FRR config before swap
+  copy:
+    src: "{{ frr_conf_path }}"
+    dest: "{{ frr_backup_path }}"
+    remote_src: true
+    mode: "0640"
+  changed_when: false
+  tags: [apply]
+
+- name: Schedule rollback watchdog — restores + reloads the backup if not cancelled
+  shell: |
+    echo 'cp {{ frr_backup_path }} {{ frr_conf_path }} && {{ frr_reload_cmd }} 2>&1 | logger -t frr-rollback' \
+      | at now + {{ frr_watchdog_minutes }} minutes 2>&1 \
+      | awk 'tolower($1) == "job" {print $2}'
+  register: _frr_at_job
+  changed_when: false
+  tags: [apply]
+
+- name: Move new FRR config into place
+  copy:
+    src: "{{ frr_conf_path }}.new"
+    dest: "{{ frr_conf_path }}"
+    remote_src: true
+    mode: "0640"
+  notify: reload frr
+  tags: [apply]
+
+- name: Flush handlers now (validate → reload → clear bgp soft)
+  meta: flush_handlers
+  tags: [apply]
+
+- name: Cancel rollback watchdog
+  command: "atrm {{ _frr_at_job.stdout }}"
+  changed_when: false
+  when: _frr_at_job.stdout | default('') | length > 0
+  tags: [apply]

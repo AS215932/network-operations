@@ -1,0 +1,9 @@
+---
+# Debian router (rtr) — frr package under /etc, systemd-managed.
+frr_conf_path: /etc/frr/frr.conf
+frr_backup_path: /etc/frr/frr.conf.backup
+# Standalone parse check of a config file (no daemon connection needed).
+frr_validate_cmd: "vtysh -C -f"
+# systemctl reload frr runs /usr/lib/frr/frr-reload.py --reload internally,
+# computing + applying the delta against the running config.
+frr_reload_cmd: "systemctl reload frr"

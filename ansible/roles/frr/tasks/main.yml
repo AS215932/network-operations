@@ -1,0 +1,31 @@
+---
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
+
+- name: Locate the committed FRR config for this host (controller)
+  delegate_to: localhost
+  become: false
+  stat:
+    path: "{{ frr_config_src_dir }}/{{ inventory_hostname }}/frr.conf"
+  register: _frr_src
+  tags: [validate, diff, apply]
+
+- name: Assert a committed FRR config exists for this host
+  assert:
+    that:
+      - _frr_src.stat.exists
+      - _frr_src.stat.size | default(0) | int > 0
+    fail_msg: >-
+      No committed config at configs/{{ inventory_hostname }}/frr.conf — the frr
+      role deploys the repo's live config verbatim. Add the file (or limit the
+      run to hosts that have one) before applying.
+    success_msg: >-
+      Will deploy configs/{{ inventory_hostname }}/frr.conf
+      ({{ _frr_src.stat.size }} bytes) to {{ frr_conf_path }}.
+  tags: [validate, diff, apply]
+
+- name: Deploy + reload FRR config
+  include_tasks: deploy.yml
+  when: frr_apply | default(false) | bool
+  tags: [apply]
