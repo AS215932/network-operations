@@ -22,7 +22,13 @@ firewall_log_only: false
 
 firewall_extra_rules:
   # DNS recursion — overlay VMs and customer VMs use rtr's Unbound resolver.
-  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}"], comment: "DNS recursion from overlay" }
+  # peers.rtr.underlay is rtr's OWN queries: Unbound is `ip vrf exec overlay`-
+  # confined (it must, to bind the overlay client addr + forward over the
+  # overlay transit), so it can't bind a default-VRF loopback. rtr's own
+  # default-VRF processes (apt, curl, unbound-anchor) therefore query the
+  # overlay Unbound with rtr's underlay source — allow it so rtr can resolve.
+  # See issue #135. (Goes away with the OpenBSD/rdomain migration, #14.)
+  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}", "{{ peers.rtr.underlay }}"], comment: "DNS recursion from overlay + rtr's own (underlay src, VRF)" }
 
   # Monitoring scrapes from mon.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

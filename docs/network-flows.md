@@ -61,6 +61,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | infra subnet, customer subnet, vpn-clients | TCP/UDP | 53 | DNS recursion (Unbound + DNS64) |
+| rtr underlay (`2001:41d0:303:48a::2`) | TCP/UDP | 53 | rtr's **own** DNS queries to its Unbound — Unbound is overlay-VRF-confined so rtr's default-VRF processes query it with the underlay source (#135) |
 | mon | TCP | 9100 | node_exporter scrape |
 | mon | TCP | 9342 | frr_exporter scrape |
 | cr1-nl1, cr1-de1 loopbacks | TCP | 179 | iBGP |
