@@ -45,3 +45,16 @@ jobs:
           # honours OPENROUTER_API_KEY. Set both from the org secret.
           OPENROUTER__KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Force our models via dynaconf env (SECTION__KEY, double underscore —
+          # the same mechanism OPENROUTER__KEY uses, and proven to reach the
+          # action's container). .pr_agent.toml alone is NOT honoured here: it
+          # only lives on this pilot branch (not the default branch) and there is
+          # no checkout step, so PR-Agent's "repo settings" load misses it and
+          # falls back to its packaged default (gpt-5.5 → gpt-5.4-mini). These
+          # env vars override that regardless. Once .pr_agent.toml lands on main
+          # (Wave 3) it becomes the durable source; these stay as a belt-and-
+          # suspenders pin. deepseek-v4-flash/minimax-m2.7 are custom (non-listed)
+          # models, so custom_model_max_tokens is required.
+          CONFIG__MODEL: openrouter/deepseek/deepseek-v4-flash
+          CONFIG__FALLBACK_MODELS: '["openrouter/minimax/minimax-m2.7"]'
+          CONFIG__CUSTOM_MODEL_MAX_TOKENS: "128000"
