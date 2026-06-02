@@ -31,11 +31,30 @@ github_runner_ssh_key_path: ""            # no id_ci deploy key
 github_runner_containerlab_enabled: false # labs stay on the privileged `ci` runner
 github_runner_caddy_rfc2136_enabled: false
 github_runner_storage_enabled: false      # no separate data disk
+# Routed-GUA container networking. Containers get GUAs from this /64 (a slice of
+# our customer /48); ci-pr forwards (net.ipv6.conf.all.forwarding=1, set by the
+# role) and rtr routes the /64 back via a static route
+# (2a0c:b641:b51:c1::/64 via 2a0c:b641:b51::c1, issue #132). Docker 26.x leaves
+# ip6tables/IPv6-NAT off, so this is true routing — no masquerade — which the
+# rtr return route depends on.
+github_runner_docker_ipv6_enabled: true
+github_runner_docker_fixed_cidr_v6: "2a0c:b641:b51:c1::/64"
+# Container resolver = rtr's Unbound. It binds ONLY the infra address
+# 2a0c:b641:b50:2::1 (no listener on the customer gateway 2a0c:b641:b51::1 —
+# verified live), and rtr's input chain explicitly accepts :53 from the whole
+# customer /48 ("DNS recursion from overlay"). Querying rtr's own recursive
+# resolver is router-input, not a customer→infra-HOST forward, so it does not
+# breach ci-pr's customer isolation — and it inherits the #131 DNS64 CloudFront
+# override (Docker blob pulls take the fast NAT64 path).
+github_runner_docker_dns:
+  - "2a0c:b641:b50:2::1"
 
 # --- Firewall: default-deny inbound + node_exporter scrape from mon only ---
 # node_exporter is pull-only; mon -> ci-pr is infra->customer, which rtr permits.
 firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape (mon, pull-only)" }
+firewall_forward_extra_raw_nft: |
+  iifname docker0 ip6 saddr {{ github_runner_docker_fixed_cidr_v6 }} counter accept comment "ci-pr Docker IPv6 egress"
 
 # --- Monitoring: register on mon (Icinga host + node_exporter scrape) ---
 monitoring_register: true

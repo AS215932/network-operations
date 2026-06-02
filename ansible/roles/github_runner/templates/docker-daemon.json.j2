@@ -1,3 +1,15 @@
-{
-  "data-root": "{{ github_runner_docker_data_root }}"
-}
+{% set docker_daemon_config = {
+  "data-root": github_runner_docker_data_root
+} %}
+{% if github_runner_docker_ipv6_enabled | bool %}
+{% set _ = docker_daemon_config.update({
+  "ipv6": true,
+  "fixed-cidr-v6": github_runner_docker_fixed_cidr_v6
+}) %}
+{% endif %}
+{% if github_runner_docker_dns | length > 0 %}
+{% set _ = docker_daemon_config.update({
+  "dns": github_runner_docker_dns
+}) %}
+{% endif %}
+{{ docker_daemon_config | to_nice_json }}

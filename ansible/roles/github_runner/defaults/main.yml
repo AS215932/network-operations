@@ -48,6 +48,9 @@ github_runner_tmp_retention: 7d
 github_runner_bootstrap_dir: "{{ github_runner_home }}/bootstrap"
 github_runner_bootstrap_retention: 3d
 github_runner_docker_data_root: "{{ github_runner_home }}/docker"
+github_runner_docker_ipv6_enabled: false
+github_runner_docker_fixed_cidr_v6: ""
+github_runner_docker_dns: []
 github_runner_docker_prune_enabled: true
 github_runner_docker_prune_interval: daily
 github_runner_docker_prune_randomized_delay: 15m
