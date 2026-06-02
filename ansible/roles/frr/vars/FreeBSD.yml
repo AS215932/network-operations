@@ -4,9 +4,10 @@ frr_conf_path: /usr/local/etc/frr/frr.conf
 frr_backup_path: /usr/local/etc/frr/frr.conf.backup
 # Standalone parse check of a config file (no daemon connection needed).
 frr_validate_cmd: "vtysh -C -f"
-# Hot-reload (delta apply via frr-reload). If the frr port's rc script lacks a
-# `reload` verb, override to the direct script in host_vars/group_vars:
-#   frr_reload_cmd: "/usr/local/lib/frr/frr-reload.py --reload
-#     --bindir /usr/local/bin --confdir /usr/local/etc/frr
-#     /usr/local/etc/frr/frr.conf"
-frr_reload_cmd: "service frr reload"
+# FreeBSD `service frr reload` does NOT invoke FRR's integrated reload — it
+# silently applies nothing. Call frr-reload.py directly (the same tool Debian's
+# `systemctl reload frr` runs internally), pointed at the FreeBSD bin/conf dirs.
+# It computes the delta against the running daemon and applies it — no restart.
+frr_reload_cmd: >-
+  /usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin
+  --confdir /usr/local/etc/frr --stdout /usr/local/etc/frr/frr.conf

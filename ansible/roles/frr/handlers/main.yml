@@ -1,20 +1,5 @@
 ---
-# Handlers listening on the same topic fire in definition order, so a notify of
-# "reload frr" runs: validate (parse the in-place file) → reload (delta apply)
-# → clear bgp soft (re-evaluate policy without bouncing sessions).
-
-- name: validate frr
-  command: "{{ frr_validate_cmd }} {{ frr_conf_path }}"
-  changed_when: false
-  listen: reload frr
-
-- name: reload frr
-  command: "{{ frr_reload_cmd }}"
-  changed_when: false
-  listen: reload frr
-
-- name: clear bgp soft
-  command: "{{ frr_clear_bgp_cmd }}"
-  changed_when: false
-  when: frr_clear_bgp | default(true) | bool
-  listen: reload frr
+# No handlers: the reload is applied inline in tasks/deploy.yml. It runs on every
+# apply (frr-reload diffs against the running daemon, so a converged daemon is a
+# no-op), which is more robust than a notify-on-file-change handler — a prior
+# reload that left the daemon stale would otherwise never be retried.

@@ -135,13 +135,19 @@ ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 
 Or via the gated workflow: `gh workflow run apply.yml -F playbook=frr -F limit=rtr -F dry_run=false`.
 
-**Rollout order:** `--limit rtr` first (Debian; `systemctl reload frr` is certain),
-then `--limit cr1-de1`, then `--limit cr1-nl1`. The FreeBSD `frr_reload_cmd`
-(`service frr reload`) assumes the frr port's rc script has a `reload` verb —
-**confirm on the first FreeBSD apply**; if absent, override `frr_reload_cmd` in
-host_vars to call `/usr/local/lib/frr/frr-reload.py --reload` directly (see the
-role README). The syntax check + backup + watchdog make a wrong reload command
-self-reverting, but the first FreeBSD apply is the point to verify it.
+**Rollout order:** `--limit rtr` first (Debian), then `--limit cr1-de1`, then
+`--limit cr1-nl1`. The reload runs on **every** apply (frr-reload diffs against
+the running daemon, so a converged daemon is a no-op) — this is deliberate, so a
+daemon left stale by a botched reload still gets reconverged on a re-run.
+
+> **FreeBSD reload gotcha (learned the hard way):** `service frr reload` on the
+> FreeBSD frr port does **not** invoke FRR's integrated reload — it returns rc 0
+> but silently applies nothing. The role therefore calls
+> `/usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin --confdir
+> /usr/local/etc/frr` directly on FreeBSD (Debian keeps `systemctl reload frr`,
+> which runs frr-reload internally). **Always verify the running config actually
+> converged** (`vtysh -c 'show route-map …'`, `show bgp … <prefix>`) — a reload
+> exiting 0 is not proof it applied.
 
 ## Monitoring user — dedicated `monitoring` system account on every host
 

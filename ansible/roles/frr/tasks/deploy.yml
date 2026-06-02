@@ -1,11 +1,17 @@
 ---
-# Live config push + hot-reload. Mirrors the firewall role's pf/nftables apply:
-# stage → syntax-check → backup → schedule rollback watchdog → swap → reload
-# (validate → reload → clear bgp soft handler chain) → cancel watchdog.
+# Live config push + hot-reload via FRR's integrated reload (frr-reload), which
+# computes and applies only the delta against the RUNNING daemon — no restart,
+# no session flap. Mirrors the firewall role's safety chain (stage -> syntax
+# check -> backup -> at(1) watchdog -> swap).
 #
-# FRR is assumed already installed + running on a router. We never install or
-# restart the daemon here — only push config and delta-reload, so iBGP/OSPF
-# sessions are not flapped.
+# The reload runs on EVERY apply rather than only when the file changes: the
+# config push is idempotent, so after a prior run the on-disk file already
+# equals the repo, and a file-change gate would skip the reload even when the
+# running daemon is still stale. frr-reload diffs against the running daemon, so
+# an unchanged daemon is a cheap no-op; a stale one converges. soft-clear then
+# re-applies route-map policy to stored routes (route-map edits need it).
+#
+# FRR is assumed installed + running; we never restart the daemon.
 
 - name: Check FRR + watchdog prerequisites are present
   command: sh -c 'command -v vtysh >/dev/null 2>&1 && command -v at >/dev/null 2>&1 && command -v atrm >/dev/null 2>&1'
@@ -48,11 +54,17 @@
     dest: "{{ frr_conf_path }}"
     remote_src: true
     mode: "0640"
-  notify: reload frr
   tags: [apply]
 
-- name: Flush handlers now (validate → reload → clear bgp soft)
-  meta: flush_handlers
+- name: Reload FRR (integrated delta apply — converges running daemon, no restart)
+  command: "{{ frr_reload_cmd }}"
+  changed_when: true
+  tags: [apply]
+
+- name: Re-evaluate BGP policy (soft — re-applies route-maps without flapping sessions)
+  command: "{{ frr_clear_bgp_cmd }}"
+  changed_when: false
+  when: frr_clear_bgp | default(true) | bool
   tags: [apply]
 
 - name: Cancel rollback watchdog
