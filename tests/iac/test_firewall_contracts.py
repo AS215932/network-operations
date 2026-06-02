@@ -65,13 +65,19 @@ def test_rtr_customer_isolation_is_destination_prefix_enforced():
     )
 
 
-def test_rtr_customer_isolation_runs_before_established_accept():
+def test_rtr_forward_state_handling_runs_before_customer_isolation():
     ruleset = (REPO / "ansible/generated/rtr/nftables.conf").read_text()
 
+    v4_forward = ruleset.index("table ip filter")
+    v4_established = ruleset.index("ct state established,related accept", v4_forward)
+    v4_invalid = ruleset.index("ct state invalid drop", v4_forward)
     v4_drop = ruleset.index("customer→infra/mgmt v4 isolation")
-    v4_established = ruleset.index("ct state established,related accept", v4_drop)
-    assert v4_drop < v4_established
+    assert v4_established < v4_drop
+    assert v4_invalid < v4_drop
 
+    v6_forward = ruleset.index("chain forward", ruleset.index("table inet filter"))
+    v6_established = ruleset.index("ct state established,related accept", v6_forward)
+    v6_invalid = ruleset.index("ct state invalid drop", v6_forward)
     v6_drop = ruleset.index("customer→infra/router v6 isolation")
-    output_chain = ruleset.index("chain output", v6_drop)
-    assert v6_drop < output_chain
+    assert v6_established < v6_drop
+    assert v6_invalid < v6_drop
