@@ -145,6 +145,9 @@ github_runner_containerlab_deb_url: >-
 github_runner_containerlab_deb_path: >-
   {{ github_runner_bootstrap_dir }}/containerlab_{{ github_runner_containerlab_version }}_linux_amd64.deb
 github_runner_containerlab_admin_group: clab_admins
+# containerlab needs root; the runner runs it via passwordless sudo for the FRR
+# containerlab CI gate. Path the .deb installs to. See network-operations#143.
+github_runner_containerlab_bin: /usr/bin/containerlab
 github_runner_xcaddy_path: /usr/local/bin/xcaddy
 github_runner_caddy_path: /usr/local/bin/caddy
 github_runner_caddy_build_dir: "{{ github_runner_tmp_dir }}/caddy-build"
