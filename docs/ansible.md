@@ -135,13 +135,23 @@ ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 
 Or via the gated workflow: `gh workflow run apply.yml -F playbook=frr -F limit=rtr -F dry_run=false`.
 
-**Rollout order:** `--limit rtr` first (Debian; `systemctl reload frr` is certain),
-then `--limit cr1-de1`, then `--limit cr1-nl1`. The FreeBSD `frr_reload_cmd`
-(`service frr reload`) assumes the frr port's rc script has a `reload` verb —
-**confirm on the first FreeBSD apply**; if absent, override `frr_reload_cmd` in
-host_vars to call `/usr/local/lib/frr/frr-reload.py --reload` directly (see the
-role README). The syntax check + backup + watchdog make a wrong reload command
-self-reverting, but the first FreeBSD apply is the point to verify it.
+**Rollout order:** `--limit rtr` first (Debian), then `--limit cr1-de1`, then
+`--limit cr1-nl1`. The reload runs on **every** apply (frr-reload diffs against
+the running daemon, so a converged daemon is a no-op) — this is deliberate, so a
+daemon left stale by a botched reload still gets reconverged on a re-run.
+
+> **FreeBSD reload gotcha (learned the hard way):** `service frr reload` on the
+> FreeBSD frr port does **not** invoke FRR's integrated reload — it returns rc 0
+> but silently applies nothing. The real reload is the port wrapper
+> `/usr/local/sbin/frr-reload` (→ `frr-reload.py --reload …`), which **requires
+> the `frr10-pythontools` package** — it is NOT installed by the base frr10
+> package, and without it the wrapper exits with "Please install
+> frr10-pythontools". The role installs it as a prerequisite
+> (`frr_pythontools_pkg`) and reloads via the wrapper; Debian bundles frr-reload
+> in the frr package and keeps `systemctl reload frr`. **Always verify the running
+> config actually converged** (`vtysh -c 'show route-map …'`, `show bgp …
+> <prefix>`) — a reload exiting 0 is not proof it applied. (cr1-nl1 also lacks
+> frr10-pythontools until its first frr-role apply installs it.)
 
 ## Monitoring user — dedicated `monitoring` system account on every host
 

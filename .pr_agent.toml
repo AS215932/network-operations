@@ -1,0 +1,50 @@
+# PR-Agent (advisory) configuration for AS215932/network-operations.
+#
+# Replaces the hosted Sourcery reviewer. Runs ONLY on the unprivileged
+# `hyrule-public-pr` runner with read/comment-only permissions, on our own
+# OpenRouter key. Advisory: no auto-merge, no code writes, no deploy access.
+# Full design: docs/ci/pr-agent.md.
+
+[config]
+git_provider = "github"
+# deepseek-v4-flash (primary) and minimax-m2.7 (fallback) are NOT in PR-Agent's
+# built-in model list, so they are used as *custom* models — which requires
+# custom_model_max_tokens to be set explicitly.
+model = "openrouter/deepseek/deepseek-v4-flash"
+fallback_models = ["openrouter/minimax/minimax-m2.7"]
+custom_model_max_tokens = 128000
+temperature = 0.2
+use_repo_settings_file = true
+publish_output = true
+
+[github_action_config]
+# What runs automatically on each PR (advisory only). /ask, /improve, /review
+# etc. remain available as slash commands to trusted authors.
+auto_review = true
+auto_describe = false
+auto_improve = true
+
+[pr_reviewer]
+require_security_review = true
+require_tests_review = true
+require_score_review = true
+require_estimate_effort_to_review = true
+extra_instructions = """
+This is the AS215932 network infrastructure-as-code repo. Treat as HIGH RISK:
+Ansible playbooks/roles, inventory, host_vars, ansible/generated/ configs,
+FRR/BGP and firewall (nftables/pf) templates, DNS zone files, Vault paths, and
+deploy scripts. Flag, with specifics:
+- changes that bypass render-check, idempotency, Batfish, Containerlab, or
+  dry-run gates;
+- any deploy that checks out / pulls `main` instead of an SHA-pinned ref;
+- secrets committed to files or rendered with broad permissions;
+- added `pull_request_target`;
+- broad GITHUB_TOKEN permissions or `permissions: write-all`;
+- Docker-socket exposure into job steps;
+- any pull_request job that runs on a privileged self-hosted runner label
+  (`hyrule` / `hyrule-infra`) instead of `hyrule-public-pr`.
+Do not restate the diff; surface risk, missing tests, and operational footguns.
+"""
+
+[pr_description]
+publish_description_as_comment = true
