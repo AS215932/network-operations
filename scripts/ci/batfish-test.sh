@@ -34,7 +34,11 @@ if [[ -z "${BATFISH_HOST:-}" ]]; then
     exit 1
   fi
   docker rm -f "$container_name" >/dev/null 2>&1 || true
-  docker run -d --name "$container_name" -p 9997:9997 -p 9996:9996 batfish/allinone >/dev/null
+  # --network host (not -p) so Batfish binds 9997/9996 directly on the host: the
+  # self-hosted runner's Docker daemon can't program the iptables DOCKER nat chain
+  # for published ports, which fails `-p` with "iptables: No chain/target/match"
+  # (network-operations#143). Host networking needs no DNAT, so it sidesteps that.
+  docker run -d --name "$container_name" --network host batfish/allinone >/dev/null
   started_container=1
   export BATFISH_HOST=127.0.0.1
   sleep 15
