@@ -1,0 +1,89 @@
+---
+name: netops-nightly
+
+# Nightly cadence for the heavy NetOps lab tiers (Wave 5, Stage 1: manual +
+# nightly). Batfish (control-plane model) and Containerlab (dynamic FRR) are
+# too heavy / lab-bound to run on every PR, and they need the privileged ci
+# runner (Docker + lab infra), so they run here on a schedule and on manual
+# dispatch — never automatically on an untrusted PR. Live check-mode drift is
+# owned by drift-detection.yml; render validation by render-check.yml; this
+# workflow does not duplicate either. Failures alert the NOC via Discord.
+
+on:
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  batfish-full:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Batfish AS215932 model tests
+        run: |
+          set -euo pipefail
+          python3 -m venv .venv-batfish
+          . .venv-batfish/bin/activate
+          pip install pytest pybatfish
+          scripts/ci/batfish-test.sh
+
+      - name: Upload Batfish artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: nightly-batfish-artifacts
+          path: |
+            tests/iac/batfish/_artifacts/**
+            .venv-batfish/batfish-*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+  containerlab-full:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Containerlab dynamic FRR smoke test
+        run: scripts/ci/containerlab-frr-test.sh
+
+      - name: Upload Containerlab artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: nightly-containerlab-artifacts
+          path: |
+            tests/iac/containerlab/_artifacts/**
+            clab-*/**
+          if-no-files-found: ignore
+          retention-days: 30
+
+  notify-failure:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    needs: [batfish-full, containerlab-full]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Source runner-scoped secrets
+        run: |
+          set -euo pipefail
+          scripts/ci/deploy-preflight.sh --runner
+          set -a
+          . /etc/github-runner/secrets.env
+          set +a
+          grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+
+      - name: Alert NOC on nightly NetOps failure
+        if: env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ env.DISCORD_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg content "AS215932 nightly NetOps labs failed: ${RUN_URL}" '{content: $content}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL"
