@@ -1,22 +1,39 @@
 ---
-# Pre/post Icinga snapshot — calls a small script on mon to capture
-# current problem state. Used to diff "what was broken before" vs "after".
+# Pre/post Icinga snapshot — captures the current HARD-state problem list from
+# mon and writes it to the controller's ansible/generated/snapshots/<phase>/ so
+# the apply.yml "Capture snapshot diff" step can compare pre vs post and surface
+# regressions the rollout introduced.
 #
-# Skipped silently if mon is unreachable or the script doesn't exist yet;
-# this keeps the firewall play usable before the icinga_master role lands.
+# The helper (/usr/local/bin/icinga-snapshot) and its API creds are deployed by
+# the icinga2 role. Degrades gracefully (failed_when: false) — a missing helper,
+# unreachable mon, or empty problem set just yields an empty snapshot, keeping
+# the play usable. See network-operations#149.
 #
 # Connects as mon's inventory user (svag from the workstation, ci from the
-# runner) and escalates with sudo — never a hardcoded root login, which only
-# ever worked with the operator's broadly-authorized id_servify.
+# runner) and escalates with sudo — never a hardcoded root login.
 
-- name: "{{ snapshot_phase | capitalize }}-deploy Icinga snapshot"
+- name: "Capture {{ snapshot_phase }}-deploy Icinga problem state on mon"
   delegate_to: mon
   become: true
   shell: |
     if [ -x /usr/local/bin/icinga-snapshot ]; then
-      /usr/local/bin/icinga-snapshot {{ snapshot_phase }} firewall-rollout
+      /usr/local/bin/icinga-snapshot
     else
       echo "skip: /usr/local/bin/icinga-snapshot not present yet"
     fi
+  register: _icinga_snapshot
+  changed_when: false
+  failed_when: false
+
+- name: "Write {{ snapshot_phase }} snapshot to the controller for diffing"
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: |
+      # icinga {{ snapshot_phase }}-deploy snapshot — HARD-state service problems
+      {{ _icinga_snapshot.stdout | default('') }}
+    dest: "{{ playbook_dir }}/../generated/snapshots/{{ snapshot_phase }}/icinga.txt"
+    mode: "0644"
   changed_when: false
   failed_when: false

@@ -60,6 +60,35 @@
   notify: validate and reload icinga2
   tags: [apply]
 
+# --- Deploy-bracket snapshot helper (network-operations#149) ---
+- name: Ensure icinga-snapshot helper dependencies (jq, curl)
+  package:
+    name:
+      - jq
+      - curl
+    state: present
+  tags: [apply]
+
+- name: Install icinga-snapshot helper to /usr/local/bin
+  copy:
+    src: "{{ icinga2_repo_configs }}/scripts/icinga-snapshot"
+    dest: /usr/local/bin/icinga-snapshot
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [apply]
+
+- name: Render icinga-snapshot API creds (read-only noc-agent ApiUser)
+  template:
+    src: icinga-snapshot.env.j2
+    dest: "{{ icinga2_scripts_dir }}/.icinga-snapshot.env"
+    owner: nagios
+    group: nagios
+    mode: "0640"
+  no_log: true
+  when: icinga2_noc_agent_api_password | default('') | length > 0
+  tags: [apply]
+
 - name: Install notifications.conf (templated — carries webhook secret)
   template:
     src: notifications.conf.j2

@@ -10,3 +10,7 @@ __pycache__/
 # (knot is not in render-all.sh's default set, so untracking it doesn't weaken
 # the render guard.)
 ansible/generated/**/knot.conf
+
+# Deploy-bracket Icinga snapshots are runtime state captured on the runner during
+# an apply (network-operations#149), not desired state — never commit them.
+ansible/generated/snapshots/

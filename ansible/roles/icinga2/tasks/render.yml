@@ -26,6 +26,18 @@
   become: false
   tags: [validate, diff, apply]
 
+- name: Render icinga-snapshot.env (review — API password redacted)
+  template:
+    src: icinga-snapshot.env.j2
+    dest: "{{ playbook_dir }}/../generated/mon/icinga2/icinga-snapshot.env"
+    mode: "0640"
+  vars:
+    icinga2_noc_agent_api_password: "__REDACTED_ICINGA_API_PASSWORD__"
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
+
 - name: Pre-flight — fail if discord webhook URL is empty for apply
   fail:
     msg: |
