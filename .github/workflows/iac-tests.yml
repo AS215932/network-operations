@@ -1,6 +1,21 @@
 ---
 name: iac-tests
 
+# Tiered IaC test pipeline (Wave 5).
+#
+#   Tier 0  static-iac, ansible-idempotency   unprivileged ci-pr   required (via iac-gate)
+#   Tier 1  batfish                            privileged   ci      trusted-only (dispatch/nightly/var)
+#   Tier 2  containerlab-frr                   privileged   ci      trusted-only (dispatch/nightly/var)
+#
+# Tier 0 runs untrusted PR code, so it lives on the unprivileged hyrule-public-pr
+# runner. Tiers 1-2 spin up Batfish / Containerlab (heavy lab infra + Docker) on
+# the privileged ci runner and only run on a trusted trigger — never automatically
+# on an arbitrary PR. The `iac-gate` job is the single REQUIRED status context:
+# it always reports, so a PR that touches none of the path-filtered IaC files
+# (where this whole workflow is skipped) is treated as passing, while an IaC PR
+# only passes when the required tiers succeed and the lab tiers are
+# success-or-skipped (never failed). See docs/netops/testing-strategy.md.
+
 on:
   pull_request:
     branches: [main]
@@ -27,6 +42,7 @@ permissions:
   pull-requests: read
 
 jobs:
+  # ---- Tier 0: static, unprivileged, required ---------------------------
   static-iac:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     env:
@@ -45,6 +61,16 @@ jobs:
             ansible-playbook "$playbook" --syntax-check
           done
 
+  ansible-idempotency:
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    needs: static-iac
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render/validate idempotency gate
+        run: scripts/ci/ansible-idempotency.sh
+
+  # ---- Tier 1: Batfish control-plane model (privileged, trusted-only) ---
   batfish:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: static-iac
@@ -54,11 +80,24 @@ jobs:
 
       - name: Batfish AS215932 model tests
         run: |
+          set -euo pipefail
           python3 -m venv .venv-batfish
           . .venv-batfish/bin/activate
           pip install pytest pybatfish
           scripts/ci/batfish-test.sh
 
+      - name: Upload Batfish artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: batfish-artifacts
+          path: |
+            tests/iac/batfish/_artifacts/**
+            .venv-batfish/batfish-*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---- Tier 2: Containerlab dynamic FRR (privileged, trusted-only) ------
   containerlab-frr:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: static-iac
@@ -69,11 +108,52 @@ jobs:
       - name: Containerlab dynamic FRR smoke test
         run: scripts/ci/containerlab-frr-test.sh
 
-  ansible-idempotency:
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    needs: static-iac
-    steps:
-      - uses: actions/checkout@v4
+      - name: Upload Containerlab artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: containerlab-artifacts
+          path: |
+            tests/iac/containerlab/_artifacts/**
+            clab-*/**
+          if-no-files-found: ignore
+          retention-days: 14
 
-      - name: Render/validate idempotency gate
-        run: scripts/ci/ansible-idempotency.sh
+  # ---- Aggregating gate: the single REQUIRED context --------------------
+  iac-gate:
+    name: iac-gate
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    needs: [static-iac, ansible-idempotency, batfish, containerlab-frr]
+    if: always()
+    steps:
+      - name: Evaluate tier results
+        env:
+          STATIC_IAC: ${{ needs.static-iac.result }}
+          ANSIBLE_IDEMPOTENCY: ${{ needs.ansible-idempotency.result }}
+          BATFISH: ${{ needs.batfish.result }}
+          CONTAINERLAB: ${{ needs.containerlab-frr.result }}
+        run: |
+          set -euo pipefail
+          echo "Tier results:"
+          echo "  static-iac          = ${STATIC_IAC}"
+          echo "  ansible-idempotency = ${ANSIBLE_IDEMPOTENCY}"
+          echo "  batfish (trusted)   = ${BATFISH}"
+          echo "  containerlab (trust)= ${CONTAINERLAB}"
+          fail=0
+          # Required tiers must succeed.
+          for pair in "static-iac:${STATIC_IAC}" "ansible-idempotency:${ANSIBLE_IDEMPOTENCY}"; do
+            name="${pair%%:*}"; res="${pair##*:}"
+            if [ "${res}" != "success" ]; then
+              echo "::error::required tier ${name} did not pass (${res})"
+              fail=1
+            fi
+          done
+          # Trusted lab tiers may be skipped on PRs, but must never be failed.
+          for pair in "batfish:${BATFISH}" "containerlab-frr:${CONTAINERLAB}"; do
+            name="${pair%%:*}"; res="${pair##*:}"
+            if [ "${res}" != "success" ] && [ "${res}" != "skipped" ]; then
+              echo "::error::lab tier ${name} reported a failure (${res})"
+              fail=1
+            fi
+          done
+          exit "${fail}"
