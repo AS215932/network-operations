@@ -18,6 +18,17 @@ CORE_PAIRS = {
 LOCAL_AS = 215932
 CANONICAL_PREFIX = "2a0c:b641:b50::/44"
 
+# Batfish's reachability/dataplane analysis and BGP-edge modelling are IPv4-only;
+# AS215932 is IPv6-only, so these checks error out parsing IPv6 specifiers
+# ("Error parsing '2a0c:b641:b50:2::/64' as ipSpecifier"). Mark them xfail rather
+# than delete them, so they reactivate automatically if Batfish gains IPv6
+# support; real IPv6 reachability is covered by the containerlab gate (it boots
+# the FRR configs and pings). See network-operations#143.
+_BATFISH_NO_IPV6 = pytest.mark.xfail(
+    reason="Batfish lacks IPv6 reachability/BGP-edge support; AS215932 is IPv6-only (#143)",
+    strict=False,
+)
+
 
 @pytest.fixture(scope="session")
 def bf():
@@ -34,6 +45,7 @@ def test_bgp_session_compatibility(bf):
     assert bad.empty, bad
 
 
+@_BATFISH_NO_IPV6
 def test_ibgp_full_mesh(bf):
     df = bf.q.bgpEdges().answer().frame()
     ibgp = df[(df["AS_Number"] == LOCAL_AS) & (df["Remote_AS_Number"] == LOCAL_AS)]
@@ -57,6 +69,7 @@ def test_no_undefined_references(bf):
     assert df.empty, df
 
 
+@_BATFISH_NO_IPV6
 def test_customer_networks_cannot_reach_infra_management(bf):
     result = bf.q.reachability(
         pathConstraints={"startLocation": "@enter(rtr[enX3])"},
@@ -65,6 +78,7 @@ def test_customer_networks_cannot_reach_infra_management(bf):
     assert result.empty, result
 
 
+@_BATFISH_NO_IPV6
 def test_authorized_ci_can_reach_management_ports(bf):
     result = bf.q.reachability(
         pathConstraints={"startLocation": "@enter(rtr[enX2])"},
