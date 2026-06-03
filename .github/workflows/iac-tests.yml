@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   static-iac:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     env:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
@@ -70,7 +70,7 @@ jobs:
         run: scripts/ci/containerlab-frr-test.sh
 
   ansible-idempotency:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     needs: static-iac
     steps:
       - uses: actions/checkout@v4

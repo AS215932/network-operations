@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   render:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v4
 

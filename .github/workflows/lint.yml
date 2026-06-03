@@ -13,14 +13,14 @@ permissions:
 
 jobs:
   yamllint:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v4
       - name: yamllint
         run: yamllint -c .yamllint .
 
   ansible-lint:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     # roles_path lives in ansible/ansible.cfg, which isn't picked up when lint
     # runs from the repo root — point ansible at ansible/roles explicitly so
     # syntax-check can resolve role references.
@@ -32,7 +32,7 @@ jobs:
         run: ansible-lint -c .ansible-lint ansible/playbooks/ ansible/roles/
 
   shellcheck:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
@@ -49,7 +49,7 @@ jobs:
           fi
 
   jinja-syntax:
-    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v4
       - name: jinja2 syntax check
