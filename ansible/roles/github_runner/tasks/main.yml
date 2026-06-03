@@ -322,6 +322,20 @@
   when: github_runner_containerlab_enabled | bool
   tags: [apply]
 
+# containerlab needs root to create netns/veth; the runner runs unprivileged
+# (User=runner). Scope a passwordless sudo to exactly the containerlab binary so
+# the containerlab-frr CI gate can `sudo containerlab` (network-operations#143).
+- name: Allow the runner passwordless sudo for containerlab
+  copy:
+    content: "{{ github_runner_user }} ALL=(root) NOPASSWD: {{ github_runner_containerlab_bin }}\n"
+    dest: /etc/sudoers.d/github-runner-containerlab
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: github_runner_containerlab_enabled | bool
+  tags: [apply]
+
 - name: Install xcaddy builder
   command: go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
   environment:
