@@ -18,6 +18,15 @@
   changed_when: false
   tags: [apply]
 
+- name: Ensure the integrated-reload tooling package is installed
+  # On FreeBSD frr-reload.py ships in a separate package (frr10-pythontools);
+  # without it the reload silently applies nothing. Debian bundles it (pkg = "").
+  package:
+    name: "{{ frr_pythontools_pkg }}"
+    state: present
+  when: frr_pythontools_pkg | default('') | length > 0
+  tags: [apply]
+
 - name: Stage new FRR config on host (.new)
   copy:
     src: "{{ frr_config_src_dir }}/{{ inventory_hostname }}/frr.conf"

@@ -30,17 +30,19 @@ where the on-disk file already matches the repo but the daemon never ingested it
 | | FreeBSD (cr1-nl1, cr1-de1) | Debian (rtr) |
 |---|---|---|
 | `frr_conf_path` | `/usr/local/etc/frr/frr.conf` | `/etc/frr/frr.conf` |
-| `frr_reload_cmd` | `frr-reload.py --reload …` (direct) | `systemctl reload frr` |
+| `frr_reload_cmd` | `/usr/local/sbin/frr-reload` (port wrapper) | `systemctl reload frr` |
 | `frr_validate_cmd` | `vtysh -C -f` | `vtysh -C -f` |
+| `frr_pythontools_pkg` | `frr10-pythontools` | `""` (bundled) |
 
-> FreeBSD's `service frr reload` does **not** invoke FRR's integrated reload — on
-> first use it silently applied nothing. So the FreeBSD `frr_reload_cmd` calls
-> `/usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin --confdir
-> /usr/local/etc/frr --stdout /usr/local/etc/frr/frr.conf` directly (the same
-> tool Debian's `systemctl reload frr` runs internally). Confirmed working on
-> cr1-de1 (FRR 10.4.1 / FreeBSD 15). Always verify the change actually took with
-> `vtysh -c 'show route-map …'` after — a reload returning rc 0 is not proof the
-> running config converged.
+> FreeBSD's `service frr reload` does **not** invoke FRR's integrated reload — it
+> returns rc 0 but applies nothing. The role uses the port's wrapper
+> `/usr/local/sbin/frr-reload` (→ `frr-reload.py --reload …`), which **requires
+> the `frr10-pythontools` package** — without it the wrapper just prints "Please
+> install frr10-pythontools" and exits non-zero, so the role installs it as a
+> prerequisite (`frr_pythontools_pkg`). Confirmed working on cr1-de1 (FRR 10.4.1
+> / FreeBSD 15). Always verify the change actually took
+> (`vtysh -c 'show route-map …'`, `show bgp … <prefix>`) — a reload returning rc 0
+> is not proof the running config converged.
 
 ## Key variables (`defaults/main.yml`)
 

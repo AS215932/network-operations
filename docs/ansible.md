@@ -142,12 +142,16 @@ daemon left stale by a botched reload still gets reconverged on a re-run.
 
 > **FreeBSD reload gotcha (learned the hard way):** `service frr reload` on the
 > FreeBSD frr port does **not** invoke FRR's integrated reload — it returns rc 0
-> but silently applies nothing. The role therefore calls
-> `/usr/local/lib/frr/frr-reload.py --reload --bindir /usr/local/bin --confdir
-> /usr/local/etc/frr` directly on FreeBSD (Debian keeps `systemctl reload frr`,
-> which runs frr-reload internally). **Always verify the running config actually
-> converged** (`vtysh -c 'show route-map …'`, `show bgp … <prefix>`) — a reload
-> exiting 0 is not proof it applied.
+> but silently applies nothing. The real reload is the port wrapper
+> `/usr/local/sbin/frr-reload` (→ `frr-reload.py --reload …`), which **requires
+> the `frr10-pythontools` package** — it is NOT installed by the base frr10
+> package, and without it the wrapper exits with "Please install
+> frr10-pythontools". The role installs it as a prerequisite
+> (`frr_pythontools_pkg`) and reloads via the wrapper; Debian bundles frr-reload
+> in the frr package and keeps `systemctl reload frr`. **Always verify the running
+> config actually converged** (`vtysh -c 'show route-map …'`, `show bgp …
+> <prefix>`) — a reload exiting 0 is not proof it applied. (cr1-nl1 also lacks
+> frr10-pythontools until its first frr-role apply installs it.)
 
 ## Monitoring user — dedicated `monitoring` system account on every host
 
