@@ -8,7 +8,7 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026051901 ; serial (YYYYMMDDNN)
+                  2026060301 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -20,7 +20,7 @@ $TTL 3600
 
 ; --- Mail for AS215932 operational role accounts ---
 @       IN  MX    10 mail.as215932.net.
-@       IN  TXT   "v=spf1 ip6:2a0c:b641:b50:2::90 -all"
+@       IN  TXT   "v=spf1 ip4:51.91.236.215 ip6:2a0c:b641:b50:2::90 -all"
 _dmarc  IN  TXT   "v=DMARC1; p=none; rua=mailto:noc@as215932.net; adkim=s; aspf=s"
 ; DKIM selector for Rspamd signing on mail.as215932.net.
 dkim._domainkey IN TXT ( "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxF/V0NkAuLkXFZ6WVPqTrdi1na7DZKHXFl605qBrhhgiFM6oR65kPivhwKcP7S+8PsbxAIzZb2irl1RUZqeTrYigsetugKyg7ONX1o5C9+JEO+BuY4ug6Lg9LRMy00q+DNKV7HxD"
@@ -42,6 +42,7 @@ mon     IN  AAAA  2a0c:b641:b50:2::50
 vpn     IN  AAAA  2a0c:b641:b50:2::60
 xoa     IN  AAAA  2a0c:b641:b50:2::70
 irc     IN  AAAA  2a0c:b641:b50:2::80
+mail    IN  A     51.91.236.215
 mail    IN  AAAA  2a0c:b641:b50:2::90
 noc     IN  AAAA  2a0c:b641:b50:2::a0
 log     IN  AAAA  2a0c:b641:b50:2::b0
