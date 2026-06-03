@@ -87,8 +87,18 @@ jobs:
           # here so playbooks pick up DISCORD_WEBHOOK_URL, ICINGA_API_*, etc.
           if [ -r /etc/github-runner/secrets.env ]; then
             set -a; . /etc/github-runner/secrets.env; set +a
-            # Re-export for subsequent steps via GITHUB_ENV.
-            grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+            # Mask each value in the run log BEFORE exporting to later steps.
+            # Values placed in $GITHUB_ENV are otherwise echoed in plaintext in
+            # every subsequent step's "env:" group (network-operations#148).
+            while IFS='=' read -r _key _; do
+              case "$_key" in
+                [A-Z_][A-Z0-9_]*)
+                  _val="${!_key}"
+                  [ -n "$_val" ] && echo "::add-mask::$_val"
+                  printf '%s=%s\n' "$_key" "$_val" >> "$GITHUB_ENV"
+                  ;;
+              esac
+            done < /etc/github-runner/secrets.env
           else
             echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
           fi
