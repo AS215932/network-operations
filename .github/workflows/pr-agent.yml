@@ -1,0 +1,60 @@
+---
+name: pr-agent
+
+# Advisory AI PR review (replaces hosted Sourcery). Runs on the UNPRIVILEGED
+# `hyrule-public-pr` runner only, with read + PR/issue-comment permissions and
+# our own OpenRouter key. Never deploys, never writes code, never auto-merges.
+# Config (model/fallback/instructions): .pr_agent.toml. Design: docs/ci/pr-agent.md.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-agent:
+    # Public-fork policy: auto-review ONLY for same-repo (internal) PRs, and
+    # slash commands ONLY from trusted authors. This keeps OPENROUTER_API_KEY
+    # off untrusted fork PRs and stops anyone from burning the OpenRouter
+    # budget via /ask, /improve, etc.
+    if: >
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       startsWith(github.event.comment.body, '/') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    timeout-minutes: 12
+    steps:
+      - name: PR-Agent
+        uses: The-PR-Agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7  # v0.35.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PR-Agent reads the OpenRouter key from openrouter__key; litellm also
+          # honours OPENROUTER_API_KEY. Set both from the org secret.
+          OPENROUTER__KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Force our models via dynaconf env (SECTION__KEY, double underscore —
+          # the same mechanism OPENROUTER__KEY uses, and proven to reach the
+          # action's container). .pr_agent.toml alone is NOT honoured here: it
+          # only lives on this pilot branch (not the default branch) and there is
+          # no checkout step, so PR-Agent's "repo settings" load misses it and
+          # falls back to its packaged default (gpt-5.5 → gpt-5.4-mini). These
+          # env vars override that regardless. Once .pr_agent.toml lands on main
+          # (Wave 3) it becomes the durable source; these stay as a belt-and-
+          # suspenders pin. deepseek-v4-flash/minimax-m2.7 are custom (non-listed)
+          # models, so custom_model_max_tokens is required.
+          CONFIG__MODEL: openrouter/deepseek/deepseek-v4-flash
+          CONFIG__FALLBACK_MODELS: '["openrouter/minimax/minimax-m2.7"]'
+          CONFIG__CUSTOM_MODEL_MAX_TOKENS: "128000"
