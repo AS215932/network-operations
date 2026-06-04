@@ -92,6 +92,15 @@ the first apply after the disk is attached, and keeps transient content bounded:
 `_diag` is pruned after 7 days, runner bootstrap/build scratch is pruned after a
 few days, and a systemd timer runs `docker system prune` with a 7-day cutoff.
 
+The `ci` runner is intentionally privileged enough to run the trusted
+Containerlab FRR gate (`containerlab-frr`). The `github_runner` role grants
+`runner` passwordless `sudo /usr/bin/containerlab` and relaxes the
+`github-runner.service` sandbox when `github_runner_containerlab_enabled=true`
+(`NoNewPrivileges=false`, `ProtectKernelModules=false`,
+`ProtectControlGroups=false`). This is not suitable for untrusted pull request
+jobs; the separate `ci-pr` runner keeps containerlab disabled and retains the
+stricter sandbox.
+
 ## 5. Verify
 
 ```bash
