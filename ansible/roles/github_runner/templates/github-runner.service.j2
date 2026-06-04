@@ -21,15 +21,18 @@ TimeoutStopSec=5min
 Environment=HOME={{ github_runner_home }}
 Environment=TMPDIR={{ github_runner_tmp_dir }}
 
-# Hardening
-NoNewPrivileges=true
+# Hardening. When containerlab is enabled, this runner intentionally relaxes the
+# privilege/cgroup/module guards below so `sudo containerlab` can create the
+# FRR lab's netns/veth topology (network-operations#143). Runners without
+# containerlab keep the stricter defaults from role vars.
+NoNewPrivileges={{ github_runner_service_no_new_privileges }}
 ProtectSystem=full
 ProtectHome=read-only
 ReadWritePaths={{ github_runner_install_dir }} {{ github_runner_home }}
 PrivateTmp=true
 ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
+ProtectKernelModules={{ github_runner_service_protect_kernel_modules }}
+ProtectControlGroups={{ github_runner_service_protect_control_groups }}
 
 [Install]
 WantedBy=multi-user.target

@@ -148,6 +148,16 @@ github_runner_containerlab_admin_group: clab_admins
 # containerlab needs root; the runner runs it via passwordless sudo for the FRR
 # containerlab CI gate. Path the .deb installs to. See network-operations#143.
 github_runner_containerlab_bin: /usr/bin/containerlab
+# The deploy runner runs the dynamic FRR lab in containerlab. That needs `sudo`
+# plus netns/veth/cgroup operations, so when containerlab is enabled the systemd
+# sandbox must allow those. Runners with containerlab disabled (notably ci-pr)
+# keep the stricter defaults.
+github_runner_service_no_new_privileges: >-
+  {{ 'false' if github_runner_containerlab_enabled | bool else 'true' }}
+github_runner_service_protect_kernel_modules: >-
+  {{ 'false' if github_runner_containerlab_enabled | bool else 'true' }}
+github_runner_service_protect_control_groups: >-
+  {{ 'false' if github_runner_containerlab_enabled | bool else 'true' }}
 github_runner_xcaddy_path: /usr/local/bin/xcaddy
 github_runner_caddy_path: /usr/local/bin/caddy
 github_runner_caddy_build_dir: "{{ github_runner_tmp_dir }}/caddy-build"
