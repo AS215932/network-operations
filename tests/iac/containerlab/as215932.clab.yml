@@ -8,6 +8,7 @@ topology:
       binds:
         - /lib/modules:/lib/modules:ro
         - ./configs/daemons:/etc/frr/daemons:ro
+        - ./configs/vtysh.conf:/etc/frr/vtysh.conf:ro
 
   nodes:
     rtr:

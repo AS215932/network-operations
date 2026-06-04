@@ -22,10 +22,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+cleanup
 sudo containerlab deploy -t "$topology"
 
-for node in rtr cr1-nl1 cr1-de1; do
-  docker exec "clab-as215932-${node}" vtysh -c 'show bgp summary'
-done
-
 python3 tests/iac/containerlab/check_frr_lab.py
+
+for node in rtr cr1-nl1 cr1-de1; do
+  docker exec "clab-as215932-${node}" vtysh -c 'show bgp ipv6 summary'
+done
