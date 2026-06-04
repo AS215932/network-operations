@@ -7,6 +7,7 @@ topology:
       image: quay.io/frrouting/frr:10.4.1
       binds:
         - /lib/modules:/lib/modules:ro
+        - ./configs/daemons:/etc/frr/daemons:ro
 
   nodes:
     rtr:
