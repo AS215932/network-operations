@@ -96,10 +96,11 @@ The `ci` runner is intentionally privileged enough to run the trusted
 Containerlab FRR gate (`containerlab-frr`). The `github_runner` role grants
 `runner` passwordless `sudo /usr/bin/containerlab` and relaxes the
 `github-runner.service` sandbox when `github_runner_containerlab_enabled=true`
-(`NoNewPrivileges=false`, `ProtectKernelModules=false`,
-`ProtectControlGroups=false`). This is not suitable for untrusted pull request
-jobs; the separate `ci-pr` runner keeps containerlab disabled and retains the
-stricter sandbox.
+(`NoNewPrivileges=false`, `ProtectKernelTunables=false`,
+`ProtectKernelModules=false`, `ProtectControlGroups=false`). Containerlab needs
+these to create netns/veth/cgroup resources and adjust rp_filter on the Docker
+host. This is not suitable for untrusted pull request jobs; the separate
+`ci-pr` runner keeps containerlab disabled and retains the stricter sandbox.
 
 ## 5. Verify
 
