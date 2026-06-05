@@ -43,9 +43,12 @@ jobs:
           status=0
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"
+            # ci-pr lives on the customer-isolated segment and is managed from
+            # the ops workstation, not from the privileged ci runner.
             if ! ansible-playbook "playbooks/${playbook}.yml" \
                 --check --diff \
                 --tags apply \
+                --limit 'all:!ci-pr' \
                 -e ansible_user=ci \
                 -e "${playbook}_apply=true"; then
               status=1

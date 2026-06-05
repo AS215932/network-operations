@@ -17,6 +17,7 @@
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
+  check_mode: false
   when: not _vector_deb.stat.exists
   tags: [apply]
 
@@ -96,6 +97,7 @@
     url: "https://github.com/grafana/loki/releases/download/v{{ logs_loki_version }}/loki-linux-amd64.zip"
     dest: "/tmp/loki-{{ logs_loki_version }}.zip"
     mode: "0644"
+  check_mode: false
   register: loki_download
   tags: [apply]
 
