@@ -19,7 +19,6 @@
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
-  check_mode: false
   when:
     - ansible_os_family == "Debian"
     - not ansible_check_mode
