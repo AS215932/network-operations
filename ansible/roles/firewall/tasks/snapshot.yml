@@ -14,7 +14,7 @@
 
 - name: "Capture {{ snapshot_phase }}-deploy Icinga problem state on mon"
   delegate_to: mon
-  become: true
+  become: "{{ not ansible_check_mode }}"
   shell: |
     if [ -x /usr/local/bin/icinga-snapshot ]; then
       /usr/local/bin/icinga-snapshot
@@ -24,6 +24,7 @@
   register: _icinga_snapshot
   changed_when: false
   failed_when: false
+  tags: [snapshot]
 
 - name: "Write {{ snapshot_phase }} snapshot to the controller for diffing"
   delegate_to: localhost
@@ -37,3 +38,4 @@
     mode: "0644"
   changed_when: false
   failed_when: false
+  tags: [snapshot]
