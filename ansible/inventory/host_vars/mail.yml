@@ -8,6 +8,7 @@ firewall_log_only: false
 ssh_allow_sources_v6:
   - "{{ ops_prefix_v6 }}"
   - "{{ vpn_clients_subnet }}"
+  - "{{ peers.ci.ipv6 }}"
   - "{{ peers.mon.ipv6 }}"
 
 firewall_extra_rules:

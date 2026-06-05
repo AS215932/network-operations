@@ -157,7 +157,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | ops-prefix, vpn-clients, mon, noc | TCP | 993 | Dovecot IMAPS mailbox access, TLS check, and noc-agent polling |
 | ops-prefix, vpn-clients | TCP | 4190 | Dovecot ManageSieve |
 | mon | TCP | 9100 | node_exporter |
-| ops-prefix, vpn-clients, mon | TCP | 22 | SSH and monitoring check |
+| ops-prefix, vpn-clients, ci, mon | TCP | 22 | SSH for operator access, runner automation, and monitoring check |
 
 ### noc (`2a0c:b641:b50:2::a0`)
 
