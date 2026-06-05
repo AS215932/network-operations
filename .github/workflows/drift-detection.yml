@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload drift logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: drift-logs
           path: ansible/drift-logs/*.log
