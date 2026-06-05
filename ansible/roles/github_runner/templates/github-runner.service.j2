@@ -15,7 +15,16 @@ ExecStart={{ github_runner_install_dir }}/run.sh
 # generated unit — so the runner comes back regardless of exit code.
 Restart=always
 RestartSec=5s
-KillMode=process
+# mixed (NOT GitHub's default `process`): SIGTERM to run.sh, then SIGKILL to the
+# whole control group at TimeoutStopSec. With `process`, a restart mid-job (disk
+# migration, vault-agent env re-render, manual restart) orphaned Runner.Listener:
+# it kept holding the GitHub session — so the next start hit SessionConflictException
+# and crash-looped (NRestarts 245+) — and ran jobs inside the torn-down PrivateTmp
+# namespace, where `mktemp /tmp/...` failed ("No such file or directory"). `mixed`
+# reaps the listener together with the unit, so the session releases and /tmp is
+# never stale. Trade-off: a runner self-update during an in-flight job kills that
+# job (it re-queues) — rare and cheap next to the orphan loop.
+KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=5min
 Environment=HOME={{ github_runner_home }}

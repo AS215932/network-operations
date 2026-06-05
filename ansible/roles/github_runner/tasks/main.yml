@@ -160,10 +160,15 @@
   changed_when: true
   tags: [apply]
 
+# absent, not unmounted: `unmounted` leaves the staging mountpoint in /etc/fstab,
+# so the same partition is listed twice (staging path + runner home) and a reboot
+# races to mount /dev/xvdiN at both — the duplicate that broke the runner host.
+# `absent` unmounts AND removes the fstab line; the permanent runner-home mount is
+# (re)written by the task further down.
 - name: Unmount runner data disk staging path after migration copy
   mount:
     path: "{{ github_runner_data_disk_stage_mount }}"
-    state: unmounted
+    state: absent
   when:
     - github_runner_storage_enabled | bool
     - github_runner_storage_migration_needed | default(false)

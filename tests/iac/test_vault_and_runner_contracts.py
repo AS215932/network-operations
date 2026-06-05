@@ -106,6 +106,20 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("configs/hyrule-cloud.env.j2", role_text)
         self.assertNotRegex(role_text, re.compile(r"lookup\(['\"]env['\"],\s*['\"]XO_TOKEN['\"]"))
 
+    def test_runner_unit_reaps_orphans_on_restart(self):
+        # KillMode=process orphaned Runner.Listener on a mid-job restart: it held
+        # the GitHub session (next start → SessionConflict crash-loop) and ran in a
+        # torn-down PrivateTmp /tmp (mktemp failures). mixed reaps the whole cgroup.
+        unit = (REPO / "ansible/roles/github_runner/templates/github-runner.service.j2").read_text()
+        self.assertIn("KillMode=mixed", unit)
+        self.assertNotIn("KillMode=process", unit)
+
+    def test_runner_staging_unmount_removes_fstab_entry(self):
+        # state: unmounted left the staging mountpoint in /etc/fstab, duplicating
+        # the runner-home device entry and racing two mounts of /dev/xvdiN on boot.
+        tasks = (REPO / "ansible/roles/github_runner/tasks/main.yml").read_text()
+        self.assertNotRegex(tasks, re.compile(r"state:\s*unmounted"))
+
     def test_vault_agent_supports_response_wrapped_secret_id(self):
         hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
         self.assertIn("secret_id_response_wrapping_path", hcl)
