@@ -1,24 +1,19 @@
 ---
-# Remote user for icinga2 by_ssh checks.
+# Dedicated `monitoring` system user for icinga2 by_ssh checks.
 #
-# Most hosts use the dedicated `monitoring` system user. rtr temporarily
-# overrides `monitoring_by_ssh_user: root` while its privileged checks still run
-# without sudo. Human SSH users are otherwise untouched.
-#
-# Privileged checks (FRR vtysh, jool stats, etc.) for the dedicated user get a
-# sudoers/doas drop scoped to /usr/local/lib/nagios/plugins/* so the trust
-# surface stays narrow.
+# Human SSH users (`svag`, `root`, etc.) are untouched. Privileged checks (FRR
+# vtysh, jool stats, etc.) get a sudoers/doas drop scoped to
+# /usr/local/lib/nagios/plugins/* so the trust surface stays narrow.
 
 - name: Ensure dedicated monitoring user exists
   user:
-    name: "{{ monitoring_by_ssh_user }}"
+    name: monitoring
     system: true
     shell: "{{ monitoring_user_shell }}"
     home: "{{ monitoring_user_home }}"
     create_home: true
     comment: "icinga2 by_ssh remote user (managed by network-operations)"
   register: monitoring_user
-  when: monitoring_by_ssh_user != 'root'
   tags: [apply]
 
 # Use the primary group the OS assigned to the monitoring user (looked up
@@ -29,10 +24,9 @@
   file:
     path: "{{ monitoring_user_home }}/.ssh"
     state: directory
-    owner: "{{ monitoring_by_ssh_user }}"
+    owner: monitoring
     group: "{{ monitoring_user.group }}"
     mode: "0700"
-  when: monitoring_by_ssh_user != 'root'
   tags: [apply]
 
 - name: Validate mon source address for by_ssh key restriction
@@ -46,9 +40,9 @@
       authorized_key is always installed with a restrictive from= option.
   tags: [apply]
 
-- name: Authorize mon's icinga2 by_ssh pubkey for the remote user
+- name: Authorize mon's icinga2 by_ssh pubkey for the monitoring user
   authorized_key:
-    user: "{{ monitoring_by_ssh_user }}"
+    user: monitoring
     key: "{{ monitoring_by_ssh_pubkey }}"
     key_options: >-
       from="{{ peers[monitoring_mon_host].ipv6 }}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding
@@ -64,7 +58,13 @@
     group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
     mode: "{{ monitoring_user_privesc_mode }}"
     validate: "{{ '/usr/sbin/visudo -cf %s' if ansible_os_family != 'FreeBSD' else omit }}"
-  when:
-    - monitoring_by_ssh_user != 'root'
-    - monitoring_user_privesc_template is defined
+  when: monitoring_user_privesc_template is defined
+  tags: [apply]
+
+- name: Remove legacy root by_ssh authorization
+  authorized_key:
+    user: root
+    key: "{{ monitoring_by_ssh_pubkey }}"
+    state: absent
+  when: monitoring_remove_legacy_root_by_ssh_key | bool
   tags: [apply]

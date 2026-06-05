@@ -156,21 +156,17 @@ daemon left stale by a botched reload still gets reconverged on a re-run.
 ## Monitoring user — dedicated `monitoring` system account on by_ssh hosts
 
 The `monitoring` role provisions a dedicated `monitoring` system user
-(nologin shell, home under `/var/lib/monitoring` on Linux,
-`/var/db/monitoring` on FreeBSD) on any host where
-`monitoring_by_ssh_pubkey` is set. mon's icinga2 daemon SSHes in as this
-user for `by_ssh` checks; the pubkey is dropped into
-`~monitoring/.ssh/authorized_keys`. Human SSH (`svag`, `root`) is
-untouched.
+(home under `/var/lib/monitoring` on Linux, `/var/db/monitoring` on FreeBSD)
+on any host where `monitoring_by_ssh_pubkey` is set. The account uses a real
+shell because OpenSSH executes remote commands via `$SHELL -c ...`; access is
+still key-only and source-restricted. mon's icinga2 daemon SSHes in as this user
+for `by_ssh` checks; the pubkey is dropped into
+`~monitoring/.ssh/authorized_keys`. Human SSH (`svag`, `root`) is untouched.
 
 Privileged checks (FRR vtysh, jool stats) need root. A scoped
 sudoers (Linux) / doas (FreeBSD) drop allows `monitoring` to invoke
 exactly `/usr/local/lib/nagios/plugins/*` as root, nothing else. In
 Icinga, those `vars.by_ssh_command` strings prepend `sudo`.
-
-Exception: rtr still sets `monitoring_by_ssh_user: root` while its legacy
-checks run without sudo. rtr service definitions must therefore set
-`vars.by_ssh_logname = "root"` explicitly until it is migrated.
 
 The first connection from icinga2 to a new by_ssh target fails with
 *"Host key verification failed"* until mon's nagios-user known_hosts file

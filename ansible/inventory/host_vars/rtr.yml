@@ -76,15 +76,13 @@ monitoring_check_vars:
 monitoring_check_scripts:
   - check_jool_success_delta.sh
 
-# mon's icinga2 by_ssh pubkey, currently authorized for root@rtr (legacy
-# convention). The fleet-wide migration to the dedicated `monitoring`
-# user is deferred for rtr — the monitoring role's node_exporter step
-# fails on rtr with "Failed to update apt cache" (pre-existing issue,
-# tracked separately). cr1.* already use `monitoring`. Set
-# MONITORING_BY_SSH_PUBKEY in secrets.local.sh until the icinga2 role
+# mon's icinga2 by_ssh pubkey, authorized for the dedicated `monitoring`
+# user by the monitoring role. Privileged checks run through the scoped
+# sudoers drop for /usr/local/lib/nagios/plugins/*.
+# Set MONITORING_BY_SSH_PUBKEY in secrets.local.sh until the icinga2 role
 # lands a Vault-rendered pubkey distribution path.
-monitoring_by_ssh_user: root
 monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
+monitoring_remove_legacy_root_by_ssh_key: true
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
