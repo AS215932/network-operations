@@ -23,10 +23,16 @@ jobs:
         run: |
           set -euo pipefail
           scripts/ci/deploy-preflight.sh --runner
-          set -a
-          . /etc/github-runner/secrets.env
-          set +a
-          grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+          set -a; . /etc/github-runner/secrets.env; set +a
+          while IFS='=' read -r _key _; do
+            case "$_key" in
+              [A-Z_][A-Z0-9_]*)
+                _val="${!_key}"
+                [ -n "$_val" ] && echo "::add-mask::$_val"
+                printf '%s=%s\n' "$_key" "$_val" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /etc/github-runner/secrets.env
 
       - name: Check production drift
         id: drift
