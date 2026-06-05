@@ -15,7 +15,7 @@ jobs:
   yamllint:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: yamllint
         run: yamllint -c .yamllint .
 
@@ -27,14 +27,14 @@ jobs:
     env:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: ansible-lint
         run: ansible-lint -c .ansible-lint ansible/playbooks/ ansible/roles/
 
   shellcheck:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: shellcheck
         run: |
           set -e
@@ -51,7 +51,7 @@ jobs:
   jinja-syntax:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: jinja2 syntax check
         run: |
           python3 - <<'EOF'

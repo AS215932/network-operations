@@ -49,7 +49,7 @@ jobs:
     env:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Static IaC contract tests
         run: scripts/ci/iac-static.sh
@@ -67,7 +67,7 @@ jobs:
     needs: static-iac
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Render/validate idempotency gate
         run: scripts/ci/ansible-idempotency.sh
@@ -79,7 +79,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true' }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Batfish AS215932 model tests
         run: |
@@ -107,7 +107,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true' }}
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Containerlab dynamic FRR smoke test
         run: scripts/ci/containerlab-frr-test.sh
