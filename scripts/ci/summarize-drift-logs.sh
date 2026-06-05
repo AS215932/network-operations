@@ -14,8 +14,11 @@ input=$1
 if [ -d "$input" ]; then
   shopt -s nullglob
   logs=("$input"/*.log)
-else
+elif [ -f "$input" ]; then
   logs=("$input")
+else
+  echo "No drift log file or directory found: $input" >&2
+  exit 0
 fi
 
 echo "## Drift summary"
