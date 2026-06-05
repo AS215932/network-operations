@@ -23,30 +23,60 @@ jobs:
         run: |
           set -euo pipefail
           scripts/ci/deploy-preflight.sh --runner
-          set -a
-          . /etc/github-runner/secrets.env
-          set +a
-          grep -E '^[A-Z_][A-Z0-9_]*=' /etc/github-runner/secrets.env >> "$GITHUB_ENV"
+          set -a; . /etc/github-runner/secrets.env; set +a
+          while IFS='=' read -r _key _; do
+            case "$_key" in
+              [A-Z_][A-Z0-9_]*)
+                _val="${!_key}"
+                [ -n "$_val" ] && echo "::add-mask::$_val"
+                printf '%s=%s\n' "$_key" "$_val" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /etc/github-runner/secrets.env
 
       - name: Check production drift
         id: drift
         working-directory: ansible
         run: |
           set -euo pipefail
+          mkdir -p drift-logs
           playbooks=(firewall monitoring logs icinga2 ci rtr_routing networkd_resolved)
           status=0
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"
+            log="drift-logs/${playbook}.log"
+            # ci-pr lives on the customer-isolated segment and is managed from
+            # the ops workstation, not from the privileged ci runner. extmon is
+            # an external placeholder until its VPS is provisioned.
             if ! ansible-playbook "playbooks/${playbook}.yml" \
                 --check --diff \
                 --tags apply \
+                --limit 'all:!ci-pr:!extmon' \
                 -e ansible_user=ci \
-                -e "${playbook}_apply=true"; then
+                -e "${playbook}_apply=true" 2>&1 | tee "${log}"; then
+              status=1
+            fi
+            if grep -q 'changed: \[' "${log}"; then
+              echo "::error::${playbook} reported check-mode changes"
               status=1
             fi
             echo "::endgroup::"
           done
           exit "$status"
+
+      - name: Summarize drift
+        if: always()
+        working-directory: ansible
+        run: ../scripts/ci/summarize-drift-logs.sh drift-logs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-logs
+          path: ansible/drift-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Alert NOC on drift failure
         if: failure() && env.DISCORD_WEBHOOK_URL != ''

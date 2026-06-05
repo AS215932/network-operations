@@ -17,13 +17,25 @@
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
-  when: not _vector_deb.stat.exists
+  when:
+    - not ansible_check_mode
+    - not _vector_deb.stat.exists
+  tags: [apply]
+
+- name: Report Vector .deb would be downloaded
+  debug:
+    msg: "Would download {{ logs_vector_deb_url }}"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not _vector_deb.stat.exists
   tags: [apply]
 
 - name: Install Vector .deb
   apt:
     deb: "/tmp/vector_{{ logs_vector_version }}.deb"
     state: present
+  when: not ansible_check_mode or _vector_deb.stat.exists
   tags: [apply]
 
 - name: Ensure systemd drop-in dir for vector.service
@@ -91,12 +103,29 @@
     state: present
   tags: [apply]
 
+- name: Check if Loki binary release is already cached
+  stat:
+    path: "/tmp/loki-{{ logs_loki_version }}.zip"
+  register: _loki_zip
+  tags: [apply]
+
 - name: Download Loki binary release
   get_url:
     url: "https://github.com/grafana/loki/releases/download/v{{ logs_loki_version }}/loki-linux-amd64.zip"
     dest: "/tmp/loki-{{ logs_loki_version }}.zip"
     mode: "0644"
-  register: loki_download
+  when:
+    - not ansible_check_mode
+    - not _loki_zip.stat.exists
+  tags: [apply]
+
+- name: Report Loki binary release would be downloaded
+  debug:
+    msg: "Would download Loki {{ logs_loki_version }} binary release"
+  changed_when: true
+  when:
+    - ansible_check_mode
+    - not _loki_zip.stat.exists
   tags: [apply]
 
 - name: Extract Loki binary
@@ -105,7 +134,7 @@
     dest: /usr/local/bin
     remote_src: true
     creates: "/usr/local/bin/loki-linux-amd64"
-  when: loki_download is succeeded
+  when: not ansible_check_mode or _loki_zip.stat.exists
   tags: [apply]
 
 - name: Symlink loki-linux-amd64 → /usr/local/bin/loki

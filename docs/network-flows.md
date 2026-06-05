@@ -157,7 +157,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | ops-prefix, vpn-clients, mon, noc | TCP | 993 | Dovecot IMAPS mailbox access, TLS check, and noc-agent polling |
 | ops-prefix, vpn-clients | TCP | 4190 | Dovecot ManageSieve |
 | mon | TCP | 9100 | node_exporter |
-| ops-prefix, vpn-clients, mon | TCP | 22 | SSH and monitoring check |
+| ops-prefix, vpn-clients, ci, mon | TCP | 22 | SSH for operator access, runner automation, and monitoring check |
 
 ### noc (`2a0c:b641:b50:2::a0`)
 
@@ -210,6 +210,7 @@ on mon is the only read path.
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci) | TCP | 6000 | Vector→Vector ingest from agents |
+| rtr underlay (`2001:41d0:303:48a::2`) | TCP | 6000 | Vector→Vector ingest from rtr default-VRF processes; kernel routes this path via underlay |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
 | cr1-nl1, cr1-de1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
 | ns2 (`2001:41d0:304:300::7bfb`) | TCP | 6000 | Off-net Vector ingest over public IPv6 |

@@ -84,6 +84,7 @@
   register: github_runner_home_mount_source
   changed_when: false
   failed_when: false
+  check_mode: false
   when: github_runner_storage_enabled | bool
   tags: [apply]
 
@@ -184,7 +185,9 @@
     owner: root
     group: root
     mode: "0755"
-  when: github_runner_storage_enabled | bool
+  when:
+    - github_runner_storage_enabled | bool
+    - github_runner_storage_migration_needed | default(false)
   tags: [apply]
 
 - name: Mount runner data disk at runner home
@@ -236,7 +239,7 @@
   loop:
     - { path: "{{ github_runner_bootstrap_dir }}", owner: root, group: root, mode: "0755" }
     - { path: "{{ github_runner_tmp_dir }}", owner: root, group: root, mode: "1777" }
-    - { path: "{{ github_runner_docker_data_root }}", owner: root, group: root, mode: "0711" }
+    - { path: "{{ github_runner_docker_data_root }}", owner: root, group: root, mode: "0710" }
   tags: [apply]
 
 - name: Install Docker daemon config for runner data disk
