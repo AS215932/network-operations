@@ -5,8 +5,9 @@ monitoring_node_env_path: /etc/default/prometheus-node-exporter
 
 # Dedicated by_ssh remote user. Created by the monitoring role when
 # monitoring_by_ssh_pubkey is set; the icinga2 daemon on mon logs in as
-# this user to run by_ssh checks. Per-OS shell path differs.
-monitoring_user_shell: /usr/sbin/nologin
+# this user to run by_ssh checks. The account needs a real shell because
+# OpenSSH executes by_ssh commands via the user's shell (`$SHELL -c ...`).
+monitoring_user_shell: /bin/sh
 monitoring_user_home: /var/lib/monitoring
 monitoring_user_privesc_template: sudoers-monitoring.j2
 monitoring_user_privesc_dest: /etc/sudoers.d/monitoring

@@ -76,13 +76,14 @@
   known_hosts:
     path: "{{ monitoring_by_ssh_known_hosts_path }}"
     name: "{{ ansible_host | default(inventory_hostname) }}"
-    key: "{{ by_ssh_host_keyscan.stdout }}"
+    key: "{{ item }}"
     state: present
+  loop: "{{ by_ssh_host_keyscan.stdout_lines | reject('match', '^#') | list }}"
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
-    - by_ssh_host_keyscan.stdout is defined
-    - by_ssh_host_keyscan.stdout | length > 0
+    - by_ssh_host_keyscan.stdout_lines is defined
+    - by_ssh_host_keyscan.stdout_lines | reject('match', '^#') | list | length > 0
   tags: [apply]
