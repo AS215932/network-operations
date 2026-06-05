@@ -10,8 +10,9 @@
 # docs/application-logging.md for the contract that fills these streams.
 
 firewall_extra_rules:
-  # Vector→Vector ingest from every agent on the infra subnet.
+  # Vector→Vector ingest from agents.
   - { proto: tcp, dport: 6000, src: "{{ peers.rtr.ipv6 }}",   comment: "Vector ingest from rtr" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.rtr.underlay }}", comment: "Vector ingest from rtr underlay" }
   - { proto: tcp, dport: 6000, src: "{{ peers.dns.ipv6 }}",   comment: "Vector ingest from dns" }
   - { proto: tcp, dport: 6000, src: "{{ peers.api.ipv6 }}",   comment: "Vector ingest from api" }
   - { proto: tcp, dport: 6000, src: "{{ peers.web.ipv6 }}",   comment: "Vector ingest from web" }
