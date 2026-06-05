@@ -153,7 +153,7 @@ daemon left stale by a botched reload still gets reconverged on a re-run.
 > <prefix>`) — a reload exiting 0 is not proof it applied. (cr1-nl1 also lacks
 > frr10-pythontools until its first frr-role apply installs it.)
 
-## Monitoring user — dedicated `monitoring` system account on every host
+## Monitoring user — dedicated `monitoring` system account on by_ssh hosts
 
 The `monitoring` role provisions a dedicated `monitoring` system user
 (nologin shell, home under `/var/lib/monitoring` on Linux,
@@ -166,14 +166,16 @@ untouched.
 Privileged checks (FRR vtysh, jool stats) need root. A scoped
 sudoers (Linux) / doas (FreeBSD) drop allows `monitoring` to invoke
 exactly `/usr/local/lib/nagios/plugins/*` as root, nothing else. In
-Icinga, those `vars.by_ssh_command` strings prepend `sudo`. The new
-convention replaces the old per-host `monitoring_by_ssh_user: root`
-override on rtr (now removed) and the never-existed `nagios` user on
-cr1.*.
+Icinga, those `vars.by_ssh_command` strings prepend `sudo`.
+
+Exception: rtr still sets `monitoring_by_ssh_user: root` while its legacy
+checks run without sudo. rtr service definitions must therefore set
+`vars.by_ssh_logname = "root"` explicitly until it is migrated.
 
 The first connection from icinga2 to a new by_ssh target fails with
-*"Host key verification failed"* until mon's `~icinga2/.ssh/known_hosts`
-is populated; the role does this via `ssh-keyscan` delegated to mon.
+*"Host key verification failed"* until mon's nagios-user known_hosts file
+(`/var/lib/nagios/.ssh/known_hosts` on Debian) is populated; the role does
+this via `ssh-keyscan` delegated to mon.
 
 ## Memory ops should know about
 

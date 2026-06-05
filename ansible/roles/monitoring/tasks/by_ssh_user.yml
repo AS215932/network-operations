@@ -1,24 +1,24 @@
 ---
-# Dedicated `monitoring` system user for icinga2 by_ssh checks.
+# Remote user for icinga2 by_ssh checks.
 #
-# Replaces the older convention of authorizing root@<host> (rtr) and the
-# never-existed `nagios` user (cr1.*). Human SSH stays as svag, root,
-# etc. — those are untouched. This user has nologin shell and is only
-# reachable via the by_ssh pubkey provisioned below.
+# Most hosts use the dedicated `monitoring` system user. rtr temporarily
+# overrides `monitoring_by_ssh_user: root` while its privileged checks still run
+# without sudo. Human SSH users are otherwise untouched.
 #
-# Privileged checks (FRR vtysh, jool stats, etc.) get a sudoers/doas drop
-# scoped to /usr/local/lib/nagios/plugins/* so the trust surface stays
-# narrow.
+# Privileged checks (FRR vtysh, jool stats, etc.) for the dedicated user get a
+# sudoers/doas drop scoped to /usr/local/lib/nagios/plugins/* so the trust
+# surface stays narrow.
 
 - name: Ensure dedicated monitoring user exists
   user:
-    name: monitoring
-    system: yes
+    name: "{{ monitoring_by_ssh_user }}"
+    system: true
     shell: "{{ monitoring_user_shell }}"
     home: "{{ monitoring_user_home }}"
-    create_home: yes
-    comment: "icinga2 by_ssh remote user (managed by hyrule-infra)"
+    create_home: true
+    comment: "icinga2 by_ssh remote user (managed by network-operations)"
   register: monitoring_user
+  when: monitoring_by_ssh_user != 'root'
   tags: [apply]
 
 # Use the primary group the OS assigned to the monitoring user (looked up
@@ -29,15 +29,29 @@
   file:
     path: "{{ monitoring_user_home }}/.ssh"
     state: directory
-    owner: monitoring
+    owner: "{{ monitoring_by_ssh_user }}"
     group: "{{ monitoring_user.group }}"
     mode: "0700"
+  when: monitoring_by_ssh_user != 'root'
   tags: [apply]
 
-- name: Authorize mon's icinga2 by_ssh pubkey for the monitoring user
+- name: Validate mon source address for by_ssh key restriction
+  assert:
+    that:
+      - peers[monitoring_mon_host] is defined
+      - peers[monitoring_mon_host].ipv6 is defined
+      - peers[monitoring_mon_host].ipv6 | length > 0
+    fail_msg: >-
+      peers[{{ monitoring_mon_host }}].ipv6 is required so the by_ssh
+      authorized_key is always installed with a restrictive from= option.
+  tags: [apply]
+
+- name: Authorize mon's icinga2 by_ssh pubkey for the remote user
   authorized_key:
-    user: monitoring
+    user: "{{ monitoring_by_ssh_user }}"
     key: "{{ monitoring_by_ssh_pubkey }}"
+    key_options: >-
+      from="{{ peers[monitoring_mon_host].ipv6 }}",no-port-forwarding,no-X11-forwarding,no-agent-forwarding
     comment: "icinga2 by_ssh from mon"
     state: present
   tags: [apply]
@@ -50,5 +64,7 @@
     group: "{{ 'wheel' if ansible_os_family == 'FreeBSD' else 'root' }}"
     mode: "{{ monitoring_user_privesc_mode }}"
     validate: "{{ '/usr/sbin/visudo -cf %s' if ansible_os_family != 'FreeBSD' else omit }}"
-  when: monitoring_user_privesc_template is defined
+  when:
+    - monitoring_by_ssh_user != 'root'
+    - monitoring_user_privesc_template is defined
   tags: [apply]

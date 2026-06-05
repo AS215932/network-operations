@@ -38,8 +38,12 @@ monitoring_disks:
 # Hostname and address derive automatically from the host being registered.
 monitoring_extra_services: []
 
+# Remote account used by by_ssh. Most hosts use the dedicated monitoring user;
+# rtr temporarily overrides this to root until its privileged checks are migrated
+# to sudo/doas under the dedicated account.
+monitoring_by_ssh_user: monitoring
+
 # by_ssh known_hosts target on mon. Debian's icinga2 package runs as the
-# `nagios` user but stores SSH state under /var/lib/icinga2; the daemon's
-# HOME is set to this directory. Override per-inventory if the package
-# changes layout.
-monitoring_by_ssh_known_hosts_path: /var/lib/icinga2/.ssh/known_hosts
+# `nagios` user with HOME=/var/lib/nagios, so OpenSSH reads this file when
+# check_by_ssh runs from Icinga.
+monitoring_by_ssh_known_hosts_path: /var/lib/nagios/.ssh/known_hosts

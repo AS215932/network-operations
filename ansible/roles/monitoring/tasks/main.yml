@@ -56,6 +56,22 @@
     - monitoring_by_ssh_pubkey | length > 0
   tags: [apply]
 
+- name: Ensure mon's icinga2 SSH dir exists
+  file:
+    path: "{{ monitoring_by_ssh_known_hosts_path | dirname }}"
+    state: directory
+    owner: nagios
+    group: nagios
+    mode: "0700"
+  delegate_to: "{{ monitoring_mon_host }}"
+  when:
+    - monitoring_apply | default(false) | bool
+    - monitoring_by_ssh_pubkey is defined
+    - monitoring_by_ssh_pubkey | length > 0
+    - by_ssh_host_keyscan.stdout is defined
+    - by_ssh_host_keyscan.stdout | length > 0
+  tags: [apply]
+
 - name: Populate mon's icinga2 known_hosts for by_ssh
   known_hosts:
     path: "{{ monitoring_by_ssh_known_hosts_path }}"
