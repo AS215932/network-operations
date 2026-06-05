@@ -19,9 +19,19 @@
     url: "{{ logs_vector_deb_url }}"
     dest: "/tmp/vector_{{ logs_vector_version }}.deb"
     mode: "0644"
-  check_mode: false
   when:
     - ansible_os_family == "Debian"
+    - not ansible_check_mode
+    - not _vector_deb.stat.exists
+  tags: [apply]
+
+- name: Report Vector .deb would be downloaded (Debian)
+  debug:
+    msg: "Would download {{ logs_vector_deb_url }}"
+  changed_when: true
+  when:
+    - ansible_os_family == "Debian"
+    - ansible_check_mode
     - not _vector_deb.stat.exists
   tags: [apply]
 
@@ -29,7 +39,9 @@
   apt:
     deb: "/tmp/vector_{{ logs_vector_version }}.deb"
     state: present
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - not ansible_check_mode or _vector_deb.stat.exists
   tags: [apply]
 
 - name: Ensure systemd drop-in dir for vector.service (Debian)

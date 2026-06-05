@@ -44,11 +44,12 @@ jobs:
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"
             # ci-pr lives on the customer-isolated segment and is managed from
-            # the ops workstation, not from the privileged ci runner.
+            # the ops workstation, not from the privileged ci runner. extmon is
+            # an external placeholder until its VPS is provisioned.
             if ! ansible-playbook "playbooks/${playbook}.yml" \
                 --check --diff \
                 --tags apply \
-                --limit 'all:!ci-pr' \
+                --limit 'all:!ci-pr:!extmon' \
                 -e ansible_user=ci \
                 -e "${playbook}_apply=true"; then
               status=1
