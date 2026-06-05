@@ -45,6 +45,7 @@ jobs:
   # ---- Tier 0: static, unprivileged, required ---------------------------
   static-iac:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    timeout-minutes: 10
     env:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
@@ -64,6 +65,7 @@ jobs:
   ansible-idempotency:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     needs: static-iac
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -75,6 +77,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: static-iac
     if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true' }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -102,6 +105,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: static-iac
     if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true' }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -125,6 +129,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     needs: [static-iac, ansible-idempotency, batfish, containerlab-frr]
     if: always()
+    timeout-minutes: 5
     steps:
       - name: Evaluate tier results
         env:
