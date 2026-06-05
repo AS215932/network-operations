@@ -30,7 +30,7 @@ jobs:
   render:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Render every playbook (validate-only, no apply)
         run: scripts/ci/render-all.sh
