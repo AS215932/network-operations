@@ -35,6 +35,8 @@ vault kv put kv/noc-agent \
   discord_allowed_role_ids="${NOC_DISCORD_ALLOWED_ROLE_IDS:-}" \
   noc_control_token="${NOC_CONTROL_TOKEN:-}" \
   noc_approval_signing_secret="${NOC_APPROVAL_SIGNING_SECRET:-}" \
+  noc_action_allowed_hosts="${NOC_ACTION_ALLOWED_HOSTS:-noc,mon,cr1-nl1,cr1-de1}" \
+  noc_action_allowed_services="${NOC_ACTION_ALLOWED_SERVICES:-node_exporter,noc-agent,noc-agent-bot,hyrule-mcp}" \
   mail_imap_password="${MAIL_NOC_PASSWORD}" \
   xo_token="${XO_TOKEN}" \
   icinga_api_user="${ICINGA_API_USER}" \
