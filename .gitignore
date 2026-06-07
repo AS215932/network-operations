@@ -2,6 +2,7 @@ ovh.conf
 openprovider.conf
 secrets.local.sh
 __pycache__/
+.tmp/
 
 # Rendered Knot configs embed the TSIG secret (key.secret). Everything else
 # under ansible/generated/ is intentionally tracked (render-check diffs it),

@@ -1,5 +1,20 @@
 # AS215932 Network Operations
 
+## Production Deploys: Read This First
+
+This repository is the production deployment record for `noc-agent`,
+`hyrule-mcp`, `hyrule-cloud`, and `hyrule-web`. App repos do not deploy
+production on merge.
+
+Use **Actions -> promote-apps** with the merged app commit SHAs. That workflow
+opens or updates the promotion PR that pins exact SHAs in inventory. After the
+promotion PR merges, **app-promotion-deploy** automatically calls `apply.yml`
+for the affected playbooks and waits at the GitHub `production` environment
+approval gate. The human operator's normal job is to review the promotion PR,
+merge it, approve the production gate, and review the Icinga snapshot diff.
+
+Full runbook: [docs/ci/deploy-runbook.md](docs/ci/deploy-runbook.md).
+
 Public operations repository for **AS215932** (Hyrule/Servify) - building a complete Internet Service Provider from scratch.
 
 ## About

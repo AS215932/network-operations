@@ -22,6 +22,8 @@ on:
           - monitoring
           - icinga2
           - logs
+          - cloud
+          - web
           - noc
           - vault
           - ci
@@ -54,10 +56,38 @@ on:
         type: boolean
         required: true
         default: false
+  workflow_call:
+    inputs:
+      playbook:
+        description: Playbook to apply (matches ansible/playbooks/<name>.yml)
+        type: string
+        required: true
+      limit:
+        description: Ansible --limit pattern (host or group)
+        type: string
+        required: true
+      dry_run:
+        description: Dry-run only (render + check, no apply)
+        type: boolean
+        required: true
+      pr_number:
+        description: PR number to post the diff to (optional)
+        type: string
+        required: false
+        default: ""
+      bootstrap_ci_runner_key:
+        description: Connect as inventory users for first-time ci-runner-key bootstrap
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
   pull-requests: write
+
+concurrency:
+  group: production-infra
+  cancel-in-progress: false
 
 jobs:
   apply:
@@ -77,6 +107,8 @@ jobs:
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - name: Runner deploy preflight
         run: scripts/ci/deploy-preflight.sh --runner
@@ -102,6 +134,61 @@ jobs:
           else
             echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
           fi
+
+      - name: Summarize app version pins
+        if: ${{ contains(fromJSON('["noc","cloud","web"]'), inputs.playbook) }}
+        run: |
+          set -euo pipefail
+
+          case "${{ inputs.playbook }}" in
+            noc)
+              host_vars="ansible/inventory/host_vars/noc.yml"
+              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp"
+              ;;
+            cloud)
+              host_vars="ansible/inventory/host_vars/api.yml"
+              entries="hyrule_cloud_version|AS215932/hyrule-cloud"
+              ;;
+            web)
+              host_vars="ansible/inventory/host_vars/web.yml"
+              entries="hyrule_web_version|AS215932/hyrule-web"
+              ;;
+          esac
+
+          extract_pin() {
+            local key="$1"
+            local file="$2"
+            sed -nE "s/^${key}:[[:space:]]*['\"]?([0-9a-fA-F]{40})['\"]?[[:space:]]*$/\1/p" "$file" | head -1
+          }
+
+          {
+            echo "## App version pins"
+            echo
+            echo "| Variable | Repository | SHA | Compare |"
+            echo "| --- | --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for entry in $entries; do
+            key="${entry%%|*}"
+            repo="${entry##*|}"
+            current="$(extract_pin "$key" "$host_vars")"
+            previous=""
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              tmp="$(mktemp)"
+              if git show "HEAD^:${host_vars}" > "$tmp" 2>/dev/null; then
+                previous="$(extract_pin "$key" "$tmp")"
+              fi
+              rm -f "$tmp"
+            fi
+
+            if [ -n "$previous" ] && [ "$previous" != "$current" ]; then
+              compare="[${previous:0:7}...${current:0:7}](https://github.com/${repo}/compare/${previous}...${current})"
+            else
+              compare="unchanged"
+            fi
+
+            echo "| \`${key}\` | \`${repo}\` | \`${current}\` | ${compare} |" >> "$GITHUB_STEP_SUMMARY"
+          done
 
       # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
       # user on every host (created + NOPASSWD-root by the ci_runner_key role)

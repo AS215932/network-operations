@@ -1,6 +1,8 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
+hyrule_cloud_version: 1907cf99fe8d9c9c8b7ff825363fd33f63cb667a
+
 firewall_extra_rules:
   # API upstreams and backend health checks.
   - { proto: tcp, dport: 8402, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.web.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "hyrule-cloud API from proxy/web/mon" }

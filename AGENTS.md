@@ -1,5 +1,28 @@
 # AS215932 Infrastructure Agent Guide
 
+## Deployment Rules - Read Before Touching App Pins
+
+- Production deploys for `noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and
+  `hyrule-web` are controlled from this repository, not from app repos.
+- App repositories may merge code, but they must not be treated as production
+  deployment records.
+- Production app versions are the pinned 40-character SHAs in:
+  - `ansible/inventory/host_vars/noc.yml`
+  - `ansible/inventory/host_vars/api.yml`
+  - `ansible/inventory/host_vars/web.yml`
+- Normal promotion path:
+  1. Merge app PRs after app CI is green.
+  2. Run the `promote-apps` workflow in this repo with the merged app SHAs.
+  3. Review and merge the generated promotion PR.
+  4. Let `app-promotion-deploy` start automatically from `main`.
+  5. The only intended manual step is approving the `production` environment
+     gate before `apply.yml` touches live hosts.
+- Do not manually edit app pins unless the automation is unavailable. If you
+  must, use the promotion PR template and keep rollback SHAs in the PR body.
+- `apply.yml` runs only when explicitly dispatched or called by another
+  workflow. After this automation, app pin changes merged to `main` cause
+  `app-promotion-deploy` to call `apply.yml` automatically.
+
 ## Domain Policy
 
 - `hyrule.host` is customer-facing Hyrule Cloud/product identity. Use it for the product site, public Hyrule Cloud API, and customer VM subdomains.

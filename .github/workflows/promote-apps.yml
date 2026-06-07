@@ -1,0 +1,93 @@
+---
+name: promote-apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: Promotion PR title
+        type: string
+        required: true
+        default: Promote app SHAs
+      noc_agent_sha:
+        description: Optional AS215932/noc-agent commit SHA
+        type: string
+        required: false
+        default: ""
+      hyrule_mcp_sha:
+        description: Optional AS215932/hyrule-mcp commit SHA
+        type: string
+        required: false
+        default: ""
+      hyrule_cloud_sha:
+        description: Optional AS215932/hyrule-cloud commit SHA
+        type: string
+        required: false
+        default: ""
+      hyrule_web_sha:
+        description: Optional AS215932/hyrule-web commit SHA
+        type: string
+        required: false
+        default: ""
+      impact:
+        description: Short deploy impact note
+        type: string
+        required: false
+        default: Automated app SHA promotion.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: promote-apps
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Update app pins
+        run: |
+          scripts/ci/promote-app-pins.py \
+            --title "${{ inputs.title }}" \
+            --impact "${{ inputs.impact }}" \
+            --noc-agent-sha "${{ inputs.noc_agent_sha }}" \
+            --hyrule-mcp-sha "${{ inputs.hyrule_mcp_sha }}" \
+            --hyrule-cloud-sha "${{ inputs.hyrule_cloud_sha }}" \
+            --hyrule-web-sha "${{ inputs.hyrule_web_sha }}" \
+            --body-file /tmp/promotion-body.md
+
+      - name: Validate pins
+        run: scripts/ci/iac-static.sh
+
+      - name: Commit promotion branch
+        env:
+          BRANCH: promotion/app-sha-pins
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml
+          git commit -m "${{ inputs.title }}"
+          git push --force-with-lease origin "$BRANCH"
+
+      - name: Open or update promotion PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: promotion/app-sha-pins
+        run: |
+          set -euo pipefail
+          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "${{ inputs.title }}" --body-file /tmp/promotion-body.md
+            echo "Updated PR #$existing" >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh pr create --base main --head "$BRANCH" --title "${{ inputs.title }}" --body-file /tmp/promotion-body.md
+          fi
