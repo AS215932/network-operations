@@ -92,9 +92,9 @@ concurrency:
 jobs:
   apply:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    # `production` is an environment with a required reviewer rule.
-    # The job pauses until the reviewer approves.
-    environment: production
+    # Real applies pause on the protected `production` environment. Dry-runs
+    # must stay ungated so promotion PR validation can be automated.
+    environment: ${{ inputs.dry_run && 'dry-run' || 'production' }}
     timeout-minutes: 30
     env:
       ANSIBLE_FORCE_COLOR: "true"
