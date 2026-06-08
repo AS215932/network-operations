@@ -49,6 +49,26 @@ def _read_state(path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
 
 
+def _parse_key_value(items: list[str] | None, *, option: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in items or []:
+        if "=" not in item:
+            raise ValueError(f"{option} expects NAME=VALUE, got {item}")
+        key, value = item.split("=", 1)
+        parsed[key] = value
+    return parsed
+
+
+def _parse_repo_paths(items: list[str] | None, *, option: str) -> dict[str, list[str]]:
+    parsed: dict[str, list[str]] = {}
+    for item in items or []:
+        if "=" not in item:
+            raise ValueError(f"{option} expects REPO=PATH_PREFIX, got {item}")
+        repo, prefix = item.split("=", 1)
+        parsed.setdefault(repo, []).append(prefix)
+    return parsed
+
+
 def run_command(args: argparse.Namespace) -> int:
     change_class = cast(ChangeClass, args.change_class)
     state = _default_state(args.change_id, change_class)
@@ -59,6 +79,20 @@ def run_command(args: argparse.Namespace) -> int:
         if gate_command and gate_command[0] == "--":
             gate_command = gate_command[1:]
         state["gate_commands"] = [gate_command]
+    if args.promotion_enabled:
+        state["promotion_enabled"] = True
+        state["promotion_repositories"] = _parse_key_value(
+            args.promotion_repo,
+            option="--promotion-repo",
+        )
+        state["promotion_allowed_paths"] = _parse_repo_paths(
+            args.promotion_allow,
+            option="--promotion-allow",
+        )
+        if args.promotion_worktree_root:
+            state["promotion_worktree_root"] = args.promotion_worktree_root
+        if args.promotion_branch_prefix:
+            state["promotion_branch_prefix"] = args.promotion_branch_prefix
 
     graph = build_graph(
         checkpointer=MemorySaver(),
@@ -96,6 +130,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("change_id")
     run_parser.add_argument("change_class")
     run_parser.add_argument("--handoff-dir")
+    run_parser.add_argument("--promotion-enabled", action="store_true")
+    run_parser.add_argument("--promotion-repo", action="append")
+    run_parser.add_argument("--promotion-allow", action="append")
+    run_parser.add_argument("--promotion-worktree-root")
+    run_parser.add_argument("--promotion-branch-prefix")
     run_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     run_parser.add_argument("--no-interrupt-before-signoff", action="store_false", dest="interrupt_before_signoff")
     run_parser.set_defaults(func=run_command, interrupt_before_signoff=True)

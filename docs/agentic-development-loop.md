@@ -94,6 +94,19 @@ Phase 4 adds live-token hardening and NOC plane integration:
 - `HYRULE_HANDOFF_DIR` or `handoff_output_dir` designates where
   `noc_handoff.json` is rendered for monitoring/NOC consumption.
 
+Phase 5 adds branch-backed mutation promotion:
+
+- promotion is opt-in with `promotion_enabled`;
+- structured mutation keys use `repo:path` format;
+- each repo must be listed in `promotion_repositories`;
+- each path must match `promotion_allowed_paths`;
+- git worktrees are created under `promotion_worktree_root`;
+- promoted worktrees use a per-change branch name;
+- git diffs are captured into `promotion_results`;
+- failed promotion attempts roll back created worktrees/branches;
+- successful promotion sets `requires_human_signoff` before any push or PR
+  creation exists.
+
 Loop stages:
 
 1. Intake.
@@ -170,6 +183,13 @@ Optional Phase 2 staging keys:
 - `workspace_cleaned_up`: whether the latest temporary workspace was removed.
 - `handoff_output_dir`: explicit output directory for NOC metadata.
 - `noc_handoff_path`: rendered `noc_handoff.json` path.
+- `promotion_enabled`: whether branch-backed promotion is active.
+- `promotion_repositories`: repo name to checkout path allowlist.
+- `promotion_allowed_paths`: repo name to allowed relative path prefixes.
+- `promotion_worktree_root`: parent directory for branch-backed worktrees.
+- `promotion_branch_prefix`: branch namespace for promoted worktrees.
+- `promotion_status`: latest promotion status.
+- `promotion_results`: generated branch/worktree/diff metadata.
 
 Because `validation_errors` is append-only history, routing decisions use the
 latest `gate_status` to decide whether errors are currently active.
@@ -229,6 +249,11 @@ When a handoff directory is configured, the packaging node writes
   "workspace": {
     "written_files": [],
     "cleaned_up": true
+  },
+  "promotion": {
+    "status": "not_requested",
+    "results": [],
+    "requires_human_signoff": false
   },
   "rollback": {
     "plan": "...",
@@ -316,6 +341,16 @@ Render a NOC handoff file while running:
 
 ```bash
 hyrule-engineering-loop run APP_BUGFIX_GREEN app_bugfix --handoff-dir /tmp/handoff
+```
+
+Promote validated `repo:path` mutations into branch-backed worktrees:
+
+```bash
+hyrule-engineering-loop run APP_BUGFIX_GREEN app_bugfix \
+  --promotion-enabled \
+  --promotion-repo hyrule-cloud=/home/svag/Dev/hyrule-cloud \
+  --promotion-allow hyrule-cloud=hyrule_cloud \
+  --promotion-worktree-root /tmp/hyrule-loop-worktrees
 ```
 
 The CLI is an operator boundary, not a production deploy tool.
