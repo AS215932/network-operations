@@ -152,6 +152,17 @@ Phase 10 adds an offline operator dry-run harness:
 - the harness verifies the same approval, push, PR body, label/reviewer, and
   handoff surfaces that operators use in normal publication.
 
+Phase 11 adds a sibling-repo canary dry run:
+
+- a real sibling `hyrule-*` checkout is selected from an operator supplied
+  workspace root;
+- the repo adapter requires a clean, attached git checkout and valid base ref;
+- the canary mutation is restricted to `docs/engineering-loop-canary.md`;
+- graph, repo adapter, policy, promotion, and handoff stages run;
+- the harness stops before approval, commit, push, or PR creation;
+- generated canary worktrees and branches are removed by default after
+  verification.
+
 Loop stages:
 
 1. Intake.
@@ -443,6 +454,15 @@ hyrule-engineering-loop operator-dry-run \
   --root /tmp/hyrule-loop-operator \
   --label engineering-loop \
   --reviewer netops-review
+```
+
+Run a docs-only canary against a real sibling repo without publishing:
+
+```bash
+hyrule-engineering-loop sibling-canary \
+  --workspace-root /home/svag/Dev \
+  --repo-name hyrule-cloud \
+  --output-root /tmp/hyrule-loop-canary
 ```
 
 The CLI is an operator boundary, not a production deploy tool.
