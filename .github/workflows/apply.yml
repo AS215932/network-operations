@@ -22,6 +22,8 @@ on:
           - monitoring
           - icinga2
           - logs
+          - cloud
+          - web
           - noc
           - vault
           - ci
@@ -54,17 +56,45 @@ on:
         type: boolean
         required: true
         default: false
+  workflow_call:
+    inputs:
+      playbook:
+        description: Playbook to apply (matches ansible/playbooks/<name>.yml)
+        type: string
+        required: true
+      limit:
+        description: Ansible --limit pattern (host or group)
+        type: string
+        required: true
+      dry_run:
+        description: Dry-run only (render + check, no apply)
+        type: boolean
+        required: true
+      pr_number:
+        description: PR number to post the diff to (optional)
+        type: string
+        required: false
+        default: ""
+      bootstrap_ci_runner_key:
+        description: Connect as inventory users for first-time ci-runner-key bootstrap
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: production-infra
+  cancel-in-progress: false
+
 jobs:
   apply:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    # `production` is an environment with a required reviewer rule.
-    # The job pauses until the reviewer approves.
-    environment: production
+    # Real applies pause on the protected `production` environment. Dry-runs
+    # must stay ungated so promotion PR validation can be automated.
+    environment: ${{ inputs.dry_run && 'dry-run' || 'production' }}
     timeout-minutes: 30
     env:
       ANSIBLE_FORCE_COLOR: "true"
@@ -77,6 +107,8 @@ jobs:
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - name: Runner deploy preflight
         run: scripts/ci/deploy-preflight.sh --runner
@@ -103,14 +135,73 @@ jobs:
             echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
           fi
 
+      - name: Summarize app version pins
+        if: ${{ contains(fromJSON('["noc","cloud","web"]'), inputs.playbook) }}
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+        run: |
+          set -euo pipefail
+
+          case "$PLAYBOOK" in
+            noc)
+              host_vars="ansible/inventory/host_vars/noc.yml"
+              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp"
+              ;;
+            cloud)
+              host_vars="ansible/inventory/host_vars/api.yml"
+              entries="hyrule_cloud_version|AS215932/hyrule-cloud"
+              ;;
+            web)
+              host_vars="ansible/inventory/host_vars/web.yml"
+              entries="hyrule_web_version|AS215932/hyrule-web"
+              ;;
+          esac
+
+          extract_pin() {
+            local key="$1"
+            local file="$2"
+            sed -nE "s/^${key}:[[:space:]]*['\"]?([0-9a-fA-F]{40})['\"]?[[:space:]]*$/\1/p" "$file" | head -1
+          }
+
+          {
+            echo "## App version pins"
+            echo
+            echo "| Variable | Repository | SHA | Compare |"
+            echo "| --- | --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for entry in $entries; do
+            key="${entry%%|*}"
+            repo="${entry##*|}"
+            current="$(extract_pin "$key" "$host_vars")"
+            previous=""
+            if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+              tmp="$(mktemp)"
+              if git show "HEAD^:${host_vars}" > "$tmp" 2>/dev/null; then
+                previous="$(extract_pin "$key" "$tmp")"
+              fi
+              rm -f "$tmp"
+            fi
+
+            if [ -n "$previous" ] && [ "$previous" != "$current" ]; then
+              compare="[${previous:0:7}...${current:0:7}](https://github.com/${repo}/compare/${previous}...${current})"
+            else
+              compare="unchanged"
+            fi
+
+            echo "| \`${key}\` | \`${repo}\` | \`${current}\` | ${compare} |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
       # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
       # user on every host (created + NOPASSWD-root by the ci_runner_key role)
       # and escalates with sudo — never root, never the operator's svag. An
       # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Pre-deploy Icinga snapshot
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
             -e snapshot_phase=pre
@@ -118,41 +209,61 @@ jobs:
       - name: Render-only (dry run)
         if: ${{ inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          limit_args=()
+          if [ -n "$LIMIT" ]; then
+            limit_args=(--limit "$LIMIT")
+          fi
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags validate \
             --connection=local \
             --skip-tags=snapshot \
-            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+            "${limit_args[@]}"
 
       - name: Apply
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
+          BOOTSTRAP_CI_RUNNER_KEY: ${{ inputs.bootstrap_ci_runner_key }}
         run: |
-          playbook="${{ inputs.playbook }}"
+          playbook="$PLAYBOOK"
           apply_var="${playbook//-/_}_apply=true"
           user_args=(-e ansible_user=ci)
-          if [ "${playbook}" = "ci-runner-key" ] && [ "${{ inputs.bootstrap_ci_runner_key }}" = "true" ]; then
+          limit_args=()
+          if [ -n "$LIMIT" ]; then
+            limit_args=(--limit "$LIMIT")
+          fi
+          if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then
             user_args=()
           fi
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             "${user_args[@]}" \
             -e "${apply_var}" \
-            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+            "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
             -e snapshot_phase=post
 
       - name: Post-deploy Goss validation
         if: ${{ !inputs.dry_run }}
-        run: scripts/ci/goss-validate.sh "${{ inputs.playbook }}" "${{ inputs.limit }}"
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
+        run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
 
       - name: Capture snapshot diff
         if: ${{ !inputs.dry_run }}
@@ -193,9 +304,11 @@ jobs:
         if: ${{ !inputs.dry_run && inputs.pr_number != '' && steps.diff.outputs.diff != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          gh pr comment "${{ inputs.pr_number }}" \
-            --repo "${{ github.repository }}" \
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
             --body-file /tmp/diff.md
 
       - name: Upload snapshots as artifact

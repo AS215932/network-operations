@@ -8,12 +8,10 @@
 # Apply (live deploy):
 #   ansible-playbook playbooks/web.yml --tags apply \
 #     -e hyrule_web_apply=true \
-#     -e hyrule_web_version=<sha-or-ref> \
 #     --limit web
 #
-# The deploy.yml workflow in AS215932/hyrule-web invokes the apply variant
-# with hyrule_web_version=${{ github.sha }} so production deploys are pinned
-# to the exact commit that passed CI.
+# Production deploys use hyrule_web_version from inventory host_vars. Promote
+# a new app commit by updating the pinned SHA in network-operations.
 
 - name: hyrule-web — apply
   hosts: web

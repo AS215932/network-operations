@@ -22,8 +22,9 @@ vault token lookup >/dev/null 2>&1 || {
 : "${XO_TOKEN:?XO_TOKEN is required}"
 : "${ICINGA_API_USER:?ICINGA_API_USER is required}"
 : "${ICINGA_API_PASSWORD:?ICINGA_API_PASSWORD is required}"
+: "${NOC_APPROVAL_SIGNING_SECRET:?NOC_APPROVAL_SIGNING_SECRET is required}"
 
-vault kv put kv/noc-agent \
+vault_args=(
   gemini_api_key="${GEMINI_API_KEY}" \
   anthropic_api_key="${ANTHROPIC_API_KEY:-}" \
   openai_api_key="${OPENAI_API_KEY:-}" \
@@ -34,10 +35,21 @@ vault kv put kv/noc-agent \
   discord_allowed_channel_ids="${NOC_DISCORD_ALLOWED_CHANNEL_IDS:-}" \
   discord_allowed_role_ids="${NOC_DISCORD_ALLOWED_ROLE_IDS:-}" \
   noc_control_token="${NOC_CONTROL_TOKEN:-}" \
-  noc_approval_signing_secret="${NOC_APPROVAL_SIGNING_SECRET:-}" \
+  noc_approval_signing_secret="${NOC_APPROVAL_SIGNING_SECRET}" \
   mail_imap_password="${MAIL_NOC_PASSWORD}" \
   xo_token="${XO_TOKEN}" \
   icinga_api_user="${ICINGA_API_USER}" \
   icinga_api_password="${ICINGA_API_PASSWORD}"
+)
+
+if [ -n "${NOC_ACTION_ALLOWED_HOSTS:-}" ]; then
+  vault_args+=(noc_action_allowed_hosts="${NOC_ACTION_ALLOWED_HOSTS}")
+fi
+
+if [ -n "${NOC_ACTION_ALLOWED_SERVICES:-}" ]; then
+  vault_args+=(noc_action_allowed_services="${NOC_ACTION_ALLOWED_SERVICES}")
+fi
+
+vault kv put kv/noc-agent "${vault_args[@]}"
 
 echo "Wrote kv/noc-agent."

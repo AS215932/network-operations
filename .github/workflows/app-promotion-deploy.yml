@@ -1,0 +1,62 @@
+---
+name: app-promotion-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ansible/inventory/host_vars/noc.yml
+      - ansible/inventory/host_vars/api.yml
+      - ansible/inventory/host_vars/web.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: production-app-promotion
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - id: detect
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only HEAD^ HEAD -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml)"
+          python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import sys
+
+          changed = set(sys.argv[1].splitlines())
+          matrix = []
+          if "ansible/inventory/host_vars/noc.yml" in changed:
+              matrix.append({"playbook": "noc", "limit": "noc"})
+          if "ansible/inventory/host_vars/api.yml" in changed:
+              matrix.append({"playbook": "cloud", "limit": "api"})
+          if "ansible/inventory/host_vars/web.yml" in changed:
+              matrix.append({"playbook": "web", "limit": "web"})
+          print(f"matrix={json.dumps({'include': matrix})}")
+          print(f"has_changes={'true' if matrix else 'false'}")
+          PY
+
+  apply:
+    needs: detect
+    if: ${{ needs.detect.outputs.has_changes == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    uses: ./.github/workflows/apply.yml
+    with:
+      playbook: ${{ matrix.playbook }}
+      limit: ${{ matrix.limit }}
+      dry_run: false
+      pr_number: ""

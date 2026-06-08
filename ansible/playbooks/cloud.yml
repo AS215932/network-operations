@@ -8,12 +8,10 @@
 # Apply (live deploy):
 #   ansible-playbook playbooks/cloud.yml --tags apply \
 #     -e hyrule_cloud_apply=true \
-#     -e hyrule_cloud_version=<sha-or-ref> \
 #     --limit api
 #
-# The deploy.yml workflow in AS215932/hyrule-cloud invokes the apply variant
-# with hyrule_cloud_version=${{ github.sha }} so production deploys are pinned
-# to the exact commit that passed CI.
+# Production deploys use hyrule_cloud_version from inventory host_vars. Promote
+# a new app commit by updating the pinned SHA in network-operations.
 #
 # Wave 2 prerequisite: the toy `accounts` and `crypto_intents` tables created
 # via hand-applied db_patch{1,2,3}.py scripts must be dropped before Wave 2's

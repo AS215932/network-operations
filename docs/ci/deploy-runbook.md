@@ -2,20 +2,61 @@
 
 How to ship a change from "PR merged" to "live on production." Production is
 the next environment after `main` — there is no staging VM, by design (the
-approved plan trades fidelity for a smaller blast surface). Safety lives in
-two layers:
+approved plan trades fidelity for a smaller blast surface). For app-backed
+services, production deploys are promoted through `network-operations` by
+pinning exact app commit SHAs. Safety lives in three layers:
 
-1. **Render-check** before merge — the diff between `ansible/generated/` and
+1. **App CI** before promotion — the exact app commit has passed its required
+   lint, type, and test checks.
+2. **Render-check** before merge — the diff between `ansible/generated/` and
    what render produces is empty.
-2. **Icinga snapshot bracket** around apply — what was broken before and what
+3. **Icinga snapshot bracket** around apply — what was broken before and what
    is broken after, captured as artifacts on the workflow run.
+
+## App promotion model
+
+`hyrule-noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web` do not own
+normal production applies. Their repositories produce reviewed commits with
+green CI. `network-operations` owns production by pinning those commits in
+inventory:
+
+- `ansible/inventory/host_vars/noc.yml`: `noc_agent_version`,
+  `hyrule_mcp_version`
+- `ansible/inventory/host_vars/api.yml`: `hyrule_cloud_version`
+- `ansible/inventory/host_vars/web.yml`: `hyrule_web_version`
+
+Use the promotion PR template for coordinated deploys. Merge app PRs first,
+update the promotion PR to the exact merged app SHAs, run a dry-run from the
+promotion branch, then merge and apply from `network-operations/main`.
+
+The normal automated path is:
+
+1. Merge app PRs after app CI is green.
+2. Run **Actions -> promote-apps** in this repository and paste the merged app
+   SHAs into the relevant inputs.
+3. Review the generated promotion PR. It updates the app pins and records
+   compare links plus rollback SHAs.
+4. Merge the promotion PR after checks pass.
+5. **app-promotion-deploy** starts automatically on the `main` push when an app
+   pin file changed. It calls `apply.yml` for the affected playbook(s).
+6. Approve the GitHub `production` environment gate. This is the intended
+   manual deploy step.
+7. Review the workflow summary: app pins, compare links, and Icinga snapshot
+   diff.
+
+`apply.yml` itself is not a push-triggered workflow. It runs when either:
+
+- an operator manually starts it with `workflow_dispatch`, or
+- another workflow calls it through `workflow_call` (for app promotions, this is
+  `app-promotion-deploy` after a SHA-pin PR merges).
 
 ## When to ship
 
-After your PR merges to `main`. Most days that's also the same day, but
-deploys happen one at a time. If two operators merge back-to-back, ship
-sequentially (each apply's post-snapshot is the next apply's pre-snapshot
-baseline).
+For pure infrastructure changes, ship after the `network-operations` PR merges
+to `main`. For app-backed services, ship only after the app PRs are merged and
+the `network-operations` promotion PR pins their exact SHAs. Deploys happen one
+at a time. If two operators merge back-to-back, ship sequentially (each apply's
+post-snapshot is the next apply's pre-snapshot baseline).
 
 Do not ship during the documented merge-freeze windows (see `MEMORY.md` for
 any active freezes).
@@ -24,8 +65,8 @@ any active freezes).
 
 ```bash
 gh workflow run apply.yml \
-  -F playbook=firewall \
-  -F limit=cr1-de1 \
+  -F playbook=noc \
+  -F limit=noc \
   -F dry_run=false \
   -F pr_number=42         # optional — auto-comments the diff onto the PR
 ```
@@ -68,6 +109,17 @@ expected response is:
    reload; that just makes the next deploy harder.
 2. **If the apply failed mid-flight**: roll back the change with another PR,
    re-dispatch.
+
+## App rollback
+
+Prefer rollback by PR: revert the app version pin in `network-operations` to
+the previous known-good SHA, merge the rollback promotion PR, then run
+`apply.yml` for the affected playbook.
+
+During an active outage, an operator may pass an explicit old SHA through
+Ansible extra-vars from a trusted shell, then follow up with a PR that records
+the deployed pin. Extra-vars are an emergency escape hatch, not the normal
+promotion path.
 
 ## Manual deploy (bypass CI)
 

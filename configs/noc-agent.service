@@ -13,6 +13,8 @@ Group=noc-agent
 WorkingDirectory=/opt/noc-agent
 EnvironmentFile=/opt/noc-agent/.env
 Environment=PYTHONPATH=/opt/noc-agent
+ExecStartPre=/bin/grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env
+ExecStartPre=/bin/grep -Eq "^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env
 ExecStart=/opt/noc-agent/.venv/bin/uvicorn app.main:app \
     --host :: \
     --port 8000 \

@@ -3,15 +3,15 @@
 # possible, and they make `--tags validate` a real safety net rather than
 # a no-op rubber stamp.
 
-- name: Assert hyrule_web_version is set to a non-empty ref
+- name: Assert hyrule_web_version is pinned to a commit SHA
   ansible.builtin.assert:
     that:
       - hyrule_web_version is defined
-      - hyrule_web_version | length > 0
+      - hyrule_web_version is match('^[0-9a-fA-F]{40}$')
     fail_msg: >-
-      hyrule_web_version must be set to a branch, tag, or commit SHA.
-      The deploy workflow normally passes the triggering commit SHA;
-      for local runs pass -e hyrule_web_version=main (or a SHA for rollback).
+      hyrule_web_version must be set to a 40-character commit SHA. Production
+      deploys are promoted through network-operations by pinning the exact app
+      commit; for rollback, promote the previous SHA or pass it explicitly.
 
 - name: Stat reusable configs on the controller (hyrule-web.service)
   ansible.builtin.stat:

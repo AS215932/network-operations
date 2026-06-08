@@ -60,11 +60,32 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('apply_var="${playbook//-/_}_apply=true"', workflow)
         self.assertIn('user_args=(-e ansible_user=ci)', workflow)
         self.assertIn(
-            'if [ "${playbook}" = "ci-runner-key" ] && [ "${{ inputs.bootstrap_ci_runner_key }}" = "true" ]; then',
+            'if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then',
             workflow,
         )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
+    def test_noc_action_signing_secret_has_no_empty_fallback(self):
+        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
+        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
+        mcp_env = (REPO / "configs/hyrule-mcp.env.j2").read_text()
+        vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
+        bot_service = (REPO / "configs/noc-agent-bot.service").read_text()
+        mcp_service = (REPO / "configs/hyrule-mcp.service").read_text()
+
+        for text in (vault_template, noc_env, mcp_env):
+            self.assertNotIn('noc_approval_signing_secret ""', text)
+            self.assertNotIn("noc_approval_signing_secret | default('')", text)
+
+        self.assertIn("NOC_APPROVAL_SIGNING_SECRET is required", vault_put)
+        self.assertNotIn("NOC_ACTION_ALLOWED_HOSTS:-noc,mon,cr1-nl1,cr1-de1", vault_put)
+        self.assertNotIn("NOC_ACTION_ALLOWED_SERVICES:-node_exporter,noc-agent,noc-agent-bot,hyrule-mcp", vault_put)
+        for text in (noc_service, bot_service):
+            self.assertIn('^NOC_APPROVAL_SIGNING_SECRET=.{32,}$', text)
+        for text in (noc_service, bot_service, mcp_service):
+            self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', text)
 
     def test_freebsd_playbooks_can_opt_into_become(self):
         freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())

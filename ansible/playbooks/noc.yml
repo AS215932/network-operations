@@ -27,6 +27,17 @@
   gather_facts: true
   become: true
   pre_tasks:
+    - name: Require NOC approval signing secret
+      assert:
+        that:
+          - noc_approval_signing_secret | length >= 32
+        fail_msg: >-
+          NOC_APPROVAL_SIGNING_SECRET must be set to at least 32 characters
+          before deploying NOC write-action approval support.
+      when: noc_agent_secret_backend == 'env'
+      no_log: true
+      tags: [validate, apply]
+
     - name: Pre-deploy Icinga snapshot
       include_role:
         name: firewall
@@ -75,7 +86,9 @@
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
         vault_agent_google_subject_token_destination: "{{ noc_agent_google_subject_token_path }}"
-        vault_agent_reload_command: >-
+        vault_agent_env_reload_command: >-
+          /bin/grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env &&
+          /bin/grep -Eq "^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env &&
           /bin/systemctl restart xo-mcp.service &&
           /bin/systemctl restart noc-agent.service &&
           /bin/systemctl restart noc-agent-bot.service
