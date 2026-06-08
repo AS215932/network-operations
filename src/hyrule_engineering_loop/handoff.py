@@ -52,6 +52,11 @@ def render_noc_handoff(state: GraphState) -> dict[str, Any]:
             "written_files": state.get("workspace_written_files", []),
             "cleaned_up": state.get("workspace_cleaned_up", False),
         },
+        "promotion": {
+            "status": state.get("promotion_status", "not_requested"),
+            "results": state.get("promotion_results", []),
+            "requires_human_signoff": state.get("requires_human_signoff", False),
+        },
         "rollback": {
             "plan": state["rollback_plan"],
             "requires_human_signoff": state["requires_human_signoff"],

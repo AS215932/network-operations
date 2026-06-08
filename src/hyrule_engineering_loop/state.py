@@ -25,6 +25,7 @@ RiskLevel = Literal["low", "medium", "high", "critical"]
 CustomerImpact = Literal["none", "possible", "expected"]
 LabVerification = Literal["not_applicable", "pending", "passed", "failed"]
 GateStatus = Literal["not_run", "passed", "failed"]
+PromotionStatus = Literal["not_requested", "passed", "failed"]
 
 RoleName = Literal[
     "network_architect",
@@ -105,3 +106,10 @@ class GraphState(TypedDict):
     workspace_cleaned_up: NotRequired[bool]
     handoff_output_dir: NotRequired[str]
     noc_handoff_path: NotRequired[str]
+    promotion_enabled: NotRequired[bool]
+    promotion_repositories: NotRequired[Dict[str, str]]
+    promotion_allowed_paths: NotRequired[Dict[str, List[str]]]
+    promotion_worktree_root: NotRequired[str]
+    promotion_branch_prefix: NotRequired[str]
+    promotion_status: NotRequired[PromotionStatus]
+    promotion_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]

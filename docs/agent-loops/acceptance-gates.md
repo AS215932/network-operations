@@ -138,3 +138,22 @@ rollback plan, and NOC handoff metadata.
 The handoff file is data for the production monitoring/NOC plane. It is not a
 development command channel, and it must not cause NOC Agent to spawn coding
 agents or author PRs.
+
+## Phase 5 Worktree Promotion
+
+Validated mutations can be promoted into sibling repositories only when
+promotion is explicitly enabled. Mutation keys must use `repo:path` format, and
+the repo plus path must both pass allowlists:
+
+- `promotion_repositories`: repo name to checkout path.
+- `promotion_allowed_paths`: repo name to allowed relative path prefixes.
+- `promotion_worktree_root`: parent directory for generated worktrees.
+- `promotion_branch_prefix`: branch namespace.
+
+The promotion stage creates a git worktree from `HEAD`, writes the allowed
+mutations, runs `git add -N .`, and captures `git diff -- .` into
+`promotion_results`. It does not commit, push, open PRs, or mutate production.
+
+If promotion fails partway through, created worktrees and branches are removed.
+If promotion succeeds, the worktree is left in place for human inspection and
+`requires_human_signoff` is set before any future push/PR phase can run.
