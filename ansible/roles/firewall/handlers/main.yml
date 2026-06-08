@@ -10,16 +10,16 @@
     state: reloaded
   listen: reload nftables
 
-- name: restart nat64-vrf-leak
+- name: restart jool
   systemd:
-    name: nat64-vrf-leak
+    name: jool
     state: restarted
   when: inventory_hostname == 'rtr'
   listen: reload nftables
 
-- name: restart jool
+- name: restart nat64-vrf-leak
   systemd:
-    name: jool
+    name: nat64-vrf-leak
     state: restarted
   when: inventory_hostname == 'rtr'
   listen: reload nftables
