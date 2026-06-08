@@ -43,7 +43,8 @@ template {
   source      = "{{ vault_agent_template_dir }}/{{ t.name }}"
   destination = "{{ t.destination }}"
   perms       = 0640
-  command     = "/bin/sh -c 'chgrp {{ t.group }} {{ t.destination }} && chmod 0640 {{ t.destination }} && {{ t.reload_command }}'"
+{% set render_command = "/bin/sh -c 'chgrp " ~ t.group ~ " " ~ t.destination ~ " && chmod 0640 " ~ t.destination ~ " && " ~ t.reload_command ~ "'" %}
+  command     = {{ render_command | to_json }}
 
   wait {
     min = "2s"

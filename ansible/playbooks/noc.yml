@@ -87,8 +87,8 @@
         vault_agent_env_destination: /opt/noc-agent/.env
         vault_agent_google_subject_token_destination: "{{ noc_agent_google_subject_token_path }}"
         vault_agent_env_reload_command: >-
-          /bin/grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env &&
-          /bin/grep -Eq "^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env &&
+          /bin/grep -Eq ^NOC_APPROVAL_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
+          /bin/grep -Eq ^HYRULE_MCP_ACTION_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
           /bin/systemctl restart xo-mcp.service &&
           /bin/systemctl restart noc-agent.service &&
           /bin/systemctl restart noc-agent-bot.service
