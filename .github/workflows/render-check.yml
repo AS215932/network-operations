@@ -9,12 +9,6 @@ name: render-check
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'ansible/**'
-      - 'configs/**'
-      - 'docs/network-flows.md'
-      - 'scripts/ci/render-all.sh'
-      - '.github/workflows/render-check.yml'
   push:
     branches: [main]
     paths:

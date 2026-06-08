@@ -50,6 +50,16 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             self.assertIn("hyrule-infra", text, name)
             self.assertNotIn("hyrule-public-pr", text, name)
 
+    def test_required_render_check_reports_on_every_pull_request(self):
+        workflow = yaml.safe_load((REPO / ".github/workflows/render-check.yml").read_text())
+        pull_request = workflow.get("on", workflow.get(True))["pull_request"]
+
+        self.assertNotIn(
+            "paths",
+            pull_request,
+            "render is a required branch-protection context, so it must not be skipped by PR path filters",
+        )
+
     def test_apply_workflow_can_gate_ci_runner_key_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
 
@@ -57,7 +67,26 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("bootstrap_ci_runner_key:", workflow)
         self.assertIn("Connect as inventory users for first-time ci-runner-key bootstrap", workflow)
         self.assertIn("CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci", workflow)
-        self.assertIn('apply_var="${playbook//-/_}_apply=true"', workflow)
+        self.assertRegex(
+            workflow,
+            r"""case "\$playbook" in
+\s+cloud\)
+\s+apply_var="hyrule_cloud_apply=true"
+\s+expected_apply_var="hyrule_cloud_apply=true"
+\s+;;
+\s+web\)
+\s+apply_var="hyrule_web_apply=true"
+\s+expected_apply_var="hyrule_web_apply=true"
+\s+;;
+\s+\*\)
+\s+apply_var="\$\{playbook//-/_\}_apply=true"
+\s+expected_apply_var="\$\{playbook//-/_\}_apply=true"
+\s+;;
+\s+esac""",
+        )
+        self.assertIn('printf \'APPLY_VAR=%s\\n\' "$apply_var" >> "$GITHUB_ENV"', workflow)
+        self.assertIn('-e "${APPLY_VAR}"', workflow)
+        self.assertNotIn('-e "${apply_var}"', workflow)
         self.assertIn('user_args=(-e ansible_user=ci)', workflow)
         self.assertIn(
             'if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then',
