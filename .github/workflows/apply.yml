@@ -226,6 +226,45 @@ jobs:
             echo "\`${apply_var}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Mint hyrule-cloud Vault bootstrap
+        if: ${{ !inputs.dry_run && inputs.playbook == 'cloud' }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${VAULT_HYRULE_CLOUD_ROLE_ID:-}" ] && { [ -n "${VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_HYRULE_CLOUD_SECRET_ID:-}" ]; }; then
+            echo "hyrule-cloud Vault bootstrap already provided by environment"
+            exit 0
+          fi
+
+          token_file="/run/vault-agent/github-runner.token"
+          if [ -r "$token_file" ]; then
+            vault_token="$(cat "$token_file")"
+          else
+            vault_token="$(sudo cat "$token_file")"
+          fi
+
+          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
+          export VAULT_TOKEN="$vault_token"
+
+          role_id="$(vault read -field=role_id auth/approle/role/hyrule-cloud/role-id)"
+          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/hyrule-cloud/secret-id)"
+
+          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
+            echo "::error::failed to mint hyrule-cloud Vault bootstrap credentials"
+            exit 1
+          fi
+
+          echo "::add-mask::$role_id"
+          echo "::add-mask::$wrapped_secret_id"
+          printf 'VAULT_HYRULE_CLOUD_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
+          printf 'VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
+
+          {
+            echo "## hyrule-cloud Vault bootstrap"
+            echo
+            echo "Minted response-wrapped AppRole SecretID for this apply run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
       # user on every host (created + NOPASSWD-root by the ci_runner_key role)
       # and escalates with sudo — never root, never the operator's svag. An

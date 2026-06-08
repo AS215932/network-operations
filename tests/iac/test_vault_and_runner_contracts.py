@@ -95,6 +95,38 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
 
+    def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        runner_template = (REPO / "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2").read_text()
+
+        self.assertIn("Mint hyrule-cloud Vault bootstrap", workflow)
+        self.assertIn("inputs.playbook == 'cloud'", workflow)
+        self.assertIn("!inputs.dry_run", workflow)
+        self.assertIn('vault read -field=role_id auth/approle/role/hyrule-cloud/role-id', workflow)
+        self.assertIn(
+            'vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/hyrule-cloud/secret-id',
+            workflow,
+        )
+        self.assertIn("VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID", workflow)
+
+        self.assertIn('path "auth/approle/role/hyrule-cloud/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/hyrule-cloud/secret-id"', runner_policy)
+        self.assertIn('capabilities = ["read"]', runner_policy)
+        self.assertIn('capabilities = ["update"]', runner_policy)
+
+        self.assertNotIn("kv/data/hyrule-cloud", runner_policy)
+        self.assertNotIn("XCPNG_XO_TOKEN", runner_template)
+        self.assertNotIn("VAULT_HYRULE_CLOUD_SECRET_ID", runner_template)
+
+    def test_app_roles_restart_deterministically_on_apply(self):
+        for role in ("hyrule_cloud", "hyrule_web"):
+            health_tasks = yaml.safe_load((REPO / "ansible/roles" / role / "tasks/health.yml").read_text())
+            restart_task = _task_by_name(health_tasks, f"Restart {role.replace('_', '-')} (deterministic on every apply)")
+
+            self.assertIsNotNone(restart_task, role)
+            self.assertEqual(restart_task["ansible.builtin.systemd"]["state"], "restarted")
+
     def test_noc_action_signing_secret_has_no_empty_fallback(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
         noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
