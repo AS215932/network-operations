@@ -33,7 +33,7 @@ auto_auth {
   sink "file" {
     config = {
       path = "{{ vault_agent_token_sink }}"
-      mode = 0600
+      mode = {{ vault_agent_token_sink_mode }}
     }
   }
 }

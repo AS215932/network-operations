@@ -9,7 +9,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-Group=root
+Group={{ vault_agent_service_group }}
 {# Recreate the consumer's volatile (/run) dirs on boot — tmpfs is wiped.
    Persistent dirs (e.g. /etc/*) are handled by the role's file task. #}
 {% for d in vault_agent_extra_dirs if d.path.startswith('/run/') %}
@@ -22,7 +22,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
 RuntimeDirectory=vault-agent
-RuntimeDirectoryMode=0750
+RuntimeDirectoryMode={{ vault_agent_run_dir_mode }}
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

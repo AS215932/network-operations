@@ -27,6 +27,15 @@ class MockRenderTest(unittest.TestCase):
         rendered = self.render(REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2")
         self.assertIn('secret_id_response_wrapping_path = "auth/approle/role/hyrule-cloud/secret-id"', rendered)
         self.assertIn("remove_secret_id_file_after_reading = true", rendered)
+        self.assertIn("mode = 0600", rendered)
+
+    def test_vault_agent_config_renders_custom_token_sink_mode(self):
+        context = deepcopy(MOCK)
+        context["vault_agent_token_sink_mode"] = "0640"
+
+        rendered = self.render(REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2", context)
+
+        self.assertIn("mode = 0640", rendered)
 
     def test_vault_agent_config_escapes_reload_command_quotes(self):
         context = deepcopy(MOCK)

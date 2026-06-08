@@ -45,7 +45,7 @@
     {{ [
          {'path': vault_agent_config_dir, 'mode': '0750'},
          {'path': vault_agent_template_dir, 'mode': '0750'},
-         {'path': vault_agent_run_dir, 'mode': '0750'},
+         {'path': vault_agent_run_dir, 'group': vault_agent_run_dir_group, 'mode': vault_agent_run_dir_mode},
        ] + vault_agent_extra_dirs }}
   tags: [apply]
 
@@ -144,6 +144,18 @@
     enabled: true
     daemon_reload: true
   when:
+    - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
+    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
+  tags: [apply]
+
+- name: Ensure Vault Agent token sink permissions
+  file:
+    path: "{{ vault_agent_token_sink }}"
+    owner: root
+    group: "{{ vault_agent_token_sink_group }}"
+    mode: "{{ vault_agent_token_sink_mode }}"
+  when:
+    - vault_agent_token_sink_group != "root" or vault_agent_token_sink_mode != "0600"
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
     - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
   tags: [apply]

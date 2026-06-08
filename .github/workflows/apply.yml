@@ -237,11 +237,11 @@ jobs:
           fi
 
           token_file="/run/vault-agent/github-runner.token"
-          if [ -r "$token_file" ]; then
-            vault_token="$(cat "$token_file")"
-          else
-            vault_token="$(sudo cat "$token_file")"
+          if [ ! -r "$token_file" ]; then
+            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
+            exit 1
           fi
+          vault_token="$(cat "$token_file")"
 
           export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
           export VAULT_TOKEN="$vault_token"
