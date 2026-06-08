@@ -1,4 +1,6 @@
+import json
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 import yaml
@@ -10,19 +12,33 @@ MOCK = yaml.safe_load((REPO / "tests/iac/mock_inventory.yml").read_text())
 
 
 class MockRenderTest(unittest.TestCase):
-    def render(self, template):
+    def render(self, template, context=None):
+        context = MOCK if context is None else context
         env = Environment(
             loader=FileSystemLoader(str(template.parent)),
             undefined=StrictUndefined,
             keep_trailing_newline=True,
         )
         env.filters["bool"] = bool
-        return env.get_template(template.name).render(**MOCK)
+        env.filters["to_json"] = json.dumps
+        return env.get_template(template.name).render(**context)
 
     def test_vault_agent_config_renders_with_wrapped_secretid(self):
         rendered = self.render(REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2")
         self.assertIn('secret_id_response_wrapping_path = "auth/approle/role/hyrule-cloud/secret-id"', rendered)
         self.assertIn("remove_secret_id_file_after_reading = true", rendered)
+
+    def test_vault_agent_config_escapes_reload_command_quotes(self):
+        context = deepcopy(MOCK)
+        context["vault_agent_templates"][0]["reload_command"] = (
+            '/bin/grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env && '
+            "/bin/systemctl restart noc-agent.service"
+        )
+
+        rendered = self.render(REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2", context)
+
+        self.assertIn(r"\"^NOC_APPROVAL_SIGNING_SECRET=.{32,}$\"", rendered)
+        self.assertNotIn('grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$"', rendered)
 
     def test_hyrule_cloud_vault_render_hook_renders_required_keys(self):
         rendered = self.render(REPO / "ansible/roles/hyrule_cloud/templates/vault-render-hook.sh.j2")
