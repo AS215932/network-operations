@@ -1,0 +1,231 @@
+"""Structured LLM invocation layer for role review hydration.
+
+The default client is deterministic so tests and local scaffolding need no API
+keys. Production model adapters should implement ``StructuredLLMClient`` and
+return the same Pydantic schema.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Protocol
+
+from pydantic import BaseModel, Field
+
+from hyrule_engineering_loop.state import GraphState, RoleName
+
+
+class FileMutation(BaseModel):
+    """A proposed file content mutation relative to a workspace root."""
+
+    path: str = Field(min_length=1)
+    content: str
+
+
+class RoleReviewOutput(BaseModel):
+    """Structured role review output consumed by LangGraph nodes."""
+
+    approved: bool
+    validation_errors: list[dict[str, Any]] = Field(default_factory=list)
+    proposed_mutations: list[FileMutation] = Field(default_factory=list)
+    notes: str = ""
+
+
+class StructuredLLMClient(Protocol):
+    """Provider interface for structured role review invocation."""
+
+    def invoke_role_review(
+        self,
+        *,
+        role: RoleName,
+        system_prompt: str,
+        source_context: dict[str, str],
+        state: GraphState,
+    ) -> RoleReviewOutput:
+        """Return a structured role review output."""
+
+
+class LLMInvocationError(RuntimeError):
+    """Raised when live inference fails before producing structured output."""
+
+
+class DeterministicStructuredLLMClient:
+    """Safe default client for local graph execution without live inference."""
+
+    def invoke_role_review(
+        self,
+        *,
+        role: RoleName,
+        system_prompt: str,
+        source_context: dict[str, str],
+        state: GraphState,
+    ) -> RoleReviewOutput:
+        mock = state.get("llm_mock_responses", {}).get(role)
+        if mock is not None:
+            return RoleReviewOutput.model_validate(mock)
+
+        return RoleReviewOutput(
+            approved=True,
+            notes=(
+                f"Deterministic approval for {role}; prompt chars={len(system_prompt)}, "
+                f"source files={len(source_context)}."
+            ),
+        )
+
+
+class HTTPStructuredLLMClient:
+    """Small OpenAI-compatible structured-output client.
+
+    This intentionally uses the standard library so the loop can instantiate
+    live inference from environment variables without forcing a specific SDK
+    into the runtime skeleton.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        timeout_seconds: float = 60.0,
+        max_retries: int = 2,
+    ) -> None:
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+        self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+
+    @classmethod
+    def from_env(cls) -> "HTTPStructuredLLMClient":
+        api_key = os.environ.get("HYRULE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise LLMInvocationError(
+                "HYRULE_MOCK_LLM=0 requires HYRULE_LLM_API_KEY or OPENAI_API_KEY"
+            )
+
+        return cls(
+            api_key=api_key,
+            base_url=os.environ.get("HYRULE_LLM_BASE_URL")
+            or os.environ.get("OPENAI_BASE_URL")
+            or "https://api.openai.com/v1",
+            model=os.environ.get("HYRULE_LLM_MODEL") or "gpt-4.1-mini",
+            timeout_seconds=float(os.environ.get("HYRULE_LLM_TIMEOUT_SECONDS", "60")),
+            max_retries=int(os.environ.get("HYRULE_LLM_MAX_RETRIES", "2")),
+        )
+
+    def invoke_role_review(
+        self,
+        *,
+        role: RoleName,
+        system_prompt: str,
+        source_context: dict[str, str],
+        state: GraphState,
+    ) -> RoleReviewOutput:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "role": role,
+                            "state": state,
+                            "source_context": source_context,
+                            "output_schema": RoleReviewOutput.model_json_schema(),
+                        },
+                        sort_keys=True,
+                    ),
+                },
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                return self._post(payload)
+            except Exception as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    time.sleep(min(2.0, 0.25 * (2**attempt)))
+
+        raise LLMInvocationError(str(last_error) if last_error else "LLM invocation failed")
+
+    def _post(self, payload: dict[str, Any]) -> RoleReviewOutput:
+        request = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise LLMInvocationError(f"HTTP {exc.code}: {body}") from exc
+        except urllib.error.URLError as exc:
+            raise LLMInvocationError(str(exc.reason)) from exc
+
+        decoded = json.loads(raw)
+        content = decoded["choices"][0]["message"]["content"]
+        return RoleReviewOutput.model_validate_json(content)
+
+
+def _mock_llm_enabled() -> bool:
+    return os.environ.get("HYRULE_MOCK_LLM", "1").lower() not in {"0", "false", "no"}
+
+
+def default_llm_client() -> StructuredLLMClient:
+    """Return the configured LLM client, defaulting to deterministic mock mode."""
+    if _mock_llm_enabled():
+        return DeterministicStructuredLLMClient()
+    return HTTPStructuredLLMClient.from_env()
+
+
+def role_api_error(role: RoleName, message: str) -> RoleReviewOutput:
+    """Convert provider failures into graph-consumable validation errors."""
+    return RoleReviewOutput(
+        approved=False,
+        validation_errors=[
+            {
+                "node": role,
+                "domain": "llm",
+                "message": message,
+            }
+        ],
+        notes="LLM invocation failed; routed as validation error.",
+    )
+
+
+def invoke_role_review(
+    *,
+    role: RoleName,
+    system_prompt: str,
+    source_context: dict[str, str],
+    state: GraphState,
+    client: StructuredLLMClient | None = None,
+) -> RoleReviewOutput:
+    """Invoke a role review and validate structured output."""
+    try:
+        active_client = client or default_llm_client()
+        return active_client.invoke_role_review(
+            role=role,
+            system_prompt=system_prompt,
+            source_context=source_context,
+            state=state,
+        )
+    except Exception as exc:
+        return role_api_error(role, str(exc))
