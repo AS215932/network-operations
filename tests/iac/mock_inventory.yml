@@ -55,6 +55,7 @@ vault_agent_role_id_file: /etc/vault-agent.d/hyrule-cloud-role-id
 vault_agent_secret_id_file: /etc/vault-agent.d/hyrule-cloud-secret-id
 vault_agent_secret_id_response_wrapping_path: auth/approle/role/hyrule-cloud/secret-id
 vault_agent_token_sink: /run/vault-agent/hyrule-cloud.token
+vault_agent_token_sink_mode: "0600"
 vault_agent_template_dir: /etc/vault-agent.d/templates
 vault_agent_templates:
   - name: hyrule-cloud.env.ctmpl

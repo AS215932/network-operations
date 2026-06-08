@@ -108,7 +108,9 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             'vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/hyrule-cloud/secret-id',
             workflow,
         )
+        self.assertIn("is not readable by the runner user", workflow)
         self.assertIn("VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID", workflow)
+        self.assertNotIn("sudo cat", workflow)
 
         self.assertIn('path "auth/approle/role/hyrule-cloud/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/hyrule-cloud/secret-id"', runner_policy)
@@ -118,6 +120,36 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/hyrule-cloud", runner_policy)
         self.assertNotIn("XCPNG_XO_TOKEN", runner_template)
         self.assertNotIn("VAULT_HYRULE_CLOUD_SECRET_ID", runner_template)
+
+    def test_github_runner_vault_token_sink_is_runner_readable(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())
+        vault_tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        vault_template = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
+        service_template = (REPO / "ansible/roles/vault_agent/templates/vault-agent.service.j2").read_text()
+        runner_tasks = yaml.safe_load((REPO / "ansible/roles/github_runner/tasks/main.yml").read_text())
+
+        self.assertEqual(defaults["vault_agent_service_group"], "root")
+        self.assertEqual(defaults["vault_agent_token_sink_group"], "root")
+        self.assertEqual(defaults["vault_agent_token_sink_mode"], "0600")
+        self.assertEqual(defaults["vault_agent_run_dir_group"], "root")
+        self.assertEqual(defaults["vault_agent_run_dir_mode"], "0750")
+        self.assertIn("mode = {{ vault_agent_token_sink_mode }}", vault_template)
+        self.assertIn("Group={{ vault_agent_service_group }}", service_template)
+        self.assertIn("RuntimeDirectoryMode={{ vault_agent_run_dir_mode }}", service_template)
+
+        token_permission_task = _task_by_name(vault_tasks, "Ensure Vault Agent token sink permissions")
+        self.assertIsNotNone(token_permission_task)
+        self.assertEqual(token_permission_task["file"]["group"], "{{ vault_agent_token_sink_group }}")
+        self.assertEqual(token_permission_task["file"]["mode"], "{{ vault_agent_token_sink_mode }}")
+
+        runner_vault_task = _task_by_name(runner_tasks, "Set up Vault Agent for runner secret delivery")
+        self.assertIsNotNone(runner_vault_task)
+        runner_vars = runner_vault_task["vars"]
+        self.assertEqual(runner_vars["vault_agent_service_group"], "{{ github_runner_group }}")
+        self.assertEqual(runner_vars["vault_agent_run_dir_group"], "{{ github_runner_group }}")
+        self.assertEqual(runner_vars["vault_agent_run_dir_mode"], "2750")
+        self.assertEqual(runner_vars["vault_agent_token_sink_group"], "{{ github_runner_group }}")
+        self.assertEqual(runner_vars["vault_agent_token_sink_mode"], "0640")
 
     def test_app_roles_restart_deterministically_on_apply(self):
         for role in ("hyrule_cloud", "hyrule_web"):

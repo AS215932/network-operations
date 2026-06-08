@@ -5,14 +5,19 @@ vault_agent_name: noc-agent
 # Caddy so a proxy outage does not break the secrets plane.
 vault_agent_vault_addr: "http://[{{ peers.vault.ipv6 }}]:8200"
 vault_agent_vault_tls_skip_verify: false
+vault_agent_service_group: root
 vault_agent_config_dir: "/etc/vault-agent.d"
 vault_agent_run_dir: "/run/vault-agent"
+vault_agent_run_dir_group: root
+vault_agent_run_dir_mode: "0750"
 vault_agent_role_id: ""
 vault_agent_secret_id: ""
 vault_agent_secret_id_response_wrapping_path: ""
 vault_agent_role_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-role-id"
 vault_agent_secret_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-secret-id"
 vault_agent_token_sink: "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.token"
+vault_agent_token_sink_group: root
+vault_agent_token_sink_mode: "0600"
 vault_agent_template_dir: "{{ vault_agent_config_dir }}/templates"
 vault_agent_env_destination: /opt/noc-agent/.env
 vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt

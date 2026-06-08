@@ -653,6 +653,11 @@
     vault_agent_name: github-runner
     vault_agent_role_id: "{{ github_runner_vault_role_id }}"
     vault_agent_secret_id: "{{ github_runner_vault_secret_id }}"
+    vault_agent_service_group: "{{ github_runner_group }}"
+    vault_agent_run_dir_group: "{{ github_runner_group }}"
+    vault_agent_run_dir_mode: "2750"
+    vault_agent_token_sink_group: "{{ github_runner_group }}"
+    vault_agent_token_sink_mode: "0640"
     vault_agent_templates:
       - src: github-runner.env.ctmpl.j2
         name: github-runner.env.ctmpl
