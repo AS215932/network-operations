@@ -180,6 +180,23 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         for text in (noc_service, bot_service, mcp_service):
             self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', text)
 
+    def test_noc_agent_model_defaults_come_from_toml_not_env(self):
+        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
+        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
+        vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
+        playbook = (REPO / "ansible/playbooks/noc.yml").read_text()
+
+        for text in (vault_template, noc_env):
+            self.assertNotIn("google-gla:gemini-3.1-pro-preview", text)
+            self.assertNotIn("google-gla:gemini-2.5-flash", text)
+            self.assertIn("OPENROUTER_API_KEY", text)
+            self.assertIn("OPENROUTER_MANAGEMENT_API_KEY", text)
+
+        self.assertIn("OPENROUTER_API_KEY is required", vault_put)
+        self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
+        self.assertIn("openrouter_api_key", playbook)
+        self.assertIn("openrouter_management_api_key", playbook)
+
     def test_freebsd_playbooks_can_opt_into_become(self):
         freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())
 
