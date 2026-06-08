@@ -111,9 +111,10 @@ def test_promotion_rejects_disallowed_paths_and_rolls_back(tmp_path: Path) -> No
 
     final_state = build_graph().invoke(state)
 
-    assert final_state["promotion_status"] == "failed"
-    assert final_state["retry_counters"]["promotion"] == 3
+    assert final_state["policy_status"] == "failed"
+    assert "promotion_status" not in final_state
+    assert final_state["retry_counters"]["policy"] == 1
     assert final_state["requires_human_signoff"] is True
-    assert any("path not allowlisted" in error["message"] for error in final_state["validation_errors"])
+    assert any("denied by pattern" in error["message"] for error in final_state["validation_errors"])
     if worktree_root.exists():
         assert list(worktree_root.glob("*")) == []

@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "langgraph>=0.2.70",
     "pydantic>=2.10",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -15,6 +16,7 @@ hyrule-engineering-loop = "hyrule_engineering_loop.cli:main"
 dev = [
     "pytest>=8.0",
     "mypy>=1.10",
+    "types-PyYAML>=6.0",
 ]
 
 [build-system]

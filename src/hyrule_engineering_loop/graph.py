@@ -17,6 +17,7 @@ from hyrule_engineering_loop.nodes import (
     implementation_node,
     network_architect_node,
     package_pr_node,
+    policy_node,
     promotion_node,
     required_roles,
     security_auditor_node,
@@ -33,6 +34,7 @@ Route = Literal[
     "devops_netops",
     "security_auditor",
     "finops_integrity",
+    "policy",
     "promotion",
     "package_pr",
     "human_signoff",
@@ -71,9 +73,16 @@ def remediation_router(state: GraphState) -> Route | list[Route]:
         return "systems_engineer"
 
     if _approval_complete(state):
-        return "promotion"
+        return "policy"
 
     return role_review_router(state)
+
+
+def policy_router(state: GraphState) -> Route:
+    """Route policy outcome to promotion or human sign-off."""
+    if state.get("policy_status") == "failed":
+        return "human_signoff"
+    return "promotion"
 
 
 def promotion_router(state: GraphState) -> Route:
@@ -103,6 +112,7 @@ def build_graph(
     graph.add_node("workspace_writer", workspace_writer_node)
     graph.add_node("gate_execution", gate_execution_node)
     graph.add_node("workspace_cleanup", workspace_cleanup_node)
+    graph.add_node("policy", policy_node)
     graph.add_node("promotion", promotion_node)
     graph.add_node("package_pr", package_pr_node)
     graph.add_node("human_signoff", human_signoff_node)
@@ -135,8 +145,17 @@ def build_graph(
             "devops_netops": "devops_netops",
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
+            "policy": "policy",
             "promotion": "promotion",
             "package_pr": "package_pr",
+            "human_signoff": "human_signoff",
+        },
+    )
+    graph.add_conditional_edges(
+        "policy",
+        policy_router,
+        {
+            "promotion": "promotion",
             "human_signoff": "human_signoff",
         },
     )

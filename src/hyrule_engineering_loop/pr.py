@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from hyrule_engineering_loop.policy import validate_pr_remote
+
 
 class PRBoundaryError(RuntimeError):
     """Raised when PR boundary safety checks fail."""
@@ -74,6 +76,7 @@ def publish_promoted_worktrees(
     create_github_pr: bool = False,
 ) -> list[dict[str, Any]]:
     """Commit and push promoted worktrees after human approval."""
+    validate_pr_remote(state, remote=remote)
     if not _approved(state):
         raise PRBoundaryError("approval_decision must be approved before PR publication")
 
