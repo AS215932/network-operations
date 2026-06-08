@@ -57,6 +57,11 @@ def render_noc_handoff(state: GraphState) -> dict[str, Any]:
             "results": state.get("promotion_results", []),
             "requires_human_signoff": state.get("requires_human_signoff", False),
         },
+        "repo_adapter": {
+            "status": state.get("repo_adapter_status", "not_run"),
+            "results": state.get("repo_adapter_results", []),
+            "base_ref": state.get("promotion_base_ref", "HEAD"),
+        },
         "rollback": {
             "plan": state["rollback_plan"],
             "requires_human_signoff": state["requires_human_signoff"],

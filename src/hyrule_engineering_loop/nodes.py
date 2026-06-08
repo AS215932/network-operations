@@ -11,6 +11,7 @@ from hyrule_engineering_loop.llm import invoke_role_review
 from hyrule_engineering_loop.policy import validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
 from hyrule_engineering_loop.promotion import PromotionError, promote_mutations
+from hyrule_engineering_loop.repo_adapter import RepoAdapterError, resolve_repositories_for_state
 from hyrule_engineering_loop.state import ChangeClass, GraphState, RoleApprovals, RoleName
 from hyrule_engineering_loop.workspace import cleanup_workspace, write_mutations_to_workspace
 
@@ -242,6 +243,34 @@ def gate_execution_node(state: GraphState) -> StateUpdate:
 def workspace_cleanup_node(state: GraphState) -> StateUpdate:
     print("[Node: Workspace Cleanup] Removing temporary workspace...")
     return {"workspace_cleaned_up": cleanup_workspace(state.get("workspace_root"))}
+
+
+def repo_adapter_node(state: GraphState) -> StateUpdate:
+    print("[Node: Repo Adapter] Verifying promotion target repositories...")
+    if not state.get("promotion_enabled", False):
+        return {"repo_adapter_status": "not_run"}
+
+    try:
+        repositories, results = resolve_repositories_for_state(state)
+    except RepoAdapterError as exc:
+        return {
+            "repo_adapter_status": "failed",
+            "requires_human_signoff": True,
+            "validation_errors": [
+                {
+                    "node": "repo_adapter",
+                    "domain": "devops",
+                    "message": str(exc),
+                }
+            ],
+            "retry_counters": _increment_counter(state["retry_counters"], "repo_adapter"),
+        }
+
+    return {
+        "repo_adapter_status": "passed",
+        "promotion_repositories": repositories,
+        "repo_adapter_results": results,
+    }
 
 
 def policy_node(state: GraphState) -> StateUpdate:

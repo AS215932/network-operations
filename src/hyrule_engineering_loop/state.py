@@ -28,6 +28,7 @@ GateStatus = Literal["not_run", "passed", "failed"]
 PromotionStatus = Literal["not_requested", "passed", "failed"]
 PRStatus = Literal["not_requested", "pushed", "failed"]
 PolicyStatus = Literal["not_run", "passed", "failed"]
+RepoAdapterStatus = Literal["not_run", "passed", "failed"]
 
 RoleName = Literal[
     "network_architect",
@@ -125,3 +126,8 @@ class GraphState(TypedDict):
     pr_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     policy_file: NotRequired[str]
     policy_status: NotRequired[PolicyStatus]
+    repo_workspace_root: NotRequired[str]
+    promotion_repo_names: NotRequired[List[str]]
+    promotion_base_ref: NotRequired[str]
+    repo_adapter_status: NotRequired[RepoAdapterStatus]
+    repo_adapter_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
