@@ -19,6 +19,7 @@ from hyrule_engineering_loop.nodes import (
     package_pr_node,
     policy_node,
     promotion_node,
+    repo_adapter_node,
     required_roles,
     security_auditor_node,
     systems_engineer_node,
@@ -35,6 +36,7 @@ Route = Literal[
     "security_auditor",
     "finops_integrity",
     "policy",
+    "repo_adapter",
     "promotion",
     "package_pr",
     "human_signoff",
@@ -73,9 +75,16 @@ def remediation_router(state: GraphState) -> Route | list[Route]:
         return "systems_engineer"
 
     if _approval_complete(state):
-        return "policy"
+        return "repo_adapter"
 
     return role_review_router(state)
+
+
+def repo_adapter_router(state: GraphState) -> Route:
+    """Route repo adapter outcome to policy or human sign-off."""
+    if state.get("repo_adapter_status") == "failed":
+        return "human_signoff"
+    return "policy"
 
 
 def policy_router(state: GraphState) -> Route:
@@ -112,6 +121,7 @@ def build_graph(
     graph.add_node("workspace_writer", workspace_writer_node)
     graph.add_node("gate_execution", gate_execution_node)
     graph.add_node("workspace_cleanup", workspace_cleanup_node)
+    graph.add_node("repo_adapter", repo_adapter_node)
     graph.add_node("policy", policy_node)
     graph.add_node("promotion", promotion_node)
     graph.add_node("package_pr", package_pr_node)
@@ -145,9 +155,18 @@ def build_graph(
             "devops_netops": "devops_netops",
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
+            "repo_adapter": "repo_adapter",
             "policy": "policy",
             "promotion": "promotion",
             "package_pr": "package_pr",
+            "human_signoff": "human_signoff",
+        },
+    )
+    graph.add_conditional_edges(
+        "repo_adapter",
+        repo_adapter_router,
+        {
+            "policy": "policy",
             "human_signoff": "human_signoff",
         },
     )

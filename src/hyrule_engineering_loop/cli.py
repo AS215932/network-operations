@@ -70,9 +70,27 @@ def _parse_repo_paths(items: list[str] | None, *, option: str) -> dict[str, list
     return parsed
 
 
+def _parse_mutations(items: list[str] | None, *, option: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for item in items or []:
+        if "=" not in item:
+            raise ValueError(f"{option} expects PATH=CONTENT, got {item}")
+        path, content = item.split("=", 1)
+        parsed[path] = content
+    return parsed
+
+
 def run_command(args: argparse.Namespace) -> int:
     change_class = cast(ChangeClass, args.change_class)
     state = _default_state(args.change_id, change_class)
+    if getattr(args, "repo_workspace_root", None):
+        state["repo_workspace_root"] = args.repo_workspace_root
+    if getattr(args, "promotion_repo_name", None):
+        state["promotion_repo_names"] = list(args.promotion_repo_name)
+    if getattr(args, "promotion_base_ref", None):
+        state["promotion_base_ref"] = args.promotion_base_ref
+    if getattr(args, "mutation", None):
+        state["proposed_mutations"] = _parse_mutations(args.mutation, option="--mutation")
     if args.policy_file:
         state["policy_file"] = args.policy_file
     if args.handoff_dir:
@@ -106,6 +124,12 @@ def run_command(args: argparse.Namespace) -> int:
     _write_state(path, dict(final_state))
     print(f"[CLI] wrote state artifact: {path}")
     return 0
+
+
+def dry_run_command(args: argparse.Namespace) -> int:
+    args.promotion_enabled = True
+    args.interrupt_before_signoff = True
+    return run_command(args)
 
 
 def show_command(args: argparse.Namespace) -> int:
@@ -172,13 +196,36 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--policy-file")
     run_parser.add_argument("--handoff-dir")
     run_parser.add_argument("--promotion-enabled", action="store_true")
+    run_parser.add_argument("--repo-workspace-root")
+    run_parser.add_argument("--promotion-repo-name", action="append")
+    run_parser.add_argument("--promotion-base-ref")
     run_parser.add_argument("--promotion-repo", action="append")
     run_parser.add_argument("--promotion-allow", action="append")
     run_parser.add_argument("--promotion-worktree-root")
     run_parser.add_argument("--promotion-branch-prefix")
+    run_parser.add_argument("--mutation", action="append")
     run_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     run_parser.add_argument("--no-interrupt-before-signoff", action="store_false", dest="interrupt_before_signoff")
     run_parser.set_defaults(func=run_command, interrupt_before_signoff=True)
+
+    dry_run_parser = subparsers.add_parser(
+        "dry-run",
+        help="run graph, policy, promotion, and handoff without approval or PR publication",
+    )
+    dry_run_parser.add_argument("change_id")
+    dry_run_parser.add_argument("change_class")
+    dry_run_parser.add_argument("--policy-file")
+    dry_run_parser.add_argument("--handoff-dir")
+    dry_run_parser.add_argument("--repo-workspace-root")
+    dry_run_parser.add_argument("--promotion-repo-name", action="append")
+    dry_run_parser.add_argument("--promotion-base-ref")
+    dry_run_parser.add_argument("--promotion-repo", action="append")
+    dry_run_parser.add_argument("--promotion-allow", action="append")
+    dry_run_parser.add_argument("--promotion-worktree-root")
+    dry_run_parser.add_argument("--promotion-branch-prefix")
+    dry_run_parser.add_argument("--mutation", action="append")
+    dry_run_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
+    dry_run_parser.set_defaults(func=dry_run_command, promotion_enabled=True, interrupt_before_signoff=True)
 
     show_parser = subparsers.add_parser("show", help="print a persisted state artifact")
     show_parser.add_argument("change_id")

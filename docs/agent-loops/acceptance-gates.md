@@ -198,3 +198,26 @@ It validates:
 The PR boundary also checks the remote against `allowed_pr_remotes` before any
 commit or push. Policy failures append structured `validation_errors`, set
 `policy_status: failed`, and route to human sign-off.
+
+## Phase 8 Repo Adapter Dry Run
+
+The repo adapter normalizes sibling repo names into checked-out paths before
+policy and promotion. It verifies:
+
+- the repo exists and has a `.git` directory;
+- the repo is on an attached branch, not detached HEAD;
+- `git status --porcelain` is clean;
+- the configured base ref resolves.
+
+Use `dry-run` for non-publishing end-to-end validation:
+
+```bash
+hyrule-engineering-loop dry-run <change-id> <change-class> \
+  --repo-workspace-root /home/svag/Dev \
+  --promotion-repo-name hyrule-cloud \
+  --promotion-allow hyrule-cloud=docs \
+  --promotion-worktree-root /tmp/hyrule-loop-worktrees \
+  --mutation "hyrule-cloud:docs/smoke.md=hello"
+```
+
+`dry-run` never approves, commits, pushes, or creates PRs.
