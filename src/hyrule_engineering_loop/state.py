@@ -26,6 +26,7 @@ CustomerImpact = Literal["none", "possible", "expected"]
 LabVerification = Literal["not_applicable", "pending", "passed", "failed"]
 GateStatus = Literal["not_run", "passed", "failed"]
 PromotionStatus = Literal["not_requested", "passed", "failed"]
+PRStatus = Literal["not_requested", "pushed", "failed"]
 
 RoleName = Literal[
     "network_architect",
@@ -113,3 +114,11 @@ class GraphState(TypedDict):
     promotion_branch_prefix: NotRequired[str]
     promotion_status: NotRequired[PromotionStatus]
     promotion_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
+    pr_enabled: NotRequired[bool]
+    pr_status: NotRequired[PRStatus]
+    pr_remote: NotRequired[str]
+    pr_create_github: NotRequired[bool]
+    commit_message: NotRequired[str]
+    pr_title: NotRequired[str]
+    pr_body: NotRequired[str]
+    pr_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
