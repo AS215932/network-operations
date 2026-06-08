@@ -123,6 +123,8 @@ class GraphState(TypedDict):
     commit_message: NotRequired[str]
     pr_title: NotRequired[str]
     pr_body: NotRequired[str]
+    pr_labels: NotRequired[List[str]]
+    pr_reviewers: NotRequired[List[str]]
     pr_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     policy_file: NotRequired[str]
     policy_status: NotRequired[PolicyStatus]
