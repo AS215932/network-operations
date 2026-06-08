@@ -160,6 +160,8 @@ def pr_command(args: argparse.Namespace) -> int:
             commit_message=args.commit_message,
             pr_title=args.title,
             pr_body=args.body,
+            pr_labels=args.label,
+            pr_reviewers=args.reviewer,
             create_github_pr=args.create_github_pr,
         )
     except PRBoundaryError as exc:
@@ -179,6 +181,8 @@ def pr_command(args: argparse.Namespace) -> int:
     state["commit_message"] = args.commit_message
     state["pr_title"] = args.title
     state["pr_body"] = args.body
+    state["pr_labels"] = args.label
+    state["pr_reviewers"] = args.reviewer
     state["pr_create_github"] = args.create_github_pr
     _write_state(path, state)
     print(f"[CLI] published {len(pr_results)} promoted worktree(s)")
@@ -242,6 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     pr_parser.add_argument("--commit-message", required=True)
     pr_parser.add_argument("--title", required=True)
     pr_parser.add_argument("--body", required=True)
+    pr_parser.add_argument("--label", action="append", default=[])
+    pr_parser.add_argument("--reviewer", action="append", default=[])
     pr_parser.add_argument("--create-github-pr", action="store_true")
     pr_parser.set_defaults(func=pr_command)
 

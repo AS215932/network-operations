@@ -124,6 +124,7 @@ def test_pr_boundary_refuses_without_promotion_results() -> None:
     state: dict[str, Any] = {
         "change_id": "NO_PROMOTION",
         "approval_decision": "approved",
+        "policy_status": "passed",
     }
 
     with pytest.raises(PRBoundaryError, match="promotion_results are required"):
