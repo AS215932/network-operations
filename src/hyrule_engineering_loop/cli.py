@@ -11,6 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.nodes import ALL_ROLES
+from hyrule_engineering_loop.pr import PRBoundaryError, publish_promoted_worktrees
 from hyrule_engineering_loop.state import ChangeClass, GraphState
 
 DEFAULT_STATE_DIR = Path(".engineering-loop-state")
@@ -121,6 +122,41 @@ def approve_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def pr_command(args: argparse.Namespace) -> int:
+    path = _state_path(Path(args.state_dir), args.change_id)
+    state = _read_state(path)
+    try:
+        pr_results = publish_promoted_worktrees(
+            state,
+            remote=args.remote,
+            commit_message=args.commit_message,
+            pr_title=args.title,
+            pr_body=args.body,
+            create_github_pr=args.create_github_pr,
+        )
+    except PRBoundaryError as exc:
+        state["pr_status"] = "failed"
+        state["pr_results"] = [
+            {
+                "error": str(exc),
+            }
+        ]
+        _write_state(path, state)
+        print(f"[CLI] PR boundary refused: {exc}")
+        return 1
+
+    state["pr_status"] = "pushed"
+    state["pr_results"] = pr_results
+    state["pr_remote"] = args.remote
+    state["commit_message"] = args.commit_message
+    state["pr_title"] = args.title
+    state["pr_body"] = args.body
+    state["pr_create_github"] = args.create_github_pr
+    _write_state(path, state)
+    print(f"[CLI] published {len(pr_results)} promoted worktree(s)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the Hyrule Engineering Loop skeleton")
     parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR))
@@ -146,6 +182,15 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser = subparsers.add_parser("approve", help="record manual approval in a state artifact")
     approve_parser.add_argument("change_id")
     approve_parser.set_defaults(func=approve_command)
+
+    pr_parser = subparsers.add_parser("pr", help="commit and push approved promoted worktrees")
+    pr_parser.add_argument("change_id")
+    pr_parser.add_argument("--remote", default="origin")
+    pr_parser.add_argument("--commit-message", required=True)
+    pr_parser.add_argument("--title", required=True)
+    pr_parser.add_argument("--body", required=True)
+    pr_parser.add_argument("--create-github-pr", action="store_true")
+    pr_parser.set_defaults(func=pr_command)
 
     return parser
 
