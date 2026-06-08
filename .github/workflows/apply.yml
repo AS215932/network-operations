@@ -192,6 +192,40 @@ jobs:
             echo "| \`${key}\` | \`${repo}\` | \`${current}\` | ${compare} |" >> "$GITHUB_STEP_SUMMARY"
           done
 
+      - name: Resolve apply gate variable
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+        run: |
+          set -euo pipefail
+
+          playbook="$PLAYBOOK"
+          case "$playbook" in
+            cloud)
+              apply_var="hyrule_cloud_apply=true"
+              expected_apply_var="hyrule_cloud_apply=true"
+              ;;
+            web)
+              apply_var="hyrule_web_apply=true"
+              expected_apply_var="hyrule_web_apply=true"
+              ;;
+            *)
+              apply_var="${playbook//-/_}_apply=true"
+              expected_apply_var="${playbook//-/_}_apply=true"
+              ;;
+          esac
+
+          if [ "$apply_var" != "$expected_apply_var" ]; then
+            echo "::error::${playbook} resolved apply gate ${apply_var}, expected ${expected_apply_var}"
+            exit 1
+          fi
+
+          printf 'APPLY_VAR=%s\n' "$apply_var" >> "$GITHUB_ENV"
+          {
+            echo "## Apply gate"
+            echo
+            echo "\`${apply_var}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
       # user on every host (created + NOPASSWD-root by the ci_runner_key role)
       # and escalates with sudo — never root, never the operator's svag. An
@@ -232,7 +266,6 @@ jobs:
           BOOTSTRAP_CI_RUNNER_KEY: ${{ inputs.bootstrap_ci_runner_key }}
         run: |
           playbook="$PLAYBOOK"
-          apply_var="${playbook//-/_}_apply=true"
           user_args=(-e ansible_user=ci)
           limit_args=()
           if [ -n "$LIMIT" ]; then
@@ -244,7 +277,7 @@ jobs:
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             "${user_args[@]}" \
-            -e "${apply_var}" \
+            -e "${APPLY_VAR}" \
             "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot
