@@ -144,6 +144,10 @@ def _create_github_pr(
     if not _github_pr_enabled(enabled):
         return {"created": False, "url": None, "provider": "disabled"}
 
+    mock_url = os.environ.get("HYRULE_MOCK_GITHUB_PR_URL")
+    if mock_url:
+        return {"created": True, "url": mock_url, "provider": "mock-gh"}
+
     args = [
         "gh",
         "pr",

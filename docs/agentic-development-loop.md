@@ -140,6 +140,18 @@ Phase 8 adds real repo adapter dry-runs:
 - `dry-run` runs graph, policy, promotion, and handoff, then stops before
   approval or PR publication.
 
+Phase 10 adds an offline operator dry-run harness:
+
+- a disposable local git repo and bare remote are created under an operator
+  supplied root;
+- the graph runs with promotion and NOC handoff enabled;
+- the persisted state is approved inside the harness;
+- PR publication commits and pushes to the disposable remote;
+- GitHub draft PR creation uses `HYRULE_MOCK_GITHUB_PR_URL` and makes no
+  network call;
+- the harness verifies the same approval, push, PR body, label/reviewer, and
+  handoff surfaces that operators use in normal publication.
+
 Loop stages:
 
 1. Intake.
@@ -421,6 +433,16 @@ hyrule-engineering-loop dry-run SMOKE_DOC app_bugfix \
   --promotion-allow hyrule-cloud=docs \
   --promotion-worktree-root /tmp/hyrule-loop-worktrees \
   --mutation "hyrule-cloud:docs/smoke.md=hello"
+```
+
+Run the offline operator harness, including approval, branch push, mocked PR
+creation, and NOC handoff rendering:
+
+```bash
+hyrule-engineering-loop operator-dry-run \
+  --root /tmp/hyrule-loop-operator \
+  --label engineering-loop \
+  --reviewer netops-review
 ```
 
 The CLI is an operator boundary, not a production deploy tool.
