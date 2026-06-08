@@ -14,3 +14,15 @@ path "kv/data/ci-runner" {
 path "kv/metadata/ci-runner" {
   capabilities = ["read"]
 }
+
+# Production cloud applies run on the trusted ci runner and need to bootstrap
+# the api VM's target-side Vault Agent. The runner may mint only a short-lived,
+# response-wrapped SecretID for the hyrule-cloud AppRole; it still cannot read
+# kv/hyrule-cloud runtime secrets.
+path "auth/approle/role/hyrule-cloud/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/hyrule-cloud/secret-id" {
+  capabilities = ["update"]
+}
