@@ -221,3 +221,26 @@ hyrule-engineering-loop dry-run <change-id> <change-class> \
 ```
 
 `dry-run` never approves, commits, pushes, or creates PRs.
+
+## Phase 10 Operator Dry-Run Harness
+
+The operator harness exercises the full offline path with disposable git
+fixtures:
+
+- create a local git repo and bare remote;
+- run graph, policy, promotion, and handoff rendering;
+- persist and approve the generated state artifact;
+- commit and push the promoted worktree to the disposable remote;
+- create a mocked GitHub draft PR using `HYRULE_MOCK_GITHUB_PR_URL`;
+- assert the pushed branch, PR body, labels/reviewers, and NOC handoff agree.
+
+Run it with:
+
+```bash
+hyrule-engineering-loop operator-dry-run \
+  --root /tmp/hyrule-loop-operator \
+  --label engineering-loop \
+  --reviewer netops-review
+```
+
+The harness must not call live GitHub APIs or mutate production repositories.

@@ -11,6 +11,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.nodes import ALL_ROLES
+from hyrule_engineering_loop.operator_harness import OperatorHarnessError, run_operator_dry_run
 from hyrule_engineering_loop.pr import PRBoundaryError, publish_promoted_worktrees
 from hyrule_engineering_loop.state import ChangeClass, GraphState
 
@@ -189,6 +190,31 @@ def pr_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def operator_dry_run_command(args: argparse.Namespace) -> int:
+    try:
+        result = run_operator_dry_run(
+            root=Path(args.root),
+            change_id=args.change_id,
+            mock_github_pr_url=args.mock_github_pr_url,
+            labels=args.label,
+            reviewers=args.reviewer,
+        )
+    except (OperatorHarnessError, PRBoundaryError) as exc:
+        print(f"[CLI] operator dry-run failed: {exc}")
+        return 1
+
+    summary = {
+        "state_path": result["state_path"],
+        "handoff_path": result["handoff_path"],
+        "remote_path": result["remote_path"],
+        "branch": result["branch"],
+        "remote_commit": result["remote_commit"],
+        "github_pr": result["pr_results"][0]["github_pr"],
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the Hyrule Engineering Loop skeleton")
     parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR))
@@ -251,10 +277,24 @@ def build_parser() -> argparse.ArgumentParser:
     pr_parser.add_argument("--create-github-pr", action="store_true")
     pr_parser.set_defaults(func=pr_command)
 
+    operator_parser = subparsers.add_parser(
+        "operator-dry-run",
+        help="run an offline end-to-end operator harness with a disposable repo",
+    )
+    operator_parser.add_argument("--root", required=True)
+    operator_parser.add_argument("--change-id", default="OPERATOR_DRY_RUN")
+    operator_parser.add_argument(
+        "--mock-github-pr-url",
+        default="https://github.example.invalid/hyrule/demo/pull/1",
+    )
+    operator_parser.add_argument("--label", action="append", default=[])
+    operator_parser.add_argument("--reviewer", action="append", default=[])
+    operator_parser.set_defaults(func=operator_dry_run_command)
+
     return parser
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     return int(args.func(args))
