@@ -27,6 +27,7 @@ LabVerification = Literal["not_applicable", "pending", "passed", "failed"]
 GateStatus = Literal["not_run", "passed", "failed"]
 PromotionStatus = Literal["not_requested", "passed", "failed"]
 PRStatus = Literal["not_requested", "pushed", "failed"]
+PolicyStatus = Literal["not_run", "passed", "failed"]
 
 RoleName = Literal[
     "network_architect",
@@ -122,3 +123,5 @@ class GraphState(TypedDict):
     pr_title: NotRequired[str]
     pr_body: NotRequired[str]
     pr_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
+    policy_file: NotRequired[str]
+    policy_status: NotRequired[PolicyStatus]

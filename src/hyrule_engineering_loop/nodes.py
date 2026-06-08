@@ -8,6 +8,7 @@ from typing import Any, Iterable
 from hyrule_engineering_loop.gate_runner import run_gate_commands
 from hyrule_engineering_loop.handoff import write_noc_handoff
 from hyrule_engineering_loop.llm import invoke_role_review
+from hyrule_engineering_loop.policy import validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
 from hyrule_engineering_loop.promotion import PromotionError, promote_mutations
 from hyrule_engineering_loop.state import ChangeClass, GraphState, RoleApprovals, RoleName
@@ -241,6 +242,27 @@ def gate_execution_node(state: GraphState) -> StateUpdate:
 def workspace_cleanup_node(state: GraphState) -> StateUpdate:
     print("[Node: Workspace Cleanup] Removing temporary workspace...")
     return {"workspace_cleaned_up": cleanup_workspace(state.get("workspace_root"))}
+
+
+def policy_node(state: GraphState) -> StateUpdate:
+    print("[Node: Policy] Enforcing mutation and publication policy...")
+    violations = validate_graph_state(state)
+    if not violations:
+        return {"policy_status": "passed"}
+
+    return {
+        "policy_status": "failed",
+        "requires_human_signoff": True,
+        "validation_errors": [
+            {
+                "node": "policy",
+                "domain": "security",
+                "message": violation,
+            }
+            for violation in violations
+        ],
+        "retry_counters": _increment_counter(state["retry_counters"], "policy"),
+    }
 
 
 def promotion_node(state: GraphState) -> StateUpdate:

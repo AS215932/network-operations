@@ -177,3 +177,24 @@ without `promotion_results`. It commits inside each promoted worktree and pushes
 the generated branch to the configured remote. GitHub draft PR creation is
 disabled by default and must be explicitly requested later with the dedicated
 flag/environment gate.
+
+## Phase 7 Policy Guards
+
+Policy lives in `engineering-loop-policy.yml` by default. Override with
+`HYRULE_POLICY_FILE` or `GraphState["policy_file"]`.
+
+The policy guard runs after temporary workspace cleanup and before promotion.
+It validates:
+
+- denied mutation path globs, including secret-looking paths;
+- denied content patterns, including private keys and token assignments;
+- maximum changed file count;
+- maximum file size;
+- allowed gate command names;
+- protected promotion branch prefixes;
+- repo-root allowlists;
+- NOC handoff output directory allowlists.
+
+The PR boundary also checks the remote against `allowed_pr_remotes` before any
+commit or push. Policy failures append structured `validation_errors`, set
+`policy_status: failed`, and route to human sign-off.

@@ -73,6 +73,8 @@ def _parse_repo_paths(items: list[str] | None, *, option: str) -> dict[str, list
 def run_command(args: argparse.Namespace) -> int:
     change_class = cast(ChangeClass, args.change_class)
     state = _default_state(args.change_id, change_class)
+    if args.policy_file:
+        state["policy_file"] = args.policy_file
     if args.handoff_dir:
         state["handoff_output_dir"] = args.handoff_dir
     if args.gate_command:
@@ -125,6 +127,8 @@ def approve_command(args: argparse.Namespace) -> int:
 def pr_command(args: argparse.Namespace) -> int:
     path = _state_path(Path(args.state_dir), args.change_id)
     state = _read_state(path)
+    if args.policy_file:
+        state["policy_file"] = args.policy_file
     try:
         pr_results = publish_promoted_worktrees(
             state,
@@ -165,6 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="run the graph and persist final state")
     run_parser.add_argument("change_id")
     run_parser.add_argument("change_class")
+    run_parser.add_argument("--policy-file")
     run_parser.add_argument("--handoff-dir")
     run_parser.add_argument("--promotion-enabled", action="store_true")
     run_parser.add_argument("--promotion-repo", action="append")
@@ -185,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     pr_parser = subparsers.add_parser("pr", help="commit and push approved promoted worktrees")
     pr_parser.add_argument("change_id")
+    pr_parser.add_argument("--policy-file")
     pr_parser.add_argument("--remote", default="origin")
     pr_parser.add_argument("--commit-message", required=True)
     pr_parser.add_argument("--title", required=True)

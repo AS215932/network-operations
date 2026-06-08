@@ -118,6 +118,18 @@ Phase 6 adds the PR creation boundary:
 - GitHub draft PR creation remains disabled unless explicitly requested.
 - PR metadata is written back into the state artifact.
 
+Phase 7 adds policy guards:
+
+- `engineering-loop-policy.yml` defines global and repo-specific bounds.
+- The graph runs a policy node after workspace cleanup and before promotion.
+- Policy failures stop at human sign-off and do not reach promotion.
+- Mutation paths are checked for traversal, denied globs, size limits, and
+  secret-looking content.
+- Gate commands are checked against an allowlist.
+- Promotion branch prefixes are checked against protected namespaces.
+- Promotion repo roots can be allowlisted per repo.
+- PR remotes are checked before commit/push publication.
+
 Loop stages:
 
 1. Intake.
@@ -209,6 +221,8 @@ Optional Phase 2 staging keys:
 - `pr_title`: PR title.
 - `pr_body`: PR body.
 - `pr_results`: pushed branch/commit/PR metadata.
+- `policy_file`: optional policy file path override.
+- `policy_status`: latest policy guard status.
 
 Because `validation_errors` is append-only history, routing decisions use the
 latest `gate_status` to decide whether errors are currently active.
