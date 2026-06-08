@@ -244,3 +244,28 @@ hyrule-engineering-loop operator-dry-run \
 ```
 
 The harness must not call live GitHub APIs or mutate production repositories.
+
+## Phase 11 Sibling-Repo Canary Dry Run
+
+The sibling canary verifies the real repo adapter and promotion path against an
+existing `hyrule-*` checkout while remaining non-publishing:
+
+- the target repo is discovered under `--workspace-root`;
+- the target repo must be clean, attached to a branch, and have a valid base
+  ref;
+- the only generated mutation path is `docs/engineering-loop-canary.md`;
+- graph, repo adapter, policy, promotion, and NOC handoff stages must pass;
+- approval, commit, push, and PR creation must not run;
+- generated canary worktrees and branches are removed by default.
+
+Run it with:
+
+```bash
+hyrule-engineering-loop sibling-canary \
+  --workspace-root /home/svag/Dev \
+  --repo-name hyrule-cloud \
+  --output-root /tmp/hyrule-loop-canary
+```
+
+Use `--keep-worktree` only when an operator needs to inspect the generated
+canary worktree manually.
