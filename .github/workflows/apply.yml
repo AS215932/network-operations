@@ -137,10 +137,12 @@ jobs:
 
       - name: Summarize app version pins
         if: ${{ contains(fromJSON('["noc","cloud","web"]'), inputs.playbook) }}
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
         run: |
           set -euo pipefail
 
-          case "${{ inputs.playbook }}" in
+          case "$PLAYBOOK" in
             noc)
               host_vars="ansible/inventory/host_vars/noc.yml"
               entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp"
@@ -196,8 +198,10 @@ jobs:
       # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Pre-deploy Icinga snapshot
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
             -e snapshot_phase=pre
@@ -205,41 +209,61 @@ jobs:
       - name: Render-only (dry run)
         if: ${{ inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          limit_args=()
+          if [ -n "$LIMIT" ]; then
+            limit_args=(--limit "$LIMIT")
+          fi
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags validate \
             --connection=local \
             --skip-tags=snapshot \
-            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+            "${limit_args[@]}"
 
       - name: Apply
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
+          BOOTSTRAP_CI_RUNNER_KEY: ${{ inputs.bootstrap_ci_runner_key }}
         run: |
-          playbook="${{ inputs.playbook }}"
+          playbook="$PLAYBOOK"
           apply_var="${playbook//-/_}_apply=true"
           user_args=(-e ansible_user=ci)
-          if [ "${playbook}" = "ci-runner-key" ] && [ "${{ inputs.bootstrap_ci_runner_key }}" = "true" ]; then
+          limit_args=()
+          if [ -n "$LIMIT" ]; then
+            limit_args=(--limit "$LIMIT")
+          fi
+          if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then
             user_args=()
           fi
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             "${user_args[@]}" \
             -e "${apply_var}" \
-            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }}
+            "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
         run: |
-          ansible-playbook "playbooks/${{ inputs.playbook }}.yml" \
+          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
             -e snapshot_phase=post
 
       - name: Post-deploy Goss validation
         if: ${{ !inputs.dry_run }}
-        run: scripts/ci/goss-validate.sh "${{ inputs.playbook }}" "${{ inputs.limit }}"
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+          LIMIT: ${{ inputs.limit }}
+        run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
 
       - name: Capture snapshot diff
         if: ${{ !inputs.dry_run }}
@@ -280,9 +304,11 @@ jobs:
         if: ${{ !inputs.dry_run && inputs.pr_number != '' && steps.diff.outputs.diff != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          gh pr comment "${{ inputs.pr_number }}" \
-            --repo "${{ github.repository }}" \
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
             --body-file /tmp/diff.md
 
       - name: Upload snapshots as artifact

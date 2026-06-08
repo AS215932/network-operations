@@ -53,14 +53,21 @@ jobs:
           ref: main
 
       - name: Update app pins
+        env:
+          PROMOTION_TITLE: ${{ inputs.title }}
+          PROMOTION_IMPACT: ${{ inputs.impact }}
+          NOC_AGENT_SHA: ${{ inputs.noc_agent_sha }}
+          HYRULE_MCP_SHA: ${{ inputs.hyrule_mcp_sha }}
+          HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
+          HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
         run: |
           scripts/ci/promote-app-pins.py \
-            --title "${{ inputs.title }}" \
-            --impact "${{ inputs.impact }}" \
-            --noc-agent-sha "${{ inputs.noc_agent_sha }}" \
-            --hyrule-mcp-sha "${{ inputs.hyrule_mcp_sha }}" \
-            --hyrule-cloud-sha "${{ inputs.hyrule_cloud_sha }}" \
-            --hyrule-web-sha "${{ inputs.hyrule_web_sha }}" \
+            --title "$PROMOTION_TITLE" \
+            --impact "$PROMOTION_IMPACT" \
+            --noc-agent-sha "$NOC_AGENT_SHA" \
+            --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
+            --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
+            --hyrule-web-sha "$HYRULE_WEB_SHA" \
             --body-file /tmp/promotion-body.md
 
       - name: Validate pins
@@ -69,25 +76,27 @@ jobs:
       - name: Commit promotion branch
         env:
           BRANCH: promotion/app-sha-pins
+          COMMIT_MESSAGE: ${{ inputs.title }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
           git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml
-          git commit -m "${{ inputs.title }}"
+          git commit -m "$COMMIT_MESSAGE"
           git push --force-with-lease origin "$BRANCH"
 
       - name: Open or update promotion PR
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: promotion/app-sha-pins
+          PR_TITLE: ${{ inputs.title }}
         run: |
           set -euo pipefail
           existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "${{ inputs.title }}" --body-file /tmp/promotion-body.md
+            gh pr edit "$existing" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
             echo "Updated PR #$existing" >> "$GITHUB_STEP_SUMMARY"
           else
-            gh pr create --base main --head "$BRANCH" --title "${{ inputs.title }}" --body-file /tmp/promotion-body.md
+            gh pr create --base main --head "$BRANCH" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
           fi

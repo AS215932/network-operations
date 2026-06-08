@@ -14,6 +14,7 @@ EnvironmentFile=/opt/noc-agent/.env
 Environment=HYRULE_MCP_TRANSPORT=http
 Environment=HYRULE_MCP_BIND=127.0.0.1
 Environment=HYRULE_MCP_PORT=8765
+ExecStartPre=/bin/grep -Eq "^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env
 ExecStart=/opt/hyrule-mcp/.venv/bin/python /opt/hyrule-mcp/mcp_server.py
 Restart=always
 RestartSec=5
