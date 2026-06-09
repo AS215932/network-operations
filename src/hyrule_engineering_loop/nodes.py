@@ -92,13 +92,54 @@ def _read_source_context(paths: Iterable[str]) -> dict[str, str]:
     return context
 
 
+def _read_repo_source_context(paths: Iterable[str], state: GraphState) -> dict[str, str]:
+    base = Path.cwd().resolve()
+    repos = {
+        name: Path(path).expanduser().resolve()
+        for name, path in state.get("promotion_repositories", {}).items()
+    }
+    context: dict[str, str] = {}
+    if state.get("feature_request"):
+        request_key = state.get("feature_request_path", "feature_request")
+        context[request_key] = state["feature_request"]
+
+    for raw_path in paths:
+        repo_root: Path | None = None
+        source_path = raw_path
+        if ":" in raw_path:
+            repo_name, source_path = raw_path.split(":", 1)
+            repo_root = repos.get(repo_name)
+            if repo_root is None:
+                context[raw_path] = "[skipped: unknown repo]"
+                continue
+
+        path = Path(source_path)
+        if path.is_absolute() or ".." in path.parts:
+            context[raw_path] = "[skipped: unsafe source path]"
+            continue
+
+        root = repo_root or base
+        resolved = (root / path).resolve()
+        if not resolved.is_relative_to(root):
+            context[raw_path] = "[skipped: outside workspace]"
+            continue
+        if not resolved.exists():
+            context[raw_path] = "[missing]"
+            continue
+        if not resolved.is_file():
+            context[raw_path] = "[skipped: not a file]"
+            continue
+        context[raw_path] = resolved.read_text(encoding="utf-8")
+    return context
+
+
 def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
     if role not in required_roles(state["change_class"]):
         return {}
 
     prompts = load_role_prompts()
     system_prompt = prompts[role]
-    source_context = _read_source_context(state["source_of_truth_files"])
+    source_context = _read_repo_source_context(state["source_of_truth_files"], state)
     review = invoke_role_review(
         role=role,
         system_prompt=system_prompt,

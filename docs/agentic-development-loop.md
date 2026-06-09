@@ -163,6 +163,19 @@ Phase 11 adds a sibling-repo canary dry run:
 - generated canary worktrees and branches are removed by default after
   verification.
 
+Phase 13 adds feature-intake UX:
+
+- operators provide a feature request Markdown file instead of raw graph state;
+- the command targets one sibling repo and one or more allowed path prefixes;
+- request text is stored in `GraphState["feature_request"]` for role review;
+- source files can be passed as repo-relative paths and are loaded as
+  `repo:path` context;
+- offline mock mode scaffolds a docs planning artifact or accepts explicit
+  `--mock-mutation` values;
+- live LLM mode can propose structured mutations through the same role-node
+  schema by setting `HYRULE_MOCK_LLM=0`;
+- the command still stops before approval, commit, push, or PR creation.
+
 Loop stages:
 
 1. Intake.
@@ -464,6 +477,24 @@ hyrule-engineering-loop sibling-canary \
   --repo-name hyrule-cloud \
   --output-root /tmp/hyrule-loop-canary
 ```
+
+Run the loop from a feature request file:
+
+```bash
+uv run hyrule-engineering-loop feature ADD_PAYMENT_RETRY \
+  --request /tmp/add-payment-retry.md \
+  --repo hyrule-cloud \
+  --workspace-root /home/svag/Dev \
+  --output-root /tmp/hyrule-feature-add-payment-retry \
+  --allow docs \
+  --source README.md
+```
+
+In default mock mode this creates a promoted planning artifact under
+`docs/engineering-loop/`. To practice explicit file output without live LLMs,
+add `--mock-mutation "docs/example.md=example content"`. To let role nodes
+propose structured mutations from a configured provider, set `HYRULE_MOCK_LLM=0`
+and provide the required LLM environment variables.
 
 The CLI is an operator boundary, not a production deploy tool.
 
