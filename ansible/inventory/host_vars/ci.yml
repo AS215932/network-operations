@@ -23,6 +23,8 @@ firewall_extra_rules:
 # (Prometheus query on node_systemd_unit_state) — no by_ssh trust plumbing needed.
 monitoring_register: true
 monitoring_role: ci
+monitoring_check_vars:
+  github_runner: true
 
 # Logs — ship journald to log VM.
 logs_register: true
