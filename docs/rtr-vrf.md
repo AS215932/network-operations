@@ -88,6 +88,8 @@ VRF. Overlay clients reach Jool via the IPv6 leak rules installed by
 [`nat64-vrf-leak.service`](../configs/rtr/jool/nat64-vrf-leak.service):
 
 ```
+ip -6 rule add to 2a0c:b641:b51::/48 lookup 200 prio 900
+ip -6 rule add to 2a0c:b641:b50:2::/64 lookup 200 prio 901
 ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
 ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
 ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
@@ -95,8 +97,9 @@ ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
 
 This is a different shape than the v4 DNAT leak — Jool needs the
 forward packet in default VRF (so its netfilter hook fires) and the
-synthesised reply needs to escape back to overlay. See [CLAUDE.md
-NAT64 section](../CLAUDE.md) for the full picture.
+synthesised reply needs to escape back to overlay. The explicit destination
+rules for `2a0c:b641:b51::/48` and `2a0c:b641:b50:2::/64` keep translated
+replies for infrastructure and customer VMs from being routed out the underlay.
 
 ## Boot-order traps
 
