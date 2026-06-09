@@ -32,9 +32,15 @@ scrape_configs:
           - "[2a0c:b641:b50:2::a0]:9100"   # noc
           - "[2a0c:b641:b50:2::b0]:9100"   # log
           - "[2a0c:b641:b50:2::c0]:9100"   # vault
+          - "[2a0c:b641:b50:2::d0]:9100"   # ci (privileged runner)
         labels:
           site: ovh1
           role: infra
+      - targets:
+          - "[2a0c:b641:b51::c1]:9100"     # ci-pr (unprivileged PR runner, customer-isolated)
+        labels:
+          site: ovh1
+          role: ci-pr
       - targets:
           - "[2a0c:b641:b50:2::80]:9100"   # irc
         labels:

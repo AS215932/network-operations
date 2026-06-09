@@ -59,6 +59,8 @@ firewall_forward_extra_raw_nft: |
 # --- Monitoring: register on mon (Icinga host + node_exporter scrape) ---
 monitoring_register: true
 monitoring_role: ci
+monitoring_check_vars:
+  github_runner: true
 
 # --- Logs: OFF. Pushing to the log VM (customer->infra) is dropped by the
 # customer isolation; shipping would require weakening that boundary. The logs
