@@ -269,3 +269,33 @@ hyrule-engineering-loop sibling-canary \
 
 Use `--keep-worktree` only when an operator needs to inspect the generated
 canary worktree manually.
+
+## Phase 13 Feature Intake
+
+The feature command is the operator-facing entry point for normal development
+requests:
+
+- the operator supplies a Markdown request file;
+- the command targets exactly one sibling repo under `--workspace-root`;
+- target repos must pass the repo adapter checks before promotion;
+- every generated mutation must stay under one of the supplied `--allow`
+  prefixes;
+- role nodes receive both the request text and any `--source` files as context;
+- default mock mode scaffolds a planning artifact when no explicit mutation is
+  supplied;
+- `--mock-mutation PATH=CONTENT` can be used for offline practice;
+- live LLM mutation proposals require `HYRULE_MOCK_LLM=0` and configured
+  provider environment variables;
+- approval, commit, push, and PR creation remain separate commands.
+
+Example:
+
+```bash
+uv run hyrule-engineering-loop feature ADD_PAYMENT_RETRY \
+  --request /tmp/add-payment-retry.md \
+  --repo hyrule-cloud \
+  --workspace-root /home/svag/Dev \
+  --output-root /tmp/hyrule-feature-add-payment-retry \
+  --allow docs \
+  --source README.md
+```

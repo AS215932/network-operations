@@ -133,3 +133,7 @@ class GraphState(TypedDict):
     promotion_base_ref: NotRequired[str]
     repo_adapter_status: NotRequired[RepoAdapterStatus]
     repo_adapter_results: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
+    feature_request: NotRequired[str]
+    feature_request_path: NotRequired[str]
+    feature_target_repo: NotRequired[str]
+    feature_plan_path: NotRequired[str]

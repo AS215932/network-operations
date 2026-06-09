@@ -10,6 +10,7 @@ from typing import Any, cast
 from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.canary import CanaryDryRunError, run_sibling_repo_canary
+from hyrule_engineering_loop.feature import FeatureIntakeError, run_feature_intake
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.nodes import ALL_ROLES
 from hyrule_engineering_loop.operator_harness import OperatorHarnessError, run_operator_dry_run
@@ -241,6 +242,41 @@ def sibling_canary_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def feature_command(args: argparse.Namespace) -> int:
+    try:
+        result = run_feature_intake(
+            change_id=args.change_id,
+            change_class=args.change_class,
+            workspace_root=Path(args.workspace_root),
+            output_root=Path(args.output_root),
+            repo_name=args.repo,
+            request_path=Path(args.request),
+            allowed_paths=args.allow,
+            source_files=args.source,
+            mock_mutations=args.mock_mutation,
+            plan_path=args.plan_path,
+            scaffold_plan=not args.no_scaffold_plan,
+            gate_command=args.gate_command,
+            promotion_base_ref=args.base_ref,
+        )
+    except FeatureIntakeError as exc:
+        print(f"[CLI] feature intake failed: {exc}")
+        return 1
+
+    summary = {
+        "state_path": result["state_path"],
+        "handoff_path": result["handoff_path"],
+        "repo_name": result["repo_name"],
+        "promotion_count": result["promotion_count"],
+        "requires_human_signoff": result["requires_human_signoff"],
+        "policy_status": result["policy_status"],
+        "promotion_status": result["promotion_status"],
+        "gate_status": result["gate_status"],
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the Hyrule Engineering Loop skeleton")
     parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR))
@@ -327,6 +363,25 @@ def build_parser() -> argparse.ArgumentParser:
     canary_parser.add_argument("--change-id", default="SIBLING_CANARY")
     canary_parser.add_argument("--keep-worktree", action="store_true")
     canary_parser.set_defaults(func=sibling_canary_command)
+
+    feature_parser = subparsers.add_parser(
+        "feature",
+        help="run the engineering loop from a human feature request file",
+    )
+    feature_parser.add_argument("change_id")
+    feature_parser.add_argument("--request", required=True)
+    feature_parser.add_argument("--repo", required=True)
+    feature_parser.add_argument("--workspace-root", required=True)
+    feature_parser.add_argument("--output-root", required=True)
+    feature_parser.add_argument("--change-class", default="app_feature")
+    feature_parser.add_argument("--allow", action="append", required=True)
+    feature_parser.add_argument("--source", action="append", default=[])
+    feature_parser.add_argument("--mock-mutation", action="append", default=[])
+    feature_parser.add_argument("--plan-path")
+    feature_parser.add_argument("--no-scaffold-plan", action="store_true")
+    feature_parser.add_argument("--base-ref", default="HEAD")
+    feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
+    feature_parser.set_defaults(func=feature_command)
 
     return parser
 
