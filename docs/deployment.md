@@ -229,15 +229,23 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
     - Enable the stock `jool.service` shipped by `jool-tools` (it runs
       `jool file handle /etc/jool/jool.conf` on start).
 23. Deploy `configs/rtr/jool/nat64-vrf-leak.service` → `/etc/systemd/system/`
-    and `systemctl enable --now nat64-vrf-leak`. It installs both VRF leak
-    rules plus a table-200 route for the NAT64 prefix:
+    and `systemctl enable --now nat64-vrf-leak`. It installs the NAT64 VRF
+    leak rules plus a table-200 route for the NAT64 prefix:
     ```
     # Forward: overlay clients → Jool in default VRF (so Jool's netfilter
     # hook sees the packet; without this rule overlay traffic never reaches
     # Jool and all NAT64 checks time out)
     ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
-    # Return: Jool reply (src 64:ff9b::...) → overlay VRF so it reaches the VM
+
+    # Return: Jool replies to infrastructure and customer VMs → overlay VRF.
+    # These destination rules prevent default-VRF route lookup from sending
+    # translated replies out the underlay.
+    ip -6 rule add to 2a0c:b641:b51::/48 lookup 200 prio 900
+    ip -6 rule add to 2a0c:b641:b50:2::/64 lookup 200 prio 901
+
+    # Return: allocation-wide NAT64 replies → overlay VRF.
     ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+
     # Route in overlay VRF giving clients a next-hop for the NAT64 prefix
     ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
     ```

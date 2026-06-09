@@ -14,13 +14,18 @@
   systemd:
     name: jool
     state: restarted
+    no_block: false
   when: inventory_hostname == 'rtr'
   listen: reload nftables
 
-- name: restart nat64-vrf-leak
+# Keep this handler after the synchronous Jool restart. Jool service restarts
+# stop nat64-vrf-leak because the unit is ordered Before=jool.service; restoring
+# the leak last reinstalls return-routing rules for overlay clients.
+- name: restart nat64-vrf-leak after jool
   systemd:
     name: nat64-vrf-leak
     state: restarted
+    no_block: false
   when: inventory_hostname == 'rtr'
   listen: reload nftables
 

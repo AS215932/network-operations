@@ -27,11 +27,13 @@ ExecStart=/usr/sbin/ip -6 rule add to 2a0c:b641:b51::/48 lookup 200 prio 900
 ExecStart=/usr/sbin/ip -6 rule add to 2a0c:b641:b50:2::/64 lookup 200 prio 901
 ExecStart=/usr/sbin/ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
 ExecStart=/usr/sbin/ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
-ExecStop=/usr/sbin/ip -6 route del 64:ff9b::/96 table 200
-ExecStop=/usr/sbin/ip -6 rule del to 2a0c:b641:b51::/48 lookup 200 prio 900
-ExecStop=/usr/sbin/ip -6 rule del to 2a0c:b641:b50:2::/64 lookup 200 prio 901
-ExecStop=/usr/sbin/ip -6 rule del from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
-ExecStop=/usr/sbin/ip -6 rule del from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+# ExecStop also tolerates already-missing rules. Failed cleanup must not block
+# a later restart from reinstalling the full route leak.
+ExecStop=-/usr/sbin/ip -6 route del 64:ff9b::/96 table 200
+ExecStop=-/usr/sbin/ip -6 rule del to 2a0c:b641:b51::/48 lookup 200 prio 900
+ExecStop=-/usr/sbin/ip -6 rule del to 2a0c:b641:b50:2::/64 lookup 200 prio 901
+ExecStop=-/usr/sbin/ip -6 rule del from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+ExecStop=-/usr/sbin/ip -6 rule del from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
 
 [Install]
 WantedBy=multi-user.target

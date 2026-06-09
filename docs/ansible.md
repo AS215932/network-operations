@@ -61,7 +61,11 @@ This:
 5. Schedules a 3-minute `at` watchdog that reverts to the backup if the play
    doesn't cancel it.
 6. Atomically moves the new config into place and triggers the reload handler.
-7. On rtr, the handler also restarts `nat64-vrf-leak` and `jool` (in that order). The IPv4 DNAT VRF leak lives in `10-enX2.network` as routing-policy rules and needs no per-reload restart.
+7. On `rtr`, the handler restarts `jool` first, then restarts
+   `nat64-vrf-leak`. This order matters: restarting Jool can stop the leak
+   unit because `nat64-vrf-leak.service` is ordered `Before=jool.service`, so
+   the leak must be restored last. The IPv4 DNAT VRF leak lives in
+   `10-enX2.network` as routing-policy rules and needs no per-reload restart.
 8. Cancels the watchdog only if the play completes cleanly.
 
 `serial: 1` is set on the firewall play, so a bad rule blocks the next host.

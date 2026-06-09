@@ -1,4 +1,35 @@
 ---
+- name: Stage nat64-vrf-leak unit to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  copy:
+    src: "{{ playbook_dir }}/../../configs/rtr/jool/nat64-vrf-leak.service"
+    dest: "{{ firewall_generated_dir }}/{{ inventory_hostname }}/nat64-vrf-leak.service"
+    mode: "0644"
+  when: inventory_hostname == "rtr"
+  tags: [validate, diff, apply]
+
+- name: Install nat64-vrf-leak unit on rtr
+  copy:
+    src: "{{ playbook_dir }}/../../configs/rtr/jool/nat64-vrf-leak.service"
+    dest: /etc/systemd/system/nat64-vrf-leak.service
+    mode: "0644"
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+  notify: reload nftables
+  tags: [apply]
+
+- name: Enable nat64-vrf-leak unit on rtr
+  systemd:
+    name: nat64-vrf-leak
+    enabled: true
+    daemon_reload: true
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+  tags: [apply]
+
 - name: Render nftables config to controller (review artifact)
   delegate_to: localhost
   become: false
