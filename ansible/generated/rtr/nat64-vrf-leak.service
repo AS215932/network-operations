@@ -1,0 +1,39 @@
+# /etc/systemd/system/nat64-vrf-leak.service
+# Leak the NAT64 prefix between overlay VRF (table 200) and default VRF so
+# Jool (default-VRF-only) can translate traffic for overlay clients.
+#
+# Forward: overlay -> default VRF so Jool's netfilter hook sees the packet.
+# Return:  Jool's reply -> overlay VRF to reach the client. The explicit
+# destination rules are intentionally narrower than the allocation-wide
+# source NAT64 rule; they prevent default-VRF route lookups from sending
+# translated SYN-ACKs for infra/customer VMs out the underlay.
+# Route in table 200 gives overlay clients a next-hop for 64:ff9b::/96.
+[Unit]
+Description=NAT64 VRF route leak rules
+After=systemd-networkd.service
+Before=jool.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# ExecStartPre lines tolerate missing rules on first boot (the leading '-').
+ExecStartPre=-/usr/sbin/ip -6 route del 64:ff9b::/96 table 200
+ExecStartPre=-/usr/sbin/ip -6 rule del to 2a0c:b641:b51::/48 lookup 200 prio 900
+ExecStartPre=-/usr/sbin/ip -6 rule del to 2a0c:b641:b50:2::/64 lookup 200 prio 901
+ExecStartPre=-/usr/sbin/ip -6 rule del from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+ExecStartPre=-/usr/sbin/ip -6 rule del from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+ExecStart=/usr/sbin/ip -6 route add 64:ff9b::/96 via 2001:41d0:303:48a::1 dev enX4 table 200
+ExecStart=/usr/sbin/ip -6 rule add to 2a0c:b641:b51::/48 lookup 200 prio 900
+ExecStart=/usr/sbin/ip -6 rule add to 2a0c:b641:b50:2::/64 lookup 200 prio 901
+ExecStart=/usr/sbin/ip -6 rule add from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+ExecStart=/usr/sbin/ip -6 rule add from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+# ExecStop also tolerates already-missing rules. Failed cleanup must not block
+# a later restart from reinstalling the full route leak.
+ExecStop=-/usr/sbin/ip -6 route del 64:ff9b::/96 table 200
+ExecStop=-/usr/sbin/ip -6 rule del to 2a0c:b641:b51::/48 lookup 200 prio 900
+ExecStop=-/usr/sbin/ip -6 rule del to 2a0c:b641:b50:2::/64 lookup 200 prio 901
+ExecStop=-/usr/sbin/ip -6 rule del from 2a0c:b641:b50::/44 to 64:ff9b::/96 lookup main prio 1000
+ExecStop=-/usr/sbin/ip -6 rule del from 64:ff9b::/96 to 2a0c:b641:b50::/44 lookup 200 prio 1001
+
+[Install]
+WantedBy=multi-user.target
