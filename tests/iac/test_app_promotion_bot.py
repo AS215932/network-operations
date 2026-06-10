@@ -7,16 +7,22 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 
 
+def workflow_triggers(workflow: dict) -> dict:
+    return workflow.get("on", workflow.get(True, {}))
+
+
 class AppPromotionBotTest(unittest.TestCase):
     def test_promote_apps_accepts_repository_dispatch(self):
         workflow = yaml.safe_load((REPO / ".github/workflows/promote-apps.yml").read_text())
 
-        triggers = workflow[True]
+        triggers = workflow_triggers(workflow)
         self.assertIn("repository_dispatch", triggers)
         self.assertEqual(triggers["repository_dispatch"]["types"], ["app-promote"])
 
     def test_promote_apps_maps_known_repositories_to_pin_inputs(self):
         workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()
+
+        self.assertIn("ref: ${{ github.sha }}", workflow_text)
 
         expected_cases = {
             "AS215932/noc-agent)": 'noc_agent_sha="$sha"',
