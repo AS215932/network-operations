@@ -137,3 +137,5 @@ class GraphState(TypedDict):
     feature_request_path: NotRequired[str]
     feature_target_repo: NotRequired[str]
     feature_plan_path: NotRequired[str]
+    trace_events: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
+    loop_trace_path: NotRequired[str]

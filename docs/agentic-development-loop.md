@@ -176,6 +176,22 @@ Phase 13 adds feature-intake UX:
   schema by setting `HYRULE_MOCK_LLM=0`;
 - the command still stops before approval, commit, push, or PR creation.
 
+Phase 14 adds loop trace and Pi `/loop` UX hardening:
+
+- every graph node appends a compact trace event to `trace_events`;
+- `loop_trace.json` is written beside `noc_handoff.json` when a handoff
+  directory is configured;
+- trace events include node name, timestamp, input keys, sanitized output
+  summaries, approval state, retry counters, and mutation paths;
+- trace events do not dump full prompts, source file contents, full diffs, or
+  secret-bearing payloads;
+- `/loop` in Pi autodetects the current `hyrule-*` repo from the working
+  directory when possible;
+- `/loop` with no arguments opens one menu for new requests, latest summary,
+  trace location, cleanup, and approval;
+- `/loop --plan` reads the current stored Plan Mode proposed plan and passes it
+  to the engineering loop as the feature request.
+
 Loop stages:
 
 1. Intake.
@@ -495,6 +511,20 @@ In default mock mode this creates a promoted planning artifact under
 add `--mock-mutation "docs/example.md=example content"`. To let role nodes
 propose structured mutations from a configured provider, set `HYRULE_MOCK_LLM=0`
 and provide the required LLM environment variables.
+
+The feature command writes `loop_trace.json` beside `noc_handoff.json`. Inspect
+the trace to see how state flowed through role review, gates, policy, promotion,
+and packaging without exposing full source contents or diffs.
+
+From Pi, use the global extension command:
+
+```text
+/loop Add checkout progress indicators
+```
+
+When no arguments are supplied, `/loop` opens a single menu for starting a new
+request, inspecting the latest trace, cleaning up the latest worktree, or
+approving the latest state artifact.
 
 The CLI is an operator boundary, not a production deploy tool.
 
