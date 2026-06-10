@@ -38,3 +38,11 @@ class AppPromotionBotTest(unittest.TestCase):
         self.assertIn("unsupported promotion source repository", workflow_text)
         self.assertIn('gh api "repos/${repo}/commits/${sha}" --jq .sha', workflow_text)
         self.assertIn("repository_dispatch payload sha must be a 40-character commit SHA", workflow_text)
+
+    def test_promote_apps_uses_app_token_and_accumulates_branch(self):
+        workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()
+
+        self.assertIn("actions/create-github-app-token@v2", workflow_text)
+        self.assertIn("GH_TOKEN: ${{ steps.app-token.outputs.token }}", workflow_text)
+        self.assertIn('git fetch origin "$BRANCH"', workflow_text)
+        self.assertIn('git checkout -B "$BRANCH" "origin/$BRANCH"', workflow_text)
