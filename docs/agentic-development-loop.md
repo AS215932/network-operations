@@ -45,6 +45,170 @@ NOC Agent -> normal feature planning
 NOC Agent -> CI unit-test triage unless production-impacting
 ```
 
+## Internal Loop Structure
+
+At a high level, Pi is the operator control surface, `hyrule-infra` owns the
+LangGraph runtime, and sibling `hyrule-*` repos are mutation targets. The loop
+does not directly commit or push during normal feature intake.
+
+```text
+Operator / Pi
+    |
+    | /loop <prompt>
+    | /loop --plan
+    v
+Pi hyrule-loop extension
+    |
+    | writes request markdown under /tmp
+    | runs: uv run hyrule-engineering-loop feature ...
+    v
+hyrule-infra LangGraph runtime
+    |
+    | reads request + source context
+    | runs role nodes + gates + policy
+    | writes temp workspace and promoted worktree
+    v
+Artifacts
+    |
+    +-- state/<change_id>.json
+    +-- handoff/noc_handoff.json
+    +-- handoff/loop_trace.json
+    +-- worktrees/<repo>-<change_id>/
+```
+
+The current graph topology is:
+
+```text
+START
+  |
+  v
+[classification]
+  |
+  +------------------+------------------+------------------+
+  |                  |                  |                  |
+  v                  v                  v                  v
+[systems]       [devops/netops]   [network]          [security]
+  |                  |                  |                  |
+  +------------------+------------------+------------------+
+                     |
+                     v
+             [implementation]
+                     |
+                     v
+             [workspace_writer]
+                     |
+                     v
+             [gate_execution]
+                     |
+                     v
+             [workspace_cleanup]
+                     |
+                     v
+             <remediation router>
+              |        |          |
+              |        |          +--> retry role nodes when gates fail
+              |        +-------------> [human_signoff] when circuit breaker trips
+              v
+          [repo_adapter]
+              |
+              v
+            [policy]
+              |
+              v
+          [promotion]
+              |
+              v
+          [package_pr]
+              |
+              v
+             END
+```
+
+For app work, only Systems and DevOps/NetOps roles are required by default. For
+network, firewall, Vault, cloud billing, or mixed changes, the classifier fans
+out to the additional senior roles defined in the role matrix.
+
+The main state and artifact flow is:
+
+```text
+feature request text
+  -> GraphState.feature_request
+  -> role prompts + source context
+  -> structured role outputs
+  -> GraphState.proposed_mutations
+  -> temporary workspace files
+  -> gate results / validation_errors
+  -> policy decision
+  -> promoted git worktree diff
+  -> final state + NOC handoff + loop trace
+```
+
+The mutation boundary is intentionally split into phases:
+
+```text
+Feature intake / dry-run
+  - may create temporary workspaces
+  - may create local git worktrees and branches
+  - must stop with approval_decision: pending
+  - must not commit, push, or open PRs
+
+Human inspection
+  - operator reads promoted worktree, state, handoff, and trace
+  - operator either cleans up or approves state
+
+PR publication
+  - separate command
+  - requires approval_decision: approved
+  - requires policy_status: passed
+  - requires promotion_results
+  - commits and pushes generated branch
+  - creates GitHub draft PR only when explicitly requested
+```
+
+The trace answers "what did the agents do?" without exposing all context:
+
+```text
+loop_trace.json
+  |
+  +-- change metadata
+  +-- event_count
+  +-- events[]
+        |
+        +-- node
+        +-- timestamp
+        +-- input_keys
+        +-- state_before
+        |     +-- approval_true
+        |     +-- mutation_paths
+        |     +-- retry_counters
+        |     +-- validation_error_count
+        +-- output
+              +-- approvals, statuses, mutation paths, file lists
+              +-- summarized gate/promotion results
+              +-- no full prompts, source contents, full diffs, or secrets
+```
+
+Pi uses one command as the daily entry point:
+
+```text
+/loop <prompt>
+  -> start feature intake against autodetected hyrule-* repo
+
+/loop --repo hyrule-web <prompt>
+  -> override repo autodetection
+
+/loop --plan
+  -> read latest Plan Mode proposed plan and send it as the request
+
+/loop
+  -> interactive menu:
+       start new request
+       show latest summary
+       show latest trace
+       cleanup latest worktree
+       approve latest state
+```
+
 ## LangGraph Runtime
 
 Phase 1 implements a first runnable LangGraph controller skeleton in
