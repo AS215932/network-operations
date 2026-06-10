@@ -6,12 +6,15 @@ This repository is the production deployment record for `noc-agent`,
 `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web`. App repos do not deploy
 production on merge.
 
-Use **Actions -> promote-apps** with the merged app commit SHAs. That workflow
-opens or updates the promotion PR that pins exact SHAs in inventory. After the
-promotion PR merges, **app-promotion-deploy** automatically calls `apply.yml`
-for the affected playbooks and waits at the GitHub `production` environment
-approval gate. The human operator's normal job is to review the promotion PR,
-merge it, approve the production gate, and review the Icinga snapshot diff.
+After an app repo's `ci` workflow succeeds on `main`, its
+**request-promotion** workflow asks this repo to open or update the promotion PR
+that pins exact SHAs in inventory. **Actions -> promote-apps** remains the
+manual fallback when a promotion request needs to be replayed or coordinated by
+hand. After the promotion PR merges, **app-promotion-deploy** automatically
+calls `apply.yml` for the affected playbooks and waits at the GitHub
+`production` environment approval gate. The human operator's normal job is to
+review the promotion PR, merge it, approve the production gate, and review the
+Icinga snapshot diff.
 
 Full runbook: [docs/ci/deploy-runbook.md](docs/ci/deploy-runbook.md).
 

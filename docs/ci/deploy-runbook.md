@@ -26,23 +26,32 @@ inventory:
 - `ansible/inventory/host_vars/web.yml`: `hyrule_web_version`
 
 Use the promotion PR template for coordinated deploys. Merge app PRs first,
-update the promotion PR to the exact merged app SHAs, run a dry-run from the
-promotion branch, then merge and apply from `network-operations/main`.
+then let the app repo request or manually update a promotion PR with the exact
+merged app SHAs. Production deploys only happen from `network-operations/main`
+after the promotion PR merges and the GitHub `production` environment gate is
+approved.
 
 The normal automated path is:
 
 1. Merge app PRs after app CI is green.
-2. Run **Actions -> promote-apps** in this repository and paste the merged app
-   SHAs into the relevant inputs.
-3. Review the generated promotion PR. It updates the app pins and records
-   compare links plus rollback SHAs.
-4. Merge the promotion PR after checks pass.
-5. **app-promotion-deploy** starts automatically on the `main` push when an app
+2. The app repo's **request-promotion** workflow runs after its `ci` workflow
+   succeeds on `main`. It uses the AS215932 Promotion Bot GitHub App to send
+   `repository_dispatch` to this repository.
+3. **promote-apps** opens or updates the promotion PR with app pins, compare
+   links, and rollback SHAs.
+4. Review the generated promotion PR.
+5. Merge the promotion PR after checks pass.
+6. **app-promotion-deploy** starts automatically on the `main` push when an app
    pin file changed. It calls `apply.yml` for the affected playbook(s).
-6. Approve the GitHub `production` environment gate. This is the intended
+7. Approve the GitHub `production` environment gate. This is the intended
    manual deploy step.
-7. Review the workflow summary: app pins, compare links, and Icinga snapshot
+8. Review the workflow summary: app pins, compare links, and Icinga snapshot
    diff.
+
+Manual fallback: run **Actions -> promote-apps** in this repository and paste
+the merged app SHAs into the relevant inputs. Use this when a dispatch failed,
+when a coordinated promotion should pin multiple app repos at once, or when an
+operator intentionally wants to replay a promotion request.
 
 `apply.yml` itself is not a push-triggered workflow. It runs when either:
 

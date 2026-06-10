@@ -2,6 +2,8 @@
 name: promote-apps
 
 on:
+  repository_dispatch:
+    types: [app-promote]
   workflow_dispatch:
     inputs:
       title:
@@ -50,16 +52,89 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ github.sha }}
+
+      - name: Resolve promotion request
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_REPOSITORY: ${{ github.event.client_payload.repository }}
+          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+          DISPATCH_TITLE: ${{ github.event.client_payload.title }}
+          DISPATCH_IMPACT: ${{ github.event.client_payload.impact }}
+          INPUT_TITLE: ${{ inputs.title }}
+          INPUT_IMPACT: ${{ inputs.impact }}
+          INPUT_NOC_AGENT_SHA: ${{ inputs.noc_agent_sha }}
+          INPUT_HYRULE_MCP_SHA: ${{ inputs.hyrule_mcp_sha }}
+          INPUT_HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
+          INPUT_HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          title="${INPUT_TITLE:-Promote app SHAs}"
+          impact="${INPUT_IMPACT:-Automated app SHA promotion.}"
+          noc_agent_sha="${INPUT_NOC_AGENT_SHA:-}"
+          hyrule_mcp_sha="${INPUT_HYRULE_MCP_SHA:-}"
+          hyrule_cloud_sha="${INPUT_HYRULE_CLOUD_SHA:-}"
+          hyrule_web_sha="${INPUT_HYRULE_WEB_SHA:-}"
+
+          if [ "$EVENT_NAME" = "repository_dispatch" ]; then
+            repo="${DISPATCH_REPOSITORY:-}"
+            sha="${DISPATCH_SHA:-}"
+            sha="${sha,,}"
+
+            if ! [[ "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "::error::repository_dispatch payload sha must be a 40-character commit SHA"
+              exit 1
+            fi
+
+            case "$repo" in
+              AS215932/noc-agent)
+                noc_agent_sha="$sha"
+                ;;
+              AS215932/hyrule-mcp)
+                hyrule_mcp_sha="$sha"
+                ;;
+              AS215932/hyrule-cloud)
+                hyrule_cloud_sha="$sha"
+                ;;
+              AS215932/hyrule-web)
+                hyrule_web_sha="$sha"
+                ;;
+              *)
+                echo "::error::unsupported promotion source repository: ${repo:-<missing>}"
+                exit 1
+                ;;
+            esac
+
+            canonical="$(gh api "repos/${repo}/commits/${sha}" --jq .sha)"
+            if [ "$canonical" != "$sha" ]; then
+              echo "::error::commit ${sha} was not found in ${repo}"
+              exit 1
+            fi
+
+            title="${DISPATCH_TITLE:-Promote ${repo#AS215932/} ${sha:0:7}}"
+            impact="${DISPATCH_IMPACT:-Automated promotion request from ${repo}@${sha}.}"
+          fi
+
+          {
+            printf 'title=%s\n' "$title"
+            printf 'impact=%s\n' "$impact"
+            printf 'noc_agent_sha=%s\n' "$noc_agent_sha"
+            printf 'hyrule_mcp_sha=%s\n' "$hyrule_mcp_sha"
+            printf 'hyrule_cloud_sha=%s\n' "$hyrule_cloud_sha"
+            printf 'hyrule_web_sha=%s\n' "$hyrule_web_sha"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Update app pins
         env:
-          PROMOTION_TITLE: ${{ inputs.title }}
-          PROMOTION_IMPACT: ${{ inputs.impact }}
-          NOC_AGENT_SHA: ${{ inputs.noc_agent_sha }}
-          HYRULE_MCP_SHA: ${{ inputs.hyrule_mcp_sha }}
-          HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
-          HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
+          PROMOTION_TITLE: ${{ steps.resolve.outputs.title }}
+          PROMOTION_IMPACT: ${{ steps.resolve.outputs.impact }}
+          NOC_AGENT_SHA: ${{ steps.resolve.outputs.noc_agent_sha }}
+          HYRULE_MCP_SHA: ${{ steps.resolve.outputs.hyrule_mcp_sha }}
+          HYRULE_CLOUD_SHA: ${{ steps.resolve.outputs.hyrule_cloud_sha }}
+          HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
         run: |
           scripts/ci/promote-app-pins.py \
             --title "$PROMOTION_TITLE" \
@@ -73,10 +148,22 @@ jobs:
       - name: Validate pins
         run: scripts/ci/iac-static.sh
 
+      - name: Check promotion diff
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No app pin changes requested; promotion PR not needed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Commit promotion branch
+        if: steps.diff.outputs.changed == 'true'
         env:
           BRANCH: promotion/app-sha-pins
-          COMMIT_MESSAGE: ${{ inputs.title }}
+          COMMIT_MESSAGE: ${{ steps.resolve.outputs.title }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -87,10 +174,11 @@ jobs:
           git push --force-with-lease origin "$BRANCH"
 
       - name: Open or update promotion PR
+        if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: promotion/app-sha-pins
-          PR_TITLE: ${{ inputs.title }}
+          PR_TITLE: ${{ steps.resolve.outputs.title }}
         run: |
           set -euo pipefail
           existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
