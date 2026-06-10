@@ -1,7 +1,7 @@
 ---
 # web — hyrule-web (uvicorn :8080 hyrule.host) + nginx (:8081 as215932.net).
 
-hyrule_web_version: 45d7bb6964c686188a49da032de785be55e95a56
+hyrule_web_version: 7720f083320d03eb5c62bfdd8be329b6fe82d7e2
 
 firewall_extra_rules:
   - { proto: tcp, dport: 8080, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "hyrule-web upstream from proxy/mon" }
