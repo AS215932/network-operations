@@ -15,6 +15,7 @@ from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.nodes import ALL_ROLES
 from hyrule_engineering_loop.operator_harness import OperatorHarnessError, run_operator_dry_run
 from hyrule_engineering_loop.pr import PRBoundaryError, publish_promoted_worktrees
+from hyrule_engineering_loop.promotion import rollback_promotions
 from hyrule_engineering_loop.state import ChangeClass, GraphState
 
 DEFAULT_STATE_DIR = Path(".engineering-loop-state")
@@ -51,6 +52,10 @@ def _write_state(path: Path, state: dict[str, Any]) -> None:
 
 def _read_state(path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
+
+
+def _write_state_file(path: Path, state: dict[str, Any]) -> None:
+    path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _parse_key_value(items: list[str] | None, *, option: str) -> dict[str, str]:
@@ -146,8 +151,39 @@ def approve_command(args: argparse.Namespace) -> int:
     state = _read_state(path)
     state["approval_decision"] = "approved"
     state["requires_human_signoff"] = False
-    _write_state(path, state)
+    _write_state_file(path, state)
     print(f"[CLI] approved state artifact: {path}")
+    return 0
+
+
+def state_approve_command(args: argparse.Namespace) -> int:
+    path = Path(args.state_path).expanduser().resolve()
+    state = _read_state(path)
+    state["approval_decision"] = "approved"
+    state["requires_human_signoff"] = False
+    _write_state_file(path, state)
+    print(json.dumps({"state_path": str(path), "approval_decision": "approved"}, indent=2, sort_keys=True))
+    return 0
+
+
+def state_cleanup_command(args: argparse.Namespace) -> int:
+    path = Path(args.state_path).expanduser().resolve()
+    state = _read_state(path)
+    promotions = list(state.get("promotion_results", []))
+    rollback_promotions(promotions)
+    state["promotion_cleanup_performed"] = True
+    _write_state_file(path, state)
+    print(
+        json.dumps(
+            {
+                "state_path": str(path),
+                "promotion_cleanup_performed": True,
+                "promotion_count": len(promotions),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
@@ -208,6 +244,7 @@ def operator_dry_run_command(args: argparse.Namespace) -> int:
     summary = {
         "state_path": result["state_path"],
         "handoff_path": result["handoff_path"],
+        "trace_path": result["trace_path"],
         "remote_path": result["remote_path"],
         "branch": result["branch"],
         "remote_commit": result["remote_commit"],
@@ -233,6 +270,7 @@ def sibling_canary_command(args: argparse.Namespace) -> int:
     summary = {
         "state_path": result["state_path"],
         "handoff_path": result["handoff_path"],
+        "trace_path": result["trace_path"],
         "repo_name": result["repo_name"],
         "canary_path": result["canary_path"],
         "cleanup_performed": result["cleanup_performed"],
@@ -266,6 +304,7 @@ def feature_command(args: argparse.Namespace) -> int:
     summary = {
         "state_path": result["state_path"],
         "handoff_path": result["handoff_path"],
+        "trace_path": result["trace_path"],
         "repo_name": result["repo_name"],
         "promotion_count": result["promotion_count"],
         "requires_human_signoff": result["requires_human_signoff"],
@@ -326,6 +365,14 @@ def build_parser() -> argparse.ArgumentParser:
     approve_parser = subparsers.add_parser("approve", help="record manual approval in a state artifact")
     approve_parser.add_argument("change_id")
     approve_parser.set_defaults(func=approve_command)
+
+    state_approve_parser = subparsers.add_parser("state-approve", help="approve a state artifact by path")
+    state_approve_parser.add_argument("--state-path", required=True)
+    state_approve_parser.set_defaults(func=state_approve_command)
+
+    state_cleanup_parser = subparsers.add_parser("state-cleanup", help="rollback promoted worktrees from a state artifact")
+    state_cleanup_parser.add_argument("--state-path", required=True)
+    state_cleanup_parser.set_defaults(func=state_cleanup_command)
 
     pr_parser = subparsers.add_parser("pr", help="commit and push approved promoted worktrees")
     pr_parser.add_argument("change_id")

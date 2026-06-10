@@ -299,3 +299,28 @@ uv run hyrule-engineering-loop feature ADD_PAYMENT_RETRY \
   --allow docs \
   --source README.md
 ```
+
+## Phase 14 Trace And Pi Loop UX
+
+Every graph run that reaches packaging or human sign-off should emit a compact
+trace artifact when a handoff directory is configured:
+
+- `loop_trace.json` is written beside `noc_handoff.json`;
+- each event includes node, timestamp, input keys, sanitized output summary,
+  approval state, retry counters, and mutation paths;
+- full source context, prompts, diffs, and secret-like values must not be
+  dumped into the trace;
+- package/human-signoff nodes include the trace path in final graph state.
+
+Pi integration keeps one slash command:
+
+- `/loop <prompt>` starts a feature-intake run;
+- `/loop --repo hyrule-web <prompt>` overrides autodetection;
+- `/loop --plan` reads the latest stored Plan Mode proposed plan;
+- `/loop` with no arguments opens a menu for starting a request, showing the
+  latest summary, showing the latest trace, cleaning up the latest worktree,
+  or approving the latest state artifact.
+
+Repo-local config files are optional overrides only. The default behavior is to
+autodetect the current `hyrule-*` repo from Pi's working directory and fall back
+to the extension default when the current directory is not inside a target repo.

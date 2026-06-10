@@ -145,6 +145,7 @@ def run_sibling_repo_canary(
         "repo_name": repo_name,
         "canary_path": CANARY_PATH,
         "handoff_path": result.get("noc_handoff_path"),
+        "trace_path": result.get("loop_trace_path"),
         "promotion_results": result.get("promotion_results", []),
         "cleanup_performed": cleanup_performed,
         "final_state": result,

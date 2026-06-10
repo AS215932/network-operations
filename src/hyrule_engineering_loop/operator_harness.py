@@ -152,6 +152,7 @@ def run_operator_dry_run(
         "repo_path": str(repo_path),
         "remote_path": str(remote_path),
         "handoff_path": published_state.get("noc_handoff_path"),
+        "trace_path": published_state.get("loop_trace_path"),
         "branch": first_result["branch"],
         "remote_commit": _remote_branch_commit(remote_path, str(first_result["branch"])),
         "pr_results": pr_results,

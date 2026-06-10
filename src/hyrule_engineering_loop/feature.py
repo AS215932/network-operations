@@ -198,6 +198,7 @@ def run_feature_intake(
     return {
         "state_path": str(state_path),
         "handoff_path": final_state.get("noc_handoff_path"),
+        "trace_path": final_state.get("loop_trace_path"),
         "repo_name": repo_name,
         "promotion_count": len(final_state.get("promotion_results", [])),
         "requires_human_signoff": final_state.get("requires_human_signoff", False),
