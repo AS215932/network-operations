@@ -1,5 +1,6 @@
 ---
 name: apply
+run-name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
 
 # Manual gated deployment. Run with:
 #   gh workflow run apply.yml -F playbook=firewall -F limit=cr1-de1 -F dry_run=true
@@ -91,6 +92,7 @@ concurrency:
 
 jobs:
   apply:
+    name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     # Real applies pause on the protected `production` environment. Dry-runs
     # must stay ungated so promotion PR validation can be automated.
