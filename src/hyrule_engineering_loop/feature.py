@@ -63,24 +63,6 @@ def _resolve_repo(workspace_root: Path, repo_name: str) -> Path:
     return repo_path
 
 
-def _scaffold_mutation(
-    *,
-    repo_name: str,
-    change_id: str,
-    request_text: str,
-    plan_path: str,
-) -> dict[str, str]:
-    content = (
-        "# Engineering Loop Feature Intake\n\n"
-        f"- change_id: {change_id}\n"
-        f"- repo: {repo_name}\n"
-        "- status: scaffolded\n\n"
-        "## Request\n\n"
-        f"{request_text.rstrip()}\n"
-    )
-    return {f"{repo_name}:{plan_path}": content}
-
-
 def build_feature_state(
     *,
     change_id: str,
@@ -106,16 +88,6 @@ def build_feature_state(
     active_plan_path = plan_path or f"docs/engineering-loop/{_slug(change_id)}.md"
 
     mutations = _parse_mutations(repo_name, mock_mutations or [])
-    if scaffold_plan and not mutations:
-        mutations.update(
-            _scaffold_mutation(
-                repo_name=repo_name,
-                change_id=change_id,
-                request_text=request_text,
-                plan_path=active_plan_path,
-            )
-        )
-
     repo_source_files = [f"{repo_name}:{path}" for path in source_files or []]
     if not repo_source_files:
         repo_source_files = [f"{repo_name}:README.md"]
@@ -155,6 +127,7 @@ def build_feature_state(
         "feature_request_path": str(request_path.expanduser().resolve()),
         "feature_target_repo": repo_name,
         "feature_plan_path": active_plan_path,
+        "feature_scaffold_plan": scaffold_plan,
         "gate_commands": _parse_gate_command(gate_command),
     }
     if model_policy_file is not None:
@@ -211,5 +184,6 @@ def run_feature_intake(
         "policy_status": final_state.get("policy_status", "not_run"),
         "promotion_status": final_state.get("promotion_status", "not_requested"),
         "gate_status": final_state.get("gate_status", "not_run"),
+        "diff_preview": final_state.get("diff_preview", []),
         "final_state": final_state,
     }

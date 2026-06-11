@@ -720,6 +720,19 @@ The feature command writes `loop_trace.json` beside `noc_handoff.json`. Inspect
 the trace to see how state flowed through role review, gates, policy, promotion,
 and packaging without exposing full source contents or diffs.
 
+Phase 17 adds a dedicated implementation writer stage:
+
+- default feature intake scaffolding is produced by the writer node, not by
+  preloaded state mutations;
+- writer outputs use structured mutation operations: `create` and `replace`;
+- `create` refuses to overwrite an existing promoted worktree file;
+- `replace` refuses to target a file that does not exist;
+- multiple file mutations for one repo are promoted into one branch-backed
+  worktree;
+- local gates are selected from changed paths when the operator did not supply
+  explicit gates;
+- feature summaries include `diff_preview` for quick Pi/CLI review.
+
 From Pi, use the global extension command:
 
 ```text

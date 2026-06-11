@@ -5,14 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable, cast
 
-from hyrule_engineering_loop.gate_runner import run_gate_commands
+from hyrule_engineering_loop.gate_runner import run_gate_commands, select_gate_commands_for_mutations
 from hyrule_engineering_loop.handoff import write_noc_handoff
-from hyrule_engineering_loop.llm import invoke_role_review
+from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review
 from hyrule_engineering_loop.model_policy import select_model_for_role
 from hyrule_engineering_loop.policy import validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
-from hyrule_engineering_loop.promotion import PromotionError, promote_mutations
-from hyrule_engineering_loop.repo_adapter import RepoAdapterError, resolve_repositories_for_state
+from hyrule_engineering_loop.promotion import PromotionError, diff_preview_from_results, promote_mutations
+from hyrule_engineering_loop.repo_adapter import (
+    RepoAdapterError,
+    build_repo_context_bundle,
+    resolve_repositories_for_state,
+)
 from hyrule_engineering_loop.state import ChangeClass, GraphState, RoleApprovals, RoleName
 from hyrule_engineering_loop.trace import trace_event, with_trace, write_loop_trace
 from hyrule_engineering_loop.workspace import cleanup_workspace, write_mutations_to_workspace
@@ -180,6 +184,15 @@ def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
         )
 
     mutations = {mutation.path: mutation.content for mutation in review.proposed_mutations}
+    operations = [
+        {
+            "path": mutation.path,
+            "content": mutation.content,
+            "operation": mutation.operation,
+            "source": role,
+        }
+        for mutation in review.proposed_mutations
+    ]
     result: StateUpdate = {
         "role_approvals": update,
         "prompt_artifacts": {role: system_prompt},
@@ -196,6 +209,7 @@ def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
     }
     if mutations:
         result["proposed_mutations"] = mutations
+        result["proposed_mutation_operations"] = operations
     if errors:
         result["validation_errors"] = errors
         result["retry_counters"] = _increment_counter(state["retry_counters"], f"llm_{role}")
@@ -271,22 +285,102 @@ def virtual_lab_chaos_node(state: GraphState) -> StateUpdate:
     return _role_review_update("virtual_lab_chaos", state)
 
 
+def _scaffold_feature_response(state: GraphState) -> RoleReviewOutput | None:
+    if not state.get("feature_request") or not state.get("feature_scaffold_plan", False):
+        return None
+    target_repo = state.get("feature_target_repo")
+    plan_path = state.get("feature_plan_path")
+    if not target_repo or not plan_path:
+        return None
+
+    content = (
+        "# Engineering Loop Feature Intake\n\n"
+        f"- change_id: {state['change_id']}\n"
+        f"- repo: {target_repo}\n"
+        "- status: scaffolded\n\n"
+        "## Request\n\n"
+        f"{state['feature_request'].rstrip()}\n"
+    )
+    return RoleReviewOutput.model_validate(
+        {
+            "approved": True,
+            "notes": "Deterministic implementation writer scaffolded the feature request.",
+            "proposed_mutations": [
+                {
+                    "path": f"{target_repo}:{plan_path}",
+                    "content": content,
+                    "operation": "create",
+                }
+            ],
+        }
+    )
+
+
+def _implementation_writer_response(state: GraphState) -> RoleReviewOutput | None:
+    mock = state.get("llm_mock_responses", {}).get("implementation_writer")
+    if mock is not None:
+        return RoleReviewOutput.model_validate(mock)
+    if state["proposed_mutations"]:
+        return None
+    return _scaffold_feature_response(state)
+
+
+def _mutation_operations_from_writer(review: RoleReviewOutput, *, source: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": mutation.path,
+            "content": mutation.content,
+            "operation": mutation.operation,
+            "source": source,
+        }
+        for mutation in review.proposed_mutations
+    ]
+
+
 def implementation_node(state: GraphState) -> StateUpdate:
-    print("[Node: Implementation Tranche] Preparing deterministic mock implementation tranche...")
+    print("[Node: Implementation Writer] Preparing implementation tranche...")
+    repo_context = build_repo_context_bundle(state)
     mutations = dict(state["proposed_mutations"])
-    mutations.setdefault("hyrule-infra", f"mock diff for {state['change_id']}")
-    update = {"proposed_mutations": mutations}
+    operations: list[dict[str, Any]] = []
+    writer = _implementation_writer_response(state)
+    if writer is not None:
+        for mutation in writer.proposed_mutations:
+            mutations[mutation.path] = mutation.content
+        operations.extend(_mutation_operations_from_writer(writer, source="implementation_writer"))
+    elif not mutations and not state.get("feature_request"):
+        mutations.setdefault("hyrule-infra", f"mock diff for {state['change_id']}")
+        operations.append(
+            {
+                "path": "hyrule-infra",
+                "content": mutations["hyrule-infra"],
+                "operation": "create",
+                "source": "legacy_mock",
+            }
+        )
+
+    update: StateUpdate = {
+        "proposed_mutations": mutations,
+        "repo_context_bundle": repo_context,
+        "implementation_writer_status": "complete" if writer is not None else "not_required",
+    }
+    if operations:
+        update["proposed_mutation_operations"] = operations
+    if not state.get("gate_commands") and mutations:
+        update["gate_commands"] = select_gate_commands_for_mutations(mutations)
     return with_trace(
         "implementation",
         state,
         update,
-        input_keys=["proposed_mutations", "change_id"],
+        input_keys=["proposed_mutations", "feature_request", "repo_context_bundle", "change_id"],
     )
 
 
 def workspace_writer_node(state: GraphState) -> StateUpdate:
     print("[Node: Workspace Writer] Applying proposed mutations to temporary workspace...")
-    root, written = write_mutations_to_workspace(state["proposed_mutations"])
+    root, written = write_mutations_to_workspace(
+        state["proposed_mutations"],
+        state.get("proposed_mutation_operations"),
+    )
     update = {
         "workspace_root": str(root),
         "workspace_written_files": written,
@@ -429,6 +523,7 @@ def promotion_node(state: GraphState) -> StateUpdate:
     update = cast(StateUpdate, {
         "promotion_status": "passed",
         "promotion_results": results,
+        "diff_preview": diff_preview_from_results(results),
         "requires_human_signoff": bool(results),
     })
     return with_trace(

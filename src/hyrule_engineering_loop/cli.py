@@ -340,6 +340,7 @@ def feature_command(args: argparse.Namespace) -> int:
         "promotion_status": result["promotion_status"],
         "gate_status": result["gate_status"],
         "model_summary": _model_summary_from_state(result["final_state"]),
+        "diff_preview": result["diff_preview"],
     }
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
