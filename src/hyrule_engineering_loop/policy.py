@@ -140,6 +140,12 @@ def _validate_gate_commands(state: GraphState, policy: dict[str, Any]) -> list[s
     return violations
 
 
+def validate_gate_commands_for_state(state: GraphState, policy: dict[str, Any] | None = None) -> list[str]:
+    """Return policy violations for gate commands before executing them."""
+    active_policy = policy or load_policy(state.get("policy_file"))
+    return _validate_gate_commands(state, active_policy)
+
+
 def _validate_promotion(state: GraphState, policy: dict[str, Any]) -> list[str]:
     defaults = _defaults(policy)
     violations: list[str] = []

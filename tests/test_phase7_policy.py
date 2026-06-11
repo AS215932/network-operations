@@ -20,7 +20,7 @@ def _write_policy(path: Path, overrides: dict[str, Any] | None = None) -> Path:
             "max_file_bytes": 100,
             "denied_path_globs": [".env", "*.key", "secrets/**", "**/secrets/**"],
             "denied_content_patterns": ["PRIVATE KEY", "(?i)token\\s*="],
-            "allowed_gate_commands": ["python"],
+            "allowed_gate_commands": ["python", "python3"],
             "protected_branch_prefixes": ["main", "prod"],
             "allowed_pr_remotes": ["origin"],
             "allowed_handoff_dirs": [str(path.parent)],
@@ -124,6 +124,26 @@ def test_policy_node_stops_graph_before_promotion(tmp_path: Path) -> None:
     assert final_state["policy_status"] == "failed"
     assert final_state["requires_human_signoff"] is True
     assert "promotion_status" not in final_state
+
+
+def test_policy_blocks_gate_command_before_execution(tmp_path: Path) -> None:
+    policy_path = _write_policy(tmp_path / "policy.yml")
+    state = _base_state(policy_path)
+    state["llm_mock_responses"] = {
+        "systems_engineer": {
+            "approved": True,
+            "proposed_mutations": [{"path": "docs/safe.txt", "content": "safe\n"}],
+        },
+        "devops_netops": {"approved": True},
+    }
+    state["gate_commands"] = [["bash", "-lc", "exit 99"]]
+
+    final_state = build_graph().invoke(state)
+
+    assert final_state["policy_status"] == "failed"
+    assert final_state["requires_human_signoff"] is True
+    assert not any(event["node"] == "gate_execution" for event in final_state["trace_events"])
+    assert "workspace_root" not in final_state
 
 
 def test_policy_passes_safe_graph_state(tmp_path: Path) -> None:

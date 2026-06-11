@@ -10,7 +10,7 @@ from hyrule_engineering_loop.gate_runner import run_gate_commands, select_gate_c
 from hyrule_engineering_loop.handoff import write_noc_handoff
 from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review, mock_llm_enabled
 from hyrule_engineering_loop.model_policy import select_model_for_node, select_model_for_role
-from hyrule_engineering_loop.policy import validate_graph_state
+from hyrule_engineering_loop.policy import validate_gate_commands_for_state, validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
 from hyrule_engineering_loop.promotion import PromotionError, diff_preview_from_results, promote_mutations
 from hyrule_engineering_loop.repo_adapter import (
@@ -470,6 +470,29 @@ def gate_execution_node(state: GraphState) -> StateUpdate:
         "gate_status": "failed",
     })
     return with_trace("gate_execution", state, update, input_keys=["change_id", "gate_commands", "workspace_root"])
+
+
+def gate_policy_node(state: GraphState) -> StateUpdate:
+    print("[Node: Gate Policy] Enforcing validation command policy...")
+    violations = validate_gate_commands_for_state(state)
+    if not violations:
+        update = cast(StateUpdate, {"policy_status": "passed"})
+        return with_trace("gate_policy", state, update, input_keys=["gate_commands", "policy_file"])
+
+    update = cast(StateUpdate, {
+        "policy_status": "failed",
+        "requires_human_signoff": True,
+        "validation_errors": [
+            {
+                "node": "gate_policy",
+                "domain": "security",
+                "message": violation,
+            }
+            for violation in violations
+        ],
+        "retry_counters": _increment_counter(state["retry_counters"], "policy"),
+    })
+    return with_trace("gate_policy", state, update, input_keys=["gate_commands", "policy_file"])
 
 
 def workspace_cleanup_node(state: GraphState) -> StateUpdate:

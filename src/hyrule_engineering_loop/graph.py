@@ -14,6 +14,7 @@ from hyrule_engineering_loop.nodes import (
     devops_netops_node,
     finops_integrity_node,
     gate_execution_node,
+    gate_policy_node,
     implementation_node,
     network_architect_node,
     package_pr_node,
@@ -37,6 +38,7 @@ Route = Literal[
     "security_auditor",
     "finops_integrity",
     "virtual_lab_chaos",
+    "workspace_writer",
     "policy",
     "repo_adapter",
     "promotion",
@@ -92,8 +94,15 @@ def repo_adapter_router(state: GraphState) -> Route:
     return "policy"
 
 
+def pre_gate_policy_router(state: GraphState) -> Route:
+    """Route pre-gate policy outcome to gate execution or human sign-off."""
+    if state.get("policy_status") == "failed":
+        return "human_signoff"
+    return "workspace_writer"
+
+
 def policy_router(state: GraphState) -> Route:
-    """Route policy outcome to promotion or human sign-off."""
+    """Route post-adapter policy outcome to promotion or human sign-off."""
     if state.get("policy_status") == "failed":
         return "human_signoff"
     return "promotion"
@@ -124,6 +133,7 @@ def build_graph(
     graph.add_node("finops_integrity", finops_integrity_node)
     graph.add_node("virtual_lab_chaos", virtual_lab_chaos_node)
     graph.add_node("implementation", implementation_node)
+    graph.add_node("pre_gate_policy", gate_policy_node)
     graph.add_node("workspace_writer", workspace_writer_node)
     graph.add_node("gate_execution", gate_execution_node)
     graph.add_node("workspace_cleanup", workspace_cleanup_node)
@@ -150,7 +160,15 @@ def build_graph(
     for role_node in ROLE_NODE_NAMES.values():
         graph.add_edge(role_node, "implementation")
 
-    graph.add_edge("implementation", "workspace_writer")
+    graph.add_edge("implementation", "pre_gate_policy")
+    graph.add_conditional_edges(
+        "pre_gate_policy",
+        pre_gate_policy_router,
+        {
+            "workspace_writer": "workspace_writer",
+            "human_signoff": "human_signoff",
+        },
+    )
     graph.add_edge("workspace_writer", "gate_execution")
     graph.add_edge("gate_execution", "workspace_cleanup")
     graph.add_conditional_edges(
