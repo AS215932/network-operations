@@ -6,7 +6,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from hyrule_engineering_loop.state import GraphState
 
@@ -150,6 +150,104 @@ def render_loop_trace(state: GraphState) -> dict[str, Any]:
         "event_count": len(state.get("trace_events", [])),
         "events": state.get("trace_events", []),
     }
+
+
+def load_loop_trace(path: str | Path) -> dict[str, Any]:
+    """Load a rendered loop trace artifact."""
+    resolved = Path(path).expanduser().resolve()
+    return cast(dict[str, Any], json.loads(resolved.read_text(encoding="utf-8")))
+
+
+def summarize_loop_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact human-facing summary of trace flow and model usage."""
+    raw_events = trace.get("events", [])
+    events = [event for event in raw_events if isinstance(event, dict)]
+    nodes = [str(event.get("node")) for event in events if event.get("node")]
+    role_models: list[dict[str, Any]] = []
+    validation_errors: list[dict[str, Any]] = []
+    mutation_paths: set[str] = set()
+
+    for event in events:
+        output = event.get("output")
+        if not isinstance(output, dict):
+            continue
+        llm_outputs = output.get("llm_outputs")
+        if isinstance(llm_outputs, list):
+            for item in llm_outputs:
+                if not isinstance(item, dict):
+                    continue
+                model_selection = item.get("model_selection")
+                role_models.append(
+                    {
+                        "role": item.get("role"),
+                        "approved": item.get("approved"),
+                        "model_selection": model_selection if isinstance(model_selection, dict) else {},
+                    }
+                )
+                for path in item.get("proposed_mutation_paths", []):
+                    if isinstance(path, str):
+                        mutation_paths.add(path)
+        errors = output.get("validation_errors")
+        if isinstance(errors, list):
+            validation_errors.extend(error for error in errors if isinstance(error, dict))
+        proposed = output.get("proposed_mutations")
+        if isinstance(proposed, dict):
+            for path in proposed.get("paths", []):
+                if isinstance(path, str):
+                    mutation_paths.add(path)
+
+    return {
+        "change": trace.get("change", {}),
+        "event_count": trace.get("event_count", len(events)),
+        "nodes": nodes,
+        "role_models": role_models,
+        "validation_errors": validation_errors,
+        "mutation_paths": sorted(mutation_paths),
+    }
+
+
+def format_loop_trace_summary(trace: dict[str, Any]) -> str:
+    """Format a compact trace summary for CLI and Pi display."""
+    summary = summarize_loop_trace(trace)
+    change = summary["change"] if isinstance(summary["change"], dict) else {}
+    lines = [
+        f"change_id: {change.get('change_id', 'unknown')}",
+        f"change_class: {change.get('change_class', 'unknown')}",
+        f"risk_level: {change.get('risk_level', 'unknown')}",
+        f"event_count: {summary['event_count']}",
+        f"nodes: {' -> '.join(summary['nodes'])}",
+    ]
+    role_models = summary["role_models"]
+    if role_models:
+        lines.append("role_models:")
+        for item in role_models:
+            if not isinstance(item, dict):
+                continue
+            model_selection = item.get("model_selection")
+            model = model_selection if isinstance(model_selection, dict) else {}
+            lines.append(
+                "  - "
+                f"{item.get('role')}: "
+                f"{model.get('provider', 'unknown')}/"
+                f"{model.get('model', 'unknown')} "
+                f"tier={model.get('tier', 'unknown')} "
+                f"approved={item.get('approved')}"
+            )
+    mutation_paths = summary["mutation_paths"]
+    if mutation_paths:
+        lines.append(f"mutation_paths: {', '.join(mutation_paths)}")
+    validation_errors = summary["validation_errors"]
+    if validation_errors:
+        lines.append("validation_errors:")
+        for error in validation_errors:
+            if not isinstance(error, dict):
+                continue
+            lines.append(
+                "  - "
+                f"{error.get('domain', 'unknown')}: "
+                f"{error.get('message', '')}"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def write_loop_trace(state: GraphState) -> str | None:

@@ -9,11 +9,19 @@ from typing import Any, Literal
 
 import yaml
 
-from hyrule_engineering_loop.state import GraphState, RoleName
+from hyrule_engineering_loop.state import GraphState, RiskLevel, RoleName
 
 Tier = Literal["cheap", "mid", "strong", "frontier"]
 TIER_ORDER: tuple[Tier, ...] = ("cheap", "mid", "strong", "frontier")
 DEFAULT_MODEL_POLICY_PATH = Path("model-policy.yml")
+MODEL_POLICY_ROLES: tuple[RoleName, ...] = (
+    "network_architect",
+    "systems_engineer",
+    "devops_netops",
+    "security_auditor",
+    "finops_integrity",
+    "virtual_lab_chaos",
+)
 
 
 @dataclass(frozen=True)
@@ -73,6 +81,11 @@ def _load_policy(path: str | Path | None = None) -> tuple[dict[str, Any], str | 
     return loaded, str(policy_path)
 
 
+def load_model_policy(path: str | Path | None = None) -> tuple[dict[str, Any], str | None]:
+    """Load the configured model policy for operator-facing commands."""
+    return _load_policy(path)
+
+
 def _mapping(raw: Any) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
@@ -105,6 +118,33 @@ def _retry_failure_count(role: RoleName, state: GraphState) -> int:
     counters = state["retry_counters"]
     keys = [role, f"llm_{role}"]
     return max((counters.get(key, 0) for key in keys), default=0)
+
+
+def _sample_state(
+    *,
+    risk_level: RiskLevel,
+    policy_path: str | None,
+    retry_counters: dict[str, int] | None = None,
+) -> GraphState:
+    state: GraphState = {
+        "change_id": "MODEL_POLICY_PREVIEW",
+        "change_class": "mixed",
+        "risk_level": risk_level,
+        "customer_impact": "none",
+        "source_of_truth_files": [],
+        "proposed_mutations": {},
+        "mcp_schema_breaking": False,
+        "emulated_lab_verified": "not_applicable",
+        "validation_errors": [],
+        "role_approvals": {role: False for role in MODEL_POLICY_ROLES},
+        "retry_counters": retry_counters or {},
+        "rollback_plan": "",
+        "noc_handoff_metadata": {},
+        "requires_human_signoff": False,
+    }
+    if policy_path is not None:
+        state["model_policy_file"] = policy_path
+    return state
 
 
 def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
@@ -149,6 +189,108 @@ def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
         reason=reason,
         policy_path=policy_path,
     )
+
+
+def provider_env_names(provider: str) -> dict[str, list[str]]:
+    """Return relevant environment variable names for a provider."""
+    normalized = provider.lower()
+    if normalized == "openrouter":
+        return {
+            "api_key": ["HYRULE_LLM_API_KEY", "OPENROUTER_API_KEY"],
+            "base_url": ["HYRULE_LLM_BASE_URL"],
+        }
+    if normalized == "openai":
+        return {
+            "api_key": ["HYRULE_LLM_API_KEY", "OPENAI_API_KEY"],
+            "base_url": ["HYRULE_LLM_BASE_URL", "OPENAI_BASE_URL"],
+        }
+    if normalized == "anthropic":
+        return {
+            "api_key": ["HYRULE_LLM_API_KEY", "ANTHROPIC_API_KEY"],
+            "base_url": ["HYRULE_LLM_BASE_URL"],
+        }
+    return {
+        "api_key": ["HYRULE_LLM_API_KEY"],
+        "base_url": ["HYRULE_LLM_BASE_URL"],
+    }
+
+
+def model_policy_snapshot(
+    path: str | Path | None = None,
+    *,
+    risk_level: RiskLevel = "low",
+) -> dict[str, Any]:
+    """Return a compact, operator-readable view of resolved role models."""
+    policy, policy_path = _load_policy(path)
+    state = _sample_state(risk_level=risk_level, policy_path=policy_path or (str(path) if path else None))
+    selections = [select_model_for_role(role, state).as_dict() | {"role": role} for role in MODEL_POLICY_ROLES]
+    return {
+        "policy_path": policy_path,
+        "risk_level": risk_level,
+        "defaults": _mapping(policy.get("defaults")),
+        "roles": selections,
+        "risk_overrides": _mapping(policy.get("risk_overrides")),
+        "retry_escalation": _mapping(policy.get("retry_escalation")),
+        "tier_fallbacks": _mapping(policy.get("tier_fallbacks")),
+    }
+
+
+def validate_model_policy(
+    path: str | Path | None = None,
+    *,
+    require_keys: bool = False,
+) -> dict[str, Any]:
+    """Validate model policy structure and configured provider credentials."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    try:
+        policy, policy_path = _load_policy(path)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "policy_path": str(path) if path is not None else None,
+            "errors": [str(exc)],
+            "warnings": [],
+            "providers": {},
+        }
+
+    roles = _mapping(policy.get("roles"))
+    unknown_roles = sorted(set(roles) - set(MODEL_POLICY_ROLES))
+    for role in unknown_roles:
+        errors.append(f"unknown role in model policy: {role}")
+
+    for section_name in ("defaults", "roles", "risk_overrides", "retry_escalation", "tier_fallbacks"):
+        if section_name in policy and not isinstance(policy[section_name], dict):
+            errors.append(f"{section_name} must be a mapping")
+
+    state = _sample_state(risk_level="low", policy_path=policy_path or (str(path) if path else None))
+    selections = [select_model_for_role(role, state) for role in MODEL_POLICY_ROLES]
+    providers = sorted({selection.provider.lower() for selection in selections})
+    provider_status: dict[str, dict[str, Any]] = {}
+    for provider in providers:
+        env_names = provider_env_names(provider)
+        present_api_keys = [name for name in env_names["api_key"] if os.environ.get(name)]
+        missing = not present_api_keys
+        provider_status[provider] = {
+            "api_key_env": env_names["api_key"],
+            "base_url_env": env_names["base_url"],
+            "api_key_present": not missing,
+        }
+        if missing:
+            message = f"missing API key for provider {provider}: one of {', '.join(env_names['api_key'])}"
+            if require_keys:
+                errors.append(message)
+            else:
+                warnings.append(message)
+
+    return {
+        "ok": not errors,
+        "policy_path": policy_path,
+        "errors": errors,
+        "warnings": warnings,
+        "providers": provider_status,
+        "roles": [selection.as_dict() for selection in selections],
+    }
 
 
 def provider_env(selection: ModelSelection) -> tuple[str | None, str | None]:

@@ -348,3 +348,16 @@ critical work can promote to strong or frontier tiers, and retry escalation can
 promote a stubborn role after the configured failure threshold. Every
 `llm_outputs` item must include `model_selection` so the loop trace shows which
 provider/model/tier produced each role decision.
+
+## Phase 16 Model UX And Trace Review
+
+Operator UX requirements:
+
+- `hyrule-engineering-loop models show` must display resolved provider/model
+  choices per role.
+- `hyrule-engineering-loop models validate` must validate policy structure and
+  provider credential environment variables without invoking a live model.
+- `--model-policy` must override the policy for `run`, `dry-run`, and
+  `feature` executions.
+- `hyrule-engineering-loop trace` must render a compact node/model/data-flow
+  summary from either a state artifact or `loop_trace.json`.

@@ -605,6 +605,22 @@ Run the deterministic graph and persist a state artifact:
 hyrule-engineering-loop run APP_BUGFIX_GREEN app_bugfix
 ```
 
+Inspect model routing before running a loop:
+
+```bash
+hyrule-engineering-loop models show
+hyrule-engineering-loop models show --risk-level high
+hyrule-engineering-loop models validate
+hyrule-engineering-loop models validate --require-keys
+```
+
+Use a custom model routing policy for one run:
+
+```bash
+hyrule-engineering-loop run APP_BUGFIX_GREEN app_bugfix \
+  --model-policy /path/to/model-policy.yml
+```
+
 Run one explicit local gate command:
 
 ```bash
@@ -622,6 +638,13 @@ Render a NOC handoff file while running:
 
 ```bash
 hyrule-engineering-loop run APP_BUGFIX_GREEN app_bugfix --handoff-dir /tmp/handoff
+```
+
+Print a compact trace summary without opening raw JSON:
+
+```bash
+hyrule-engineering-loop trace APP_BUGFIX_GREEN
+hyrule-engineering-loop trace --trace-path /tmp/handoff/loop_trace.json
 ```
 
 Promote validated `repo:path` mutations into branch-backed worktrees:
