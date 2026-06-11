@@ -3,20 +3,45 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable, cast
+from typing import Any, Iterable, Iterator, cast
 
 from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.nodes import ALL_ROLES
+from hyrule_engineering_loop.preflight import preflight_feature_state
 from hyrule_engineering_loop.repo_adapter import discover_hyrule_repositories
 from hyrule_engineering_loop.state import ChangeClass, GraphState
 
 
 class FeatureIntakeError(RuntimeError):
     """Raised when a feature request cannot be converted to graph state."""
+
+
+class FeaturePreflightError(FeatureIntakeError):
+    """Raised when live preflight fails before graph execution."""
+
+    def __init__(self, result: dict[str, Any]) -> None:
+        super().__init__("feature live preflight failed")
+        self.result = result
+
+
+@contextmanager
+def _temporary_env(values: dict[str, str]) -> Iterator[None]:
+    previous = {key: os.environ.get(key) for key in values}
+    try:
+        os.environ.update(values)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _slug(value: str) -> str:
@@ -63,6 +88,43 @@ def _resolve_repo(workspace_root: Path, repo_name: str) -> Path:
     return repo_path
 
 
+def _failure_retry_count(state: dict[str, Any], node: str, domain: str) -> int:
+    counters = state.get("retry_counters", {})
+    if not isinstance(counters, dict):
+        return 0
+    candidates = [node, domain, f"llm_{node}"]
+    return max((int(counters.get(candidate, 0)) for candidate in candidates), default=0)
+
+
+def failure_summary(state: dict[str, Any], *, state_path: Path) -> dict[str, Any] | None:
+    """Return a compact next-action summary for failed or paused runs."""
+    errors = [error for error in state.get("validation_errors", []) if isinstance(error, dict)]
+    if not errors and not state.get("requires_human_signoff", False):
+        return None
+
+    last_error = errors[-1] if errors else {}
+    node = str(last_error.get("node", "human_signoff"))
+    domain = str(last_error.get("domain", "operator"))
+    model_selection: dict[str, Any] = {}
+    for output in reversed(state.get("llm_outputs", [])):
+        if isinstance(output, dict) and output.get("role") == node:
+            raw_model = output.get("model_selection")
+            if isinstance(raw_model, dict):
+                model_selection = dict(raw_model)
+            break
+
+    message = str(last_error.get("message", "manual sign-off required"))
+    stderr = str(last_error.get("stderr", ""))
+    return {
+        "last_failing_node": node,
+        "domain": domain,
+        "retry_count": _failure_retry_count(state, node, domain),
+        "model_selection": model_selection,
+        "error_excerpt": (stderr or message)[:800],
+        "next_operator_command": f"uv run hyrule-engineering-loop trace --state-path {state_path}",
+    }
+
+
 def build_feature_state(
     *,
     change_id: str,
@@ -79,6 +141,8 @@ def build_feature_state(
     gate_command: list[str] | None = None,
     promotion_base_ref: str = "HEAD",
     model_policy_file: str | None = None,
+    live_mode: bool = False,
+    dry_live_mode: bool = False,
 ) -> GraphState:
     """Build a graph state from operator-friendly feature-intake arguments."""
     workspace_root = workspace_root.expanduser().resolve()
@@ -128,11 +192,59 @@ def build_feature_state(
         "feature_target_repo": repo_name,
         "feature_plan_path": active_plan_path,
         "feature_scaffold_plan": scaffold_plan,
+        "live_mode": live_mode,
+        "dry_live_mode": dry_live_mode,
         "gate_commands": _parse_gate_command(gate_command),
     }
     if model_policy_file is not None:
         state["model_policy_file"] = model_policy_file
     return state
+
+
+def run_feature_dry_live(
+    *,
+    change_id: str,
+    change_class: str,
+    workspace_root: Path,
+    output_root: Path,
+    repo_name: str,
+    request_path: Path,
+    allowed_paths: list[str],
+    source_files: list[str] | None = None,
+    plan_path: str | None = None,
+    promotion_base_ref: str = "HEAD",
+    model_policy_file: str | None = None,
+) -> dict[str, Any]:
+    """Build live writer prompt/context/model preview without provider calls."""
+    state = build_feature_state(
+        change_id=change_id,
+        change_class=cast(ChangeClass, change_class),
+        workspace_root=workspace_root,
+        output_root=output_root,
+        repo_name=repo_name,
+        request_path=request_path,
+        allowed_paths=allowed_paths,
+        source_files=source_files,
+        mock_mutations=[],
+        plan_path=plan_path,
+        scaffold_plan=False,
+        gate_command=None,
+        promotion_base_ref=promotion_base_ref,
+        model_policy_file=model_policy_file,
+        live_mode=False,
+        dry_live_mode=True,
+    )
+    preflight = preflight_feature_state(state, output_root=output_root, live=False)
+    state["preflight_results"] = preflight
+    state_path = output_root.expanduser().resolve() / "state" / f"{change_id}.dry-live.json"
+    _write_state(state_path, dict(state))
+    return {
+        "state_path": str(state_path),
+        "repo_name": repo_name,
+        "dry_live": True,
+        "provider_called": False,
+        "preflight": preflight,
+    }
 
 
 def run_feature_intake(
@@ -151,6 +263,7 @@ def run_feature_intake(
     gate_command: list[str] | None = None,
     promotion_base_ref: str = "HEAD",
     model_policy_file: str | None = None,
+    live_mode: bool = False,
 ) -> dict[str, Any]:
     """Run the graph from a human-authored feature request."""
     state = build_feature_state(
@@ -168,10 +281,24 @@ def run_feature_intake(
         gate_command=gate_command,
         promotion_base_ref=promotion_base_ref,
         model_policy_file=model_policy_file,
+        live_mode=live_mode,
     )
+    if live_mode:
+        preflight = preflight_feature_state(state, output_root=output_root, live=True)
+        state["preflight_results"] = preflight
+        if not preflight["ok"]:
+            raise FeaturePreflightError(preflight)
+
     graph = build_graph(checkpointer=MemorySaver())
-    final_state = dict(graph.invoke(state, {"configurable": {"thread_id": change_id}}))
+    if live_mode:
+        with _temporary_env({"HYRULE_MOCK_LLM": "0"}):
+            final_state = dict(graph.invoke(state, {"configurable": {"thread_id": change_id}}))
+    else:
+        final_state = dict(graph.invoke(state, {"configurable": {"thread_id": change_id}}))
     state_path = output_root.expanduser().resolve() / "state" / f"{change_id}.json"
+    summary = failure_summary(final_state, state_path=state_path)
+    if summary is not None:
+        final_state["failure_summary"] = summary
     _write_state(state_path, final_state)
 
     return {
@@ -185,5 +312,52 @@ def run_feature_intake(
         "promotion_status": final_state.get("promotion_status", "not_requested"),
         "gate_status": final_state.get("gate_status", "not_run"),
         "diff_preview": final_state.get("diff_preview", []),
+        "failure_summary": final_state.get("failure_summary"),
+        "live_mode": live_mode,
         "final_state": final_state,
     }
+
+
+def run_writer_canary(
+    *,
+    workspace_root: Path,
+    output_root: Path,
+    repo_name: str,
+    change_id: str = "WRITER_CANARY",
+    live_mode: bool = False,
+    dry_live_mode: bool = True,
+    model_policy_file: str | None = None,
+) -> dict[str, Any]:
+    """Run a controlled docs-only writer canary in live or dry-live mode."""
+    output_root = output_root.expanduser().resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    request_path = output_root / "request.md"
+    request_path.write_text(
+        "Create a docs-only engineering loop writer canary artifact.\n",
+        encoding="utf-8",
+    )
+    if dry_live_mode:
+        return run_feature_dry_live(
+            change_id=change_id,
+            change_class="app_feature",
+            workspace_root=workspace_root,
+            output_root=output_root,
+            repo_name=repo_name,
+            request_path=request_path,
+            allowed_paths=["docs"],
+            source_files=["README.md"],
+            model_policy_file=model_policy_file,
+        )
+    return run_feature_intake(
+        change_id=change_id,
+        change_class="app_feature",
+        workspace_root=workspace_root,
+        output_root=output_root,
+        repo_name=repo_name,
+        request_path=request_path,
+        allowed_paths=["docs"],
+        source_files=["README.md"],
+        scaffold_plan=False,
+        model_policy_file=model_policy_file,
+        live_mode=live_mode,
+    )

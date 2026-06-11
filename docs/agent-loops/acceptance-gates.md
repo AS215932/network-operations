@@ -398,3 +398,22 @@ Rules:
   not raised out of the graph;
 - writer failures increment `llm_implementation_writer` and route through the
   normal retry/circuit-breaker path.
+
+## Phase 19 Live Preflight And Failure UX
+
+Before `feature --live` calls a provider, the loop must verify:
+
+- model policy structure is valid;
+- selected providers for required role nodes and `implementation_writer` have
+  API keys;
+- target repositories are clean attached worktrees;
+- mutation allowed paths are configured;
+- state and handoff output directories are writable.
+
+`feature --dry-live` must perform the same prompt/context/model-selection
+assembly without provider calls. Failed or paused runs must include a compact
+`failure_summary` with last failing node, retry count, model selection when
+available, an error excerpt, and the next operator command.
+
+`writer-canary` is the controlled first-run command for docs-only live or
+dry-live writer validation against a sibling repo.

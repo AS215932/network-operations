@@ -746,6 +746,20 @@ Phase 18 activates the implementation writer for live LLM use:
 - the graph retries writer failures through the normal remediation loop and
   exits to human sign-off when the counter reaches `3`.
 
+Phase 19 adds first-live-run safety and failure UX:
+
+- `feature --live` performs preflight checks, then runs with
+  `HYRULE_MOCK_LLM=0` for the graph invocation;
+- `feature --dry-live` builds the same implementation-writer prompt/context and
+  model selection preview without calling a provider;
+- live preflight verifies model policy structure, selected provider keys, clean
+  target repos, allowed paths, and writable state/handoff directories;
+- failed or paused feature runs include `failure_summary` with last failing
+  node, retry count, provider/model where available, error excerpt, and the
+  next trace command;
+- `writer-canary` runs a docs-only live or dry-live writer canary against a
+  sibling repo.
+
 From Pi, use the global extension command:
 
 ```text
