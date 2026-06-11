@@ -36,6 +36,7 @@ RoleName = Literal[
     "devops_netops",
     "security_auditor",
     "finops_integrity",
+    "virtual_lab_chaos",
 ]
 
 RoleApprovals = Dict[RoleName, bool]
@@ -139,3 +140,4 @@ class GraphState(TypedDict):
     feature_plan_path: NotRequired[str]
     trace_events: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     loop_trace_path: NotRequired[str]
+    model_policy_file: NotRequired[str]

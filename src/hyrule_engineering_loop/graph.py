@@ -20,10 +20,11 @@ from hyrule_engineering_loop.nodes import (
     policy_node,
     promotion_node,
     repo_adapter_node,
-    required_roles,
+    required_roles_for_state,
     security_auditor_node,
     systems_engineer_node,
     human_signoff_node,
+    virtual_lab_chaos_node,
     workspace_cleanup_node,
     workspace_writer_node,
 )
@@ -35,6 +36,7 @@ Route = Literal[
     "devops_netops",
     "security_auditor",
     "finops_integrity",
+    "virtual_lab_chaos",
     "policy",
     "repo_adapter",
     "promotion",
@@ -45,12 +47,12 @@ Route = Literal[
 
 def role_review_router(state: GraphState) -> list[Route]:
     """Select required role review nodes for the classified change."""
-    return [cast(Route, ROLE_NODE_NAMES[role]) for role in required_roles(state["change_class"])]
+    return [cast(Route, ROLE_NODE_NAMES[role]) for role in required_roles_for_state(state)]
 
 
 def _approval_complete(state: GraphState) -> bool:
     approvals = state["role_approvals"]
-    return all(approvals.get(role, False) for role in required_roles(state["change_class"]))
+    return all(approvals.get(role, False) for role in required_roles_for_state(state))
 
 
 def _roles_for_errors(state: GraphState) -> list[RoleName]:
@@ -117,6 +119,7 @@ def build_graph(
     graph.add_node("devops_netops", devops_netops_node)
     graph.add_node("security_auditor", security_auditor_node)
     graph.add_node("finops_integrity", finops_integrity_node)
+    graph.add_node("virtual_lab_chaos", virtual_lab_chaos_node)
     graph.add_node("implementation", implementation_node)
     graph.add_node("workspace_writer", workspace_writer_node)
     graph.add_node("gate_execution", gate_execution_node)
@@ -137,6 +140,7 @@ def build_graph(
             "devops_netops": "devops_netops",
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
+            "virtual_lab_chaos": "virtual_lab_chaos",
         },
     )
 
@@ -155,6 +159,7 @@ def build_graph(
             "devops_netops": "devops_netops",
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
+            "virtual_lab_chaos": "virtual_lab_chaos",
             "repo_adapter": "repo_adapter",
             "policy": "policy",
             "promotion": "promotion",

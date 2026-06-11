@@ -40,8 +40,10 @@ role_reviews:
   devops_netops: "required|not_required|complete"
   security_auditor: "required|not_required|complete"
   finops_integrity: "required|not_required|complete"
+  virtual_lab_chaos: "required|not_required|complete"
 mcp_schema_breaking: false
 emulated_lab_verified: "not_applicable|pending|passed|failed"
+model_policy_file: "model-policy.yml"
 implementation_tranches: []
 validation_gates: []
 rollback_plan: ""
@@ -53,13 +55,21 @@ noc_handoff: ""
 - App-only changes require Systems Engineer + DevOps/NetOps.
 - Cloud API, VPS provisioning, quota, payment, or metering changes also require
   FinOps.
-- Network/infra changes require Network Architect + Systems +
-  DevOps/NetOps.
+- Network/infra changes require Network Architect + Systems + DevOps/NetOps,
+  with Virtual Lab/Chaos added for high-risk or emulation-required work.
 - Routing, firewall, Vault, WireGuard, RPKI/IRR, and tenant-isolation changes
   require Security review.
-- `routing_bgp_frr` and `firewall_policy` require emulated lab validation
-  unless a human records explicit risk acceptance.
+- `routing_bgp_frr` and `firewall_policy` require Virtual Lab/Chaos review and
+  emulated lab validation unless a human records explicit risk acceptance.
 - Production apply is never automatic from the development loop.
+
+## Model Routing
+
+The controller resolves role models from `model-policy.yml` unless
+`GraphState["model_policy_file"]` overrides it. The policy should keep routine
+roles on cheap or mid-tier models, promote high-risk changes to strong models,
+and reserve frontier models for critical changes or repeated remediation
+failure.
 
 ## Failure Routing
 
@@ -69,4 +79,6 @@ noc_handoff: ""
 - Runtime/service failures route to Systems remediation.
 - CI/CD, render, deploy sequencing, Vault rendering, smoke, drift, or rollback
   workflow failures route to DevOps/NetOps remediation.
+- Lab, emulation, chaos, and rollback rehearsal failures route to Virtual
+  Lab/Chaos remediation.
 - Any retry counter at `3` exits to human sign-off.

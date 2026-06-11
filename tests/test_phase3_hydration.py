@@ -24,6 +24,7 @@ def _base_state(change_id: str, change_class: str) -> GraphState:
             "devops_netops": False,
             "security_auditor": False,
             "finops_integrity": False,
+            "virtual_lab_chaos": False,
         },
         "retry_counters": {},
         "rollback_plan": "",
