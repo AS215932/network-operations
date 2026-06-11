@@ -76,6 +76,9 @@ def remediation_router(state: GraphState) -> Route | list[Route]:
             return [cast(Route, ROLE_NODE_NAMES[role]) for role in roles]
         return "systems_engineer"
 
+    if state.get("implementation_writer_status") == "failed":
+        return "systems_engineer"
+
     if _approval_complete(state):
         return "repo_adapter"
 

@@ -16,8 +16,8 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from hyrule_engineering_loop.model_policy import ModelSelection, provider_env
-from hyrule_engineering_loop.state import GraphState, RoleName
+from hyrule_engineering_loop.model_policy import ModelPolicyNode, ModelSelection, provider_env
+from hyrule_engineering_loop.state import GraphState
 
 
 class FileMutation(BaseModel):
@@ -43,7 +43,7 @@ class StructuredLLMClient(Protocol):
     def invoke_role_review(
         self,
         *,
-        role: RoleName,
+        role: ModelPolicyNode,
         system_prompt: str,
         source_context: dict[str, str],
         state: GraphState,
@@ -61,7 +61,7 @@ class DeterministicStructuredLLMClient:
     def invoke_role_review(
         self,
         *,
-        role: RoleName,
+        role: ModelPolicyNode,
         system_prompt: str,
         source_context: dict[str, str],
         state: GraphState,
@@ -128,7 +128,7 @@ class HTTPStructuredLLMClient:
     def invoke_role_review(
         self,
         *,
-        role: RoleName,
+        role: ModelPolicyNode,
         system_prompt: str,
         source_context: dict[str, str],
         state: GraphState,
@@ -221,18 +221,18 @@ class HTTPStructuredLLMClient:
         return RoleReviewOutput.model_validate_json(content)
 
 
-def _mock_llm_enabled() -> bool:
+def mock_llm_enabled() -> bool:
     return os.environ.get("HYRULE_MOCK_LLM", "1").lower() not in {"0", "false", "no"}
 
 
 def default_llm_client(selection: ModelSelection | None = None) -> StructuredLLMClient:
     """Return the configured LLM client, defaulting to deterministic mock mode."""
-    if _mock_llm_enabled():
+    if mock_llm_enabled():
         return DeterministicStructuredLLMClient()
     return HTTPStructuredLLMClient.from_env(selection)
 
 
-def role_api_error(role: RoleName, message: str) -> RoleReviewOutput:
+def role_api_error(role: ModelPolicyNode, message: str) -> RoleReviewOutput:
     """Convert provider failures into graph-consumable validation errors."""
     return RoleReviewOutput(
         approved=False,
@@ -249,7 +249,7 @@ def role_api_error(role: RoleName, message: str) -> RoleReviewOutput:
 
 def invoke_role_review(
     *,
-    role: RoleName,
+    role: ModelPolicyNode,
     system_prompt: str,
     source_context: dict[str, str],
     state: GraphState,
@@ -257,6 +257,10 @@ def invoke_role_review(
     client: StructuredLLMClient | None = None,
 ) -> RoleReviewOutput:
     """Invoke a role review and validate structured output."""
+    mock = state.get("llm_mock_responses", {}).get(role)
+    if mock is not None:
+        return RoleReviewOutput.model_validate(mock)
+
     try:
         active_client = client or default_llm_client(model_selection)
         return active_client.invoke_role_review(
