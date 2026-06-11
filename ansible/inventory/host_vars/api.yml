@@ -1,7 +1,7 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
-hyrule_cloud_version: 5384a96bd9dbe381eb2bce192099de6f07bd27b4
+hyrule_cloud_version: df222b386625b46843a76ac6139fb0e4bc38a15a
 
 firewall_extra_rules:
   # API upstreams and backend health checks.
