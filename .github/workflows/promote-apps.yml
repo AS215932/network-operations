@@ -54,6 +54,15 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Generate promotion app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.PROMOTION_APP_ID }}
+          private-key: ${{ secrets.PROMOTION_APP_PRIVATE_KEY }}
+          owner: AS215932
+          repositories: network-operations
+
       - name: Resolve promotion request
         id: resolve
         env:
@@ -127,6 +136,17 @@ jobs:
             printf 'hyrule_web_sha=%s\n' "$hyrule_web_sha"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Load promotion branch
+        env:
+          BRANCH: promotion/app-sha-pins
+        run: |
+          set -euo pipefail
+          if git fetch origin "$BRANCH"; then
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -B "$BRANCH"
+          fi
+
       - name: Update app pins
         env:
           PROMOTION_TITLE: ${{ steps.resolve.outputs.title }}
@@ -168,7 +188,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$BRANCH"
           git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml
           git commit -m "$COMMIT_MESSAGE"
           git push --force-with-lease origin "$BRANCH"
@@ -176,7 +195,7 @@ jobs:
       - name: Open or update promotion PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: promotion/app-sha-pins
           PR_TITLE: ${{ steps.resolve.outputs.title }}
         run: |
