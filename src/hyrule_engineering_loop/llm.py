@@ -12,7 +12,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,7 @@ class FileMutation(BaseModel):
 
     path: str = Field(min_length=1)
     content: str
+    operation: Literal["create", "replace"] = "create"
 
 
 class RoleReviewOutput(BaseModel):

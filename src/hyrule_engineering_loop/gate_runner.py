@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -79,3 +80,24 @@ def run_gate_commands(
             )
 
     return results, errors
+
+
+def select_gate_commands_for_mutations(paths: Iterable[str]) -> list[list[str]]:
+    """Select local, workspace-safe gates from proposed mutation paths."""
+    normalized = [path.split(":", 1)[1] if ":" in path else path for path in paths]
+    if not normalized:
+        return []
+    if any(path.endswith(".py") for path in normalized):
+        return [[sys.executable, "-m", "compileall", "-q", "."]]
+    if all(path.startswith("docs/") or path.endswith((".md", ".txt", ".rst")) for path in normalized):
+        return [
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "[p.read_text(encoding='utf-8') for p in Path('.').rglob('*') if p.is_file()]"
+                ),
+            ]
+        ]
+    return [[sys.executable, "-c", "from pathlib import Path; assert any(Path('.').rglob('*'))"]]

@@ -29,6 +29,7 @@ PromotionStatus = Literal["not_requested", "passed", "failed"]
 PRStatus = Literal["not_requested", "pushed", "failed"]
 PolicyStatus = Literal["not_run", "passed", "failed"]
 RepoAdapterStatus = Literal["not_run", "passed", "failed"]
+MutationOperation = Literal["create", "replace"]
 
 RoleName = Literal[
     "network_architect",
@@ -86,6 +87,7 @@ class GraphState(TypedDict):
 
     source_of_truth_files: List[str]
     proposed_mutations: Annotated[Dict[str, str], merge_string_map]
+    proposed_mutation_operations: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
 
     mcp_schema_breaking: bool
     emulated_lab_verified: LabVerification
@@ -138,6 +140,10 @@ class GraphState(TypedDict):
     feature_request_path: NotRequired[str]
     feature_target_repo: NotRequired[str]
     feature_plan_path: NotRequired[str]
+    feature_scaffold_plan: NotRequired[bool]
+    repo_context_bundle: NotRequired[Dict[str, Any]]
+    implementation_writer_status: NotRequired[str]
+    diff_preview: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     trace_events: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     loop_trace_path: NotRequired[str]
     model_policy_file: NotRequired[str]

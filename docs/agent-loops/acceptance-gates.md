@@ -361,3 +361,23 @@ Operator UX requirements:
   `feature` executions.
 - `hyrule-engineering-loop trace` must render a compact node/model/data-flow
   summary from either a state artifact or `loop_trace.json`.
+
+## Phase 17 Feature Writer UX
+
+The implementation writer node must produce structured file mutations with:
+
+- `path`: `repo:relative/path` for promoted repo mutations;
+- `content`: complete target file content for this tranche;
+- `operation`: `create` or `replace`.
+
+Safety requirements:
+
+- `create` must fail if the target file already exists in the promoted
+  worktree.
+- `replace` must fail if the target file does not exist in the promoted
+  worktree.
+- multiple mutations for the same repo must share one branch-backed worktree;
+- when no explicit gate command is supplied, the graph must select a local,
+  workspace-safe gate from changed paths;
+- CLI and Pi summaries must include a compact `diff_preview` without dumping
+  unbounded full diffs into chat.

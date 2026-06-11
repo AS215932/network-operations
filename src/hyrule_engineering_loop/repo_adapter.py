@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from hyrule_engineering_loop.state import GraphState
+from hyrule_engineering_loop.workspace import _safe_relative_path
 
 
 class RepoAdapterError(RuntimeError):
@@ -114,3 +115,57 @@ def resolve_repositories_for_state(state: GraphState) -> tuple[dict[str, str], l
         results.append(result)
 
     return resolved, results
+
+
+def _read_context_file(repo_path: Path, relative_path: str, *, max_bytes: int) -> dict[str, Any]:
+    path = _safe_relative_path(relative_path)
+    target = repo_path / path
+    if not target.exists() or not target.is_file():
+        return {"path": path.as_posix(), "status": "missing"}
+    content = target.read_text(encoding="utf-8", errors="replace")
+    clipped = content[:max_bytes]
+    return {
+        "path": path.as_posix(),
+        "status": "read",
+        "chars": len(content),
+        "content": clipped,
+        "truncated": len(content) > len(clipped),
+    }
+
+
+def build_repo_context_bundle(
+    state: GraphState,
+    *,
+    max_files_per_repo: int = 20,
+    max_file_bytes: int = 12_000,
+) -> dict[str, Any]:
+    """Build compact target-repo context for implementation writer nodes."""
+    repo_roots = state.get("promotion_repositories", {})
+    allowed_paths = state.get("promotion_allowed_paths", {})
+    source_by_repo: dict[str, list[str]] = {}
+    for raw_source in state["source_of_truth_files"]:
+        if ":" not in raw_source:
+            continue
+        repo_name, path = raw_source.split(":", 1)
+        source_by_repo.setdefault(repo_name, []).append(path)
+
+    repos: list[dict[str, Any]] = []
+    for repo_name, raw_path in sorted(repo_roots.items()):
+        repo_path = Path(raw_path).expanduser().resolve()
+        files: list[dict[str, Any]] = []
+        for source_path in source_by_repo.get(repo_name, ["README.md"])[:max_files_per_repo]:
+            files.append(_read_context_file(repo_path, source_path, max_bytes=max_file_bytes))
+        repos.append(
+            {
+                "name": repo_name,
+                "path": str(repo_path),
+                "allowed_paths": allowed_paths.get(repo_name, []),
+                "source_files": files,
+            }
+        )
+
+    return {
+        "repos": repos,
+        "feature_target_repo": state.get("feature_target_repo"),
+        "feature_plan_path": state.get("feature_plan_path"),
+    }

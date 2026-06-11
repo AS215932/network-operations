@@ -27,6 +27,28 @@ def _summarize_value(key: str, value: Any) -> Any:
         return {"chars": len(str(value))}
     if key in {"proposed_mutations"} and isinstance(value, dict):
         return {"paths": sorted(value), "count": len(value)}
+    if key in {"proposed_mutation_operations"} and isinstance(value, list):
+        return [
+            {
+                "path": item.get("path"),
+                "operation": item.get("operation"),
+                "source": item.get("source"),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
+    if key in {"diff_preview"} and isinstance(value, list):
+        return [
+            {
+                "repo": item.get("repo"),
+                "branch": item.get("branch"),
+                "written_files": item.get("written_files", []),
+                "diff_chars": len(str(item.get("diff_excerpt", ""))),
+                "diff_truncated": item.get("diff_truncated", False),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
     if key in {"prompt_artifacts"} and isinstance(value, dict):
         return {"roles": sorted(value)}
     if key in {"llm_outputs"} and isinstance(value, list):
