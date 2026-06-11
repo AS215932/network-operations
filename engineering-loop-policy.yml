@@ -16,6 +16,7 @@ defaults:
     - "(?i)(api_key|token|secret)\\s*=\\s*['\\\"][^'\\\"]+['\\\"]"
   allowed_gate_commands:
     - "python"
+    - "python3"
     - "uv"
     - "pytest"
     - "git"
