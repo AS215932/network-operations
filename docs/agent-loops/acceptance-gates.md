@@ -85,6 +85,10 @@ nested local hypervisor validation. The gate must verify native target config
 parsing, routing convergence or firewall isolation, expected failure behavior,
 and rollback execution.
 
+The Virtual Lab & Chaos Simulation Engineer owns this proof. The role may
+approve only when the graph state includes either a passing emulation result or
+an explicit human-recorded risk acceptance.
+
 ## Break-Glass Rollback
 
 Deploy notes must define:
@@ -112,6 +116,9 @@ The runtime skeleton can execute explicit local validation commands supplied in
 Failed commands append structured `validation_errors` with domain `ci` and
 increment the `ci` retry counter. This is the staging point for later Batfish,
 Containerlab, nested hypervisor, and repo-specific command adapters.
+
+Failures with domain `lab`, `chaos`, `emulation`, or `rollback` route back to
+the Virtual Lab & Chaos Simulation Engineer.
 
 ## Phase 3 Mutation Workspace
 
@@ -324,3 +331,20 @@ Pi integration keeps one slash command:
 Repo-local config files are optional overrides only. The default behavior is to
 autodetect the current `hyrule-*` repo from Pi's working directory and fall back
 to the extension default when the current directory is not inside a target repo.
+
+## Phase 15 Model Routing
+
+Role nodes resolve inference through `model-policy.yml` by default. The policy
+records:
+
+- default provider/model/tier;
+- per-role provider/model/tier overrides;
+- risk-level minimum tiers;
+- retry escalation after repeated failures;
+- tier fallback models.
+
+Routine app work should stay on cheap or mid-tier models. High-risk and
+critical work can promote to strong or frontier tiers, and retry escalation can
+promote a stubborn role after the configured failure threshold. Every
+`llm_outputs` item must include `model_selection` so the loop trace shows which
+provider/model/tier produced each role decision.

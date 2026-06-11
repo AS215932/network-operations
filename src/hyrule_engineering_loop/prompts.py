@@ -10,6 +10,7 @@ ROLE_PROMPT_FILES: dict[str, str] = {
     "devops_netops": "senior-devops-netops-engineer.md",
     "security_auditor": "senior-security-cryptographic-auditor.md",
     "finops_integrity": "finops-billing-integrity-engineer.md",
+    "virtual_lab_chaos": "virtual-lab-chaos-simulation-engineer.md",
 }
 
 

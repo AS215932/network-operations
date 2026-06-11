@@ -28,6 +28,7 @@ def _base_state(change_id: str, change_class: str) -> GraphState:
             "devops_netops": False,
             "security_auditor": False,
             "finops_integrity": False,
+            "virtual_lab_chaos": False,
         },
         "retry_counters": {},
         "rollback_plan": "",
@@ -56,6 +57,8 @@ def test_role_prompt_loader_reads_markdown() -> None:
     assert "Senior Network Architect" in prompts["network_architect"]
     assert "finops_integrity" in prompts
     assert "FinOps" in prompts["finops_integrity"]
+    assert "virtual_lab_chaos" in prompts
+    assert "Virtual Lab" in prompts["virtual_lab_chaos"]
 
 
 def test_cli_run_show_and_approve(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

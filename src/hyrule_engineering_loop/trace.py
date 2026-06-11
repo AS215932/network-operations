@@ -36,6 +36,7 @@ def _summarize_value(key: str, value: Any) -> Any:
                 "approved": item.get("approved"),
                 "proposed_mutation_paths": item.get("proposed_mutation_paths", []),
                 "source_files": item.get("source_files", []),
+                "model_selection": item.get("model_selection", {}),
             }
             for item in value
             if isinstance(item, dict)

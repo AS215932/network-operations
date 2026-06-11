@@ -26,6 +26,7 @@ def _base_state(change_id: str, change_class: str) -> GraphState:
             "devops_netops": False,
             "security_auditor": False,
             "finops_integrity": False,
+            "virtual_lab_chaos": False,
         },
         "retry_counters": {},
         "rollback_plan": "",
@@ -111,6 +112,7 @@ def test_noc_handoff_json_schema(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         "devops_netops",
         "security_auditor",
         "finops_integrity",
+        "virtual_lab_chaos",
     }
     assert payload["workspace"]["cleaned_up"] is True
     assert payload["rollback"]["plan"]

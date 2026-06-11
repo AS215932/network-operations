@@ -375,9 +375,15 @@ Loop stages:
 13. Produce PR summary, rollout notes, rollback plan, and NOC handoff metadata.
 14. Post-deploy observation is handled by existing monitoring/NOC.
 
-For `mixed` changes, all five senior role nodes run in parallel using native
+For `mixed` changes, all six senior role nodes run in parallel using native
 LangGraph branching. Parallel state writes must use reducers so sibling branch
 updates merge instead of overwriting each other.
+
+Role nodes resolve their model through `model-policy.yml`. The default policy
+keeps routine work on cheaper OpenRouter models, promotes high-risk work to a
+stronger tier, and escalates repeated failures to the configured frontier tier.
+Each role output records its resolved provider/model/tier in `llm_outputs` so
+trace review can show which model handled which decision.
 
 ## Graph State
 
@@ -454,6 +460,9 @@ Optional Phase 2 staging keys:
 - `promotion_base_ref`: base ref that target repos must resolve.
 - `repo_adapter_status`: latest repo adapter status.
 - `repo_adapter_results`: discovered/verified repo metadata.
+- `trace_events`: compact append-only node execution summaries.
+- `loop_trace_path`: rendered `loop_trace.json` path.
+- `model_policy_file`: optional model routing policy override.
 
 Because `validation_errors` is append-only history, routing decisions use the
 latest `gate_status` to decide whether errors are currently active.
@@ -552,15 +561,21 @@ Required defaults:
   deploy/runtime changes.
 - `mcp_diagnostic_tooling`: Systems Engineer + DevOps/NetOps; add Security if
   diagnostic output may expose secrets or tenant data.
-- `noc_runtime`: Systems Engineer + DevOps/NetOps + Security Auditor.
-- `infra_ansible`, `dns`, `monitoring_logging`: Systems Engineer +
-  DevOps/NetOps; add Network/Security as relevant.
+- `noc_runtime`: Systems Engineer + DevOps/NetOps + Security Auditor +
+  Virtual Lab/Chaos for rollback and failure-mode checks.
+- `infra_ansible`: Systems Engineer + DevOps/NetOps + Virtual Lab/Chaos.
+- `dns`, `monitoring_logging`: Systems Engineer + DevOps/NetOps; add
+  Network/Security/Virtual Lab as relevant.
 - `routing_bgp_frr`: Network Architect + Security Auditor + emulated lab
-  verification.
+  verification by Virtual Lab/Chaos.
 - `firewall_policy`: Network Architect + Security Auditor +
-  `docs/network-flows.md` alignment + emulated lab verification.
+  `docs/network-flows.md` alignment + emulated lab verification by Virtual
+  Lab/Chaos.
 - `vault_secret_plane`: Security Auditor + DevOps/NetOps.
-- `mixed`: all five approval roles.
+- `mixed`: all six approval roles.
+
+High and critical risk changes require Virtual Lab/Chaos review even when the
+change class would normally be app-only.
 
 The graph cannot exit successfully until every required role approval is true,
 required gates pass, and `requires_human_signoff` is false.
@@ -575,6 +590,8 @@ Gate nodes append structured failures into `validation_errors` and increment
 - Network/routing/firewall failures clear `network_architect`.
 - Runtime/service failures clear `systems_engineer`.
 - CI/CD/render/deploy/Vault rendering/drift failures clear `devops_netops`.
+- Lab, emulation, chaos, or rollback rehearsal failures clear
+  `virtual_lab_chaos`.
 
 If any single retry counter reaches `3`, the graph sets
 `requires_human_signoff = True`, exits the autonomous loop, and leaves the full

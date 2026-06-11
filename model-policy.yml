@@ -1,0 +1,51 @@
+version: 1
+defaults:
+  provider: openrouter
+  model: minimax/minimax-m3
+  tier: cheap
+roles:
+  systems_engineer:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+    tier: mid
+  devops_netops:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+    tier: mid
+  security_auditor:
+    provider: anthropic
+    model: claude-sonnet-4-6
+    tier: strong
+  network_architect:
+    provider: anthropic
+    model: claude-sonnet-4-6
+    tier: strong
+  finops_integrity:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+    tier: mid
+  virtual_lab_chaos:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+    tier: mid
+risk_overrides:
+  high:
+    min_tier: strong
+  critical:
+    min_tier: frontier
+retry_escalation:
+  after_failures: 1
+  max_tier: frontier
+tier_fallbacks:
+  cheap:
+    provider: openrouter
+    model: minimax/minimax-m3
+  mid:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+  strong:
+    provider: anthropic
+    model: claude-sonnet-4-6
+  frontier:
+    provider: openai
+    model: gpt-5.5

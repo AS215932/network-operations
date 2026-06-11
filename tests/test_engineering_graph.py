@@ -12,6 +12,7 @@ from hyrule_engineering_loop.nodes import (
     network_architect_node,
     security_auditor_node,
     systems_engineer_node,
+    virtual_lab_chaos_node,
 )
 from hyrule_engineering_loop.state import GraphState
 
@@ -33,6 +34,7 @@ def _base_state(change_id: str, change_class: str) -> GraphState:
             "devops_netops": False,
             "security_auditor": False,
             "finops_integrity": False,
+            "virtual_lab_chaos": False,
         },
         "retry_counters": {},
         "rollback_plan": "",
@@ -52,6 +54,7 @@ def test_green_path_execution(capsys: pytest.CaptureFixture[str]) -> None:
     assert "[Node: Senior Network Architect]" not in output
     assert "[Node: Senior Security & Cryptographic Auditor]" not in output
     assert "[Node: FinOps & Billing Integrity Engineer]" not in output
+    assert "[Node: Virtual Lab & Chaos Simulation Engineer]" not in output
     assert "[Node: PR Packaging]" in output
 
     assert final_state["role_approvals"]["systems_engineer"] is True
@@ -59,6 +62,7 @@ def test_green_path_execution(capsys: pytest.CaptureFixture[str]) -> None:
     assert final_state["role_approvals"]["network_architect"] is False
     assert final_state["role_approvals"]["security_auditor"] is False
     assert final_state["role_approvals"]["finops_integrity"] is False
+    assert final_state["role_approvals"]["virtual_lab_chaos"] is False
     assert final_state["validation_errors"] == []
     assert final_state["requires_human_signoff"] is False
     assert final_state["noc_handoff_metadata"]["status"] == "ready_for_pr_signoff"
@@ -71,16 +75,19 @@ def test_state_reducer_merging() -> None:
     review_graph.add_node("devops_netops", devops_netops_node)
     review_graph.add_node("security_auditor", security_auditor_node)
     review_graph.add_node("finops_integrity", finops_integrity_node)
+    review_graph.add_node("virtual_lab_chaos", virtual_lab_chaos_node)
     review_graph.add_edge(START, "network_architect")
     review_graph.add_edge(START, "systems_engineer")
     review_graph.add_edge(START, "devops_netops")
     review_graph.add_edge(START, "security_auditor")
     review_graph.add_edge(START, "finops_integrity")
+    review_graph.add_edge(START, "virtual_lab_chaos")
     review_graph.add_edge("network_architect", END)
     review_graph.add_edge("systems_engineer", END)
     review_graph.add_edge("devops_netops", END)
     review_graph.add_edge("security_auditor", END)
     review_graph.add_edge("finops_integrity", END)
+    review_graph.add_edge("virtual_lab_chaos", END)
     graph = review_graph.compile()
 
     final_state: dict[str, Any] = graph.invoke(_base_state("MIXED_MERGE_ERRORS", "mixed"))
@@ -91,14 +98,16 @@ def test_state_reducer_merging() -> None:
         "devops_netops": True,
         "security_auditor": True,
         "finops_integrity": True,
+        "virtual_lab_chaos": True,
     }
-    assert len(final_state["validation_errors"]) == 5
+    assert len(final_state["validation_errors"]) == 6
     assert {error["node"] for error in final_state["validation_errors"]} == {
         "network_architect",
         "systems_engineer",
         "devops_netops",
         "security_auditor",
         "finops_integrity",
+        "virtual_lab_chaos",
     }
 
 

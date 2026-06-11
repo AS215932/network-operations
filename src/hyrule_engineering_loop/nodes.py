@@ -8,6 +8,7 @@ from typing import Any, Iterable, cast
 from hyrule_engineering_loop.gate_runner import run_gate_commands
 from hyrule_engineering_loop.handoff import write_noc_handoff
 from hyrule_engineering_loop.llm import invoke_role_review
+from hyrule_engineering_loop.model_policy import select_model_for_role
 from hyrule_engineering_loop.policy import validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
 from hyrule_engineering_loop.promotion import PromotionError, promote_mutations
@@ -24,6 +25,7 @@ ALL_ROLES: tuple[RoleName, ...] = (
     "devops_netops",
     "security_auditor",
     "finops_integrity",
+    "virtual_lab_chaos",
 )
 
 ROLE_NODE_NAMES: dict[RoleName, str] = {
@@ -32,6 +34,7 @@ ROLE_NODE_NAMES: dict[RoleName, str] = {
     "devops_netops": "devops_netops",
     "security_auditor": "security_auditor",
     "finops_integrity": "finops_integrity",
+    "virtual_lab_chaos": "virtual_lab_chaos",
 }
 
 DOMAIN_TO_ROLE: dict[str, RoleName] = {
@@ -46,6 +49,10 @@ DOMAIN_TO_ROLE: dict[str, RoleName] = {
     "secret": "security_auditor",
     "finops": "finops_integrity",
     "billing": "finops_integrity",
+    "lab": "virtual_lab_chaos",
+    "chaos": "virtual_lab_chaos",
+    "emulation": "virtual_lab_chaos",
+    "rollback": "virtual_lab_chaos",
 }
 
 
@@ -58,16 +65,26 @@ def required_roles(change_class: ChangeClass) -> tuple[RoleName, ...]:
     if change_class == "mcp_diagnostic_tooling":
         return ("systems_engineer", "devops_netops")
     if change_class == "noc_runtime":
-        return ("systems_engineer", "devops_netops", "security_auditor")
-    if change_class in {"infra_ansible", "dns", "monitoring_logging"}:
+        return ("systems_engineer", "devops_netops", "security_auditor", "virtual_lab_chaos")
+    if change_class == "infra_ansible":
+        return ("systems_engineer", "devops_netops", "virtual_lab_chaos")
+    if change_class in {"dns", "monitoring_logging"}:
         return ("systems_engineer", "devops_netops")
     if change_class in {"routing_bgp_frr", "firewall_policy"}:
-        return ("network_architect", "security_auditor")
+        return ("network_architect", "security_auditor", "virtual_lab_chaos")
     if change_class == "vault_secret_plane":
         return ("security_auditor", "devops_netops")
     if change_class == "mixed":
         return ALL_ROLES
     return ("systems_engineer", "devops_netops")
+
+
+def required_roles_for_state(state: GraphState) -> tuple[RoleName, ...]:
+    """Return required roles after change class and risk-level expansion."""
+    roles = list(required_roles(state["change_class"]))
+    if state["risk_level"] in {"high", "critical"} and "virtual_lab_chaos" not in roles:
+        roles.append("virtual_lab_chaos")
+    return tuple(roles)
 
 
 def _read_source_context(paths: Iterable[str]) -> dict[str, str]:
@@ -135,17 +152,19 @@ def _read_repo_source_context(paths: Iterable[str], state: GraphState) -> dict[s
 
 
 def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
-    if role not in required_roles(state["change_class"]):
+    if role not in required_roles_for_state(state):
         return {}
 
     prompts = load_role_prompts()
     system_prompt = prompts[role]
     source_context = _read_repo_source_context(state["source_of_truth_files"], state)
+    model_selection = select_model_for_role(role, state)
     review = invoke_role_review(
         role=role,
         system_prompt=system_prompt,
         source_context=source_context,
         state=state,
+        model_selection=model_selection,
     )
 
     update: RoleApprovals = {role: review.approved}
@@ -171,6 +190,7 @@ def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
                 "notes": review.notes,
                 "proposed_mutation_paths": list(mutations),
                 "source_files": list(source_context),
+                "model_selection": model_selection.as_dict(),
             }
         ],
     }
@@ -201,7 +221,7 @@ def _reset_required_approvals(state: GraphState, roles: Iterable[RoleName]) -> R
 
 def classification_node(state: GraphState) -> StateUpdate:
     print("[Node: Change Classifier] Classifying change and loading source-of-truth context...")
-    roles = required_roles(state["change_class"])
+    roles = required_roles_for_state(state)
     source_files = list(state["source_of_truth_files"])
 
     if state["change_class"] == "firewall_policy" and "docs/network-flows.md" not in source_files:
@@ -244,6 +264,11 @@ def security_auditor_node(state: GraphState) -> StateUpdate:
 def finops_integrity_node(state: GraphState) -> StateUpdate:
     print("[Node: FinOps & Billing Integrity Engineer] Reviewing payment and quota integrity...")
     return _role_review_update("finops_integrity", state)
+
+
+def virtual_lab_chaos_node(state: GraphState) -> StateUpdate:
+    print("[Node: Virtual Lab & Chaos Simulation Engineer] Reviewing lab proof and rollback behavior...")
+    return _role_review_update("virtual_lab_chaos", state)
 
 
 def implementation_node(state: GraphState) -> StateUpdate:

@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from hyrule_engineering_loop.model_policy import ModelSelection, provider_env
 from hyrule_engineering_loop.state import GraphState, RoleName
 
 
@@ -91,29 +92,34 @@ class HTTPStructuredLLMClient:
         api_key: str,
         base_url: str,
         model: str,
+        provider: str = "openai",
         timeout_seconds: float = 60.0,
         max_retries: int = 2,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.provider = provider.lower()
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 
     @classmethod
-    def from_env(cls) -> "HTTPStructuredLLMClient":
-        api_key = os.environ.get("HYRULE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    def from_env(cls, selection: ModelSelection | None = None) -> "HTTPStructuredLLMClient":
+        api_key, selected_base_url = provider_env(selection) if selection else (None, None)
+        api_key = api_key or os.environ.get("HYRULE_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise LLMInvocationError(
-                "HYRULE_MOCK_LLM=0 requires HYRULE_LLM_API_KEY or OPENAI_API_KEY"
+                "HYRULE_MOCK_LLM=0 requires HYRULE_LLM_API_KEY or the selected provider API key"
             )
 
         return cls(
             api_key=api_key,
-            base_url=os.environ.get("HYRULE_LLM_BASE_URL")
+            base_url=selected_base_url
+            or os.environ.get("HYRULE_LLM_BASE_URL")
             or os.environ.get("OPENAI_BASE_URL")
             or "https://api.openai.com/v1",
-            model=os.environ.get("HYRULE_LLM_MODEL") or "gpt-4.1-mini",
+            model=os.environ.get("HYRULE_LLM_MODEL") or (selection.model if selection else "gpt-4.1-mini"),
+            provider=selection.provider if selection else os.environ.get("HYRULE_LLM_PROVIDER", "openai"),
             timeout_seconds=float(os.environ.get("HYRULE_LLM_TIMEOUT_SECONDS", "60")),
             max_retries=int(os.environ.get("HYRULE_LLM_MAX_RETRIES", "2")),
         )
@@ -126,28 +132,45 @@ class HTTPStructuredLLMClient:
         source_context: dict[str, str],
         state: GraphState,
     ) -> RoleReviewOutput:
-        payload = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "role": role,
-                            "state": state,
-                            "source_context": source_context,
-                            "output_schema": RoleReviewOutput.model_json_schema(),
-                        },
-                        sort_keys=True,
-                    ),
-                },
-            ],
-            "response_format": {"type": "json_object"},
-        }
+        user_payload = json.dumps(
+            {
+                "role": role,
+                "state": state,
+                "source_context": source_context,
+                "output_schema": RoleReviewOutput.model_json_schema(),
+            },
+            sort_keys=True,
+        )
+        if self.provider == "anthropic":
+            payload = {
+                "model": self.model,
+                "max_tokens": 4096,
+                "system": system_prompt,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Return only JSON matching the output_schema. "
+                            f"No markdown fences.\n\n{user_payload}"
+                        ),
+                    }
+                ],
+            }
+        else:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_payload,
+                    },
+                ],
+                "response_format": {"type": "json_object"},
+            }
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
@@ -161,13 +184,23 @@ class HTTPStructuredLLMClient:
         raise LLMInvocationError(str(last_error) if last_error else "LLM invocation failed")
 
     def _post(self, payload: dict[str, Any]) -> RoleReviewOutput:
-        request = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
+        if self.provider == "anthropic":
+            url = f"{self.base_url}/messages"
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": os.environ.get("ANTHROPIC_VERSION", "2023-06-01"),
+                "Content-Type": "application/json",
+            }
+        else:
+            url = f"{self.base_url}/chat/completions"
+            headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
-            },
+            }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
             method="POST",
         )
         try:
@@ -180,7 +213,10 @@ class HTTPStructuredLLMClient:
             raise LLMInvocationError(str(exc.reason)) from exc
 
         decoded = json.loads(raw)
-        content = decoded["choices"][0]["message"]["content"]
+        if self.provider == "anthropic":
+            content = decoded["content"][0]["text"]
+        else:
+            content = decoded["choices"][0]["message"]["content"]
         return RoleReviewOutput.model_validate_json(content)
 
 
@@ -188,11 +224,11 @@ def _mock_llm_enabled() -> bool:
     return os.environ.get("HYRULE_MOCK_LLM", "1").lower() not in {"0", "false", "no"}
 
 
-def default_llm_client() -> StructuredLLMClient:
+def default_llm_client(selection: ModelSelection | None = None) -> StructuredLLMClient:
     """Return the configured LLM client, defaulting to deterministic mock mode."""
     if _mock_llm_enabled():
         return DeterministicStructuredLLMClient()
-    return HTTPStructuredLLMClient.from_env()
+    return HTTPStructuredLLMClient.from_env(selection)
 
 
 def role_api_error(role: RoleName, message: str) -> RoleReviewOutput:
@@ -216,11 +252,12 @@ def invoke_role_review(
     system_prompt: str,
     source_context: dict[str, str],
     state: GraphState,
+    model_selection: ModelSelection | None = None,
     client: StructuredLLMClient | None = None,
 ) -> RoleReviewOutput:
     """Invoke a role review and validate structured output."""
     try:
-        active_client = client or default_llm_client()
+        active_client = client or default_llm_client(model_selection)
         return active_client.invoke_role_review(
             role=role,
             system_prompt=system_prompt,
