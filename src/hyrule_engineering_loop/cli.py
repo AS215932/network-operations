@@ -10,7 +10,13 @@ from typing import Any, cast
 from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.canary import CanaryDryRunError, run_sibling_repo_canary
-from hyrule_engineering_loop.feature import FeatureIntakeError, run_feature_intake
+from hyrule_engineering_loop.feature import (
+    FeatureIntakeError,
+    FeaturePreflightError,
+    run_feature_dry_live,
+    run_feature_intake,
+    run_writer_canary,
+)
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.model_policy import (
     model_policy_snapshot,
@@ -308,6 +314,30 @@ def sibling_canary_command(args: argparse.Namespace) -> int:
 
 
 def feature_command(args: argparse.Namespace) -> int:
+    if args.live and args.dry_live:
+        print("[CLI] --live and --dry-live are mutually exclusive")
+        return 1
+    if args.dry_live:
+        try:
+            result = run_feature_dry_live(
+                change_id=args.change_id,
+                change_class=args.change_class,
+                workspace_root=Path(args.workspace_root),
+                output_root=Path(args.output_root),
+                repo_name=args.repo,
+                request_path=Path(args.request),
+                allowed_paths=args.allow,
+                source_files=args.source,
+                plan_path=args.plan_path,
+                promotion_base_ref=args.base_ref,
+                model_policy_file=args.model_policy,
+            )
+        except FeatureIntakeError as exc:
+            print(f"[CLI] feature dry-live failed: {exc}")
+            return 1
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0
+
     try:
         result = run_feature_intake(
             change_id=args.change_id,
@@ -324,7 +354,11 @@ def feature_command(args: argparse.Namespace) -> int:
             gate_command=args.gate_command,
             promotion_base_ref=args.base_ref,
             model_policy_file=args.model_policy,
+            live_mode=args.live,
         )
+    except FeaturePreflightError as exc:
+        print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
+        return 1
     except FeatureIntakeError as exc:
         print(f"[CLI] feature intake failed: {exc}")
         return 1
@@ -341,6 +375,46 @@ def feature_command(args: argparse.Namespace) -> int:
         "gate_status": result["gate_status"],
         "model_summary": _model_summary_from_state(result["final_state"]),
         "diff_preview": result["diff_preview"],
+        "failure_summary": result["failure_summary"],
+        "live_mode": result["live_mode"],
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def writer_canary_command(args: argparse.Namespace) -> int:
+    if args.live and args.dry_live:
+        print("[CLI] --live and --dry-live are mutually exclusive")
+        return 1
+    try:
+        result = run_writer_canary(
+            workspace_root=Path(args.workspace_root),
+            output_root=Path(args.output_root),
+            repo_name=args.repo_name,
+            change_id=args.change_id,
+            live_mode=args.live,
+            dry_live_mode=args.dry_live or not args.live,
+            model_policy_file=args.model_policy,
+        )
+    except FeaturePreflightError as exc:
+        print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
+        return 1
+    except FeatureIntakeError as exc:
+        print(f"[CLI] writer canary failed: {exc}")
+        return 1
+
+    final_state = result.get("final_state", {})
+    summary = {
+        "state_path": result["state_path"],
+        "repo_name": result["repo_name"],
+        "dry_live": result.get("dry_live", False),
+        "live_mode": result.get("live_mode", args.live),
+        "provider_called": not result.get("dry_live", False),
+        "preflight": result.get("preflight"),
+        "trace_path": result.get("trace_path"),
+        "diff_preview": result.get("diff_preview", []),
+        "failure_summary": result.get("failure_summary"),
+        "model_summary": _model_summary_from_state(final_state if isinstance(final_state, dict) else {}),
     }
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
@@ -513,6 +587,19 @@ def build_parser() -> argparse.ArgumentParser:
     canary_parser.add_argument("--keep-worktree", action="store_true")
     canary_parser.set_defaults(func=sibling_canary_command)
 
+    writer_canary_parser = subparsers.add_parser(
+        "writer-canary",
+        help="run a live or dry-live docs-only implementation-writer canary",
+    )
+    writer_canary_parser.add_argument("--workspace-root", required=True)
+    writer_canary_parser.add_argument("--repo-name", required=True)
+    writer_canary_parser.add_argument("--output-root", required=True)
+    writer_canary_parser.add_argument("--change-id", default="WRITER_CANARY")
+    writer_canary_parser.add_argument("--model-policy")
+    writer_canary_parser.add_argument("--live", action="store_true")
+    writer_canary_parser.add_argument("--dry-live", action="store_true")
+    writer_canary_parser.set_defaults(func=writer_canary_command)
+
     feature_parser = subparsers.add_parser(
         "feature",
         help="run the engineering loop from a human feature request file",
@@ -530,6 +617,8 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--no-scaffold-plan", action="store_true")
     feature_parser.add_argument("--base-ref", default="HEAD")
     feature_parser.add_argument("--model-policy")
+    feature_parser.add_argument("--live", action="store_true")
+    feature_parser.add_argument("--dry-live", action="store_true")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
 
