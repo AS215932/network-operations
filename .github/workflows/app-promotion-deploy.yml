@@ -53,6 +53,7 @@ jobs:
     if: ${{ needs.detect.outputs.has_changes == 'true' }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
     uses: ./.github/workflows/apply.yml
     with:
