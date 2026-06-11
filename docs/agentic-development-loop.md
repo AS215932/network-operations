@@ -733,6 +733,19 @@ Phase 17 adds a dedicated implementation writer stage:
   explicit gates;
 - feature summaries include `diff_preview` for quick Pi/CLI review.
 
+Phase 18 activates the implementation writer for live LLM use:
+
+- `docs/agent-loops/implementation-writer.md` is the writer system prompt;
+- `model-policy.yml` includes an `implementation_writer` routing entry;
+- when `HYRULE_MOCK_LLM=1`, the writer remains deterministic unless an
+  explicit `llm_mock_responses["implementation_writer"]` response is supplied;
+- when `HYRULE_MOCK_LLM=0`, the writer invokes the selected provider and must
+  return structured `create`/`replace` mutations;
+- provider/API failures are converted into `validation_errors` with node
+  `implementation_writer` and retry counter `llm_implementation_writer`;
+- the graph retries writer failures through the normal remediation loop and
+  exits to human sign-off when the counter reaches `3`.
+
 From Pi, use the global extension command:
 
 ```text

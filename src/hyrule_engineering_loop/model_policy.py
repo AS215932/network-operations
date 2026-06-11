@@ -12,6 +12,7 @@ import yaml
 from hyrule_engineering_loop.state import GraphState, RiskLevel, RoleName
 
 Tier = Literal["cheap", "mid", "strong", "frontier"]
+ModelPolicyNode = RoleName | Literal["implementation_writer"]
 TIER_ORDER: tuple[Tier, ...] = ("cheap", "mid", "strong", "frontier")
 DEFAULT_MODEL_POLICY_PATH = Path("model-policy.yml")
 MODEL_POLICY_ROLES: tuple[RoleName, ...] = (
@@ -22,6 +23,7 @@ MODEL_POLICY_ROLES: tuple[RoleName, ...] = (
     "finops_integrity",
     "virtual_lab_chaos",
 )
+MODEL_POLICY_NODES: tuple[ModelPolicyNode, ...] = (*MODEL_POLICY_ROLES, "implementation_writer")
 
 
 @dataclass(frozen=True)
@@ -114,9 +116,9 @@ def _promote_to_min_tier(
     }
 
 
-def _retry_failure_count(role: RoleName, state: GraphState) -> int:
+def _retry_failure_count(node: ModelPolicyNode, state: GraphState) -> int:
     counters = state["retry_counters"]
-    keys = [role, f"llm_{role}"]
+    keys = [node, f"llm_{node}"]
     return max((counters.get(key, 0) for key in keys), default=0)
 
 
@@ -147,14 +149,14 @@ def _sample_state(
     return state
 
 
-def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
-    """Resolve the configured model for a role and current risk/retry state."""
+def select_model_for_node(node: ModelPolicyNode, state: GraphState) -> ModelSelection:
+    """Resolve the configured model for a routed node and current risk/retry state."""
     policy, policy_path = _load_policy(state.get("model_policy_file"))
     defaults = _mapping(policy.get("defaults"))
     roles = _mapping(policy.get("roles"))
     selected = {
         **defaults,
-        **_mapping(roles.get(role)),
+        **_mapping(roles.get(node)),
     }
     reason = "role_default"
 
@@ -172,7 +174,7 @@ def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
 
     retry_config = _mapping(policy.get("retry_escalation"))
     after_failures = retry_config.get("after_failures", 0)
-    if isinstance(after_failures, int) and _retry_failure_count(role, state) >= after_failures:
+    if isinstance(after_failures, int) and _retry_failure_count(node, state) >= after_failures:
         max_tier = _normalize_tier(retry_config.get("max_tier"), "frontier")
         selected = _promote_to_min_tier(
             selection=selected,
@@ -189,6 +191,11 @@ def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
         reason=reason,
         policy_path=policy_path,
     )
+
+
+def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
+    """Resolve the configured model for a senior role and current risk/retry state."""
+    return select_model_for_node(role, state)
 
 
 def provider_env_names(provider: str) -> dict[str, list[str]]:
@@ -223,7 +230,10 @@ def model_policy_snapshot(
     """Return a compact, operator-readable view of resolved role models."""
     policy, policy_path = _load_policy(path)
     state = _sample_state(risk_level=risk_level, policy_path=policy_path or (str(path) if path else None))
-    selections = [select_model_for_role(role, state).as_dict() | {"role": role} for role in MODEL_POLICY_ROLES]
+    selections = [
+        select_model_for_node(node, state).as_dict() | {"role": node}
+        for node in MODEL_POLICY_NODES
+    ]
     return {
         "policy_path": policy_path,
         "risk_level": risk_level,
@@ -255,7 +265,7 @@ def validate_model_policy(
         }
 
     roles = _mapping(policy.get("roles"))
-    unknown_roles = sorted(set(roles) - set(MODEL_POLICY_ROLES))
+    unknown_roles = sorted(set(roles) - set(MODEL_POLICY_NODES))
     for role in unknown_roles:
         errors.append(f"unknown role in model policy: {role}")
 
@@ -264,7 +274,7 @@ def validate_model_policy(
             errors.append(f"{section_name} must be a mapping")
 
     state = _sample_state(risk_level="low", policy_path=policy_path or (str(path) if path else None))
-    selections = [select_model_for_role(role, state) for role in MODEL_POLICY_ROLES]
+    selections = [select_model_for_node(node, state) for node in MODEL_POLICY_NODES]
     providers = sorted({selection.provider.lower() for selection in selections})
     provider_status: dict[str, dict[str, Any]] = {}
     for provider in providers:

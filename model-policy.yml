@@ -28,6 +28,10 @@ roles:
     provider: openrouter
     model: moonshotai/kimi-k2.6
     tier: mid
+  implementation_writer:
+    provider: openrouter
+    model: moonshotai/kimi-k2.6
+    tier: mid
 risk_overrides:
   high:
     min_tier: strong

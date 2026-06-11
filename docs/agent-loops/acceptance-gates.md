@@ -381,3 +381,20 @@ Safety requirements:
   workspace-safe gate from changed paths;
 - CLI and Pi summaries must include a compact `diff_preview` without dumping
   unbounded full diffs into chat.
+
+## Phase 18 Live Implementation Writer
+
+The implementation writer is a model-routed graph node, not a senior approval
+role. It uses `docs/agent-loops/implementation-writer.md` and the
+`implementation_writer` entry in `model-policy.yml`.
+
+Rules:
+
+- mock mode remains the default and must not require API keys;
+- explicit `llm_mock_responses["implementation_writer"]` responses must work in
+  mock mode and live mode for deterministic tests;
+- live mode is enabled only with `HYRULE_MOCK_LLM=0`;
+- live provider exceptions must be captured as structured `validation_errors`,
+  not raised out of the graph;
+- writer failures increment `llm_implementation_writer` and route through the
+  normal retry/circuit-breaker path.

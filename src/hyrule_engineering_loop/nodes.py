@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Iterable, cast
 
 from hyrule_engineering_loop.gate_runner import run_gate_commands, select_gate_commands_for_mutations
 from hyrule_engineering_loop.handoff import write_noc_handoff
-from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review
-from hyrule_engineering_loop.model_policy import select_model_for_role
+from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review, mock_llm_enabled
+from hyrule_engineering_loop.model_policy import select_model_for_node, select_model_for_role
 from hyrule_engineering_loop.policy import validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
 from hyrule_engineering_loop.promotion import PromotionError, diff_preview_from_results, promote_mutations
@@ -316,13 +317,48 @@ def _scaffold_feature_response(state: GraphState) -> RoleReviewOutput | None:
     )
 
 
-def _implementation_writer_response(state: GraphState) -> RoleReviewOutput | None:
-    mock = state.get("llm_mock_responses", {}).get("implementation_writer")
-    if mock is not None:
-        return RoleReviewOutput.model_validate(mock)
+def _implementation_writer_response(
+    state: GraphState,
+    *,
+    repo_context: dict[str, Any],
+) -> tuple[RoleReviewOutput | None, dict[str, Any] | None]:
     if state["proposed_mutations"]:
-        return None
-    return _scaffold_feature_response(state)
+        return None, None
+    has_mock = "implementation_writer" in state.get("llm_mock_responses", {})
+    if mock_llm_enabled() and not has_mock:
+        return _scaffold_feature_response(state), None
+    if not state.get("feature_request") and not has_mock:
+        return None, None
+
+    prompts = load_role_prompts()
+    system_prompt = prompts["implementation_writer"]
+    model_selection = select_model_for_node("implementation_writer", state)
+    writer_state = cast(GraphState, {**state, "repo_context_bundle": repo_context})
+    source_context = {
+        "feature_request": state.get("feature_request", ""),
+        "repo_context_bundle": json.dumps(repo_context, sort_keys=True),
+    }
+    review = invoke_role_review(
+        role="implementation_writer",
+        system_prompt=system_prompt,
+        source_context=source_context,
+        state=writer_state,
+        model_selection=model_selection,
+    )
+    metadata = {
+        "prompt_artifacts": {"implementation_writer": system_prompt},
+        "llm_outputs": [
+            {
+                "role": "implementation_writer",
+                "approved": review.approved,
+                "notes": review.notes,
+                "proposed_mutation_paths": [mutation.path for mutation in review.proposed_mutations],
+                "source_files": ["feature_request", "repo_context_bundle"],
+                "model_selection": model_selection.as_dict(),
+            }
+        ],
+    }
+    return review, metadata
 
 
 def _mutation_operations_from_writer(review: RoleReviewOutput, *, source: str) -> list[dict[str, Any]]:
@@ -342,7 +378,7 @@ def implementation_node(state: GraphState) -> StateUpdate:
     repo_context = build_repo_context_bundle(state)
     mutations = dict(state["proposed_mutations"])
     operations: list[dict[str, Any]] = []
-    writer = _implementation_writer_response(state)
+    writer, writer_metadata = _implementation_writer_response(state, repo_context=repo_context)
     if writer is not None:
         for mutation in writer.proposed_mutations:
             mutations[mutation.path] = mutation.content
@@ -363,6 +399,18 @@ def implementation_node(state: GraphState) -> StateUpdate:
         "repo_context_bundle": repo_context,
         "implementation_writer_status": "complete" if writer is not None else "not_required",
     }
+    if writer_metadata:
+        update.update(writer_metadata)
+    if writer is not None and (not writer.approved or writer.validation_errors):
+        update["validation_errors"] = writer.validation_errors or [
+            {
+                "node": "implementation_writer",
+                "domain": "llm",
+                "message": "implementation writer did not approve the generated tranche",
+            }
+        ]
+        update["retry_counters"] = _increment_counter(state["retry_counters"], "llm_implementation_writer")
+        update["implementation_writer_status"] = "failed"
     if operations:
         update["proposed_mutation_operations"] = operations
     if not state.get("gate_commands") and mutations:
