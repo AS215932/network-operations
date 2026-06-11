@@ -96,6 +96,7 @@ def build_feature_state(
     scaffold_plan: bool = True,
     gate_command: list[str] | None = None,
     promotion_base_ref: str = "HEAD",
+    model_policy_file: str | None = None,
 ) -> GraphState:
     """Build a graph state from operator-friendly feature-intake arguments."""
     workspace_root = workspace_root.expanduser().resolve()
@@ -119,7 +120,7 @@ def build_feature_state(
     if not repo_source_files:
         repo_source_files = [f"{repo_name}:README.md"]
 
-    return {
+    state: GraphState = {
         "change_id": change_id,
         "change_class": change_class,
         "risk_level": "low",
@@ -156,6 +157,9 @@ def build_feature_state(
         "feature_plan_path": active_plan_path,
         "gate_commands": _parse_gate_command(gate_command),
     }
+    if model_policy_file is not None:
+        state["model_policy_file"] = model_policy_file
+    return state
 
 
 def run_feature_intake(
@@ -173,6 +177,7 @@ def run_feature_intake(
     scaffold_plan: bool = True,
     gate_command: list[str] | None = None,
     promotion_base_ref: str = "HEAD",
+    model_policy_file: str | None = None,
 ) -> dict[str, Any]:
     """Run the graph from a human-authored feature request."""
     state = build_feature_state(
@@ -189,6 +194,7 @@ def run_feature_intake(
         scaffold_plan=scaffold_plan,
         gate_command=gate_command,
         promotion_base_ref=promotion_base_ref,
+        model_policy_file=model_policy_file,
     )
     graph = build_graph(checkpointer=MemorySaver())
     final_state = dict(graph.invoke(state, {"configurable": {"thread_id": change_id}}))

@@ -12,11 +12,20 @@ from langgraph.checkpoint.memory import MemorySaver
 from hyrule_engineering_loop.canary import CanaryDryRunError, run_sibling_repo_canary
 from hyrule_engineering_loop.feature import FeatureIntakeError, run_feature_intake
 from hyrule_engineering_loop.graph import build_graph
+from hyrule_engineering_loop.model_policy import (
+    model_policy_snapshot,
+    validate_model_policy,
+)
 from hyrule_engineering_loop.nodes import ALL_ROLES
 from hyrule_engineering_loop.operator_harness import OperatorHarnessError, run_operator_dry_run
 from hyrule_engineering_loop.pr import PRBoundaryError, publish_promoted_worktrees
 from hyrule_engineering_loop.promotion import rollback_promotions
 from hyrule_engineering_loop.state import ChangeClass, GraphState
+from hyrule_engineering_loop.trace import (
+    format_loop_trace_summary,
+    load_loop_trace,
+    summarize_loop_trace,
+)
 
 DEFAULT_STATE_DIR = Path(".engineering-loop-state")
 
@@ -88,6 +97,22 @@ def _parse_mutations(items: list[str] | None, *, option: str) -> dict[str, str]:
     return parsed
 
 
+def _model_summary_from_state(state: dict[str, Any]) -> list[dict[str, Any]]:
+    summary: list[dict[str, Any]] = []
+    for output in state.get("llm_outputs", []):
+        if not isinstance(output, dict):
+            continue
+        model_selection = output.get("model_selection")
+        summary.append(
+            {
+                "role": output.get("role"),
+                "approved": output.get("approved"),
+                "model_selection": model_selection if isinstance(model_selection, dict) else {},
+            }
+        )
+    return summary
+
+
 def run_command(args: argparse.Namespace) -> int:
     change_class = cast(ChangeClass, args.change_class)
     state = _default_state(args.change_id, change_class)
@@ -101,6 +126,8 @@ def run_command(args: argparse.Namespace) -> int:
         state["proposed_mutations"] = _parse_mutations(args.mutation, option="--mutation")
     if args.policy_file:
         state["policy_file"] = args.policy_file
+    if args.model_policy:
+        state["model_policy_file"] = args.model_policy
     if args.handoff_dir:
         state["handoff_output_dir"] = args.handoff_dir
     if args.gate_command:
@@ -296,6 +323,7 @@ def feature_command(args: argparse.Namespace) -> int:
             scaffold_plan=not args.no_scaffold_plan,
             gate_command=args.gate_command,
             promotion_base_ref=args.base_ref,
+            model_policy_file=args.model_policy,
         )
     except FeatureIntakeError as exc:
         print(f"[CLI] feature intake failed: {exc}")
@@ -311,8 +339,79 @@ def feature_command(args: argparse.Namespace) -> int:
         "policy_status": result["policy_status"],
         "promotion_status": result["promotion_status"],
         "gate_status": result["gate_status"],
+        "model_summary": _model_summary_from_state(result["final_state"]),
     }
     print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def models_show_command(args: argparse.Namespace) -> int:
+    snapshot = model_policy_snapshot(args.model_policy, risk_level=args.risk_level)
+    if args.json:
+        print(json.dumps(snapshot, indent=2, sort_keys=True))
+        return 0
+
+    print(f"policy_path: {snapshot['policy_path'] or 'default fallback'}")
+    print(f"risk_level: {snapshot['risk_level']}")
+    print("roles:")
+    for item in snapshot["roles"]:
+        print(
+            "  - "
+            f"{item['role']}: "
+            f"{item['provider']}/{item['model']} "
+            f"tier={item['tier']} "
+            f"reason={item['reason']}"
+        )
+    return 0
+
+
+def models_validate_command(args: argparse.Namespace) -> int:
+    result = validate_model_policy(args.model_policy, require_keys=args.require_keys)
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        print(f"ok: {result['ok']}")
+        print(f"policy_path: {result['policy_path'] or 'default fallback'}")
+        for provider, provider_status in result["providers"].items():
+            print(
+                "provider: "
+                f"{provider} "
+                f"api_key_present={provider_status['api_key_present']} "
+                f"api_key_env={','.join(provider_status['api_key_env'])}"
+            )
+        for warning in result["warnings"]:
+            print(f"warning: {warning}")
+        for error in result["errors"]:
+            print(f"error: {error}")
+    return 0 if result["ok"] else 1
+
+
+def trace_command(args: argparse.Namespace) -> int:
+    if args.trace_path:
+        trace_path = Path(args.trace_path).expanduser().resolve()
+    elif args.state_path:
+        state = _read_state(Path(args.state_path).expanduser().resolve())
+        raw_trace_path = state.get("loop_trace_path")
+        if not isinstance(raw_trace_path, str):
+            print("[CLI] state artifact has no loop_trace_path")
+            return 1
+        trace_path = Path(raw_trace_path).expanduser().resolve()
+    elif args.change_id:
+        state = _read_state(_state_path(Path(args.state_dir), args.change_id))
+        raw_trace_path = state.get("loop_trace_path")
+        if not isinstance(raw_trace_path, str):
+            print("[CLI] state artifact has no loop_trace_path")
+            return 1
+        trace_path = Path(raw_trace_path).expanduser().resolve()
+    else:
+        print("[CLI] trace requires change_id, --state-path, or --trace-path")
+        return 1
+
+    trace = load_loop_trace(trace_path)
+    if args.json:
+        print(json.dumps(summarize_loop_trace(trace), indent=2, sort_keys=True))
+    else:
+        print(format_loop_trace_summary(trace), end="")
     return 0
 
 
@@ -325,6 +424,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("change_id")
     run_parser.add_argument("change_class")
     run_parser.add_argument("--policy-file")
+    run_parser.add_argument("--model-policy")
     run_parser.add_argument("--handoff-dir")
     run_parser.add_argument("--promotion-enabled", action="store_true")
     run_parser.add_argument("--repo-workspace-root")
@@ -346,6 +446,7 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run_parser.add_argument("change_id")
     dry_run_parser.add_argument("change_class")
     dry_run_parser.add_argument("--policy-file")
+    dry_run_parser.add_argument("--model-policy")
     dry_run_parser.add_argument("--handoff-dir")
     dry_run_parser.add_argument("--repo-workspace-root")
     dry_run_parser.add_argument("--promotion-repo-name", action="append")
@@ -427,8 +528,35 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--plan-path")
     feature_parser.add_argument("--no-scaffold-plan", action="store_true")
     feature_parser.add_argument("--base-ref", default="HEAD")
+    feature_parser.add_argument("--model-policy")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
+
+    models_parser = subparsers.add_parser("models", help="inspect model routing policy")
+    models_subparsers = models_parser.add_subparsers(dest="models_command", required=True)
+
+    models_show_parser = models_subparsers.add_parser("show", help="show resolved role model routing")
+    models_show_parser.add_argument("--model-policy")
+    models_show_parser.add_argument(
+        "--risk-level",
+        choices=["low", "medium", "high", "critical"],
+        default="low",
+    )
+    models_show_parser.add_argument("--json", action="store_true")
+    models_show_parser.set_defaults(func=models_show_command)
+
+    models_validate_parser = models_subparsers.add_parser("validate", help="validate model policy and provider env")
+    models_validate_parser.add_argument("--model-policy")
+    models_validate_parser.add_argument("--require-keys", action="store_true")
+    models_validate_parser.add_argument("--json", action="store_true")
+    models_validate_parser.set_defaults(func=models_validate_command)
+
+    trace_parser = subparsers.add_parser("trace", help="print a compact loop trace summary")
+    trace_parser.add_argument("change_id", nargs="?")
+    trace_parser.add_argument("--state-path")
+    trace_parser.add_argument("--trace-path")
+    trace_parser.add_argument("--json", action="store_true")
+    trace_parser.set_defaults(func=trace_command)
 
     return parser
 
