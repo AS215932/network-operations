@@ -72,6 +72,7 @@ def test_feature_command_writes_compact_loop_trace(
     assert trace["event_count"] == len(trace["events"])
     assert {
         "classification",
+        "planner",
         "systems_engineer",
         "devops_netops",
         "repo_adapter",
@@ -80,6 +81,7 @@ def test_feature_command_writes_compact_loop_trace(
         "gate_execution",
         "workspace_cleanup",
         "policy",
+        "role_judgment",
         "promotion",
         "package_pr",
     }.issubset(nodes)

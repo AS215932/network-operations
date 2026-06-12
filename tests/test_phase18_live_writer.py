@@ -75,7 +75,7 @@ def test_implementation_writer_prompt_and_model_policy() -> None:
     selection = select_model_for_node("implementation_writer", state)
 
     assert "implementation_writer" in prompts
-    assert "Implementation Writer" in prompts["implementation_writer"]
+    assert "implementation-tranche" in prompts["implementation_writer"]
     assert selection.provider == "openrouter"
     assert selection.model == "moonshotai/kimi-k2.6"
     assert selection.tier == "mid"
@@ -90,6 +90,8 @@ def test_live_mode_uses_mocked_writer_response_and_records_model(
     state["llm_mock_responses"] = {
         "systems_engineer": {"approved": True},
         "devops_netops": {"approved": True},
+        "judge_systems_engineer": {"verdict": "approve"},
+        "judge_devops_netops": {"verdict": "approve"},
         "implementation_writer": {
             "approved": True,
             "notes": "mocked live writer",
