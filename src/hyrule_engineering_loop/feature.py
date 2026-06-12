@@ -199,6 +199,7 @@ def build_feature_state(
     live_mode: bool = False,
     dry_live_mode: bool = False,
     task_spec_path: Path | None = None,
+    memory_dir: str | None = None,
 ) -> GraphState:
     """Build a graph state from operator-friendly feature-intake arguments."""
     workspace_root = workspace_root.expanduser().resolve()
@@ -263,6 +264,8 @@ def build_feature_state(
     }
     if supplied_spec is not None:
         state["task_spec"] = supplied_spec
+    if memory_dir is not None:
+        state["memory_dir"] = memory_dir
     if model_policy_file is not None:
         state["model_policy_file"] = model_policy_file
     return state
@@ -281,6 +284,7 @@ def run_feature_dry_live(
     plan_path: str | None = None,
     promotion_base_ref: str = "HEAD",
     model_policy_file: str | None = None,
+    memory_dir: str | None = None,
 ) -> dict[str, Any]:
     """Build live writer prompt/context/model preview without provider calls."""
     state = build_feature_state(
@@ -300,6 +304,7 @@ def run_feature_dry_live(
         model_policy_file=model_policy_file,
         live_mode=False,
         dry_live_mode=True,
+        memory_dir=memory_dir,
     )
     preflight = preflight_feature_state(state, output_root=output_root, live=False)
     state["preflight_results"] = preflight
@@ -332,6 +337,7 @@ def run_feature_intake(
     model_policy_file: str | None = None,
     live_mode: bool = False,
     task_spec: Path | None = None,
+    memory_dir: str | None = None,
 ) -> dict[str, Any]:
     """Run the graph from a human-authored feature request."""
     state = build_feature_state(
@@ -351,6 +357,7 @@ def run_feature_intake(
         model_policy_file=model_policy_file,
         live_mode=live_mode,
         task_spec_path=task_spec,
+        memory_dir=memory_dir,
     )
     if live_mode:
         preflight = preflight_feature_state(state, output_root=output_root, live=True)
@@ -383,6 +390,7 @@ def run_feature_intake(
         "handoff_path": final_state.get("noc_handoff_path"),
         "trace_path": final_state.get("loop_trace_path"),
         "task_spec_path": final_state.get("task_spec_path"),
+        "reflection": final_state.get("reflection_results"),
         "repo_name": repo_name,
         "promotion_count": len(final_state.get("promotion_results", [])),
         "requires_human_signoff": final_state.get("requires_human_signoff", False),

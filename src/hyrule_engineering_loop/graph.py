@@ -26,6 +26,7 @@ from hyrule_engineering_loop.nodes import (
     planner_node,
     policy_node,
     promotion_node,
+    reflection_node,
     repo_adapter_node,
     required_roles_for_state,
     role_judgment_node,
@@ -182,6 +183,7 @@ def build_graph(
     graph.add_node("promotion", promotion_node)
     graph.add_node("package_pr", package_pr_node)
     graph.add_node("human_signoff", human_signoff_node)
+    graph.add_node("reflection", reflection_node)
 
     graph.add_edge(START, "classification")
     graph.add_edge("classification", "planner")
@@ -270,7 +272,8 @@ def build_graph(
             "human_signoff": "human_signoff",
         },
     )
-    graph.add_edge("package_pr", END)
-    graph.add_edge("human_signoff", END)
+    graph.add_edge("package_pr", "reflection")
+    graph.add_edge("human_signoff", "reflection")
+    graph.add_edge("reflection", END)
 
     return graph.compile(checkpointer=checkpointer, interrupt_before=interrupt_before)

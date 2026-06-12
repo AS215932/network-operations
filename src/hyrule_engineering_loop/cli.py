@@ -18,6 +18,16 @@ from hyrule_engineering_loop.feature import (
     run_feature_intake,
 )
 from hyrule_engineering_loop.graph import build_graph
+from hyrule_engineering_loop.intake import (
+    APPROVED_LABEL,
+    CANDIDATE_LABEL,
+    GhCli,
+    ensure_labels,
+    list_issues_with_label,
+    mine_all_signals,
+    signals_to_candidates,
+)
+from hyrule_engineering_loop.memory import list_memory
 from hyrule_engineering_loop.model_policy import (
     model_policy_snapshot,
     validate_model_policy,
@@ -337,6 +347,7 @@ def feature_command(args: argparse.Namespace) -> int:
                 plan_path=args.plan_path,
                 promotion_base_ref=args.base_ref,
                 model_policy_file=args.model_policy,
+                memory_dir=args.memory_dir,
             )
         except FeatureIntakeError as exc:
             print(f"[CLI] feature dry-live failed: {exc}")
@@ -362,6 +373,7 @@ def feature_command(args: argparse.Namespace) -> int:
             model_policy_file=args.model_policy,
             live_mode=args.live,
             task_spec=Path(args.task_spec) if args.task_spec else None,
+            memory_dir=args.memory_dir,
         )
     except FeaturePreflightError as exc:
         print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
@@ -375,6 +387,7 @@ def feature_command(args: argparse.Namespace) -> int:
         "handoff_path": result["handoff_path"],
         "trace_path": result["trace_path"],
         "task_spec_path": result.get("task_spec_path"),
+        "reflection": result.get("reflection"),
         "repo_name": result["repo_name"],
         "promotion_count": result["promotion_count"],
         "requires_human_signoff": result["requires_human_signoff"],
@@ -434,6 +447,98 @@ def backend_canary_command(args: argparse.Namespace) -> int:
     if result.get("signoff_status") is not None:
         summary["signoff_status"] = result["signoff_status"]
     print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+DEFAULT_INTAKE_REPO = "AS215932/network-operations"
+
+
+def intake_scan_command(args: argparse.Namespace) -> int:
+    client = GhCli()
+    signals, skipped = mine_all_signals(repo=args.repo, client=client)
+    report = signals_to_candidates(
+        signals, repo=args.repo, client=client, dry_run=args.dry_run
+    )
+    report.skipped_miners = skipped
+    payload = report.as_dict()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(f"intake scan ({'dry-run, nothing filed' if args.dry_run else 'filed'}):")
+    for entry in payload["filed"]:
+        print(f"  - {entry['source']}: {entry['title']}" + (f" -> {entry['url']}" if entry.get("url") else ""))
+    for entry in payload["deduplicated"]:
+        print(f"  - deduplicated (open issue #{entry['existing_issue']}): {entry['title']}")
+    for note in payload["skipped_miners"]:
+        print(f"  - skipped: {note}")
+    return 0
+
+
+def intake_queue_command(args: argparse.Namespace) -> int:
+    client = GhCli()
+    repos = args.repo or [DEFAULT_INTAKE_REPO]
+    approved = list_issues_with_label(repos, APPROVED_LABEL, client=client)
+    candidates = list_issues_with_label(repos, CANDIDATE_LABEL, client=client)
+    payload = {
+        "approved": [item.as_dict() for item in approved],
+        "candidates": [item.as_dict() for item in candidates],
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(f"approved (eligible for autonomous runs, label {APPROVED_LABEL}):")
+    for item in approved or []:
+        print(f"  - [{item.score:.1f}] {item.repo}#{item.number} {item.title}")
+    if not approved:
+        print("  - (none)")
+    print(f"candidates (awaiting human triage, label {CANDIDATE_LABEL}):")
+    for item in candidates or []:
+        print(f"  - [{item.score:.1f}] {item.repo}#{item.number} {item.title}")
+    if not candidates:
+        print("  - (none)")
+    return 0
+
+
+def intake_labels_command(args: argparse.Namespace) -> int:
+    repos = args.repo or [DEFAULT_INTAKE_REPO]
+    if not args.apply:
+        print(f"would create {CANDIDATE_LABEL} and {APPROVED_LABEL} in: {', '.join(repos)}")
+        print("re-run with --apply to create them")
+        return 0
+    created = ensure_labels(repos, client=GhCli())
+    for item in created:
+        print(f"ensured {item}")
+    return 0
+
+
+def lessons_command(args: argparse.Namespace) -> int:
+    """Review lessons and pending proposals; merging stays a human git action."""
+    import os
+
+    raw_root = args.memory_dir or os.environ.get("HYRULE_MEMORY_DIR")
+    if raw_root:
+        root = Path(raw_root).expanduser().resolve()
+    else:
+        root = Path(__file__).resolve().parents[2] / "memory"
+    summary = list_memory(root)
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+
+    print(f"memory root: {summary['root']}")
+    print(f"journal entries: {summary['journal_count']}")
+    print("lessons:")
+    for item in summary["lessons"] or [{"name": "(none)", "path": "", "chars": 0}]:
+        print(f"  - {item['name']}: {item['chars']} chars {item['path']}")
+    print("pending proposals (review, then merge into memory/lessons/ by hand):")
+    if not summary["proposals"]:
+        print("  - (none)")
+    for item in summary["proposals"]:
+        print(f"  - {item['name']}: {item['path']}")
+        excerpt = str(item.get("excerpt", "")).strip()
+        if excerpt:
+            for line in excerpt.splitlines()[:6]:
+                print(f"      {line}")
     return 0
 
 
@@ -653,6 +758,7 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--mock-mutation", action="append", default=[])
     feature_parser.add_argument("--plan-path")
     feature_parser.add_argument("--task-spec")
+    feature_parser.add_argument("--memory-dir")
     feature_parser.add_argument("--no-scaffold-plan", action="store_true")
     feature_parser.add_argument("--base-ref", default="HEAD")
     feature_parser.add_argument("--model-policy")
@@ -660,6 +766,42 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--dry-live", action="store_true")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
+
+    intake_parser = subparsers.add_parser("intake", help="signal mining and triage inbox")
+    intake_subparsers = intake_parser.add_subparsers(dest="intake_command", required=True)
+
+    intake_scan_parser = intake_subparsers.add_parser(
+        "scan",
+        help="mine read-only signals and file candidate issues (loop:candidate)",
+    )
+    intake_scan_parser.add_argument("--repo", default=DEFAULT_INTAKE_REPO)
+    intake_scan_parser.add_argument("--dry-run", action="store_true")
+    intake_scan_parser.add_argument("--json", action="store_true")
+    intake_scan_parser.set_defaults(func=intake_scan_command)
+
+    intake_queue_parser = intake_subparsers.add_parser(
+        "queue",
+        help="show the approved queue and the candidate triage inbox",
+    )
+    intake_queue_parser.add_argument("--repo", action="append")
+    intake_queue_parser.add_argument("--json", action="store_true")
+    intake_queue_parser.set_defaults(func=intake_queue_command)
+
+    intake_labels_parser = intake_subparsers.add_parser(
+        "labels",
+        help="create the loop:candidate / loop:approved labels (operator action)",
+    )
+    intake_labels_parser.add_argument("--repo", action="append")
+    intake_labels_parser.add_argument("--apply", action="store_true")
+    intake_labels_parser.set_defaults(func=intake_labels_command)
+
+    lessons_parser = subparsers.add_parser(
+        "lessons",
+        help="review memory lessons and pending lesson proposals",
+    )
+    lessons_parser.add_argument("--memory-dir")
+    lessons_parser.add_argument("--json", action="store_true")
+    lessons_parser.set_defaults(func=lessons_command)
 
     models_parser = subparsers.add_parser("models", help="inspect model routing policy")
     models_subparsers = models_parser.add_subparsers(dest="models_command", required=True)

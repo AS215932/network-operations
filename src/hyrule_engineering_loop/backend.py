@@ -16,12 +16,13 @@ import os
 import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Mapping, Protocol, TypeAlias
 
 import yaml
 
+from hyrule_engineering_loop.memory import journal_tail_for_repo, load_lessons_for_repo
 from hyrule_engineering_loop.state import GraphState
 from hyrule_engineering_loop.workspace import (
     _safe_relative_path,
@@ -87,6 +88,8 @@ class TaskSpec:
     non_goals: str = ""
     role_constraints: tuple[str, ...] = ()
     remediation_findings: tuple[str, ...] = ()
+    lessons: Mapping[str, str] = field(default_factory=dict)
+    journal_tail: str = ""
 
 
 @dataclass(frozen=True)
@@ -217,16 +220,6 @@ def load_skills_index(root: Path | None = None) -> list[dict[str, str]]:
     return index
 
 
-def load_lessons(repo: str | None, root: Path | None = None) -> str | None:
-    """Return ``memory/lessons/<repo>.md`` when present (Phase D populates it)."""
-    if not repo:
-        return None
-    lessons_path = (root or loop_repo_root()) / "memory" / "lessons" / f"{repo}.md"
-    if lessons_path.is_file():
-        return lessons_path.read_text(encoding="utf-8")
-    return None
-
-
 def assemble_backend_prompt(task_spec: TaskSpec, constraints: BackendConstraints) -> str:
     """Compose the harness-agnostic prompt: spec, boundaries, skills, lessons."""
     lines: list[str] = [
@@ -271,10 +264,14 @@ def assemble_backend_prompt(task_spec: TaskSpec, constraints: BackendConstraints
     if skills:
         lines.extend(["", "## Skills (read the full file on demand)", ""])
         lines.extend(f"- {item['name']}: {item['description']}" for item in skills)
-    for repo in sorted(task_spec.allowed_paths):
-        lessons = load_lessons(repo)
+    for repo in sorted(task_spec.lessons):
+        lessons = task_spec.lessons[repo]
         if lessons:
             lines.extend(["", f"## Lessons for {repo}", "", lessons.rstrip()])
+    if task_spec.journal_tail:
+        lines.extend(
+            ["", "## Recent run journal (what went wrong last time)", "", task_spec.journal_tail.rstrip()]
+        )
     lines.append("")
     return "\n".join(lines)
 
@@ -784,6 +781,16 @@ def task_spec_from_state(state: GraphState) -> TaskSpec:
             line += f" — {remediation}"
         findings.append(line)
 
+    lessons: dict[str, str] = {}
+    journal_parts: list[str] = []
+    for repo in sorted(allowed):
+        repo_lessons = load_lessons_for_repo(state, repo)
+        if repo_lessons:
+            lessons[repo] = repo_lessons
+        tail = journal_tail_for_repo(state, repo)
+        if tail:
+            journal_parts.append(tail)
+
     return TaskSpec(
         change_id=state["change_id"],
         change_class=str(state["change_class"]),
@@ -797,6 +804,8 @@ def task_spec_from_state(state: GraphState) -> TaskSpec:
         non_goals=str(spec.get("non_goals", "")),
         role_constraints=tuple(constraints_lines),
         remediation_findings=tuple(findings),
+        lessons=lessons,
+        journal_tail="\n\n---\n\n".join(journal_parts),
     )
 
 
