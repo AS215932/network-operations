@@ -21,6 +21,11 @@ for key in{% for key in hyrule_cloud_required_env_keys %} {{ key }}{% endfor %};
   fi
 done
 
+if grep -Eq '^PAYMENT_DEV_BYPASS_SECRET=.+$' "$env_file"; then
+  echo "hyrule-cloud production env must leave PAYMENT_DEV_BYPASS_SECRET empty" >&2
+  exit 1
+fi
+
 chgrp "{{ hyrule_cloud_app_group }}" "$env_file"
 chmod 0640 "$env_file"
 

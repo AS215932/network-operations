@@ -15,6 +15,14 @@ MON_DOMAIN="mon.${INFRA_DOMAIN}"
 DEV_BYPASS="${2:-}"
 PASS=0
 FAIL=0
+SMOKE_TMP=""
+
+cleanup() {
+    if [ -n "$SMOKE_TMP" ] && [ -d "$SMOKE_TMP" ]; then
+        rm -rf "$SMOKE_TMP"
+    fi
+}
+trap cleanup EXIT
 
 green() { echo -e "\033[32m✓ $1\033[0m"; }
 red()   { echo -e "\033[31m✗ $1\033[0m"; }
@@ -24,10 +32,10 @@ check() {
     shift
     if "$@" >/dev/null 2>&1; then
         green "$desc"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         red "$desc"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
@@ -36,10 +44,10 @@ check_shell() {
     local cmd="$2"
     if bash -c "$cmd" >/dev/null 2>&1; then
         green "$desc"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         red "$desc"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 }
 
@@ -76,7 +84,11 @@ echo "--- API Endpoints ---"
 check_shell "GET /v1/pricing returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/pricing' | python3 -m json.tool"
 check_shell "GET /v1/os/list returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/os/list' | python3 -m json.tool"
 check_shell "GET /v1/payments/networks returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/payments/networks' | python3 -m json.tool"
+check_shell "GET /v1/payments/networks advertises BTC/XMR" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/payments/networks' | python3 -c 'import json,sys; native=json.load(sys.stdin).get(\"native\", []); raise SystemExit(0 if {\"BTC\",\"XMR\"}.issubset(set(native)) else 1)'"
 check_shell "x402 manifest at /.well-known/x402.json" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -m json.tool"
+check_shell "x402 manifest advertises VM/domain/network resources" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -c 'import json,sys; paths={r.get(\"path\") for r in json.load(sys.stdin).get(\"resources\", [])}; raise SystemExit(0 if {\"/v1/vm/create\",\"/v1/domain/register\",\"/v1/network/request\"}.issubset(paths) else 1)'"
+check_shell "GET /v1/domain/check returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/domain/check?domain=example.com' | python3 -m json.tool"
+check_shell "POST /v1/network/request requires payment" "test \"\$(curl -6 -s -o /dev/null -w '%{http_code}' -X POST 'https://$CUSTOMER_API_DOMAIN/v1/network/request' -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\",\"proxy_mode\":\"direct\"}')\" = '402'"
 
 # --- Web Frontend ---
 echo ""
@@ -100,17 +112,27 @@ check "Prometheus targets reachable" curl -6 -sf "http://[2a0c:b641:b50:2::50]:9
 if [ -n "$DEV_BYPASS" ]; then
     echo ""
     echo "--- VM Provisioning ---"
+    SMOKE_TMP="$(mktemp -d)"
+    ssh-keygen -q -t ed25519 -N "" -C "smoketest@hyrule" -f "$SMOKE_TMP/id_ed25519"
+    SSH_PUB="$(cat "$SMOKE_TMP/id_ed25519.pub")"
+    CREATE_BODY="$(python3 - "$SSH_PUB" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+    "duration_days": 1,
+    "size": "xs",
+    "os": "debian-13",
+    "ssh_pubkey": sys.argv[1],
+    "open_ports": [22, 80, 443],
+}))
+PY
+)"
 
     CREATE_RESP=$(curl -6 -sf -X POST "https://$CUSTOMER_API_DOMAIN/v1/vm/create" \
         -H "Content-Type: application/json" \
         -H "X-DEV-BYPASS: $DEV_BYPASS" \
-        -d '{
-            "duration_days": 1,
-            "size": "xs",
-            "os": "debian-13",
-            "ssh_pubkey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest smoketest@hyrule",
-            "open_ports": [22, 80, 443]
-        }' 2>/dev/null || echo "FAILED")
+        -d "$CREATE_BODY" 2>/dev/null || echo "FAILED")
 
     if echo "$CREATE_RESP" | python3 -m json.tool >/dev/null 2>&1; then
         VM_ID=$(echo "$CREATE_RESP" | json_get "vm_id" || true)
@@ -118,20 +140,20 @@ if [ -n "$DEV_BYPASS" ]; then
         STATUS_URL=$(echo "$CREATE_RESP" | json_get "status_url" || true)
         if [ -n "$VM_ID" ]; then
             green "VM creation accepted (vm_id: $VM_ID)"
-            ((PASS++))
+            PASS=$((PASS + 1))
             if [ -n "$STATUS_URL" ] && echo "$STATUS_URL" | grep -q "/v1/vm/$VM_ID/status$"; then
                 green "VM create response includes public status_url"
-                ((PASS++))
+                PASS=$((PASS + 1))
             else
                 red "VM create response missing public status_url"
-                ((FAIL++))
+                FAIL=$((FAIL + 1))
             fi
             if [ -n "$MGMT_TOKEN" ]; then
                 green "VM create response includes management token"
-                ((PASS++))
+                PASS=$((PASS + 1))
             else
                 red "VM create response missing management token"
-                ((FAIL++))
+                FAIL=$((FAIL + 1))
             fi
 
             # Poll for ready status (max 120s)
@@ -147,7 +169,7 @@ if [ -n "$DEV_BYPASS" ]; then
 
             if [ "$STATUS" = "ready" ]; then
                 green "VM reached ready status"
-                ((PASS++))
+                PASS=$((PASS + 1))
 
                 # Check DNS AAAA record
                 HOSTNAME=$(echo "$STATUS_RESP" | json_get "hostname" || true)
@@ -159,6 +181,8 @@ if [ -n "$DEV_BYPASS" ]; then
                 VM_IP=$(echo "$STATUS_RESP" | json_get "ipv6" || true)
                 if [ -n "$VM_IP" ]; then
                     check_shell "VM IPv6 is in AS215932 space" "echo '$VM_IP' | grep -q '2a0c:b641:b5'"
+                    check_shell "SSH works over IPv6 from outside AS215932" \
+                        "ssh -6 -i '$SMOKE_TMP/id_ed25519' -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 root@'$VM_IP' true"
                 fi
 
                 if [ -n "$MGMT_TOKEN" ]; then
@@ -168,7 +192,7 @@ if [ -n "$DEV_BYPASS" ]; then
                 fi
             else
                 red "VM did not reach ready status (current: $STATUS)"
-                ((FAIL++))
+                FAIL=$((FAIL + 1))
             fi
 
             # Cleanup
@@ -180,14 +204,14 @@ if [ -n "$DEV_BYPASS" ]; then
                     -H "X-DEV-BYPASS: $DEV_BYPASS" >/dev/null 2>&1 || true
             fi
             green "Test VM cleanup requested"
-            ((PASS++))
+            PASS=$((PASS + 1))
         else
             red "VM creation returned no ID"
-            ((FAIL++))
+            FAIL=$((FAIL + 1))
         fi
     else
         red "VM creation failed: $CREATE_RESP"
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
 else
     echo ""
