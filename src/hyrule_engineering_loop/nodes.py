@@ -6,13 +6,27 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, cast
 
+from hyrule_engineering_loop.backend import (
+    constraints_from_state,
+    create_backend,
+    task_spec_from_state,
+)
 from hyrule_engineering_loop.gate_runner import run_gate_commands, select_gate_commands_for_mutations
 from hyrule_engineering_loop.handoff import write_noc_handoff
 from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review, mock_llm_enabled
-from hyrule_engineering_loop.model_policy import select_model_for_node, select_model_for_role
+from hyrule_engineering_loop.model_policy import (
+    select_backend_for_state,
+    select_model_for_node,
+    select_model_for_role,
+)
 from hyrule_engineering_loop.policy import validate_gate_commands_for_state, validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
-from hyrule_engineering_loop.promotion import PromotionError, diff_preview_from_results, promote_mutations
+from hyrule_engineering_loop.promotion import (
+    PromotionError,
+    capture_worktree_results,
+    diff_preview_from_results,
+    setup_worktrees_for_state,
+)
 from hyrule_engineering_loop.repo_adapter import (
     RepoAdapterError,
     build_repo_context_bundle,
@@ -20,7 +34,7 @@ from hyrule_engineering_loop.repo_adapter import (
 )
 from hyrule_engineering_loop.state import ChangeClass, GraphState, RoleApprovals, RoleName
 from hyrule_engineering_loop.trace import trace_event, with_trace, write_loop_trace
-from hyrule_engineering_loop.workspace import cleanup_workspace, write_mutations_to_workspace
+from hyrule_engineering_loop.workspace import cleanup_workspace
 
 StateUpdate = dict[str, Any]
 
@@ -373,19 +387,82 @@ def _mutation_operations_from_writer(review: RoleReviewOutput, *, source: str) -
     ]
 
 
-def implementation_node(state: GraphState) -> StateUpdate:
-    print("[Node: Implementation Writer] Preparing implementation tranche...")
+def worktree_setup_node(state: GraphState) -> StateUpdate:
+    print("[Node: Worktree Setup] Creating branch-backed worktrees before implementation...")
+    if not state.get("promotion_enabled", False):
+        update = cast(StateUpdate, {"worktree_status": "not_requested"})
+        return with_trace("worktree_setup", state, update, input_keys=["promotion_enabled"])
+
+    try:
+        results = setup_worktrees_for_state(state)
+    except PromotionError as exc:
+        update = cast(StateUpdate, {
+            "worktree_status": "failed",
+            "requires_human_signoff": True,
+            "validation_errors": [
+                {
+                    "node": "worktree_setup",
+                    "domain": "devops",
+                    "message": str(exc),
+                }
+            ],
+            "retry_counters": _increment_counter(state["retry_counters"], "worktree_setup"),
+        })
+        return with_trace(
+            "worktree_setup",
+            state,
+            update,
+            input_keys=["promotion_repositories", "promotion_worktree_root", "promotion_base_ref"],
+        )
+
+    update = cast(StateUpdate, {
+        "worktree_status": "passed",
+        "worktree_results": results,
+    })
+    return with_trace(
+        "worktree_setup",
+        state,
+        update,
+        input_keys=["promotion_repositories", "promotion_worktree_root", "promotion_base_ref"],
+    )
+
+
+def delegate_implementation_node(state: GraphState) -> StateUpdate:
+    print("[Node: Implementation Delegation] Executing coding-agent backend in guarded worktree...")
     repo_context = build_repo_context_bundle(state)
+    selection = select_backend_for_state(state)
+
     mutations = dict(state["proposed_mutations"])
-    operations: list[dict[str, Any]] = []
-    writer, writer_metadata = _implementation_writer_response(state, repo_context=repo_context)
+    new_operations: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    retry_key: str | None = None
+    writer_status = "not_required"
+
+    if selection.name == "mock":
+        writer, writer_metadata = _implementation_writer_response(state, repo_context=repo_context)
+    else:
+        writer, writer_metadata = None, None
     if writer is not None:
         for mutation in writer.proposed_mutations:
             mutations[mutation.path] = mutation.content
-        operations.extend(_mutation_operations_from_writer(writer, source="implementation_writer"))
-    elif not mutations and not state.get("feature_request"):
-        mutations.setdefault("hyrule-infra", f"mock diff for {state['change_id']}")
-        operations.append(
+        new_operations.extend(_mutation_operations_from_writer(writer, source="implementation_writer"))
+        writer_status = "complete"
+        if not writer.approved or writer.validation_errors:
+            errors.extend(
+                writer.validation_errors
+                or [
+                    {
+                        "node": "implementation_writer",
+                        "domain": "llm",
+                        "message": "implementation writer did not approve the generated tranche",
+                    }
+                ]
+            )
+            retry_key = "llm_implementation_writer"
+            writer_status = "failed"
+    elif selection.name == "mock" and not mutations and not state.get("feature_request"):
+        mutations["hyrule-infra"] = f"mock diff for {state['change_id']}"
+        new_operations.append(
             {
                 "path": "hyrule-infra",
                 "content": mutations["hyrule-infra"],
@@ -397,44 +474,130 @@ def implementation_node(state: GraphState) -> StateUpdate:
     update: StateUpdate = {
         "proposed_mutations": mutations,
         "repo_context_bundle": repo_context,
-        "implementation_writer_status": "complete" if writer is not None else "not_required",
+        "backend_name": selection.name,
+        "implementation_writer_status": writer_status,
     }
     if writer_metadata:
         update.update(writer_metadata)
-    if writer is not None and (not writer.approved or writer.validation_errors):
-        update["validation_errors"] = writer.validation_errors or [
-            {
-                "node": "implementation_writer",
-                "domain": "llm",
-                "message": "implementation writer did not approve the generated tranche",
-            }
-        ]
-        update["retry_counters"] = _increment_counter(state["retry_counters"], "llm_implementation_writer")
-        update["implementation_writer_status"] = "failed"
-    if operations:
-        update["proposed_mutation_operations"] = operations
-    if not state.get("gate_commands") and mutations:
-        update["gate_commands"] = select_gate_commands_for_mutations(mutations)
+
+    all_operations = [*state.get("proposed_mutation_operations", []), *new_operations]
+    backend_runs: list[dict[str, Any]] = []
+    changed_paths: list[str] = []
+    requires_signoff = False
+
+    if writer_status != "failed":
+        spec = task_spec_from_state(state)
+        constraints = constraints_from_state(state)
+        worktrees = state.get("worktree_results") or []
+        if worktrees:
+            for worktree in worktrees:
+                repo = str(worktree.get("repo", ""))
+                backend = create_backend(
+                    selection.name,
+                    command=selection.command,
+                    mutations=mutations,
+                    operations=all_operations,
+                    repo=repo,
+                )
+                result = backend.execute(
+                    task_spec=spec,
+                    worktree=Path(str(worktree.get("worktree_path", ""))),
+                    constraints=constraints,
+                )
+                backend_runs.append({"repo": repo, **result.as_dict()})
+                changed_paths.extend(result.changed_paths)
+                if result.status == "budget_exhausted":
+                    writer_status = "budget_exhausted"
+                    requires_signoff = True
+                    errors.append(
+                        {
+                            "node": "delegate_implementation",
+                            "domain": "devops",
+                            "message": f"backend budget exhausted for {repo}: {result.notes}",
+                        }
+                    )
+                    retry_key = retry_key or "backend"
+                elif result.status == "failed":
+                    writer_status = "failed"
+                    errors.append(
+                        {
+                            "node": "delegate_implementation",
+                            "domain": "devops",
+                            "message": result.error or f"backend {selection.name} failed for {repo}",
+                        }
+                    )
+                    retry_key = retry_key or "backend"
+        elif selection.name == "mock":
+            backend = create_backend(
+                "mock", mutations=mutations, operations=all_operations, repo=None
+            )
+            result = backend.execute(task_spec=spec, worktree=None, constraints=constraints)
+            backend_runs.append({"repo": None, **result.as_dict()})
+            changed_paths.extend(result.changed_paths)
+            if result.workspace_root is not None:
+                update["workspace_root"] = result.workspace_root
+                update["workspace_written_files"] = list(result.changed_paths)
+                update["workspace_cleaned_up"] = False
+            if result.status == "budget_exhausted":
+                writer_status = "budget_exhausted"
+                requires_signoff = True
+                errors.append(
+                    {
+                        "node": "delegate_implementation",
+                        "domain": "devops",
+                        "message": f"backend budget exhausted: {result.notes}",
+                    }
+                )
+                retry_key = retry_key or "backend"
+            elif result.status == "failed":
+                writer_status = "failed"
+                errors.append(
+                    {
+                        "node": "delegate_implementation",
+                        "domain": "devops",
+                        "message": result.error or "mock backend failed",
+                    }
+                )
+                retry_key = retry_key or "backend"
+        else:
+            writer_status = "failed"
+            errors.append(
+                {
+                    "node": "delegate_implementation",
+                    "domain": "devops",
+                    "message": f"backend {selection.name} requires promotion-enabled worktrees",
+                }
+            )
+            retry_key = retry_key or "backend"
+
+    update["implementation_writer_status"] = writer_status
+    if requires_signoff:
+        update["requires_human_signoff"] = True
+    if backend_runs:
+        update["backend_results"] = backend_runs
+    if new_operations:
+        update["proposed_mutation_operations"] = new_operations
+    if errors:
+        update["validation_errors"] = errors
+        update["retry_counters"] = _increment_counter(
+            state["retry_counters"], retry_key or "backend"
+        )
+    if not state.get("gate_commands") and (changed_paths or mutations):
+        update["gate_commands"] = select_gate_commands_for_mutations(
+            changed_paths or list(mutations)
+        )
     return with_trace(
-        "implementation",
+        "delegate_implementation",
         state,
         update,
-        input_keys=["proposed_mutations", "feature_request", "repo_context_bundle", "change_id"],
+        input_keys=[
+            "proposed_mutations",
+            "feature_request",
+            "worktree_results",
+            "backend_budget",
+            "change_id",
+        ],
     )
-
-
-def workspace_writer_node(state: GraphState) -> StateUpdate:
-    print("[Node: Workspace Writer] Applying proposed mutations to temporary workspace...")
-    root, written = write_mutations_to_workspace(
-        state["proposed_mutations"],
-        state.get("proposed_mutation_operations"),
-    )
-    update = {
-        "workspace_root": str(root),
-        "workspace_written_files": written,
-        "workspace_cleaned_up": False,
-    }
-    return with_trace("workspace_writer", state, update, input_keys=["proposed_mutations"])
 
 
 def gate_execution_node(state: GraphState) -> StateUpdate:
@@ -445,7 +608,34 @@ def gate_execution_node(state: GraphState) -> StateUpdate:
             update = cast(StateUpdate, {"gate_status": "passed"})
             return with_trace("gate_execution", state, update, input_keys=["gate_commands", "workspace_root"])
 
-        results, errors = run_gate_commands(commands, cwd=state.get("workspace_root"))
+        violations = validate_gate_commands_for_state(state)
+        if violations:
+            update = cast(StateUpdate, {
+                "policy_status": "failed",
+                "requires_human_signoff": True,
+                "validation_errors": [
+                    {
+                        "node": "gate_policy",
+                        "domain": "security",
+                        "message": violation,
+                    }
+                    for violation in violations
+                ],
+                "retry_counters": _increment_counter(state["retry_counters"], "policy"),
+            })
+            return with_trace("gate_execution", state, update, input_keys=["gate_commands", "workspace_root"])
+
+        cwds: list[str | None] = [
+            str(worktree.get("worktree_path"))
+            for worktree in state.get("worktree_results") or []
+            if worktree.get("worktree_path")
+        ] or [state.get("workspace_root")]
+        results: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        for cwd in cwds:
+            cwd_results, cwd_errors = run_gate_commands(commands, cwd=cwd)
+            results.extend(cwd_results)
+            errors.extend(cwd_errors)
         if errors:
             update = cast(StateUpdate, {
                 "gate_results": results,
@@ -565,13 +755,13 @@ def policy_node(state: GraphState) -> StateUpdate:
 
 
 def promotion_node(state: GraphState) -> StateUpdate:
-    print("[Node: Promotion] Promoting validated mutations to branch-backed worktrees...")
+    print("[Node: Promotion] Capturing validated worktree diffs for human review...")
     if not state.get("promotion_enabled", False):
         update = cast(StateUpdate, {"promotion_status": "not_requested"})
         return with_trace("promotion", state, update, input_keys=["promotion_enabled"])
 
     try:
-        results = promote_mutations(state)
+        results = capture_worktree_results(state)
     except PromotionError as exc:
         update = cast(StateUpdate, {
             "promotion_status": "failed",
@@ -588,7 +778,7 @@ def promotion_node(state: GraphState) -> StateUpdate:
             "promotion",
             state,
             update,
-            input_keys=["promotion_repositories", "promotion_allowed_paths", "proposed_mutations"],
+            input_keys=["worktree_results", "promotion_allowed_paths", "proposed_mutations"],
         )
 
     update = cast(StateUpdate, {
@@ -601,7 +791,7 @@ def promotion_node(state: GraphState) -> StateUpdate:
         "promotion",
         state,
         update,
-        input_keys=["promotion_repositories", "promotion_allowed_paths", "proposed_mutations"],
+        input_keys=["worktree_results", "promotion_allowed_paths", "proposed_mutations"],
     )
 
 

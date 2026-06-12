@@ -3,27 +3,16 @@
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from hyrule_engineering_loop.state import GraphState
-from hyrule_engineering_loop.workspace import _safe_relative_path
 
 
 class PromotionError(RuntimeError):
     """Raised when a mutation cannot be safely promoted."""
-
-
-@dataclass(frozen=True)
-class ParsedMutation:
-    repo: str
-    path: Path
-    content: str
-    operation: str
 
 
 def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -41,57 +30,6 @@ def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def _slug(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9._/-]+", "-", value).strip("-") or "change"
-
-
-def _parse_mutations(state: GraphState) -> list[ParsedMutation]:
-    mutations = state["proposed_mutations"]
-    operation_by_path: dict[str, dict[str, Any]] = {}
-    for operation in state.get("proposed_mutation_operations", []):
-        raw_path = operation.get("path")
-        if isinstance(raw_path, str):
-            operation_by_path[raw_path] = operation
-
-    parsed: list[ParsedMutation] = []
-    for key, content in mutations.items():
-        if ":" not in key:
-            continue
-        repo, raw_path = key.split(":", 1)
-        if not repo:
-            raise PromotionError(f"empty repo in mutation key: {key}")
-        metadata = operation_by_path.get(key, {})
-        parsed.append(
-            ParsedMutation(
-                repo=repo,
-                path=_safe_relative_path(raw_path),
-                content=str(metadata.get("content", content)),
-                operation=str(metadata.get("operation", "create")),
-            )
-        )
-
-    parsed_keys = {f"{mutation.repo}:{mutation.path.as_posix()}" for mutation in parsed}
-    for key, metadata in operation_by_path.items():
-        if key in parsed_keys or ":" not in key:
-            continue
-        repo, raw_path = key.split(":", 1)
-        parsed.append(
-            ParsedMutation(
-                repo=repo,
-                path=_safe_relative_path(raw_path),
-                content=str(metadata.get("content", "")),
-                operation=str(metadata.get("operation", "create")),
-            )
-        )
-    return parsed
-
-
-def _path_allowed(path: Path, allowed_prefixes: list[str]) -> bool:
-    if not allowed_prefixes:
-        return False
-    for raw_prefix in allowed_prefixes:
-        prefix = _safe_relative_path(raw_prefix)
-        if path == prefix or path.is_relative_to(prefix):
-            return True
-    return False
 
 
 def _cleanup_worktree(repo_path: Path, branch: str, worktree_path: Path) -> None:
@@ -128,82 +66,52 @@ def diff_preview_from_results(results: list[dict[str, Any]], *, max_chars: int =
     return previews
 
 
-def promote_mutations(state: GraphState) -> list[dict[str, Any]]:
-    """Promote explicit ``repo:path`` mutations into branch-backed worktrees."""
-    parsed = _parse_mutations(state)
-    if not parsed:
+def setup_worktrees_for_state(state: GraphState) -> list[dict[str, Any]]:
+    """Create branch-backed worktrees *before* implementation (v2 Phase B).
+
+    Idempotent: when ``worktree_results`` already records live worktrees for
+    this change (a remediation round), they are returned unchanged so the
+    backend keeps iterating in the same tree.
+    """
+    if not state.get("promotion_enabled", False):
+        return []
+    repo_roots = state.get("promotion_repositories", {})
+    if not repo_roots:
         return []
 
-    repo_roots = state.get("promotion_repositories", {})
-    allowed_paths = state.get("promotion_allowed_paths", {})
+    existing = state.get("worktree_results") or []
+    if existing and all(Path(str(item.get("worktree_path", ""))).is_dir() for item in existing):
+        return list(existing)
+
     worktree_parent = Path(
         state.get("promotion_worktree_root")
         or tempfile.mkdtemp(prefix="hyrule-engineering-promotion-root-")
     ).resolve()
     worktree_parent.mkdir(parents=True, exist_ok=True)
     branch_prefix = state.get("promotion_branch_prefix", "hyrule-loop")
+    base_ref = state.get("promotion_base_ref", "HEAD")
 
     results: list[dict[str, Any]] = []
     created: list[tuple[Path, str, Path]] = []
-    by_repo: dict[str, list[ParsedMutation]] = {}
-    for mutation in parsed:
-        by_repo.setdefault(mutation.repo, []).append(mutation)
-
     try:
-        for repo_name, repo_mutations in by_repo.items():
-            if repo_name not in repo_roots:
-                raise PromotionError(f"repo not allowlisted for promotion: {repo_name}")
-            for mutation in repo_mutations:
-                if mutation.operation not in {"create", "replace"}:
-                    raise PromotionError(f"unsupported mutation operation: {mutation.operation}")
-                if not _path_allowed(mutation.path, allowed_paths.get(repo_name, [])):
-                    raise PromotionError(
-                        f"path not allowlisted for {repo_name}: {mutation.path.as_posix()}"
-                    )
-
+        for repo_name in sorted(repo_roots):
             repo_path = Path(repo_roots[repo_name]).expanduser().resolve()
             if not (repo_path / ".git").exists():
                 raise PromotionError(f"repo path is not a git checkout: {repo_path}")
 
             branch = f"{branch_prefix}/{_slug(state['change_id'])}/{_slug(repo_name)}"
             worktree_path = worktree_parent / f"{_slug(repo_name)}-{_slug(state['change_id'])}"
-            _run_git(["worktree", "add", "-b", branch, str(worktree_path), "HEAD"], cwd=repo_path)
+            if worktree_path.exists():
+                raise PromotionError(f"worktree path already exists: {worktree_path}")
+            _run_git(["worktree", "add", "-b", branch, str(worktree_path), base_ref], cwd=repo_path)
             created.append((repo_path, branch, worktree_path))
-
-            written_files: list[str] = []
-            mutation_operations: list[dict[str, str]] = []
-            for mutation in repo_mutations:
-                target = worktree_path / mutation.path
-                if mutation.operation == "create" and target.exists():
-                    raise PromotionError(
-                        f"create mutation target already exists: {repo_name}:{mutation.path.as_posix()}"
-                    )
-                if mutation.operation == "replace" and not target.exists():
-                    raise PromotionError(
-                        f"replace mutation target does not exist: {repo_name}:{mutation.path.as_posix()}"
-                    )
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(mutation.content, encoding="utf-8")
-                written_files.append(mutation.path.as_posix())
-                mutation_operations.append(
-                    {
-                        "path": f"{repo_name}:{mutation.path.as_posix()}",
-                        "operation": mutation.operation,
-                    }
-                )
-            _run_git(["add", "-N", "."], cwd=worktree_path)
-            diff = _run_git(["diff", "--", "."], cwd=worktree_path).stdout
-
             results.append(
                 {
                     "repo": repo_name,
                     "repo_path": str(repo_path),
                     "branch": branch,
                     "worktree_path": str(worktree_path),
-                    "written_files": written_files,
-                    "mutation_operations": mutation_operations,
-                    "diff": diff,
-                    "requires_human_signoff": True,
+                    "base_ref": base_ref,
                 }
             )
     except Exception:
@@ -211,8 +119,74 @@ def promote_mutations(state: GraphState) -> list[dict[str, Any]]:
             _cleanup_worktree(repo_path, branch, worktree_path)
         raise
 
-    if not results:
-        shutil.rmtree(worktree_parent, ignore_errors=True)
+    return results
+
+
+def _status_codes(worktree_path: Path) -> list[tuple[str, str]]:
+    raw = _run_git(["status", "--porcelain"], cwd=worktree_path).stdout
+    entries: list[tuple[str, str]] = []
+    for line in raw.splitlines():
+        if len(line) < 4:
+            continue
+        code = line[:2]
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        entries.append((code, path.strip().strip('"')))
+    return entries
+
+
+def _operation_for_code(code: str) -> str:
+    if "D" in code:
+        return "delete"
+    if "M" in code or "R" in code:
+        return "replace"
+    return "create"
+
+
+def capture_worktree_results(state: GraphState) -> list[dict[str, Any]]:
+    """Capture diffs from backend-mutated worktrees into promotion results.
+
+    The result shape is byte-compatible with the v1 ``promote_mutations``
+    output so the PR boundary, trace summarizers, and operator cleanup
+    commands keep working unchanged.
+    """
+    operation_by_key: dict[str, str] = {}
+    for metadata in state.get("proposed_mutation_operations", []):
+        raw_path = metadata.get("path")
+        if isinstance(raw_path, str):
+            operation_by_key[raw_path] = str(metadata.get("operation", "create"))
+
+    results: list[dict[str, Any]] = []
+    for worktree in state.get("worktree_results") or []:
+        repo_name = str(worktree.get("repo", ""))
+        worktree_path = Path(str(worktree.get("worktree_path", "")))
+        if not worktree_path.is_dir():
+            raise PromotionError(f"promoted worktree is missing: {worktree_path}")
+
+        _run_git(["add", "-A", "-N", "--", "."], cwd=worktree_path)
+        diff = _run_git(["diff", "--", "."], cwd=worktree_path).stdout
+        entries = _status_codes(worktree_path)
+        written_files = sorted({path for _, path in entries})
+        mutation_operations = [
+            {
+                "path": f"{repo_name}:{path}",
+                "operation": operation_by_key.get(f"{repo_name}:{path}", _operation_for_code(code)),
+            }
+            for code, path in entries
+        ]
+        results.append(
+            {
+                "repo": repo_name,
+                "repo_path": str(worktree.get("repo_path", "")),
+                "branch": str(worktree.get("branch", "")),
+                "worktree_path": str(worktree_path),
+                "written_files": written_files,
+                "mutation_operations": mutation_operations,
+                "diff": diff,
+                "requires_human_signoff": True,
+            }
+        )
     return results
 
 

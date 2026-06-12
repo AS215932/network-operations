@@ -53,3 +53,29 @@ tier_fallbacks:
   frontier:
     provider: openai
     model: gpt-5.5
+backends:
+  # Executor selection follows the implementation-writer tier, so the same
+  # risk/retry escalation that picks a stronger model can also pick a
+  # stronger harness. mock = deterministic offline backend (no API keys).
+  default: mock
+  tiers:
+    cheap: mock
+    mid: mock
+    strong: mock
+    frontier: mock
+  # To go live, point a tier at a real harness and (optionally) override
+  # the argv template; {prompt} and {max_iterations} are expanded:
+  # tiers:
+  #   strong: claude-code
+  # definitions:
+  #   claude-code:
+  #     command:
+  #       - claude
+  #       - -p
+  #       - "{prompt}"
+  #       - --output-format
+  #       - json
+  #       - --permission-mode
+  #       - acceptEdits
+  #       - --max-turns
+  #       - "{max_iterations}"

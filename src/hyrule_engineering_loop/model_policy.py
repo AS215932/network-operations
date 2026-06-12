@@ -174,7 +174,11 @@ def select_model_for_node(node: ModelPolicyNode, state: GraphState) -> ModelSele
 
     retry_config = _mapping(policy.get("retry_escalation"))
     after_failures = retry_config.get("after_failures", 0)
-    if isinstance(after_failures, int) and _retry_failure_count(node, state) >= after_failures:
+    if (
+        isinstance(after_failures, int)
+        and after_failures > 0
+        and _retry_failure_count(node, state) >= after_failures
+    ):
         max_tier = _normalize_tier(retry_config.get("max_tier"), "frontier")
         selected = _promote_to_min_tier(
             selection=selected,
@@ -196,6 +200,94 @@ def select_model_for_node(node: ModelPolicyNode, state: GraphState) -> ModelSele
 def select_model_for_role(role: RoleName, state: GraphState) -> ModelSelection:
     """Resolve the configured model for a senior role and current risk/retry state."""
     return select_model_for_node(role, state)
+
+
+KNOWN_BACKEND_NAMES: tuple[str, ...] = ("mock", "pi", "claude-code")
+
+
+@dataclass(frozen=True)
+class BackendSelection:
+    """Resolved coding-agent backend for one implementation delegation."""
+
+    name: str
+    tier: Tier
+    reason: str
+    command: list[str] | None
+    policy_path: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "tier": self.tier,
+            "reason": self.reason,
+            "command": list(self.command) if self.command else None,
+            "policy_path": self.policy_path or "",
+        }
+
+
+def select_backend_for_state(state: GraphState) -> BackendSelection:
+    """Resolve the executor through the same tier/risk/retry escalation as models.
+
+    The implementation-writer model selection already encodes risk minimum
+    tiers and retry escalation; the ``backends:`` policy section maps the
+    resulting tier onto an executor, so high-risk or repeatedly-failing work
+    can move to a stronger harness, not just a stronger model.
+    """
+    policy, policy_path = _load_policy(state.get("model_policy_file"))
+    backends = _mapping(policy.get("backends"))
+    writer = select_model_for_node("implementation_writer", state)
+
+    default_name = str(backends.get("default", "mock"))
+    tiers = _mapping(backends.get("tiers"))
+    raw_tier_name = tiers.get(writer.tier)
+    if isinstance(raw_tier_name, str) and raw_tier_name:
+        name = raw_tier_name
+        reason = f"backend_tier_{writer.tier}({writer.reason})"
+    else:
+        name = default_name
+        reason = f"backend_default({writer.reason})"
+
+    definitions = _mapping(backends.get("definitions"))
+    definition = _mapping(definitions.get(name))
+    raw_command = definition.get("command")
+    command = (
+        [str(part) for part in raw_command]
+        if isinstance(raw_command, list) and all(isinstance(part, str) for part in raw_command)
+        else None
+    )
+    return BackendSelection(
+        name=name,
+        tier=writer.tier,
+        reason=reason,
+        command=command,
+        policy_path=policy_path,
+    )
+
+
+def validate_backend_policy(policy: dict[str, Any]) -> list[str]:
+    """Return structural errors for the ``backends:`` policy section."""
+    errors: list[str] = []
+    backends = policy.get("backends")
+    if backends is None:
+        return errors
+    if not isinstance(backends, dict):
+        return ["backends must be a mapping"]
+    default_name = backends.get("default", "mock")
+    if not isinstance(default_name, str) or default_name not in KNOWN_BACKEND_NAMES:
+        errors.append(f"unknown default backend: {default_name}")
+    tiers = backends.get("tiers", {})
+    if not isinstance(tiers, dict):
+        errors.append("backends.tiers must be a mapping")
+    else:
+        for tier, name in tiers.items():
+            if tier not in TIER_ORDER:
+                errors.append(f"unknown tier in backends.tiers: {tier}")
+            if not isinstance(name, str) or name not in KNOWN_BACKEND_NAMES:
+                errors.append(f"unknown backend in backends.tiers[{tier}]: {name}")
+    definitions = backends.get("definitions", {})
+    if not isinstance(definitions, dict):
+        errors.append("backends.definitions must be a mapping")
+    return errors
 
 
 def provider_env_names(provider: str) -> dict[str, list[str]]:
@@ -239,6 +331,7 @@ def model_policy_snapshot(
         "risk_level": risk_level,
         "defaults": _mapping(policy.get("defaults")),
         "roles": selections,
+        "backend": select_backend_for_state(state).as_dict(),
         "risk_overrides": _mapping(policy.get("risk_overrides")),
         "retry_escalation": _mapping(policy.get("retry_escalation")),
         "tier_fallbacks": _mapping(policy.get("tier_fallbacks")),
@@ -272,6 +365,8 @@ def validate_model_policy(
     for section_name in ("defaults", "roles", "risk_overrides", "retry_escalation", "tier_fallbacks"):
         if section_name in policy and not isinstance(policy[section_name], dict):
             errors.append(f"{section_name} must be a mapping")
+
+    errors.extend(validate_backend_policy(policy))
 
     state = _sample_state(risk_level="low", policy_path=policy_path or (str(path) if path else None))
     selections = [select_model_for_node(node, state) for node in MODEL_POLICY_NODES]

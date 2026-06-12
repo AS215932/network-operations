@@ -1,4 +1,10 @@
-"""LangGraph topology for the Hyrule Engineering Loop skeleton."""
+"""LangGraph topology for the Hyrule Engineering Loop.
+
+v2 Phase B topology: the branch-backed worktree is created *before*
+implementation, the coding-agent backend executes inside it, and the policy
+guard validates the resulting diff. The temp-workspace writer is out of the
+live flow (it survives only inside ``MockBackend`` scratch runs).
+"""
 
 from __future__ import annotations
 
@@ -11,11 +17,11 @@ from hyrule_engineering_loop.nodes import (
     DOMAIN_TO_ROLE,
     ROLE_NODE_NAMES,
     classification_node,
+    delegate_implementation_node,
     devops_netops_node,
     finops_integrity_node,
     gate_execution_node,
     gate_policy_node,
-    implementation_node,
     network_architect_node,
     package_pr_node,
     policy_node,
@@ -27,7 +33,7 @@ from hyrule_engineering_loop.nodes import (
     human_signoff_node,
     virtual_lab_chaos_node,
     workspace_cleanup_node,
-    workspace_writer_node,
+    worktree_setup_node,
 )
 from hyrule_engineering_loop.state import GraphState, RoleName
 
@@ -38,7 +44,10 @@ Route = Literal[
     "security_auditor",
     "finops_integrity",
     "virtual_lab_chaos",
-    "workspace_writer",
+    "worktree_setup",
+    "pre_gate_policy",
+    "delegate_implementation",
+    "gate_execution",
     "policy",
     "repo_adapter",
     "promotion",
@@ -68,8 +77,11 @@ def _roles_for_errors(state: GraphState) -> list[RoleName]:
 
 
 def remediation_router(state: GraphState) -> Route | list[Route]:
-    """Route gate results to remediation, human sign-off, or PR packaging."""
+    """Route gate results to remediation, human sign-off, or the diff guard."""
     if any(count >= 3 for count in state["retry_counters"].values()):
+        return "human_signoff"
+
+    if state.get("policy_status") == "failed":
         return "human_signoff"
 
     if state.get("gate_status") == "failed":
@@ -82,27 +94,41 @@ def remediation_router(state: GraphState) -> Route | list[Route]:
         return "systems_engineer"
 
     if _approval_complete(state):
-        return "repo_adapter"
+        return "policy"
 
     return role_review_router(state)
 
 
 def repo_adapter_router(state: GraphState) -> Route:
-    """Route repo adapter outcome to policy or human sign-off."""
+    """Route repo adapter outcome to worktree setup or human sign-off."""
     if state.get("repo_adapter_status") == "failed":
         return "human_signoff"
-    return "policy"
+    return "worktree_setup"
+
+
+def worktree_setup_router(state: GraphState) -> Route:
+    """Route worktree setup outcome to gate policy or human sign-off."""
+    if state.get("worktree_status") == "failed":
+        return "human_signoff"
+    return "pre_gate_policy"
 
 
 def pre_gate_policy_router(state: GraphState) -> Route:
-    """Route pre-gate policy outcome to gate execution or human sign-off."""
+    """Route pre-gate policy outcome to implementation delegation or sign-off."""
     if state.get("policy_status") == "failed":
         return "human_signoff"
-    return "workspace_writer"
+    return "delegate_implementation"
+
+
+def delegate_router(state: GraphState) -> Route:
+    """Route backend outcome onward; budget exhaustion goes straight to sign-off."""
+    if state.get("implementation_writer_status") == "budget_exhausted":
+        return "human_signoff"
+    return "gate_execution"
 
 
 def policy_router(state: GraphState) -> Route:
-    """Route post-adapter policy outcome to promotion or human sign-off."""
+    """Route diff-guard outcome to promotion capture or human sign-off."""
     if state.get("policy_status") == "failed":
         return "human_signoff"
     return "promotion"
@@ -122,7 +148,7 @@ def build_graph(
     checkpointer: Any | None = None,
     interrupt_before: list[str] | None = None,
 ) -> CompiledStateGraph[GraphState, None, GraphState, GraphState]:
-    """Build and compile the Phase 1 Hyrule Engineering Loop graph."""
+    """Build and compile the Hyrule Engineering Loop graph."""
     graph = StateGraph(GraphState)
 
     graph.add_node("classification", classification_node)
@@ -132,12 +158,12 @@ def build_graph(
     graph.add_node("security_auditor", security_auditor_node)
     graph.add_node("finops_integrity", finops_integrity_node)
     graph.add_node("virtual_lab_chaos", virtual_lab_chaos_node)
-    graph.add_node("implementation", implementation_node)
+    graph.add_node("repo_adapter", repo_adapter_node)
+    graph.add_node("worktree_setup", worktree_setup_node)
     graph.add_node("pre_gate_policy", gate_policy_node)
-    graph.add_node("workspace_writer", workspace_writer_node)
+    graph.add_node("delegate_implementation", delegate_implementation_node)
     graph.add_node("gate_execution", gate_execution_node)
     graph.add_node("workspace_cleanup", workspace_cleanup_node)
-    graph.add_node("repo_adapter", repo_adapter_node)
     graph.add_node("policy", policy_node)
     graph.add_node("promotion", promotion_node)
     graph.add_node("package_pr", package_pr_node)
@@ -158,18 +184,40 @@ def build_graph(
     )
 
     for role_node in ROLE_NODE_NAMES.values():
-        graph.add_edge(role_node, "implementation")
+        graph.add_edge(role_node, "repo_adapter")
 
-    graph.add_edge("implementation", "pre_gate_policy")
+    graph.add_conditional_edges(
+        "repo_adapter",
+        repo_adapter_router,
+        {
+            "worktree_setup": "worktree_setup",
+            "human_signoff": "human_signoff",
+        },
+    )
+    graph.add_conditional_edges(
+        "worktree_setup",
+        worktree_setup_router,
+        {
+            "pre_gate_policy": "pre_gate_policy",
+            "human_signoff": "human_signoff",
+        },
+    )
     graph.add_conditional_edges(
         "pre_gate_policy",
         pre_gate_policy_router,
         {
-            "workspace_writer": "workspace_writer",
+            "delegate_implementation": "delegate_implementation",
             "human_signoff": "human_signoff",
         },
     )
-    graph.add_edge("workspace_writer", "gate_execution")
+    graph.add_conditional_edges(
+        "delegate_implementation",
+        delegate_router,
+        {
+            "gate_execution": "gate_execution",
+            "human_signoff": "human_signoff",
+        },
+    )
     graph.add_edge("gate_execution", "workspace_cleanup")
     graph.add_conditional_edges(
         "workspace_cleanup",
@@ -181,17 +229,6 @@ def build_graph(
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
             "virtual_lab_chaos": "virtual_lab_chaos",
-            "repo_adapter": "repo_adapter",
-            "policy": "policy",
-            "promotion": "promotion",
-            "package_pr": "package_pr",
-            "human_signoff": "human_signoff",
-        },
-    )
-    graph.add_conditional_edges(
-        "repo_adapter",
-        repo_adapter_router,
-        {
             "policy": "policy",
             "human_signoff": "human_signoff",
         },
