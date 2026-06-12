@@ -10,7 +10,7 @@ the privileged `ci` runner on trusted triggers only.
 
 | Tier | Jobs | Runner | Trigger | Gating |
 |------|------|--------|---------|--------|
-| 0 — static | `static-iac`, `ansible-idempotency` | `hyrule-public-pr` (unprivileged) | every PR touching IaC paths | **required** via `iac-gate` |
+| 0 — static | `static-iac`, `ansible-idempotency` | `hyrule-public-pr` (unprivileged) | PRs with IaC path changes | **required** via `iac-gate` |
 | 1 — Batfish | `batfish` | `ci` (privileged) | `workflow_dispatch`, repo var `ENABLE_BATFISH_TESTS`, nightly | advisory / trusted-only |
 | 2 — Containerlab | `containerlab-frr` | `ci` (privileged) | `workflow_dispatch`, repo var `ENABLE_CONTAINERLAB_TESTS`, nightly | advisory / trusted-only |
 | 3 — deploy safety | `apply.yml` (manual, `production`, Icinga pre/post + Goss), `drift-detection.yml` (nightly check-mode) | `ci` (privileged) | manual / schedule | deploy-time |
@@ -63,24 +63,27 @@ are tracked as a follow-up — they need the lab to develop and verify.
 
 ## The `iac-gate` and branch protection
 
-`iac-tests.yml` is path-filtered (it only runs when IaC files change). Marking
-a path-filtered job *directly* required risks the classic deadlock: on a PR
-that touches none of those paths the job never reports, and a naive required
-context waits forever.
+`iac-tests.yml` intentionally is **not** workflow-level path-filtered. GitHub
+does not create check runs for a workflow skipped by `paths`, so a required
+context from that workflow can sit at "Expected" forever on a docs-only PR.
+Instead, the workflow always starts and does path detection inside the workflow.
 
-The fix is the **`iac-gate`** aggregator job (`if: always()`, `needs:` all
-tiers). It is the single required status context:
+The fix is the **`iac-gate`** aggregator job (`if: always()`, `needs:` the
+internal `changes` job plus all tiers). It is the single required status
+context:
 
-- It **always reports** when the workflow runs, passing only when the required
-  tiers (`static-iac`, `ansible-idempotency`) succeed and the trusted lab tiers
-  are *success or skipped* — never failed.
-- When the whole workflow is skipped by path filtering (a docs-only PR), GitHub
-  treats the required `iac-gate` context as passing, so the PR is not blocked.
+- It **always reports** because the workflow always runs.
+- On PRs with no IaC-relevant changes, the internal `changes` job reports
+  `iac_changed=false`, the tier jobs are skipped, and `iac-gate` passes.
+- On IaC PRs, `iac-gate` passes only when the required tiers (`static-iac`,
+  `ansible-idempotency`) succeed and the trusted lab tiers are *success or
+  skipped* — never failed.
 
 Therefore branch protection requires **`iac-gate`** (plus the lint/render
 contexts from `lint.yml` / `render-check.yml` and `semgrep`), **not** the
-individual path-filtered tier jobs. Verify after any change with a docs-only PR
-that touches none of the IaC paths: it must not show a stuck "Expected" check.
+individual tier jobs. Verify after any change with a docs-only PR that touches
+none of the IaC paths: `iac-tests` must run, the tier jobs should be skipped,
+and `iac-gate` must report success rather than a stuck "Expected" check.
 
 ## Adding a check
 
