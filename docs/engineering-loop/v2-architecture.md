@@ -139,7 +139,10 @@ Execution rules:
   the backend environment. The backend gets the repo, its toolchain, and
   nothing else. Headless runs never execute on the privileged `ci` runner.
 - Budgets from the spec are hard limits: max iterations, max wall-clock, max
-  tokens/cost where the harness reports them. Exhaustion returns
+  tokens/cost where the harness reports them. When a harness reports no
+  cost/token figures, the loop enforces the iteration and wall-clock limits
+  alone and records the missing cost report in the trace — budget
+  enforcement is never silently skipped. Exhaustion returns
   `budget_exhausted` and routes to remediation/human sign-off, never to a
   silent retry.
 - `model-policy.yml` grows a `backends:` section so the same
@@ -282,7 +285,8 @@ Safety rails:
 
 - a run lock (one loop run at a time);
 - per-run and per-day budgets (tokens, cost, wall-clock, iterations);
-- kill criteria: no diff progress across N remediation rounds aborts the run;
+- kill criteria: an unchanged diff across 3 consecutive remediation rounds
+  (matching the role/gate retry circuit breaker) aborts the run;
 - a Discord webhook summary per run and an Icinga passive check
   ("loop ran / loop stuck / loop over budget");
 - never on the privileged `ci` runner — the backend executes generated code.

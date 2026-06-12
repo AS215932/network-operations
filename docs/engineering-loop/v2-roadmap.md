@@ -125,7 +125,9 @@ Scope:
 
 - `daemon --once`: pick one `loop:approved` item, full run, draft PR or
   journaled failure, exit. Run lock; per-run and per-day budgets; kill
-  criteria (no diff progress across N remediation rounds).
+  criteria (an unchanged diff across 3 consecutive remediation rounds
+  aborts; when the harness reports no cost, iteration/wall-clock limits
+  still enforce).
 - Discord webhook run summary; Icinga passive check (`loop ran / stuck /
   over budget`).
 - systemd service + timer units (operator machine first; a dedicated `loop`
