@@ -7,7 +7,7 @@ AS215932. It's the input dataset for the firewall role: every rule in
 When you add a new service or peer, **update this file first**, then derive
 the firewall rules.
 
-Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
+Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
 
 ---
 
@@ -33,6 +33,7 @@ Last sync: 2026-04-29 (verified live with `nft list ruleset` / `pfctl -sr`).
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
 | cr1-de1 | FreeBSD 15.0 | loopback `2a0c:b641:b50::b` | — | core router (Servperso DE + Extra-Transit + IXPs) |
+| cr1-ch1 | FreeBSD 14.4 | loopback `2a0c:b641:b50::c`, SBIX `2001:7f8:d9:1::3:4b7c:2`, 4IXP `2001:7f8:d0::3:4b7c:1` | — | core router (Securebit CH transit + SBIX; 4IXP pending) |
 
 dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
@@ -43,7 +44,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | CIDR | Purpose |
 |------|---------|
 | `2a0c:b641:b50::/44` | AS215932 prefix (announced) |
-| `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::d` rtr) |
+| `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::c` cr1-ch1, `::d` rtr) |
 | `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::70`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
@@ -64,10 +65,11 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP/UDP | 53 | rtr's **own** DNS queries to its Unbound — Unbound is overlay-VRF-confined so rtr's default-VRF processes query it with the underlay source (#135) |
 | mon | TCP | 9100 | node_exporter scrape |
 | mon | TCP | 9342 | frr_exporter scrape |
-| cr1-nl1, cr1-de1 loopbacks | TCP | 179 | iBGP |
-| WireGuard mesh on `wg0`, `wg1` | OSPF6 (89) | — | OSPF6 between routers |
+| cr1-nl1, cr1-de1, cr1-ch1 loopbacks | TCP | 179 | iBGP |
+| WireGuard mesh on `wg0`, `wg1`, `wg2` | OSPF6 (89) | — | OSPF6 between routers |
 | cr1-nl1 underlay (`2a0c:b640:8:69::1`) | UDP | 1337 | WireGuard tunnel to NL |
 | cr1-de1 underlay (`2a0c:b640:10::213`) | UDP | 1338 | WireGuard tunnel to DE |
+| cr1-ch1 underlay (`2a09:4c0:100:2d88::8898`) | UDP | 1339 | WireGuard tunnel to CH |
 | ops-prefix, vpn-clients | TCP | 22 | SSH |
 | public internet (v4 DNAT'd from `46.105.40.223`) | TCP/UDP | 53 | → dns |
 | public internet (v4 DNAT'd) | TCP | 80, 443 | → proxy |
@@ -212,7 +214,7 @@ on mon is the only read path.
 | every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci) | TCP | 6000 | Vector→Vector ingest from agents |
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP | 6000 | Vector→Vector ingest from rtr default-VRF processes; kernel routes this path via underlay |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
-| cr1-nl1, cr1-de1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
+| cr1-nl1, cr1-de1, cr1-ch1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
 | ns2 (`2001:41d0:304:300::7bfb`) | TCP | 6000 | Off-net Vector ingest over public IPv6 |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 6000 | XCP-NG hypervisor Vector ingest over mgmt v4 |
 | mon | TCP | 3100 | Grafana queries Loki HTTP API |
@@ -237,7 +239,7 @@ NOTIFY from `dns` and outbound AXFR pull from `dns` are TSIG-authenticated at th
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | `2a0c:b640:10::ffff` (Servperso NL) | TCP | 179 | External BGP |
-| any | UDP | 1337, 1338, 1340 | WireGuard underlay (cr1-de1, leg b, rtr) |
+| any | UDP | 1337, 1338, 1340, 1341 | WireGuard underlay (cr1-de1, legacy leg b, rtr, cr1-ch1) |
 | ops-prefix | TCP | 22 | SSH |
 | `wg*` mesh interfaces | any | — | All traffic — `pass quick on wg all no state` |
 | any | ICMP, ICMPv6 | — | ping |
@@ -249,7 +251,7 @@ NOTIFY from `dns` and outbound AXFR pull from `dns` are TSIG-authenticated at th
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | `2a0c:b640:10::ffff` (Servperso DE), `2a0c:b641:870::ffff` (Extra-Transit) | TCP | 179 | External BGP |
-| any | UDP | 1337, 1338 | WireGuard underlay (cr1-nl1, rtr) |
+| any | UDP | 1337, 1338, 1342 | WireGuard underlay (cr1-nl1, rtr, cr1-ch1) |
 | ops-prefix | TCP | 22 | SSH |
 | `wg*` mesh interfaces | any | — | `pass quick on wg all no state` |
 | any | ICMP, ICMPv6 | — | ping |
@@ -258,6 +260,20 @@ NOTIFY from `dns` and outbound AXFR pull from `dns` are TSIG-authenticated at th
 
 cr1-de1 listens on four interfaces (`vtnet0..3`); the WG/BGP/transit rules
 are bound to `$ext_ifs` (the set), SSH/ICMP only on `$ext_if`.
+
+### cr1-ch1 (`2a0c:b641:b50::c` loopback, `2a09:4c0:100:2d88::8898` underlay)
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| `2a09:4c0:100:2d88::8bfa` (Securebit AS58057) | TCP | 179 | External BGP transit |
+| `2001:7f8:d9:1::1`–`::4` (SBIX AS56755) | TCP | 179 | SBIX route-server peering |
+| `2001:7f8:d0::8b7c:1`–`::8b7c:3` (4IXP AS35708) | TCP | 179 | 4IXP route-server peering (pending remote-side enablement; IPv6-only) |
+| any | UDP | 1339, 1341, 1342 | WireGuard underlay (rtr, cr1-nl1, cr1-de1) |
+| ops-prefix | TCP | 22 | SSH |
+| `wg*` mesh interfaces | any | — | `pass quick on wg all no state` |
+| any | ICMP, ICMPv6 | — | ping |
+| any (transit) | inet6 | — | `from any to <AS215932>` (no state) |
+| mon | TCP | 9100, 9342 | node_exporter, frr_exporter |
 
 ---
 
@@ -275,7 +291,7 @@ exceptions are:
 | api, proxy | → dns TCP 53 | RFC 2136 dyn updates (TSIG-authed) |
 | proxy | → ACME providers HTTPS, dns TCP 53 | DNS-01 challenges |
 | rtr | NAT64 outbound (Jool) → IPv4 internet | source = `46.105.40.223` |
-| rtr, cr1-* | UDP 1337/1338/1340 → peer underlay | WireGuard mesh |
+| rtr, cr1-* | UDP 1337/1338/1339/1340/1341/1342 → peer underlay | WireGuard mesh |
 | mon | → all hosts:9100 + per-host scrape ports | Prometheus |
 | mon | → public HTTPS, ICMP, DNS targets | blackbox checks |
 | dns | → ns2 (NOTIFY + serves AXFR pull) | TSIG `hyrule-dns` |
@@ -294,7 +310,7 @@ exceptions are:
 | dns → ns2 | out | 53 tcp/udp | NOTIFY (TSIG `hyrule-dns`) |
 | ns2 → dns | out | 53 tcp | AXFR pull on NOTIFY (TSIG `hyrule-dns`) |
 | vpn-clients → rtr / internet | out | any | Forwarded by `vpn` from `wg0` to `enX0`; includes DNS64 to rtr and routed IPv6/NAT64 egress |
-| rtr ↔ cr1-nl1, cr1-de1 underlay | both | 1337/1338 udp | WireGuard mesh |
+| rtr/cr1-* router underlays | both | 1337/1338/1339/1340/1341/1342 udp | WireGuard full mesh |
 | Public → rtr | in | 53/80/443/51820 | DNAT to dns/proxy/vpn |
 | Public → irc | in | 6697 tcp | Soju IRCS (direct v6, no DNAT) |
 | irc → dns | out | 53 tcp | RFC 2136 dyn updates (ACME DNS-01) |
@@ -315,13 +331,12 @@ exceptions are:
 
 ## Open question — Prometheus scrape on FreeBSD routers
 
-The live pf rulesets on cr1-nl1 / cr1-de1 do **not** explicitly allow
-Prometheus scrapes from mon. They work today because mon scrapes the
-routers via the WireGuard mesh, where `pass quick on wg all no state`
-allows everything. The Ansible-rendered configs add explicit
-`9100/9342 from mon` rules for clarity, even though they're redundant
-with the wg-pass. If we ever lock down the wg-pass (likely, eventually),
-the explicit rules will already be in place.
+The live pf rulesets on cr1-nl1 / cr1-de1 historically did **not** explicitly
+allow Prometheus scrapes from mon. They worked because mon scrapes the routers
+via the WireGuard mesh, where `pass quick on wg all no state` allows everything.
+The Ansible-rendered configs now add explicit `9100/9342 from mon` rules for
+cr1-nl1, cr1-de1, and cr1-ch1. If we ever lock down the wg-pass (likely,
+eventually), the explicit rules will already be in place.
 
 ---
 

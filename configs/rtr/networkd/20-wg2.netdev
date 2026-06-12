@@ -1,0 +1,15 @@
+# /etc/systemd/network/20-wg2.netdev — WireGuard tunnel to cr1.ch1
+[NetDev]
+Name=wg2
+Kind=wireguard
+
+[WireGuard]
+PrivateKeyFile=/etc/wireguard/private.key
+ListenPort=1339
+
+[WireGuardPeer]
+PublicKey=kXDLgAfQAV454SZrN8PrF1lNuiEdamAwJDend3x2jWQ=
+Endpoint=[2a09:4c0:100:2d88::8898]:1339
+AllowedIPs=::/0
+PersistentKeepalive=30
+RouteTable=off

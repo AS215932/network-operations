@@ -56,7 +56,7 @@
       run_once: true
       tags: [snapshot, always]
   vars:
-    gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') }}"
+    gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') | default('', true) }}"
     openrouter_api_key: "{{ lookup('env', 'OPENROUTER_API_KEY') | default('', true) }}"
     openrouter_management_api_key: "{{ lookup('env', 'OPENROUTER_MANAGEMENT_API_KEY') | default('', true) }}"
     noc_discord_webhook: "{{ lookup('env', 'NOC_DISCORD_WEBHOOK') }}"

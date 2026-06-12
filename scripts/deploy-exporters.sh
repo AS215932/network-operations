@@ -129,6 +129,7 @@ echo "rtr: node_exporter + frr_exporter deployed"
 FREEBSD_ROUTERS=(
   "2a0c:b641:b50::a"  # cr1.nl1
   "2a0c:b641:b50::b"  # cr1.de1
+  "2a0c:b641:b50::c"  # cr1.ch1
 )
 
 echo ""
@@ -140,7 +141,8 @@ for HOST in "${FREEBSD_ROUTERS[@]}"; do
     doas pkg install -y node_exporter
     doas sysrc node_exporter_enable=YES
     doas sysrc node_exporter_user=root
-    doas sysrc node_exporter_args="--web.listen-address=[::]:9100"
+    doas sysrc node_exporter_listen_address="[::]:9100"
+    doas sysrc node_exporter_args=""
     doas mkdir -p /var/tmp/node_exporter
     doas /usr/sbin/daemon -f -p /var/run/node_exporter.pid -T node_exporter /usr/local/bin/node_exporter --web.listen-address="[::]:9100"
 
@@ -148,11 +150,11 @@ for HOST in "${FREEBSD_ROUTERS[@]}"; do
     if [ ! -f /usr/local/bin/frr_exporter ]; then
       FRR_EXPORTER_VERSION="1.11.0"
       cd /tmp
-      doas fetch "https://github.com/tynany/frr_exporter/releases/download/v${FRR_EXPORTER_VERSION}/frr_exporter_${FRR_EXPORTER_VERSION}_freebsd_amd64.tar.gz"
-      doas tar xzf "frr_exporter_${FRR_EXPORTER_VERSION}_freebsd_amd64.tar.gz"
-      doas mv frr_exporter /usr/local/bin/frr_exporter
+      doas fetch "https://github.com/tynany/frr_exporter/releases/download/v${FRR_EXPORTER_VERSION}/frr_exporter-${FRR_EXPORTER_VERSION}.freebsd-amd64.tar.gz"
+      doas tar xzf "frr_exporter-${FRR_EXPORTER_VERSION}.freebsd-amd64.tar.gz"
+      doas mv "frr_exporter-${FRR_EXPORTER_VERSION}.freebsd-amd64/frr_exporter" /usr/local/bin/frr_exporter
       doas chmod +x /usr/local/bin/frr_exporter
-      rm -f "frr_exporter_${FRR_EXPORTER_VERSION}_freebsd_amd64.tar.gz"
+      doas rm -rf "frr_exporter-${FRR_EXPORTER_VERSION}.freebsd-amd64" "frr_exporter-${FRR_EXPORTER_VERSION}.freebsd-amd64.tar.gz"
     fi
 
     # Create rc.d script for frr_exporter
@@ -167,7 +169,7 @@ for HOST in "${FREEBSD_ROUTERS[@]}"; do
 name="frr_exporter"
 rcvar="frr_exporter_enable"
 command="/usr/local/bin/frr_exporter"
-command_args="--web.listen-address=[::]:9342 &"
+command_args="--web.listen-address=[::]:9342"
 pidfile="/var/run/${name}.pid"
 
 start_cmd="frr_exporter_start"

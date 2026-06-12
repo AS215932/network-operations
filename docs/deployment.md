@@ -50,9 +50,33 @@ xenbr-mgmt (link-local): dom0, rtr enX0, xoa (+ 10.0.0.x for XOA→XAPI)
 |--------|----------|-----|------------------|----------|-----------|
 | cr1.nl1 | Servperso NL | FreeBSD + FRRouting | 2a0c:b640:8:69::1 | ::a | 1.1.1.1 |
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | 2a0c:b640:10::213 | ::b | 2.2.2.2 |
+| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | 2a09:4c0:100:2d88::8898 (transit), 2001:7f8:d9:1::3:4b7c:2 (SBIX), 2001:7f8:d0::3:4b7c:1 (4IXP) | ::c | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | 2001:41d0:303:48a::2 | ::d | 0.0.0.13 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
+Underlay addresses outside AS215932 live under `servify.network`, not
+`as215932.net`; the `as215932.net` router names point at overlay loopbacks.
+
+```text
+              WireGuard full mesh: OSPF6 + iBGP inside tunnels
+
+         cr1.nl1 (::a) ===== ff00 ===== cr1.de1 (::b)
+              |  \\                       /  |
+         ff02 |   \\ ff07           ff08 /   | ff05
+              |    \\                   /    |
+              |     \\                 /     |
+              |      \\               /      |
+              +-------\\-------------/-------+
+                       \\           /
+                        \\         /
+                   cr1.ch1 (::c)
+                         |
+                       ff06
+                         |
+                      rtr (::d)
+                         |
+              infra 2a0c:b641:b50:2::/64
+```
 
 ### WireGuard mesh
 
@@ -61,6 +85,9 @@ All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
 | cr1.nl1 wg0 ↔ cr1.de1 wg0 | :1337 ↔ :1337 | ff00::/127 |
 | cr1.nl1 wg3 ↔ rtr wg0 | :1340 ↔ :1337 | ff02::/127 |
 | cr1.de1 wg1 ↔ rtr wg1 | :1338 ↔ :1338 | ff05::/127 |
+| cr1.ch1 wg0 ↔ rtr wg2 | :1339 ↔ :1339 | ff06::/127 |
+| cr1.nl1 wg4 ↔ cr1.ch1 wg1 | :1341 ↔ :1341 | ff07::/127 |
+| cr1.de1 wg2 ↔ cr1.ch1 wg2 | :1342 ↔ :1342 | ff08::/127 |
 
 WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50:ffXX::/127`.
 
@@ -190,12 +217,12 @@ real rollout unless it is an explicit emergency.
     - enX2 (infra): overlay VRF — address `2a0c:b641:b50:2::1/64` via FRR
     - enX3 (vm): overlay VRF — address `2a0c:b641:b51::1/48` via FRR
     - enX4 (wan): default VRF — `2001:41d0:303:48a::2/64` (OVH underlay)
-    - WireGuard tunnels (wg0, wg1) and lo-overlay created as .netdev in overlay VRF
+    - WireGuard tunnels (wg0, wg1, wg2) and lo-overlay created as .netdev in overlay VRF
 15. Deploy sysctl (`configs/rtr/sysctl.conf` → `/etc/sysctl.d/99-rtr.conf`): IPv6 forwarding, disable DAD on enX4, `tcp/udp_l3mdev_accept=1` for VRF-overlay reachability. Also deploy `configs/rtr/modules-load.d/vrf.conf` → `/etc/modules-load.d/vrf.conf` so the `vrf` module is loaded at boot before `systemd-sysctl` runs (otherwise the l3mdev sysctls don't exist at apply time and silently default to 0).
 16. Install FRRouting, deploy `configs/rtr/frr.conf`
     - Overlay VRF with WireGuard tunnels
     - All overlay IPv6 addresses assigned by FRR
-    - iBGP mesh with cr1.nl1 and cr1.de1
+    - iBGP mesh with cr1.nl1, cr1.de1, and cr1.ch1
     - Announces /44 aggregate + infra /64 + vm /48 into iBGP
 17. Copy WG private key to `/etc/wireguard/private.key` (mode 0640, root:systemd-network)
 18. Customer VM isolation (nftables):
@@ -400,6 +427,9 @@ Already live via WireGuard mesh to cr1.nl1 and cr1.de1 (see configs/).
 Transit peers:
 - AS34872 (Servperso) on cr1.nl1 and cr1.de1
 - AS210233 on cr1.de1
+- AS58057 (Securebit) on cr1.ch1
+- SBIX Zurich route servers (AS56755) on cr1.ch1
+- 4IXP route servers (AS35708) on cr1.ch1 pending remote-side enablement (L3 reachable; BGP reset by peer)
 
 BGP policy: `TRANSIT-IN` (as-path filter), `TRANSIT-OUT` (prefix-list). iBGP peers use `next-hop-self` only.
 

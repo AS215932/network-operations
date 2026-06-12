@@ -14,8 +14,8 @@ pf_ext_ifs: ["vtnet0", "vtnet1", "vtnet2", "vtnet3"]
 pf_antispoof: false
 pf_use_as215932_table: true
 
-# WG underlay listener ports — 1337 (cr1-nl1), 1338 (rtr).
-pf_wg_ports: [1337, 1338]
+# WG underlay listener ports — 1337 (cr1-nl1), 1338 (rtr), 1342 (cr1-ch1).
+pf_wg_ports: [1337, 1338, 1342]
 
 # External BGP peers (Servperso DE + Extra-Transit + LocIX).
 pf_bgp_peers:

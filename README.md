@@ -59,13 +59,22 @@ only.
 
 ### Routing & Network
 
-- **Core Routers**: FreeBSD + FRRouting
-- **Edge Router**: Debian 13 + FRRouting (rtr at OVH)
-- **Overlay Network**: Wireguard tunnels
+- **Core Routers**: FreeBSD + FRRouting (`cr1-nl1`, `cr1-de1`, `cr1-ch1`)
+- **Edge Router**: Debian 13 + FRRouting (`rtr` at OVH)
+- **Overlay Network**: full-mesh WireGuard tunnels
 - **Protocols**: BGP, OSPFv3
 - **Virtualization**: XCP-NG w/ Xen Orchestra
 
 ### Architecture Highlights
+
+```text
+cr1-nl1 ===== cr1-de1
+   |  \\       /  |
+   |   \\     /   |
+   |    cr1-ch1  |
+   |      |      |
+   +----- rtr ---+
+```
 
 - IPv6-first design with IPv4 transition mechanisms (NAT64/DNS64, 464XLAT)
 - Multi-homed BGP (with ECMP load balancing)
@@ -100,6 +109,7 @@ Key documentation:
 - [Network Architecture](docs/architecture.md)
 - [BGP Routing Policy](docs/bgp-policy.md)
 - [Peering Guidelines](docs/peering.md)
+- [Agentic Development Loop](docs/agentic-development-loop.md)
 
 ## Project Goals
 

@@ -67,9 +67,25 @@ peers:
   cr1_nl1:
     loopback: "2a0c:b641:b50::a"
     underlay: "2a0c:b640:8:69::1"
+  cr1-nl1:
+    loopback: "2a0c:b641:b50::a"
+    underlay: "2a0c:b640:8:69::1"
   cr1_de1:
     loopback: "2a0c:b641:b50::b"
     underlay: "2a0c:b640:10::213"
+  cr1-de1:
+    loopback: "2a0c:b641:b50::b"
+    underlay: "2a0c:b640:10::213"
+  cr1_ch1:
+    loopback: "2a0c:b641:b50::c"
+    underlay: "2a09:4c0:100:2d88::8898"
+    underlay_v4: "45.136.136.152"
+    gateway6: "2a09:4c0:100:2d88::8bfe"
+  cr1-ch1:
+    loopback: "2a0c:b641:b50::c"
+    underlay: "2a09:4c0:100:2d88::8898"
+    underlay_v4: "45.136.136.152"
+    gateway6: "2a09:4c0:100:2d88::8bfe"
   # Off-net external monitor (different ASN, different billing).
   # Probes AS215932 from the outside the same way real users do.
   # ipv4/ipv6 are placeholders until the VPS is provisioned — fill in
@@ -83,6 +99,19 @@ bgp_peers:
   servperso_de: "2a0c:b640:10::ffff"
   servperso_nl: "2a0c:b640:8:69::ffff"  # placeholder — nl1 BGP peer not live-confirmed
   extra_transit: "2a0c:b641:870::ffff"
+  securebit_ch_v4: "45.136.139.250"
+  securebit_ch_v6: "2a09:4c0:100:2d88::8bfa"
+  sbix_rs1_v4: "185.1.135.1"
+  sbix_rs1_v6: "2001:7f8:d9:1::1"
+  sbix_rs2_v4: "185.1.135.2"
+  sbix_rs2_v6: "2001:7f8:d9:1::2"
+  sbix_rs3_v4: "185.1.135.3"
+  sbix_rs3_v6: "2001:7f8:d9:1::3"
+  sbix_rs4_v4: "185.1.135.4"
+  sbix_rs4_v6: "2001:7f8:d9:1::4"
+  fourixp_rs1_v6: "2001:7f8:d0::8b7c:1"
+  fourixp_rs2_v6: "2001:7f8:d0::8b7c:2"
+  fourixp_rs3_v6: "2001:7f8:d0::8b7c:3"
 
 # --- Openprovider DNS secondary AXFR sources ---
 # From hyrule-infra/configs/knot.conf.j2:28-29.
@@ -98,7 +127,10 @@ openprovider_secondaries_v6:
 wg_ports:
   - 1337
   - 1338
+  - 1339
   - 1340
+  - 1341
+  - 1342
 
 # --- SSH source set used by every host's input chain ---
 # Permits the ops workstation directly, any client connected to the VPN, and
@@ -125,6 +157,7 @@ ssh_users:
   xoa: root
   cr1-nl1: svag
   cr1-de1: svag
+  cr1-ch1: svag
   default: svag
 
 # --- Centralized logging (Vector → Loki) ---
