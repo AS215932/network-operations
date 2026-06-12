@@ -96,10 +96,24 @@ def _failure_retry_count(state: dict[str, Any], node: str, domain: str) -> int:
     return max((int(counters.get(candidate, 0)) for candidate in candidates), default=0)
 
 
+def _has_failed_status(state: dict[str, Any]) -> bool:
+    return any(
+        state.get(key) == "failed"
+        for key in (
+            "gate_status",
+            "implementation_writer_status",
+            "policy_status",
+            "promotion_status",
+            "repo_adapter_status",
+            "pr_status",
+        )
+    )
+
+
 def failure_summary(state: dict[str, Any], *, state_path: Path) -> dict[str, Any] | None:
-    """Return a compact next-action summary for failed or paused runs."""
+    """Return a compact next-action summary for failed or blocked runs."""
     errors = [error for error in state.get("validation_errors", []) if isinstance(error, dict)]
-    if not errors and not state.get("requires_human_signoff", False):
+    if not errors and not _has_failed_status(state):
         return None
 
     last_error = errors[-1] if errors else {}
@@ -122,6 +136,44 @@ def failure_summary(state: dict[str, Any], *, state_path: Path) -> dict[str, Any
         "model_selection": model_selection,
         "error_excerpt": (stderr or message)[:800],
         "next_operator_command": f"uv run hyrule-engineering-loop trace --state-path {state_path}",
+    }
+
+
+def signoff_summary(state: dict[str, Any], *, state_path: Path) -> dict[str, Any] | None:
+    """Return a compact review summary for successful human sign-off pauses."""
+    if not state.get("requires_human_signoff", False):
+        return None
+    if failure_summary(state, state_path=state_path) is not None:
+        return None
+
+    promotions = [
+        result
+        for result in state.get("promotion_results", [])
+        if isinstance(result, dict)
+    ]
+    review_targets = [
+        {
+            "repo": result.get("repo"),
+            "branch": result.get("branch"),
+            "worktree_path": result.get("worktree_path"),
+            "written_files": result.get("written_files", []),
+        }
+        for result in promotions
+    ]
+    operator_commands = [f"uv run hyrule-engineering-loop trace --state-path {state_path}"]
+    for result in review_targets:
+        worktree_path = result.get("worktree_path")
+        if isinstance(worktree_path, str):
+            operator_commands.append(f"git -C {worktree_path} diff -- .")
+
+    return {
+        "status": "ready_for_review",
+        "reason": "validated changes require operator sign-off before PR/deploy",
+        "promotion_count": len(promotions),
+        "review_targets": review_targets,
+        "handoff_path": state.get("noc_handoff_path"),
+        "trace_path": state.get("loop_trace_path"),
+        "next_operator_commands": operator_commands,
     }
 
 
@@ -296,9 +348,17 @@ def run_feature_intake(
     else:
         final_state = dict(graph.invoke(state, {"configurable": {"thread_id": change_id}}))
     state_path = output_root.expanduser().resolve() / "state" / f"{change_id}.json"
-    summary = failure_summary(final_state, state_path=state_path)
-    if summary is not None:
-        final_state["failure_summary"] = summary
+    failure = failure_summary(final_state, state_path=state_path)
+    if failure is not None:
+        final_state["failure_summary"] = failure
+        final_state["signoff_status"] = "needs_operator_triage"
+    else:
+        signoff = signoff_summary(final_state, state_path=state_path)
+        if signoff is not None:
+            final_state["signoff_summary"] = signoff
+            final_state["signoff_status"] = "ready_for_review"
+        else:
+            final_state["signoff_status"] = "not_required"
     _write_state(state_path, final_state)
 
     return {
@@ -313,6 +373,8 @@ def run_feature_intake(
         "gate_status": final_state.get("gate_status", "not_run"),
         "diff_preview": final_state.get("diff_preview", []),
         "failure_summary": final_state.get("failure_summary"),
+        "signoff_summary": final_state.get("signoff_summary"),
+        "signoff_status": final_state.get("signoff_status"),
         "live_mode": live_mode,
         "final_state": final_state,
     }

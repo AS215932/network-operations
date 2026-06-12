@@ -375,9 +375,13 @@ def feature_command(args: argparse.Namespace) -> int:
         "gate_status": result["gate_status"],
         "model_summary": _model_summary_from_state(result["final_state"]),
         "diff_preview": result["diff_preview"],
-        "failure_summary": result["failure_summary"],
+        "signoff_status": result.get("signoff_status"),
         "live_mode": result["live_mode"],
     }
+    if result.get("failure_summary") is not None:
+        summary["failure_summary"] = result["failure_summary"]
+    if result.get("signoff_summary") is not None:
+        summary["signoff_summary"] = result["signoff_summary"]
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
@@ -413,9 +417,14 @@ def writer_canary_command(args: argparse.Namespace) -> int:
         "preflight": result.get("preflight"),
         "trace_path": result.get("trace_path"),
         "diff_preview": result.get("diff_preview", []),
-        "failure_summary": result.get("failure_summary"),
         "model_summary": _model_summary_from_state(final_state if isinstance(final_state, dict) else {}),
     }
+    if result.get("failure_summary") is not None:
+        summary["failure_summary"] = result["failure_summary"]
+    if result.get("signoff_summary") is not None:
+        summary["signoff_summary"] = result["signoff_summary"]
+    if result.get("signoff_status") is not None:
+        summary["signoff_status"] = result["signoff_status"]
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 

@@ -155,6 +155,8 @@ def test_feature_failure_summary_reports_next_operator_command(
     failure = cast(dict[str, object], payload["failure_summary"])
 
     assert payload["requires_human_signoff"] is True
+    assert payload["signoff_status"] == "needs_operator_triage"
+    assert "signoff_summary" not in payload
     assert failure["last_failing_node"] == "promotion"
     assert failure["retry_count"] == 3
     assert "create mutation target already exists" in str(failure["error_excerpt"])
