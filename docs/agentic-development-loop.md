@@ -149,6 +149,9 @@ START
           [package_pr]
               |
               v
+          [reflection]               <- journal entry + lesson proposals
+              |                         (human_signoff also exits through here)
+              v
              END
 ```
 
@@ -228,11 +231,15 @@ Pi uses one command as the daily entry point:
 /loop --plan
   -> read latest Plan Mode proposed plan and send it as the request
 
+/loop lessons
+  -> review memory lessons and pending lesson proposals
+
 /loop
   -> interactive menu:
        start new request
        show latest summary
        show latest trace
+       review lessons & proposals
        cleanup latest worktree
        approve latest state
 ```
@@ -845,6 +852,32 @@ Phase 21 (v2 Phase C) adds task specs and two-phase role review:
   lineage only;
 - the role matrix and `required_roles_for_state` are byte-identical to v1,
   regression-tested across every change class and risk level.
+
+Phase 22 (v2 Phase D) adds the memory + reflection flywheel:
+
+- the `memory/` tree: `lessons/<repo>.md` (human-curated rulebook),
+  `proposals/<change-id>.md` (loop-proposed lesson edits awaiting human
+  merge), `journal/<change-id>.md` (per-run lab notes: statuses, counters,
+  backend cost, judgment verdicts, failure patterns, last errors);
+- a `reflection` node runs after `package_pr` and `human_signoff`: every
+  completed or signed-off run writes exactly one journal entry, and a
+  detected failure pattern (the same gate failing twice, repeated backend
+  failures, repeated judgment rejections) produces a lesson proposal that
+  names the failure and traces back to the journal;
+- **writes require an explicit memory root** (`--memory-dir` on
+  `feature`, or `HYRULE_MEMORY_DIR`); reads (lessons, journal tail) fall
+  back to the loop repo's own `memory/` tree. The Pi extension passes the
+  loop repo's `memory/` automatically, so operator runs journal durably;
+- lessons for the target repo and the recent journal tail are injected
+  verbatim into the backend prompt, and the planner records the available
+  memory per repo (`memory_context`);
+- the loop never edits `memory/lessons/` — humans review proposals
+  (`hyrule-engineering-loop lessons`, or `/loop lessons` in Pi) and merge
+  them as a normal git change;
+- **the ratchet**: when a failure class keeps recurring, it graduates from
+  a lesson into a deterministic gate or policy rule
+  (`engineering-loop-policy.yml`, a gate script, or a CI workflow), and
+  the lesson is retired. Lessons are working memory; gates are law.
 
 From Pi, use the global extension command:
 
