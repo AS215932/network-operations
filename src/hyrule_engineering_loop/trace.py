@@ -85,6 +85,32 @@ def _summarize_value(key: str, value: Any) -> Any:
             for item in value
             if isinstance(item, dict)
         ]
+    if key in {"backend_results"} and isinstance(value, list):
+        return [
+            {
+                "repo": item.get("repo"),
+                "backend": item.get("backend"),
+                "status": item.get("status"),
+                "iterations": item.get("iterations"),
+                "wall_clock_seconds": item.get("wall_clock_seconds"),
+                "cost": item.get("cost", {}),
+                "changed_paths": item.get("changed_paths", []),
+                "transcript_path": item.get("transcript_path"),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
+    if key in {"worktree_results"} and isinstance(value, list):
+        return [
+            {
+                "repo": item.get("repo"),
+                "branch": item.get("branch"),
+                "worktree_path": item.get("worktree_path"),
+                "base_ref": item.get("base_ref"),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
     if key in {"workspace_written_files", "source_of_truth_files"} and isinstance(value, list):
         return list(value)
     if key in {"validation_errors"} and isinstance(value, list):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +124,128 @@ def _validate_mutations(state: GraphState, policy: dict[str, Any]) -> list[str]:
     return violations
 
 
+def _run_git_lines(args: list[str], *, cwd: Path) -> tuple[bool, list[str]]:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return False, [completed.stderr.strip() or completed.stdout.strip()]
+    return True, completed.stdout.splitlines()
+
+
+def _changed_paths_from_status(lines: list[str]) -> list[str]:
+    paths: list[str] = []
+    for line in lines:
+        if len(line) < 4:
+            continue
+        path = line[3:]
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        paths.append(path.strip().strip('"'))
+    return sorted(set(paths))
+
+
+def _prefix_allowed(path: str, allowed_prefixes: list[str]) -> bool:
+    candidate = Path(path)
+    for raw_prefix in allowed_prefixes:
+        prefix = Path(raw_prefix)
+        if candidate == prefix or candidate.is_relative_to(prefix):
+            return True
+    return False
+
+
+def _added_diff_lines(diff_lines: list[str]) -> list[str]:
+    return [line[1:] for line in diff_lines if line.startswith("+") and not line.startswith("+++")]
+
+
+def _validate_worktree_diffs(state: GraphState, policy: dict[str, Any]) -> list[str]:
+    """Validate the resulting worktree diff instead of proposed mutations.
+
+    This is the v2 Phase B guard: whatever the backend actually changed in
+    the branch-backed worktree is what gets checked — denied globs, denied
+    content patterns on added lines, size and count caps, and the spec's
+    allowed path prefixes ("touch only what you're asked to touch").
+    """
+    worktrees = state.get("worktree_results") or []
+    if not worktrees:
+        return []
+
+    defaults = _defaults(policy)
+    allowed_by_repo = state.get("promotion_allowed_paths", {})
+    violations: list[str] = []
+    max_changed_files = _int_value(defaults, "max_changed_files", 20)
+
+    for worktree in worktrees:
+        repo = str(worktree.get("repo", ""))
+        worktree_path = Path(str(worktree.get("worktree_path", "")))
+        if not worktree_path.is_dir():
+            violations.append(f"worktree is missing for {repo}: {worktree_path}")
+            continue
+
+        repo_config = _repo_policy(policy, repo)
+        denied_globs = _list_value(
+            repo_config,
+            "denied_path_globs",
+            _list_value(defaults, "denied_path_globs"),
+        )
+        denied_patterns = _list_value(
+            repo_config,
+            "denied_content_patterns",
+            _list_value(defaults, "denied_content_patterns"),
+        )
+        max_file_bytes = _int_value(
+            repo_config, "max_file_bytes", _int_value(defaults, "max_file_bytes", 1048576)
+        )
+
+        ok, _ = _run_git_lines(["add", "-A", "-N", "--", "."], cwd=worktree_path)
+        if not ok:
+            violations.append(f"could not stage worktree diff for {repo}: {worktree_path}")
+            continue
+        ok, status_lines = _run_git_lines(["status", "--porcelain"], cwd=worktree_path)
+        if not ok:
+            violations.append(f"could not read worktree status for {repo}: {worktree_path}")
+            continue
+        changed_paths = _changed_paths_from_status(status_lines)
+
+        if len(changed_paths) > max_changed_files:
+            violations.append(
+                f"worktree changed file count exceeds policy limit for {repo}: "
+                f"{len(changed_paths)} > {max_changed_files}"
+            )
+
+        allowed = allowed_by_repo.get(repo, [])
+        if changed_paths and not allowed:
+            violations.append(f"promotion repo {repo} has no allowed path prefixes")
+        for path in changed_paths:
+            if allowed and not _prefix_allowed(path, allowed):
+                violations.append(f"worktree path not allowlisted for {repo}: {path}")
+            denied_match = _glob_match(Path(path), denied_globs)
+            if denied_match:
+                violations.append(f"worktree path {path} denied by pattern {denied_match}")
+            target = worktree_path / path
+            if target.is_file():
+                size = target.stat().st_size
+                if size > max_file_bytes:
+                    violations.append(
+                        f"worktree file {path} exceeds size limit: {size} > {max_file_bytes}"
+                    )
+
+        ok, diff_lines = _run_git_lines(["diff", "--", "."], cwd=worktree_path)
+        if not ok:
+            violations.append(f"could not read worktree diff for {repo}: {worktree_path}")
+            continue
+        added = _added_diff_lines(diff_lines)
+        for pattern in denied_patterns:
+            if any(re.search(pattern, line) for line in added):
+                violations.append(f"worktree diff for {repo} denied by pattern {pattern}")
+
+    return violations
+
+
 def _validate_gate_commands(state: GraphState, policy: dict[str, Any]) -> list[str]:
     defaults = _defaults(policy)
     allowed = _list_value(defaults, "allowed_gate_commands", [])
@@ -198,6 +321,7 @@ def validate_graph_state(state: GraphState, policy: dict[str, Any] | None = None
     active_policy = policy or load_policy(state.get("policy_file"))
     violations: list[str] = []
     violations.extend(_validate_mutations(state, active_policy))
+    violations.extend(_validate_worktree_diffs(state, active_policy))
     violations.extend(_validate_gate_commands(state, active_policy))
     violations.extend(_validate_promotion(state, active_policy))
     violations.extend(_validate_handoff_path(state, active_policy))

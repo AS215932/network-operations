@@ -93,6 +93,8 @@ def _failure_retry_count(state: dict[str, Any], node: str, domain: str) -> int:
     if not isinstance(counters, dict):
         return 0
     candidates = [node, domain, f"llm_{node}"]
+    if node == "delegate_implementation":
+        candidates.append("backend")
     return max((int(counters.get(candidate, 0)) for candidate in candidates), default=0)
 
 
@@ -380,22 +382,28 @@ def run_feature_intake(
     }
 
 
-def run_writer_canary(
+def run_backend_canary(
     *,
     workspace_root: Path,
     output_root: Path,
     repo_name: str,
-    change_id: str = "WRITER_CANARY",
+    change_id: str = "BACKEND_CANARY",
     live_mode: bool = False,
     dry_live_mode: bool = True,
     model_policy_file: str | None = None,
 ) -> dict[str, Any]:
-    """Run a controlled docs-only writer canary in live or dry-live mode."""
+    """Run a controlled docs-only backend canary in live or dry-live mode.
+
+    Successor of the v1 ``writer-canary``: dry-live assembles the backend
+    selection, prompt, and command line without executing a harness; live
+    runs the full worktree-first flow against a sibling repo and still stops
+    before approval, commit, push, or PR creation.
+    """
     output_root = output_root.expanduser().resolve()
     output_root.mkdir(parents=True, exist_ok=True)
     request_path = output_root / "request.md"
     request_path.write_text(
-        "Create a docs-only engineering loop writer canary artifact.\n",
+        "Create a docs-only engineering loop backend canary artifact.\n",
         encoding="utf-8",
     )
     if dry_live_mode:
@@ -422,4 +430,26 @@ def run_writer_canary(
         scaffold_plan=False,
         model_policy_file=model_policy_file,
         live_mode=live_mode,
+    )
+
+
+def run_writer_canary(
+    *,
+    workspace_root: Path,
+    output_root: Path,
+    repo_name: str,
+    change_id: str = "WRITER_CANARY",
+    live_mode: bool = False,
+    dry_live_mode: bool = True,
+    model_policy_file: str | None = None,
+) -> dict[str, Any]:
+    """Deprecated alias for :func:`run_backend_canary`."""
+    return run_backend_canary(
+        workspace_root=workspace_root,
+        output_root=output_root,
+        repo_name=repo_name,
+        change_id=change_id,
+        live_mode=live_mode,
+        dry_live_mode=dry_live_mode,
+        model_policy_file=model_policy_file,
     )

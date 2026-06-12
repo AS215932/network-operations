@@ -91,7 +91,7 @@ def test_promotion_creates_branch_worktree_and_diff(tmp_path: Path) -> None:
     assert not Path(result["worktree_path"]).exists()
 
 
-def test_promotion_rejects_disallowed_paths_and_rolls_back(tmp_path: Path) -> None:
+def test_policy_rejects_disallowed_paths_and_preserves_worktree(tmp_path: Path) -> None:
     repo_path = tmp_path / "demo"
     worktree_root = tmp_path / "worktrees"
     _init_repo(repo_path)
@@ -117,5 +117,13 @@ def test_promotion_rejects_disallowed_paths_and_rolls_back(tmp_path: Path) -> No
     assert final_state["retry_counters"]["policy"] == 1
     assert final_state["requires_human_signoff"] is True
     assert any("denied by pattern" in error["message"] for error in final_state["validation_errors"])
-    if worktree_root.exists():
-        assert list(worktree_root.glob("*")) == []
+    assert any(
+        "not allowlisted for demo" in error["message"] for error in final_state["validation_errors"]
+    )
+
+    # v2 contract: the guarded worktree is preserved for human inspection
+    # after a policy failure; operator cleanup rolls it back explicitly.
+    worktrees = final_state["worktree_results"]
+    assert worktrees and Path(worktrees[0]["worktree_path"]).exists()
+    rollback_promotions(worktrees)
+    assert list(worktree_root.glob("*")) == []
