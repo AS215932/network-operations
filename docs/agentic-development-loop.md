@@ -10,6 +10,20 @@ to alerts, investigates production, detects drift, recommends approved
 remediation, and verifies runtime recovery. Do not add development
 orchestration to `hyrule-noc-agent`.
 
+## v2 Direction
+
+This document describes the running v1 implementation and stays
+authoritative for current behavior. The approved v2 refactor — a real
+coding-agent backend inside the guarded worktree, task specs as sprint
+contracts, two-phase role participation (plan consult + post-diff
+judgment), a memory/reflection flywheel, issue/signal intake, and a
+headless operations lane — is specified in
+[docs/engineering-loop/v2-architecture.md](./engineering-loop/v2-architecture.md)
+with the phased plan in
+[docs/engineering-loop/v2-roadmap.md](./engineering-loop/v2-roadmap.md).
+The `skills/` tree at the repo root is the first v2 artifact; v1 keeps
+reading `docs/agent-loops/` until roadmap phase C rebinds prompt loading.
+
 ## Architecture Decision
 
 Use two separate loops:
