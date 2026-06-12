@@ -427,6 +427,24 @@ async function approveLatest(ctx: ExtensionContext, pi: ExtensionAPI): Promise<v
 	ctx.ui.notify(result.code === 0 ? `Approved latest loop state.\n${result.stdout}` : result.stderr || result.stdout, result.code === 0 ? "info" : "error");
 }
 
+async function reviewLessons(ctx: ExtensionContext, pi: ExtensionAPI): Promise<void> {
+	const config = await loadConfig(ctx);
+	const memoryDir = join(config.infraRepo, "memory");
+	const result = await runLoopCli(pi, config, ["lessons", "--memory-dir", memoryDir], ctx);
+	if (result.code !== 0) {
+		ctx.ui.notify(result.stderr || result.stdout || "lessons command failed", "error");
+		return;
+	}
+	ctx.ui.notify(
+		[
+			"Hyrule loop memory (merge proposals into memory/lessons/ by hand):",
+			"",
+			result.stdout.trim(),
+		].join("\n"),
+		"info",
+	);
+}
+
 async function runLoop(args: string, ctx: ExtensionContext, pi: ExtensionAPI): Promise<void> {
 	const config = await loadConfig(ctx);
 	const parsed = parseArgs(args);
@@ -499,6 +517,7 @@ async function runLoop(args: string, ctx: ExtensionContext, pi: ExtensionAPI): P
 	];
 	for (const allowed of config.defaultAllow) commandArgs.push("--allow", allowed);
 	for (const source of config.defaultSources) commandArgs.push("--source", source);
+	commandArgs.push("--memory-dir", join(config.infraRepo, "memory"));
 	if (parsed.modelPolicy) commandArgs.push("--model-policy", parsed.modelPolicy);
 	if (parsed.live) commandArgs.push("--live");
 	if (parsed.dryLive) commandArgs.push("--dry-live");
@@ -583,6 +602,7 @@ export default function hyruleLoopExtension(pi: ExtensionAPI): void {
 					"Start new request",
 					"Show latest summary",
 					"Show latest trace",
+					"Review lessons & proposals",
 					"Cleanup latest worktree",
 					"Approve latest state",
 				]);
@@ -592,6 +612,8 @@ export default function hyruleLoopExtension(pi: ExtensionAPI): void {
 					await showLatest(ctx);
 				} else if (choice === "Show latest trace") {
 					await showTrace(ctx);
+				} else if (choice === "Review lessons & proposals") {
+					await reviewLessons(ctx, pi);
 				} else if (choice === "Cleanup latest worktree") {
 					await cleanupLatest(ctx, pi);
 				} else if (choice === "Approve latest state") {
@@ -602,6 +624,7 @@ export default function hyruleLoopExtension(pi: ExtensionAPI): void {
 
 			if (/^status$/i.test(command)) return showLatest(ctx);
 			if (/^trace$/i.test(command)) return showTrace(ctx);
+			if (/^lessons$/i.test(command)) return reviewLessons(ctx, pi);
 			if (/^cleanup$/i.test(command)) return cleanupLatest(ctx, pi);
 			if (/^approve$/i.test(command)) return approveLatest(ctx, pi);
 			await runLoop(args, ctx, pi);

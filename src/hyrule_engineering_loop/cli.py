@@ -18,6 +18,7 @@ from hyrule_engineering_loop.feature import (
     run_feature_intake,
 )
 from hyrule_engineering_loop.graph import build_graph
+from hyrule_engineering_loop.memory import list_memory
 from hyrule_engineering_loop.model_policy import (
     model_policy_snapshot,
     validate_model_policy,
@@ -337,6 +338,7 @@ def feature_command(args: argparse.Namespace) -> int:
                 plan_path=args.plan_path,
                 promotion_base_ref=args.base_ref,
                 model_policy_file=args.model_policy,
+                memory_dir=args.memory_dir,
             )
         except FeatureIntakeError as exc:
             print(f"[CLI] feature dry-live failed: {exc}")
@@ -362,6 +364,7 @@ def feature_command(args: argparse.Namespace) -> int:
             model_policy_file=args.model_policy,
             live_mode=args.live,
             task_spec=Path(args.task_spec) if args.task_spec else None,
+            memory_dir=args.memory_dir,
         )
     except FeaturePreflightError as exc:
         print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
@@ -375,6 +378,7 @@ def feature_command(args: argparse.Namespace) -> int:
         "handoff_path": result["handoff_path"],
         "trace_path": result["trace_path"],
         "task_spec_path": result.get("task_spec_path"),
+        "reflection": result.get("reflection"),
         "repo_name": result["repo_name"],
         "promotion_count": result["promotion_count"],
         "requires_human_signoff": result["requires_human_signoff"],
@@ -434,6 +438,37 @@ def backend_canary_command(args: argparse.Namespace) -> int:
     if result.get("signoff_status") is not None:
         summary["signoff_status"] = result["signoff_status"]
     print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def lessons_command(args: argparse.Namespace) -> int:
+    """Review lessons and pending proposals; merging stays a human git action."""
+    import os
+
+    raw_root = args.memory_dir or os.environ.get("HYRULE_MEMORY_DIR")
+    if raw_root:
+        root = Path(raw_root).expanduser().resolve()
+    else:
+        root = Path(__file__).resolve().parents[2] / "memory"
+    summary = list_memory(root)
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+
+    print(f"memory root: {summary['root']}")
+    print(f"journal entries: {summary['journal_count']}")
+    print("lessons:")
+    for item in summary["lessons"] or [{"name": "(none)", "path": "", "chars": 0}]:
+        print(f"  - {item['name']}: {item['chars']} chars {item['path']}")
+    print("pending proposals (review, then merge into memory/lessons/ by hand):")
+    if not summary["proposals"]:
+        print("  - (none)")
+    for item in summary["proposals"]:
+        print(f"  - {item['name']}: {item['path']}")
+        excerpt = str(item.get("excerpt", "")).strip()
+        if excerpt:
+            for line in excerpt.splitlines()[:6]:
+                print(f"      {line}")
     return 0
 
 
@@ -653,6 +688,7 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--mock-mutation", action="append", default=[])
     feature_parser.add_argument("--plan-path")
     feature_parser.add_argument("--task-spec")
+    feature_parser.add_argument("--memory-dir")
     feature_parser.add_argument("--no-scaffold-plan", action="store_true")
     feature_parser.add_argument("--base-ref", default="HEAD")
     feature_parser.add_argument("--model-policy")
@@ -660,6 +696,14 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--dry-live", action="store_true")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
+
+    lessons_parser = subparsers.add_parser(
+        "lessons",
+        help="review memory lessons and pending lesson proposals",
+    )
+    lessons_parser.add_argument("--memory-dir")
+    lessons_parser.add_argument("--json", action="store_true")
+    lessons_parser.set_defaults(func=lessons_command)
 
     models_parser = subparsers.add_parser("models", help="inspect model routing policy")
     models_subparsers = models_parser.add_subparsers(dest="models_command", required=True)
