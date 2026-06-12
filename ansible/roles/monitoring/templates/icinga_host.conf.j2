@@ -59,6 +59,7 @@ object Host "{{ inventory_hostname }}" {
   vars.disks["{{ disk_name }}"] = { mountpoint = "{{ disk_cfg.mountpoint }}" }
 {% endfor %}
 }
+{% if monitoring_extra_services | default([]) %}
 
 {# Per-service blocks (service-specific checks not covered by the global apply rules). #}
 {% for svc in monitoring_extra_services %}
@@ -86,3 +87,4 @@ object Service "{{ svc.name }}" {
 }
 
 {% endfor %}
+{% endif %}
