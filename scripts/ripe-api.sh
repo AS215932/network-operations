@@ -40,7 +40,7 @@ rpsl_to_json() {
   python3 - "$1" <<'PY'
 import sys, json, re
 TYPES = {
-    "domain","route6","inet6num","aut-num","mntner","person","role",
+    "domain","route6","inet6num","aut-num","as-set","mntner","person","role",
     "route","inetnum","organisation","key-cert","poem","poetic-form",
 }
 with open(sys.argv[1]) as fh:
@@ -87,11 +87,10 @@ cmd_search() {
 cmd_create() {
   local file="$1"
   local body type
-  # rpsl_to_json prints the inferred object type to stderr; capture it.
-  exec 3>&1
-  type="$(rpsl_to_json "$file" 2>&1 1>&3 | tail -1)"
+  # rpsl_to_json prints the inferred object type to stderr; capture it without
+  # leaking the generated JSON body to stdout.
+  type="$(rpsl_to_json "$file" 2>&1 >/dev/null | tail -1)"
   body="$(rpsl_to_json "$file" 2>/dev/null)"
-  exec 3>&-
   curl -sS -X POST \
     -H "Authorization: ${RIPE_API_AUTH}" \
     -H "Accept: application/json" \

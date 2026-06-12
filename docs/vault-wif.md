@@ -63,7 +63,9 @@ The AppRole `role_id` and `secret_id` are bootstrap credentials. They are writte
 
 `kv/noc-agent` uses these keys:
 
-- `gemini_api_key`
+- `openrouter_api_key`
+- `openrouter_management_api_key` (optional)
+- `gemini_api_key` (optional fallback/legacy)
 - `anthropic_api_key`
 - `openai_api_key`
 - `discord_webhook_url`

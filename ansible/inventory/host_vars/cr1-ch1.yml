@@ -1,0 +1,52 @@
+---
+# cr1-ch1 — FreeBSD 14.4 + FRRouting at Securebit CH.
+# Initial role: independent Swiss path-diversity router. External Securebit BGP
+# neighbor details are intentionally not enabled yet; this host joins the AS215932
+# overlay via rtr first.
+
+ansible_python_interpreter: /usr/local/bin/python3.11
+
+pf_ext_if: "vmx0"
+pf_extra_ifs:
+  - { name: "ixp_4ixp", dev: "vmx1" }
+  - { name: "ixp_sbix", dev: "vmx2" }
+pf_ext_ifs: ["vmx0", "vmx1", "vmx2"]
+pf_antispoof: true
+pf_use_as215932_table: true
+
+# WG underlay listener ports — 1339 (rtr), 1341 (cr1-nl1), 1342 (cr1-de1).
+pf_wg_ports: [1339, 1341, 1342]
+
+# External BGP peers: Securebit transit + SBIX route servers.
+pf_bgp_peers:
+  - "2a09:4c0:100:2d88::8bfa"  # Securebit transit (AS58057)
+  - "2001:7f8:d9:1::1"         # SBIX RS1 (AS56755)
+  - "2001:7f8:d9:1::2"         # SBIX RS2 (AS56755)
+  - "2001:7f8:d9:1::3"         # SBIX RS3 (AS56755)
+  - "2001:7f8:d9:1::4"         # SBIX RS4 (AS56755)
+  - "2001:7f8:d0::8b7c:1"      # 4IXP RS1 (AS35708)
+  - "2001:7f8:d0::8b7c:2"      # 4IXP RS2 (AS35708)
+  - "2001:7f8:d0::8b7c:3"      # 4IXP RS3 (AS35708)
+
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
+  - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }
+
+# mon's icinga2 by_ssh pubkey, authorized for the dedicated `monitoring`
+# user. Set MONITORING_BY_SSH_PUBKEY in secrets.local.sh.
+monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
+
+# --- Monitoring ---
+monitoring_register: true
+monitoring_role: router
+monitoring_display_name: "cr1-ch1 (Securebit CH)"
+monitoring_check_vars:
+  has_frr: true
+  underlay_address6: "{{ peers.cr1_ch1.underlay }}"
+  prom_instance_frr: "[{{ peers.cr1_ch1.loopback }}]:9342"
+  site: "ch1"
+
+# --- Logs --- (FreeBSD native syslogd TCP forward)
+logs_register: true
+logs_role: router
+logs_use_freebsd_syslogd: true

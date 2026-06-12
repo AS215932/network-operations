@@ -17,7 +17,6 @@ vault token lookup >/dev/null 2>&1 || {
   exit 1
 }
 : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}"
-: "${GEMINI_API_KEY:?GEMINI_API_KEY is required}"
 : "${NOC_DISCORD_WEBHOOK:?NOC_DISCORD_WEBHOOK is required}"
 : "${MAIL_NOC_PASSWORD:?MAIL_NOC_PASSWORD is required}"
 : "${XO_TOKEN:?XO_TOKEN is required}"
@@ -26,11 +25,11 @@ vault token lookup >/dev/null 2>&1 || {
 : "${NOC_APPROVAL_SIGNING_SECRET:?NOC_APPROVAL_SIGNING_SECRET is required}"
 
 vault_args=(
-  gemini_api_key="${GEMINI_API_KEY}" \
-  openrouter_api_key="${OPENROUTER_API_KEY}" \
-  openrouter_management_api_key="${OPENROUTER_MANAGEMENT_API_KEY:-}" \
+  gemini_api_key="${GEMINI_API_KEY:-}" \
   anthropic_api_key="${ANTHROPIC_API_KEY:-}" \
   openai_api_key="${OPENAI_API_KEY:-}" \
+  openrouter_api_key="${OPENROUTER_API_KEY}" \
+  openrouter_management_api_key="${OPENROUTER_MANAGEMENT_API_KEY:-}" \
   discord_webhook_url="${NOC_DISCORD_WEBHOOK}" \
   discord_bot_token="${NOC_DISCORD_BOT_TOKEN:-}" \
   discord_bot_channel_id="${NOC_DISCORD_BOT_CHANNEL_ID:-}" \

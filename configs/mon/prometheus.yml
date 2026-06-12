@@ -69,6 +69,11 @@ scrape_configs:
         labels:
           site: de1
           role: router
+      - targets:
+          - "[2a0c:b641:b50::c]:9100"      # cr1.ch1
+        labels:
+          site: ch1
+          role: router
 
   - job_name: node-hypervisor
     static_configs:
@@ -95,6 +100,10 @@ scrape_configs:
           - "[2a0c:b641:b50::b]:9342"      # cr1.de1
         labels:
           site: de1
+      - targets:
+          - "[2a0c:b641:b50::c]:9342"      # cr1.ch1
+        labels:
+          site: ch1
 
   # --- postgres_exporter (port 9187) ---
 
@@ -118,6 +127,7 @@ scrape_configs:
           - "2a0c:b641:b50::d"             # rtr loopback
           - "2a0c:b641:b50::a"             # cr1.nl1
           - "2a0c:b641:b50::b"             # cr1.de1
+          - "2a0c:b641:b50::c"             # cr1.ch1
           # Infra VMs
           - "2a0c:b641:b50:2::10"          # dns
           - "2a0c:b641:b50:2::20"          # api
@@ -128,8 +138,13 @@ scrape_configs:
           # WireGuard link endpoints (far side)
           - "2a0c:b641:b50:ff02::"         # cr1.nl1 side of rtr-nl1 tunnel
           - "2a0c:b641:b50:ff05::"         # cr1.de1 side of rtr-de1 tunnel
+          - "2a0c:b641:b50:ff06::"         # cr1.ch1 side of rtr-ch1 tunnel
           - "2a0c:b641:b50:ff00::"         # cr1.nl1 side of nl1-de1 tunnel
           - "2a0c:b641:b50:ff00::1"        # cr1.de1 side of nl1-de1 tunnel
+          - "2a0c:b641:b50:ff07::"         # cr1.nl1 side of nl1-ch1 tunnel
+          - "2a0c:b641:b50:ff07::1"        # cr1.ch1 side of nl1-ch1 tunnel
+          - "2a0c:b641:b50:ff08::"         # cr1.de1 side of de1-ch1 tunnel
+          - "2a0c:b641:b50:ff08::1"        # cr1.ch1 side of de1-ch1 tunnel
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

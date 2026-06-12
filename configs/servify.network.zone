@@ -5,7 +5,7 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026050201 ; serial (YYYYMMDDNN)
+                  2026060801 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -56,3 +56,5 @@ cr1-nl1 IN  A     194.28.98.69
 cr1-nl1 IN  AAAA  2a0c:b640:8:69::1
 cr1-de1 IN  A     194.28.99.213
 cr1-de1 IN  AAAA  2a0c:b640:10::213
+cr1-ch1 IN  A     45.136.136.152
+cr1-ch1 IN  AAAA  2a09:4c0:100:2d88::8898

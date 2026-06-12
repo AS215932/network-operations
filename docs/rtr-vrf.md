@@ -6,10 +6,10 @@ contexts:
 | VRF       | Table | Interfaces                         | Purpose                          |
 |-----------|-------|------------------------------------|----------------------------------|
 | _default_ | main  | `enX0` (mgmt), `enX4` (wan)        | Underlay v6 + failover v4        |
-| `overlay` | 200   | `enX2` (infra), `enX3` (vm), `wg0`, `wg1`, `lo-overlay` | AS215932 v6 + iBGP |
+| `overlay` | 200   | `enX2` (infra), `enX3` (vm), `wg0`, `wg1`, `wg2`, `lo-overlay` | AS215932 v6 + iBGP |
 
 FRR runs `bgpd` inside the overlay VRF (`router bgp 215932 vrf overlay`,
-two iBGP peers to cr1.nl1 / cr1.de1). Steady-state the kernel carries
+three iBGP peers to cr1.nl1 / cr1.de1 / cr1.ch1). Steady-state the kernel carries
 ~515k IPv6 routes — see [project_rtr_networkd_bgp memory] for why this
 matters when restarting networkd.
 
@@ -28,7 +28,7 @@ between VRF master and slave devices. The managed rules therefore include
 VRF-safe destination-prefix drops. The same caveat applies to host-input
 routing protocols: OSPFv3 packets may appear with `IN=overlay`, so rtr's input
 filter allows proto 89 on both the VRF master (`overlay`) and WG slaves
-(`wg0`/`wg1`).
+(`wg0`/`wg1`/`wg2`).
 
 - IPv6 forwarded from `2a0c:b641:b51::/48` to infra/router ranges
   (`2a0c:b641:b50:2::/64`, `2a0c:b641:b50::/64`, `2a0c:b641:b50:ff00::/56`)

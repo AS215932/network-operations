@@ -1,0 +1,15 @@
+# IPv6 bogons per RFC 6890. Managed by ansible/roles/firewall.
+# Multicast (ff00::/8) DELIBERATELY excluded — blocks NDP and breaks the
+# link-local discovery dataplane. See issue #25.
+
+::/8
+100::/64
+2001:2::/48
+2001:10::/28
+2001:db8::/32
+2002::/16
+3ffe::/16
+3fff::/20
+5f00::/16
+fc00::/7
+fec0::/10
