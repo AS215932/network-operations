@@ -90,7 +90,7 @@ Artifacts
     +-- worktrees/<repo>-<change_id>/
 ```
 
-The current graph topology is:
+The current graph topology (v2 Phase B: worktree-first execution) is:
 
 ```text
 START
@@ -106,16 +106,22 @@ START
   +------------------+------------------+------------------+
                      |
                      v
-             [implementation]
+             [repo_adapter]
                      |
                      v
-             [workspace_writer]
+             [worktree_setup]        <- branch-backed worktree BEFORE implementation
                      |
                      v
-             [gate_execution]
+             [pre_gate_policy]       <- explicit gate commands validated pre-execution
                      |
                      v
-             [workspace_cleanup]
+         [delegate_implementation]   <- AgentBackend (mock | pi | claude-code)
+                     |                  budget_exhausted --> [human_signoff]
+                     v
+             [gate_execution]        <- authoritative re-run in the worktree
+                     |
+                     v
+             [workspace_cleanup]     <- MockBackend scratch only
                      |
                      v
              <remediation router>
@@ -123,13 +129,10 @@ START
               |        |          +--> retry role nodes when gates fail
               |        +-------------> [human_signoff] when circuit breaker trips
               v
-          [repo_adapter]
+            [policy]                 <- diff guard: validates the resulting git diff
               |
               v
-            [policy]
-              |
-              v
-          [promotion]
+          [promotion]                <- captures worktree diffs for human review
               |
               v
           [package_pr]
@@ -777,6 +780,32 @@ Phase 19 adds first-live-run safety and failure UX:
   next trace command;
 - `writer-canary` runs a docs-only live or dry-live writer canary against a
   sibling repo.
+
+Phase 20 (v2 Phase B) swaps the generation core for the `AgentBackend`
+abstraction (`src/hyrule_engineering_loop/backend.py`):
+
+- the branch-backed worktree is created **before** implementation
+  (`worktree_setup`); `delegate_implementation` replaces the
+  `implementation` + `workspace_writer` pair;
+- `MockBackend` (default) absorbs the v1 whole-file `create`/`replace`
+  writer semantics — deterministic, no API keys, no harness binaries; the
+  temp-workspace path survives only inside its non-promotion scratch mode;
+- `PiBackend` and `ClaudeCodeBackend` drive real harnesses as subprocesses
+  with an **allowlisted environment** (no Vault, no SSH agent, no provider
+  keys) and hard budgets; wall-clock/iteration exhaustion returns
+  `budget_exhausted` and routes directly to human sign-off;
+- the policy guard validates the **resulting worktree diff** (allowed path
+  prefixes, denied globs, denied content patterns on added lines, size and
+  count caps) in addition to the v1 proposed-mutation checks; on policy
+  failure the worktree is preserved for inspection and cleaned up via
+  `state-cleanup`;
+- `model-policy.yml` gains a `backends:` section: executor selection follows
+  the implementation-writer tier, so risk/retry escalation can promote the
+  harness as well as the model (`models show` displays the resolved
+  backend);
+- `backend-canary` succeeds `writer-canary` (which remains as a deprecated
+  alias): `--dry-live` assembles backend selection, prompt, and command line
+  without executing a harness; live runs stay non-publishing.
 
 From Pi, use the global extension command:
 
