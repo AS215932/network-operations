@@ -11,30 +11,16 @@ name: iac-tests
 # runner. Tiers 1-2 spin up Batfish / Containerlab (heavy lab infra + Docker) on
 # the privileged ci runner and only run on a trusted trigger — never automatically
 # on an arbitrary PR. The `iac-gate` job is the single REQUIRED status context:
-# it always reports, so a PR that touches none of the path-filtered IaC files
-# (where this whole workflow is skipped) is treated as passing, while an IaC PR
-# only passes when the required tiers succeed and the lab tiers are
+# this workflow always starts, a cheap `changes` job decides whether IaC paths
+# changed, and `iac-gate` reports for both docs-only and IaC PRs. IaC PRs only
+# pass when the required tiers succeed and the lab tiers are
 # success-or-skipped (never failed). See docs/netops/testing-strategy.md.
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/iac-tests.yml'
-      - '.pre-commit-config.yaml'
-      - 'ansible/**'
-      - 'configs/**'
-      - 'scripts/ci/**'
-      - 'tests/**'
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/iac-tests.yml'
-      - '.pre-commit-config.yaml'
-      - 'ansible/**'
-      - 'configs/**'
-      - 'scripts/ci/**'
-      - 'tests/**'
   workflow_dispatch:
 
 permissions:
@@ -42,9 +28,82 @@ permissions:
   pull-requests: read
 
 jobs:
+  changes:
+    name: Detect IaC changes
+    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    timeout-minutes: 5
+    outputs:
+      iac_changed: ${{ steps.diff.outputs.iac_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect IaC-relevant paths
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            echo "Manual dispatch: running IaC tests."
+            echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            base="${PR_BASE_SHA}"
+            head="${PR_HEAD_SHA}"
+          elif [ "${EVENT_NAME}" = "push" ]; then
+            base="${PUSH_BEFORE}"
+            head="${HEAD_SHA}"
+          else
+            echo "Unsupported event ${EVENT_NAME}: running IaC tests."
+            echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ -z "${base}" ] || [ "${base}" = "0000000000000000000000000000000000000000" ]; then
+            echo "No usable base SHA: running IaC tests."
+            echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            if ! diff_base="$(git merge-base "${base}" "${head}")"; then
+              echo "Could not determine merge base: running IaC tests."
+              echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          else
+            diff_base="${base}"
+          fi
+
+          if ! changed_paths="$(git diff --name-only "${diff_base}" "${head}")"; then
+            echo "Could not determine changed paths: running IaC tests."
+            echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "Changed paths:"
+          printf '%s\n' "${changed_paths}"
+
+          if printf '%s\n' "${changed_paths}" | grep -Eq '^(\.github/workflows/iac-tests\.yml|\.pre-commit-config\.yaml|ansible/|configs/|scripts/ci/|tests/)'; then
+            echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "iac_changed=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   # ---- Tier 0: static, unprivileged, required ---------------------------
   static-iac:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    needs: changes
+    if: ${{ needs.changes.outputs.iac_changed == 'true' }}
     timeout-minutes: 10
     env:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
@@ -64,7 +123,8 @@ jobs:
 
   ansible-idempotency:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    needs: static-iac
+    needs: [changes, static-iac]
+    if: ${{ needs.changes.outputs.iac_changed == 'true' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
@@ -75,8 +135,8 @@ jobs:
   # ---- Tier 1: Batfish control-plane model (privileged, trusted-only) ---
   batfish:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    needs: static-iac
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true' }}
+    needs: [changes, static-iac]
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true') }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -103,8 +163,8 @@ jobs:
   # ---- Tier 2: Containerlab dynamic FRR (privileged, trusted-only) ------
   containerlab-frr:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    needs: static-iac
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true' }}
+    needs: [changes, static-iac]
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -127,12 +187,14 @@ jobs:
   iac-gate:
     name: iac-gate
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    needs: [static-iac, ansible-idempotency, batfish, containerlab-frr]
+    needs: [changes, static-iac, ansible-idempotency, batfish, containerlab-frr]
     if: always()
     timeout-minutes: 5
     steps:
       - name: Evaluate tier results
         env:
+          CHANGES: ${{ needs.changes.result }}
+          IAC_CHANGED: ${{ needs.changes.outputs.iac_changed }}
           STATIC_IAC: ${{ needs.static-iac.result }}
           ANSIBLE_IDEMPOTENCY: ${{ needs.ansible-idempotency.result }}
           BATFISH: ${{ needs.batfish.result }}
@@ -140,20 +202,33 @@ jobs:
         run: |
           set -euo pipefail
           echo "Tier results:"
+          echo "  changes             = ${CHANGES}"
+          echo "  iac_changed         = ${IAC_CHANGED}"
           echo "  static-iac          = ${STATIC_IAC}"
           echo "  ansible-idempotency = ${ANSIBLE_IDEMPOTENCY}"
           echo "  batfish (trusted)   = ${BATFISH}"
           echo "  containerlab (trust)= ${CONTAINERLAB}"
           fail=0
-          # Required tiers must succeed.
-          for pair in "static-iac:${STATIC_IAC}" "ansible-idempotency:${ANSIBLE_IDEMPOTENCY}"; do
-            name="${pair%%:*}"; res="${pair##*:}"
-            if [ "${res}" != "success" ]; then
-              echo "::error::required tier ${name} did not pass (${res})"
-              fail=1
-            fi
-          done
-          # Trusted lab tiers may be skipped on PRs, but must never be failed.
+
+          if [ "${CHANGES}" != "success" ]; then
+            echo "::error::change detection did not pass (${CHANGES})"
+            fail=1
+          fi
+
+          if [ "${IAC_CHANGED}" = "true" ]; then
+            # Required tiers must succeed when IaC-relevant paths changed.
+            for pair in "static-iac:${STATIC_IAC}" "ansible-idempotency:${ANSIBLE_IDEMPOTENCY}"; do
+              name="${pair%%:*}"; res="${pair##*:}"
+              if [ "${res}" != "success" ]; then
+                echo "::error::required tier ${name} did not pass (${res})"
+                fail=1
+              fi
+            done
+          else
+            echo "No IaC-relevant changes; required tiers may be skipped."
+          fi
+
+          # Trusted lab tiers may be skipped on PRs, but must never fail.
           for pair in "batfish:${BATFISH}" "containerlab-frr:${CONTAINERLAB}"; do
             name="${pair%%:*}"; res="${pair##*:}"
             if [ "${res}" != "success" ] && [ "${res}" != "skipped" ]; then

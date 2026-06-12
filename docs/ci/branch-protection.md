@@ -37,17 +37,17 @@ lists only `claude-for-github`, `claude`).
 ## The `iac-gate` deadlock guard (acceptance #7)
 
 `network-operations` requires **`iac-gate`**, not the individual Tier-0 jobs.
-`iac-tests.yml` is path-filtered (runs only when IaC files change), so a
-docs-only PR doesn't trigger it. GitHub treats a required check whose workflow
-is **skipped by path/branch filtering as passing**, so such a PR is not wedged.
-This is already proven on this repo: `render` (from the path-filtered
-`render-check.yml`) has long been required and docs-only PRs merge fine.
-`iac-gate` behaves identically. Always re-verify after changing required checks
-with a docs-only PR that touches none of the IaC paths — it must not show a
-stuck "Expected" check. (This very doc set was merged as that verification PR.)
+`iac-tests.yml` is not workflow-level path-filtered: GitHub does not create
+check runs for a workflow skipped by `paths`, so a required context from that
+workflow can remain stuck at "Expected" on a docs-only PR. Instead, the workflow
+always starts, an internal `changes` job decides whether IaC paths changed, and
+the `iac-gate` job reports either way. Always re-verify after changing required
+checks with a docs-only PR that touches none of the IaC paths: `iac-tests` must
+run, the tier jobs should be skipped, and `iac-gate` must report success.
 
-`iac-gate` itself (`if: always()`, `needs:` all tiers) passes only when the
-required tiers succeed and the trusted lab tiers are success-or-skipped — see
+`iac-gate` itself (`if: always()`, `needs:` the internal `changes` job plus all
+tiers) passes only when change detection succeeds, required tiers succeed for
+IaC changes, and the trusted lab tiers are success-or-skipped — see
 `docs/netops/testing-strategy.md`.
 
 ## Reproducing the protection
