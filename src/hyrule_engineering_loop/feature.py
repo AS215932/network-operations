@@ -16,6 +16,7 @@ from hyrule_engineering_loop.nodes import ALL_ROLES
 from hyrule_engineering_loop.preflight import preflight_feature_state
 from hyrule_engineering_loop.repo_adapter import discover_hyrule_repositories
 from hyrule_engineering_loop.state import ChangeClass, GraphState
+from hyrule_engineering_loop.task_spec import TaskSpecError, load_task_spec
 
 
 class FeatureIntakeError(RuntimeError):
@@ -197,6 +198,7 @@ def build_feature_state(
     model_policy_file: str | None = None,
     live_mode: bool = False,
     dry_live_mode: bool = False,
+    task_spec_path: Path | None = None,
 ) -> GraphState:
     """Build a graph state from operator-friendly feature-intake arguments."""
     workspace_root = workspace_root.expanduser().resolve()
@@ -204,6 +206,13 @@ def build_feature_state(
     repo_path = _resolve_repo(workspace_root, repo_name)
     request_text = _read_request(request_path)
     active_plan_path = plan_path or f"docs/engineering-loop/{_slug(change_id)}.md"
+
+    supplied_spec: dict[str, Any] | None = None
+    if task_spec_path is not None:
+        try:
+            supplied_spec = load_task_spec(task_spec_path)
+        except TaskSpecError as exc:
+            raise FeatureIntakeError(f"task spec refused: {exc}") from exc
 
     mutations = _parse_mutations(repo_name, mock_mutations or [])
     repo_source_files = [f"{repo_name}:{path}" for path in source_files or []]
@@ -249,7 +258,11 @@ def build_feature_state(
         "live_mode": live_mode,
         "dry_live_mode": dry_live_mode,
         "gate_commands": _parse_gate_command(gate_command),
+        "task_spec_required": True,
+        "task_spec_path": str(output_root / "tasks" / f"{change_id}.md"),
     }
+    if supplied_spec is not None:
+        state["task_spec"] = supplied_spec
     if model_policy_file is not None:
         state["model_policy_file"] = model_policy_file
     return state
@@ -318,6 +331,7 @@ def run_feature_intake(
     promotion_base_ref: str = "HEAD",
     model_policy_file: str | None = None,
     live_mode: bool = False,
+    task_spec: Path | None = None,
 ) -> dict[str, Any]:
     """Run the graph from a human-authored feature request."""
     state = build_feature_state(
@@ -336,6 +350,7 @@ def run_feature_intake(
         promotion_base_ref=promotion_base_ref,
         model_policy_file=model_policy_file,
         live_mode=live_mode,
+        task_spec_path=task_spec,
     )
     if live_mode:
         preflight = preflight_feature_state(state, output_root=output_root, live=True)
@@ -367,6 +382,7 @@ def run_feature_intake(
         "state_path": str(state_path),
         "handoff_path": final_state.get("noc_handoff_path"),
         "trace_path": final_state.get("loop_trace_path"),
+        "task_spec_path": final_state.get("task_spec_path"),
         "repo_name": repo_name,
         "promotion_count": len(final_state.get("promotion_results", [])),
         "requires_human_signoff": final_state.get("requires_human_signoff", False),

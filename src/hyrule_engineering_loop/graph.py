@@ -14,7 +14,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from hyrule_engineering_loop.nodes import (
-    DOMAIN_TO_ROLE,
     ROLE_NODE_NAMES,
     classification_node,
     delegate_implementation_node,
@@ -24,10 +23,12 @@ from hyrule_engineering_loop.nodes import (
     gate_policy_node,
     network_architect_node,
     package_pr_node,
+    planner_node,
     policy_node,
     promotion_node,
     repo_adapter_node,
     required_roles_for_state,
+    role_judgment_node,
     security_auditor_node,
     systems_engineer_node,
     human_signoff_node,
@@ -50,6 +51,7 @@ Route = Literal[
     "gate_execution",
     "policy",
     "repo_adapter",
+    "role_judgment",
     "promotion",
     "package_pr",
     "human_signoff",
@@ -66,18 +68,22 @@ def _approval_complete(state: GraphState) -> bool:
     return all(approvals.get(role, False) for role in required_roles_for_state(state))
 
 
-def _roles_for_errors(state: GraphState) -> list[RoleName]:
-    roles: list[RoleName] = []
-    for error in state["validation_errors"]:
-        domain = str(error.get("domain", ""))
-        role = DOMAIN_TO_ROLE.get(domain)
-        if role is not None and role not in roles:
-            roles.append(role)
-    return roles
+def planner_router(state: GraphState) -> Route | list[Route]:
+    """Route the planner outcome to role consults or human sign-off."""
+    if state.get("task_spec_required", False) and not state.get("task_spec"):
+        return "human_signoff"
+    return role_review_router(state)
 
 
 def remediation_router(state: GraphState) -> Route | list[Route]:
-    """Route gate results to remediation, human sign-off, or the diff guard."""
+    """Route gate/backend failures back to the backend, else to the diff guard.
+
+    Phase C: gate failures and backend failures feed straight back into
+    ``delegate_implementation`` as remediation context — role review value
+    now lives in the plan consult and the post-diff judgment, not in
+    re-reviewing the request mid-loop. The 3-strike circuit breaker is
+    unchanged.
+    """
     if any(count >= 3 for count in state["retry_counters"].values()):
         return "human_signoff"
 
@@ -85,18 +91,12 @@ def remediation_router(state: GraphState) -> Route | list[Route]:
         return "human_signoff"
 
     if state.get("gate_status") == "failed":
-        roles = _roles_for_errors(state)
-        if roles:
-            return [cast(Route, ROLE_NODE_NAMES[role]) for role in roles]
-        return "systems_engineer"
+        return "delegate_implementation"
 
     if state.get("implementation_writer_status") == "failed":
-        return "systems_engineer"
+        return "delegate_implementation"
 
-    if _approval_complete(state):
-        return "policy"
-
-    return role_review_router(state)
+    return "policy"
 
 
 def repo_adapter_router(state: GraphState) -> Route:
@@ -121,17 +121,29 @@ def pre_gate_policy_router(state: GraphState) -> Route:
 
 
 def delegate_router(state: GraphState) -> Route:
-    """Route backend outcome onward; budget exhaustion goes straight to sign-off."""
-    if state.get("implementation_writer_status") == "budget_exhausted":
+    """Route backend outcome onward; budget exhaustion and spec refusal stop."""
+    if state.get("implementation_writer_status") in {"budget_exhausted", "refused"}:
         return "human_signoff"
     return "gate_execution"
 
 
 def policy_router(state: GraphState) -> Route:
-    """Route diff-guard outcome to promotion capture or human sign-off."""
+    """Route diff-guard outcome to post-diff role judgment or human sign-off."""
     if state.get("policy_status") == "failed":
         return "human_signoff"
-    return "promotion"
+    return "role_judgment"
+
+
+def judgment_router(state: GraphState) -> Route:
+    """Route role judgments to promotion, backend remediation, or sign-off."""
+    if any(count >= 3 for count in state["retry_counters"].values()):
+        return "human_signoff"
+    approvals_complete = _approval_complete(state)
+    if state.get("requires_human_signoff", False) and not approvals_complete:
+        return "human_signoff"
+    if approvals_complete:
+        return "promotion"
+    return "delegate_implementation"
 
 
 def promotion_router(state: GraphState) -> Route:
@@ -152,6 +164,7 @@ def build_graph(
     graph = StateGraph(GraphState)
 
     graph.add_node("classification", classification_node)
+    graph.add_node("planner", planner_node)
     graph.add_node("network_architect", network_architect_node)
     graph.add_node("systems_engineer", systems_engineer_node)
     graph.add_node("devops_netops", devops_netops_node)
@@ -165,14 +178,16 @@ def build_graph(
     graph.add_node("gate_execution", gate_execution_node)
     graph.add_node("workspace_cleanup", workspace_cleanup_node)
     graph.add_node("policy", policy_node)
+    graph.add_node("role_judgment", role_judgment_node)
     graph.add_node("promotion", promotion_node)
     graph.add_node("package_pr", package_pr_node)
     graph.add_node("human_signoff", human_signoff_node)
 
     graph.add_edge(START, "classification")
+    graph.add_edge("classification", "planner")
     graph.add_conditional_edges(
-        "classification",
-        role_review_router,
+        "planner",
+        planner_router,
         {
             "network_architect": "network_architect",
             "systems_engineer": "systems_engineer",
@@ -180,6 +195,7 @@ def build_graph(
             "security_auditor": "security_auditor",
             "finops_integrity": "finops_integrity",
             "virtual_lab_chaos": "virtual_lab_chaos",
+            "human_signoff": "human_signoff",
         },
     )
 
@@ -223,12 +239,7 @@ def build_graph(
         "workspace_cleanup",
         remediation_router,
         {
-            "network_architect": "network_architect",
-            "systems_engineer": "systems_engineer",
-            "devops_netops": "devops_netops",
-            "security_auditor": "security_auditor",
-            "finops_integrity": "finops_integrity",
-            "virtual_lab_chaos": "virtual_lab_chaos",
+            "delegate_implementation": "delegate_implementation",
             "policy": "policy",
             "human_signoff": "human_signoff",
         },
@@ -237,7 +248,16 @@ def build_graph(
         "policy",
         policy_router,
         {
+            "role_judgment": "role_judgment",
+            "human_signoff": "human_signoff",
+        },
+    )
+    graph.add_conditional_edges(
+        "role_judgment",
+        judgment_router,
+        {
             "promotion": "promotion",
+            "delegate_implementation": "delegate_implementation",
             "human_signoff": "human_signoff",
         },
     )

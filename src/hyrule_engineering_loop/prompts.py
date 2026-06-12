@@ -1,27 +1,34 @@
-"""Prompt artifact loading for future role-node hydration."""
+"""Prompt artifact loading for role-node hydration.
+
+Phase C rebinds role prompts from the v1 ``docs/agent-loops/`` role cards to
+the ``skills/`` tree (``skills/README.md``): each role's working contract is
+its ``SKILL.md`` — trigger frontmatter, workflow checkpoints,
+anti-rationalization table, and exit criteria. The v1 role cards remain in
+``docs/agent-loops/`` as lineage until the Phase G extraction.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 ROLE_PROMPT_FILES: dict[str, str] = {
-    "network_architect": "senior-network-architect.md",
-    "systems_engineer": "senior-systems-engineer.md",
-    "devops_netops": "senior-devops-netops-engineer.md",
-    "security_auditor": "senior-security-cryptographic-auditor.md",
-    "finops_integrity": "finops-billing-integrity-engineer.md",
-    "virtual_lab_chaos": "virtual-lab-chaos-simulation-engineer.md",
-    "implementation_writer": "implementation-writer.md",
+    "network_architect": "role-network-architect/SKILL.md",
+    "systems_engineer": "role-systems-engineer/SKILL.md",
+    "devops_netops": "role-devops-netops/SKILL.md",
+    "security_auditor": "role-security-auditor/SKILL.md",
+    "finops_integrity": "role-finops-integrity/SKILL.md",
+    "virtual_lab_chaos": "role-virtual-lab-chaos/SKILL.md",
+    "implementation_writer": "implementation-tranche/SKILL.md",
 }
 
 
 def default_prompt_dir() -> Path:
-    """Return the repo-local role prompt directory."""
-    return Path(__file__).resolve().parents[2] / "docs" / "agent-loops"
+    """Return the repo-local skills directory."""
+    return Path(__file__).resolve().parents[2] / "skills"
 
 
 def load_role_prompts(prompt_dir: Path | None = None) -> dict[str, str]:
-    """Load Markdown role prompts for later model binding."""
+    """Load role skill documents for model binding."""
     base = prompt_dir or default_prompt_dir()
     prompts: dict[str, str] = {}
     for role, filename in ROLE_PROMPT_FILES.items():

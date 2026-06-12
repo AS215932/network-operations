@@ -67,10 +67,12 @@ class BackendExecutionError(RuntimeError):
 
 @dataclass(frozen=True)
 class TaskSpec:
-    """Minimal task contract handed to a backend.
+    """The task contract handed to a backend.
 
-    Phase C replaces the construction site with parsed ``tasks/<change-id>.md``
-    sprint contracts; the shape here is the subset Phase B needs.
+    Phase C populates this from the parsed ``tasks/<change-id>.md`` sprint
+    contract when one is present in graph state; the acceptance criteria,
+    non-goals, role consult constraints, and any judgment findings from the
+    previous round all reach the backend prompt.
     """
 
     change_id: str
@@ -80,6 +82,11 @@ class TaskSpec:
     allowed_paths: Mapping[str, tuple[str, ...]]
     gate_commands: tuple[tuple[str, ...], ...] = ()
     transcript_dir: str | None = None
+    intent: str = ""
+    acceptance_criteria: tuple[str, ...] = ()
+    non_goals: str = ""
+    role_constraints: tuple[str, ...] = ()
+    remediation_findings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,7 +236,23 @@ def assemble_backend_prompt(task_spec: TaskSpec, constraints: BackendConstraints
         "",
         "## Request",
         "",
-        task_spec.request.rstrip() or "(no request text supplied)",
+        task_spec.intent.rstrip() or task_spec.request.rstrip() or "(no request text supplied)",
+    ]
+    if task_spec.acceptance_criteria:
+        lines.extend(["", "## Acceptance criteria (the definition of done)", ""])
+        lines.extend(
+            f"{index}. {criterion}"
+            for index, criterion in enumerate(task_spec.acceptance_criteria, start=1)
+        )
+    if task_spec.non_goals:
+        lines.extend(["", "## Non-goals", "", task_spec.non_goals.rstrip()])
+    if task_spec.role_constraints:
+        lines.extend(["", "## Role consult constraints", ""])
+        lines.extend(f"- {constraint}" for constraint in task_spec.role_constraints)
+    if task_spec.remediation_findings:
+        lines.extend(["", "## Findings to address (previous judgment round)", ""])
+        lines.extend(f"- {finding}" for finding in task_spec.remediation_findings)
+    lines.extend([
         "",
         "## Boundaries",
         "",
@@ -238,7 +261,7 @@ def assemble_backend_prompt(task_spec: TaskSpec, constraints: BackendConstraints
         "- No secret material, credentials, or environment-specific tokens in any file.",
         f"- Budget: {constraints.max_iterations} iterations, "
         f"{int(constraints.max_wall_clock_seconds)}s wall clock.",
-    ]
+    ])
     for repo, prefixes in sorted(task_spec.allowed_paths.items()):
         lines.append(f"- Allowed paths ({repo}): {', '.join(prefixes) or 'none configured'}")
     if task_spec.gate_commands:
@@ -384,6 +407,13 @@ class MockBackend:
                 )
             target = worktree / mutation.path
             if mutation.operation == "create" and target.exists():
+                if (
+                    target.is_file()
+                    and target.read_text(encoding="utf-8") == mutation.content
+                ):
+                    # Idempotent re-apply across remediation rounds.
+                    written.append(mutation.path.as_posix())
+                    continue
                 raise BackendExecutionError(
                     f"create mutation target already exists: "
                     f"{self._repo}:{mutation.path.as_posix()}"
@@ -418,6 +448,20 @@ class MockBackend:
                 cost=CostReport(reported=True, usd=0.0, input_tokens=0, output_tokens=0),
                 backend=self.name,
                 notes="iteration budget exhausted before execution",
+            )
+
+        if constraints.read_only:
+            return AgentRunResult(
+                status="completed",
+                diff="",
+                changed_paths=(),
+                transcript_path=None,
+                gate_evidence=(),
+                iterations=1,
+                wall_clock_seconds=time.monotonic() - started,
+                cost=CostReport(reported=True, usd=0.0, input_tokens=0, output_tokens=0),
+                backend=self.name,
+                notes="deterministic read-only evaluation; no findings",
             )
 
         if worktree is not None:
@@ -495,14 +539,20 @@ class SubprocessBackend:
         self._command = list(command) if command else list(self.default_command)
 
     def build_command(self, *, prompt: str, constraints: BackendConstraints) -> list[str]:
-        """Render the harness argv; ``{prompt}`` and ``{max_iterations}`` expand."""
+        """Render the harness argv; ``{prompt}`` and ``{max_iterations}`` expand.
+
+        In read-only evaluation mode the write-enabled permission mode is
+        swapped for the harness's plan/read-only mode (the judgment-side
+        write-guard still verifies the worktree afterwards).
+        """
         rendered: list[str] = []
         for part in self._command:
-            rendered.append(
-                part.replace("{prompt}", prompt).replace(
-                    "{max_iterations}", str(constraints.max_iterations)
-                )
+            value = part.replace("{prompt}", prompt).replace(
+                "{max_iterations}", str(constraints.max_iterations)
             )
+            if constraints.read_only and value == "acceptEdits":
+                value = "plan"
+            rendered.append(value)
         return rendered
 
     def _parse_harness_output(self, stdout: str) -> dict[str, Any]:
@@ -548,8 +598,6 @@ class SubprocessBackend:
 
         if worktree is None:
             return _result("failed", error=f"{self.name} backend requires a branch-backed worktree")
-        if constraints.read_only:
-            return _result("failed", error="read-only agentic evaluation mode lands in Phase C")
         if constraints.max_iterations < 1:
             return _result("budget_exhausted", notes="iteration budget exhausted before execution")
 
@@ -695,11 +743,47 @@ def create_backend(
 
 
 def task_spec_from_state(state: GraphState) -> TaskSpec:
-    """Build the Phase B task spec from graph state."""
-    allowed = {
-        repo: tuple(paths)
-        for repo, paths in state.get("promotion_allowed_paths", {}).items()
-    }
+    """Build the backend task spec from graph state.
+
+    When the planner has populated a parsed sprint contract in
+    ``state["task_spec"]``, its repos/criteria/intent are authoritative;
+    role consult constraints and the previous judgment round's findings are
+    folded in so the backend sees the full, current contract.
+    """
+    spec = state.get("task_spec") or {}
+    spec_repos = spec.get("repos") if isinstance(spec.get("repos"), dict) else {}
+    if spec_repos:
+        allowed = {str(repo): tuple(paths) for repo, paths in spec_repos.items()}
+    else:
+        allowed = {
+            repo: tuple(paths)
+            for repo, paths in state.get("promotion_allowed_paths", {}).items()
+        }
+
+    criteria: list[str] = [str(item) for item in spec.get("acceptance_criteria", [])]
+    constraints_lines: list[str] = []
+    for entry in state.get("role_constraints", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        role = str(entry.get("role", "unknown"))
+        for constraint in entry.get("constraints", []):
+            constraints_lines.append(f"{role}: {constraint}")
+        for criterion in entry.get("acceptance_criteria", []):
+            if str(criterion) not in criteria:
+                criteria.append(str(criterion))
+
+    findings: list[str] = []
+    for finding in state.get("remediation_findings") or []:
+        if not isinstance(finding, dict):
+            continue
+        location = str(finding.get("path") or "general")
+        message = str(finding.get("message", ""))
+        remediation = finding.get("suggested_remediation")
+        line = f"{location}: {message}"
+        if remediation:
+            line += f" — {remediation}"
+        findings.append(line)
+
     return TaskSpec(
         change_id=state["change_id"],
         change_class=str(state["change_class"]),
@@ -708,6 +792,11 @@ def task_spec_from_state(state: GraphState) -> TaskSpec:
         allowed_paths=allowed,
         gate_commands=tuple(tuple(command) for command in state.get("gate_commands", [])),
         transcript_dir=state.get("handoff_output_dir") or os.environ.get("HYRULE_HANDOFF_DIR"),
+        intent=str(spec.get("intent", "")),
+        acceptance_criteria=tuple(criteria),
+        non_goals=str(spec.get("non_goals", "")),
+        role_constraints=tuple(constraints_lines),
+        remediation_findings=tuple(findings),
     )
 
 

@@ -103,10 +103,11 @@ def test_subprocess_backend_command_assembly_and_refusals(tmp_path: Path) -> Non
     assert refused.status == "failed"
     assert "requires a branch-backed worktree" in str(refused.error)
 
-    read_only = PiBackend().execute(
-        task_spec=spec, worktree=tmp_path, constraints=BackendConstraints(read_only=True)
+    read_only_command = ClaudeCodeBackend().build_command(
+        prompt="x", constraints=BackendConstraints(read_only=True)
     )
-    assert read_only.status == "failed"
+    assert "plan" in read_only_command
+    assert "acceptEdits" not in read_only_command
 
 
 def test_backend_selection_follows_tier_escalation(tmp_path: Path) -> None:

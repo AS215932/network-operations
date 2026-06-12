@@ -12,9 +12,11 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 from hyrule_engineering_loop.model_policy import ModelPolicyNode, ModelSelection, provider_env
 from hyrule_engineering_loop.state import GraphState
@@ -133,17 +135,37 @@ class HTTPStructuredLLMClient:
         source_context: dict[str, str],
         state: GraphState,
     ) -> RoleReviewOutput:
-        user_payload = json.dumps(
-            {
+        return self.invoke_structured(
+            node=role,
+            system_prompt=system_prompt,
+            payload={
                 "role": role,
                 "state": state,
                 "source_context": source_context,
-                "output_schema": RoleReviewOutput.model_json_schema(),
+            },
+            output_model=RoleReviewOutput,
+        )
+
+    def invoke_structured(
+        self,
+        *,
+        node: str,
+        system_prompt: str,
+        payload: dict[str, Any],
+        output_model: type[ModelT],
+    ) -> ModelT:
+        """Invoke the provider and validate an arbitrary structured schema."""
+        user_payload = json.dumps(
+            {
+                **payload,
+                "node": node,
+                "output_schema": output_model.model_json_schema(),
             },
             sort_keys=True,
+            default=str,
         )
         if self.provider == "anthropic":
-            payload = {
+            http_payload = {
                 "model": self.model,
                 "max_tokens": 4096,
                 "system": system_prompt,
@@ -158,7 +180,7 @@ class HTTPStructuredLLMClient:
                 ],
             }
         else:
-            payload = {
+            http_payload = {
                 "model": self.model,
                 "messages": [
                     {
@@ -176,7 +198,7 @@ class HTTPStructuredLLMClient:
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
-                return self._post(payload)
+                return output_model.model_validate_json(self._post(http_payload))
             except Exception as exc:
                 last_error = exc
                 if attempt < self.max_retries:
@@ -184,7 +206,7 @@ class HTTPStructuredLLMClient:
 
         raise LLMInvocationError(str(last_error) if last_error else "LLM invocation failed")
 
-    def _post(self, payload: dict[str, Any]) -> RoleReviewOutput:
+    def _post(self, payload: dict[str, Any]) -> str:
         if self.provider == "anthropic":
             url = f"{self.base_url}/messages"
             headers = {
@@ -215,10 +237,8 @@ class HTTPStructuredLLMClient:
 
         decoded = json.loads(raw)
         if self.provider == "anthropic":
-            content = decoded["content"][0]["text"]
-        else:
-            content = decoded["choices"][0]["message"]["content"]
-        return RoleReviewOutput.model_validate_json(content)
+            return str(decoded["content"][0]["text"])
+        return str(decoded["choices"][0]["message"]["content"])
 
 
 def mock_llm_enabled() -> bool:

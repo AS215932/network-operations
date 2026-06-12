@@ -90,7 +90,8 @@ Artifacts
     +-- worktrees/<repo>-<change_id>/
 ```
 
-The current graph topology (v2 Phase B: worktree-first execution) is:
+The current graph topology (v2 Phase C: sprint contracts + two-phase roles)
+is:
 
 ```text
 START
@@ -98,11 +99,14 @@ START
   v
 [classification]
   |
+  v
+[planner]                            <- expands intake into tasks/<id>.md
+  |                                     (spec-required runs refuse without one)
   +------------------+------------------+------------------+
   |                  |                  |                  |
   v                  v                  v                  v
-[systems]       [devops/netops]   [network]          [security]
-  |                  |                  |                  |
+[systems]       [devops/netops]   [network]          [security]   <- plan consult:
+  |                  |                  |                  |         constraints into the spec
   +------------------+------------------+------------------+
                      |
                      v
@@ -126,11 +130,18 @@ START
                      v
              <remediation router>
               |        |          |
-              |        |          +--> retry role nodes when gates fail
+              |        |          +--> retry [delegate_implementation] when
+              |        |               gates or the backend fail
               |        +-------------> [human_signoff] when circuit breaker trips
               v
             [policy]                 <- diff guard: validates the resulting git diff
               |
+              v
+          [role_judgment]            <- required roles rule on the DIFF against
+              |                         the spec's acceptance criteria; findings
+              |                         route back to the backend; read-only
+              |                         agentic evaluation for high risk and
+              |                         routing/firewall classes
               v
           [promotion]                <- captures worktree diffs for human review
               |
@@ -806,6 +817,34 @@ abstraction (`src/hyrule_engineering_loop/backend.py`):
 - `backend-canary` succeeds `writer-canary` (which remains as a deprecated
   alias): `--dry-live` assembles backend selection, prompt, and command line
   without executing a harness; live runs stay non-publishing.
+
+Phase 21 (v2 Phase C) adds task specs and two-phase role review:
+
+- a `planner` node expands intake text into a `tasks/<change-id>.md` sprint
+  contract (`docs/engineering-loop/templates/task-spec.md`); feature runs
+  are spec-required and refuse to delegate without one (`feature
+  --task-spec` supplies a pre-written spec; invalid specs are refused at
+  intake);
+- role nodes become **plan consults**: each required role's constraints and
+  added acceptance criteria are recorded in the spec's Role consult notes
+  before implementation;
+- a `role_judgment` node after the diff guard has every required role rule
+  on the actual diff + gate evidence against the spec's acceptance
+  criteria, returning `approve | request_changes` with structured findings
+  (`judgment_results`, `llm_outputs` phase `judgment`);
+- judgment findings feed back into the backend prompt
+  (`remediation_findings`) and the next tranche must address them; the
+  3-strike circuit breaker covers judgment rounds via the `judgment` retry
+  counter;
+- high/critical risk and `routing_bgp_frr`/`firewall_policy` changes run a
+  **read-only agentic evaluation** before judgment (backend with
+  `read_only=True`, `claude` drops to plan permission mode); a write
+  attempt from evaluation mode fails the run to human sign-off;
+- role prompts now load from `skills/*/SKILL.md`
+  (`role-*`, `implementation-tranche`); `docs/agent-loops/` remains as
+  lineage only;
+- the role matrix and `required_roles_for_state` are byte-identical to v1,
+  regression-tested across every change class and risk level.
 
 From Pi, use the global extension command:
 
