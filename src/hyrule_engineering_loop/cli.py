@@ -18,6 +18,15 @@ from hyrule_engineering_loop.feature import (
     run_feature_intake,
 )
 from hyrule_engineering_loop.graph import build_graph
+from hyrule_engineering_loop.intake import (
+    APPROVED_LABEL,
+    CANDIDATE_LABEL,
+    GhCli,
+    ensure_labels,
+    list_issues_with_label,
+    mine_all_signals,
+    signals_to_candidates,
+)
 from hyrule_engineering_loop.memory import list_memory
 from hyrule_engineering_loop.model_policy import (
     model_policy_snapshot,
@@ -441,6 +450,67 @@ def backend_canary_command(args: argparse.Namespace) -> int:
     return 0
 
 
+DEFAULT_INTAKE_REPO = "AS215932/network-operations"
+
+
+def intake_scan_command(args: argparse.Namespace) -> int:
+    client = GhCli()
+    signals, skipped = mine_all_signals(repo=args.repo, client=client)
+    report = signals_to_candidates(
+        signals, repo=args.repo, client=client, dry_run=args.dry_run
+    )
+    report.skipped_miners = skipped
+    payload = report.as_dict()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(f"intake scan ({'dry-run, nothing filed' if args.dry_run else 'filed'}):")
+    for entry in payload["filed"]:
+        print(f"  - {entry['source']}: {entry['title']}" + (f" -> {entry['url']}" if entry.get("url") else ""))
+    for entry in payload["deduplicated"]:
+        print(f"  - deduplicated (open issue #{entry['existing_issue']}): {entry['title']}")
+    for note in payload["skipped_miners"]:
+        print(f"  - skipped: {note}")
+    return 0
+
+
+def intake_queue_command(args: argparse.Namespace) -> int:
+    client = GhCli()
+    repos = args.repo or [DEFAULT_INTAKE_REPO]
+    approved = list_issues_with_label(repos, APPROVED_LABEL, client=client)
+    candidates = list_issues_with_label(repos, CANDIDATE_LABEL, client=client)
+    payload = {
+        "approved": [item.as_dict() for item in approved],
+        "candidates": [item.as_dict() for item in candidates],
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(f"approved (eligible for autonomous runs, label {APPROVED_LABEL}):")
+    for item in approved or []:
+        print(f"  - [{item.score:.1f}] {item.repo}#{item.number} {item.title}")
+    if not approved:
+        print("  - (none)")
+    print(f"candidates (awaiting human triage, label {CANDIDATE_LABEL}):")
+    for item in candidates or []:
+        print(f"  - [{item.score:.1f}] {item.repo}#{item.number} {item.title}")
+    if not candidates:
+        print("  - (none)")
+    return 0
+
+
+def intake_labels_command(args: argparse.Namespace) -> int:
+    repos = args.repo or [DEFAULT_INTAKE_REPO]
+    if not args.apply:
+        print(f"would create {CANDIDATE_LABEL} and {APPROVED_LABEL} in: {', '.join(repos)}")
+        print("re-run with --apply to create them")
+        return 0
+    created = ensure_labels(repos, client=GhCli())
+    for item in created:
+        print(f"ensured {item}")
+    return 0
+
+
 def lessons_command(args: argparse.Namespace) -> int:
     """Review lessons and pending proposals; merging stays a human git action."""
     import os
@@ -696,6 +766,34 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--dry-live", action="store_true")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
+
+    intake_parser = subparsers.add_parser("intake", help="signal mining and triage inbox")
+    intake_subparsers = intake_parser.add_subparsers(dest="intake_command", required=True)
+
+    intake_scan_parser = intake_subparsers.add_parser(
+        "scan",
+        help="mine read-only signals and file candidate issues (loop:candidate)",
+    )
+    intake_scan_parser.add_argument("--repo", default=DEFAULT_INTAKE_REPO)
+    intake_scan_parser.add_argument("--dry-run", action="store_true")
+    intake_scan_parser.add_argument("--json", action="store_true")
+    intake_scan_parser.set_defaults(func=intake_scan_command)
+
+    intake_queue_parser = intake_subparsers.add_parser(
+        "queue",
+        help="show the approved queue and the candidate triage inbox",
+    )
+    intake_queue_parser.add_argument("--repo", action="append")
+    intake_queue_parser.add_argument("--json", action="store_true")
+    intake_queue_parser.set_defaults(func=intake_queue_command)
+
+    intake_labels_parser = intake_subparsers.add_parser(
+        "labels",
+        help="create the loop:candidate / loop:approved labels (operator action)",
+    )
+    intake_labels_parser.add_argument("--repo", action="append")
+    intake_labels_parser.add_argument("--apply", action="store_true")
+    intake_labels_parser.set_defaults(func=intake_labels_command)
 
     lessons_parser = subparsers.add_parser(
         "lessons",
