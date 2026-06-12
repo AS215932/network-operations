@@ -21,6 +21,13 @@ from hyrule_engineering_loop.judgment import (
     worktree_diffs_for_judgment,
 )
 from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review, mock_llm_enabled
+from hyrule_engineering_loop.memory import (
+    detect_failure_patterns,
+    memory_context_for_state,
+    resolve_memory_write_root,
+    write_journal_entry,
+    write_lesson_proposal,
+)
 from hyrule_engineering_loop.model_policy import (
     select_backend_for_state,
     select_model_for_node,
@@ -358,11 +365,17 @@ def planner_node(state: GraphState) -> StateUpdate:
     spec_path = state.get("task_spec_path")
     if spec_path:
         update["task_spec_path"] = write_task_spec(parsed, spec_path)
+    # Lessons and journal tail are part of the planner's context: record
+    # what memory exists for the target repos so the trace shows it and a
+    # live planner can consume the full text later.
+    update["memory_context"] = memory_context_for_state(
+        cast(GraphState, {**state, "task_spec": parsed})
+    )
     return with_trace(
         "planner",
         state,
         update,
-        input_keys=["feature_request", "task_spec", "change_class", "risk_level"],
+        input_keys=["feature_request", "task_spec", "change_class", "risk_level", "memory_dir"],
     )
 
 
@@ -1108,6 +1121,49 @@ def package_pr_node(state: GraphState) -> StateUpdate:
     })
     trace_path = write_loop_trace(trace_state)
     result["trace_events"] = [event]
+    if trace_path is not None:
+        result["loop_trace_path"] = trace_path
+    return result
+
+
+def reflection_node(state: GraphState) -> StateUpdate:
+    print("[Node: Reflection] Distilling the run into journal notes and lesson proposals...")
+    patterns = detect_failure_patterns(state)
+    root = resolve_memory_write_root(state)
+    if root is None:
+        update = cast(StateUpdate, {
+            "reflection_results": {
+                "written": False,
+                "reason": "memory_dir not configured",
+                "failure_patterns": len(patterns),
+            }
+        })
+        return with_trace("reflection", state, update, input_keys=["memory_dir", "retry_counters"])
+
+    journal_path = write_journal_entry(state, root, patterns)
+    proposal_path = write_lesson_proposal(state, root, patterns)
+    reflection: dict[str, Any] = {
+        "written": True,
+        "journal_path": journal_path,
+        "failure_patterns": len(patterns),
+    }
+    if proposal_path is not None:
+        reflection["lesson_proposal_path"] = proposal_path
+    update = cast(StateUpdate, {"reflection_results": reflection})
+
+    event = trace_event(
+        node="reflection",
+        state=state,
+        update=update,
+        input_keys=["memory_dir", "retry_counters", "gate_results", "judgment_results"],
+    )
+    trace_state = cast(GraphState, {
+        **state,
+        **update,
+        "trace_events": [*state.get("trace_events", []), event],
+    })
+    trace_path = write_loop_trace(trace_state)
+    result: StateUpdate = {**update, "trace_events": [event]}
     if trace_path is not None:
         result["loop_trace_path"] = trace_path
     return result

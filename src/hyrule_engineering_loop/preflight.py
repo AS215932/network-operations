@@ -153,6 +153,10 @@ def preflight_feature_state(
             "env_allowlisted_count": len(backend_env),
             "max_iterations": backend_constraints.max_iterations,
             "max_wall_clock_seconds": backend_constraints.max_wall_clock_seconds,
+            "lessons_injected": {
+                repo: len(text) for repo, text in backend_spec.lessons.items()
+            },
+            "journal_tail_chars": len(backend_spec.journal_tail),
         },
         "implementation_writer": {
             "prompt_chars": len(prompt),
