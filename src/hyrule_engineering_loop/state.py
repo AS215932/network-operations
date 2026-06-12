@@ -30,6 +30,7 @@ PRStatus = Literal["not_requested", "pushed", "failed"]
 PolicyStatus = Literal["not_run", "passed", "failed"]
 RepoAdapterStatus = Literal["not_run", "passed", "failed"]
 MutationOperation = Literal["create", "replace"]
+SignoffStatus = Literal["not_required", "ready_for_review", "needs_operator_triage"]
 
 RoleName = Literal[
     "network_architect",
@@ -145,6 +146,8 @@ class GraphState(TypedDict):
     dry_live_mode: NotRequired[bool]
     preflight_results: NotRequired[Dict[str, Any]]
     failure_summary: NotRequired[Dict[str, Any]]
+    signoff_summary: NotRequired[Dict[str, Any]]
+    signoff_status: NotRequired[SignoffStatus]
     repo_context_bundle: NotRequired[Dict[str, Any]]
     implementation_writer_status: NotRequired[str]
     diff_preview: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]

@@ -70,13 +70,21 @@ def test_feature_command_scaffolds_request_into_promoted_worktree(
 
     assert summary["promotion_count"] == 1
     assert summary["requires_human_signoff"] is True
+    assert summary["signoff_status"] == "ready_for_review"
+    assert "failure_summary" not in summary
+    assert "signoff_summary" in summary
     assert state["approval_decision"] == "pending"
+    assert state["signoff_status"] == "ready_for_review"
+    assert "failure_summary" not in state
+    assert state["signoff_summary"]["status"] == "ready_for_review"
     assert state["feature_target_repo"] == "hyrule-cloud"
     assert "Create a small docs-visible feature" in state["feature_request"]
     assert promotion["repo"] == "hyrule-cloud"
     assert "docs/engineering-loop/add_customer_note_export.md" in promotion["diff"]
     assert plan_path.exists()
     assert "ADD_CUSTOMER_NOTE_EXPORT" in plan_path.read_text(encoding="utf-8")
+    assert state["signoff_summary"]["review_targets"][0]["branch"] == promotion["branch"]
+    assert "git -C" in state["signoff_summary"]["next_operator_commands"][1]
     assert any(str(request_path) in output["source_files"] for output in state["llm_outputs"])
     assert any("hyrule-cloud:README.md" in output["source_files"] for output in state["llm_outputs"])
 

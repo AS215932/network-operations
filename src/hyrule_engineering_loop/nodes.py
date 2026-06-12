@@ -642,13 +642,29 @@ def package_pr_node(state: GraphState) -> StateUpdate:
 
 
 def human_signoff_node(state: GraphState) -> StateUpdate:
-    print("[Node: Human Sign-off] Circuit breaker reached; pausing for operator review...")
-    update = cast(StateUpdate, {"requires_human_signoff": True})
+    triage_required = bool(state["validation_errors"]) or any(
+        state.get(key) == "failed"
+        for key in (
+            "gate_status",
+            "implementation_writer_status",
+            "policy_status",
+            "promotion_status",
+            "repo_adapter_status",
+        )
+    )
+    if triage_required:
+        print("[Node: Human Sign-off] Operator triage required; pausing graph execution...")
+    else:
+        print("[Node: Human Sign-off] Validated change ready for operator review...")
+    update = cast(StateUpdate, {
+        "requires_human_signoff": True,
+        "signoff_status": "needs_operator_triage" if triage_required else "ready_for_review",
+    })
     event = trace_event(
         node="human_signoff",
         state=state,
         update=update,
-        input_keys=["validation_errors", "retry_counters", "requires_human_signoff"],
+        input_keys=["validation_errors", "retry_counters", "requires_human_signoff", "signoff_status"],
     )
     trace_state = cast(GraphState, {
         **state,
