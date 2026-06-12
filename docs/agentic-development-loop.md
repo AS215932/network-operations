@@ -209,6 +209,10 @@ Pi uses one command as the daily entry point:
        approve latest state
 ```
 
+The repo-owned source for that Pi integration lives at
+`integrations/pi/extensions/hyrule-loop/`. The installed copy under `~/.pi` is
+only a local working copy.
+
 ## LangGraph Runtime
 
 Phase 1 implements a first runnable LangGraph controller skeleton in
