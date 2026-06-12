@@ -111,6 +111,50 @@ def _summarize_value(key: str, value: Any) -> Any:
             for item in value
             if isinstance(item, dict)
         ]
+    if key in {"judgment_results"} and isinstance(value, list):
+        return [
+            {
+                "phase": item.get("phase"),
+                "role": item.get("role"),
+                "repo": item.get("repo"),
+                "verdict": item.get("verdict"),
+                "finding_count": len(item.get("findings", []))
+                if isinstance(item.get("findings"), list)
+                else 0,
+                "write_violation": item.get("write_violation"),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
+    if key in {"role_constraints"} and isinstance(value, list):
+        return [
+            {
+                "role": item.get("role"),
+                "constraint_count": len(item.get("constraints", []))
+                if isinstance(item.get("constraints"), list)
+                else 0,
+                "acceptance_criteria": item.get("acceptance_criteria", []),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
+    if key in {"task_spec"} and isinstance(value, dict):
+        return {
+            "change_id": value.get("change_id"),
+            "repos": sorted(value.get("repos", {})),
+            "acceptance_criteria_count": len(value.get("acceptance_criteria", [])),
+            "required_roles": value.get("required_roles", []),
+        }
+    if key in {"remediation_findings"} and isinstance(value, list):
+        return [
+            {
+                "domain": item.get("domain"),
+                "severity": item.get("severity"),
+                "path": item.get("path"),
+            }
+            for item in value
+            if isinstance(item, dict)
+        ]
     if key in {"workspace_written_files", "source_of_truth_files"} and isinstance(value, list):
         return list(value)
     if key in {"validation_errors"} and isinstance(value, list):

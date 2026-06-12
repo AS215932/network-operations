@@ -361,6 +361,7 @@ def feature_command(args: argparse.Namespace) -> int:
             promotion_base_ref=args.base_ref,
             model_policy_file=args.model_policy,
             live_mode=args.live,
+            task_spec=Path(args.task_spec) if args.task_spec else None,
         )
     except FeaturePreflightError as exc:
         print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
@@ -373,6 +374,7 @@ def feature_command(args: argparse.Namespace) -> int:
         "state_path": result["state_path"],
         "handoff_path": result["handoff_path"],
         "trace_path": result["trace_path"],
+        "task_spec_path": result.get("task_spec_path"),
         "repo_name": result["repo_name"],
         "promotion_count": result["promotion_count"],
         "requires_human_signoff": result["requires_human_signoff"],
@@ -650,6 +652,7 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--source", action="append", default=[])
     feature_parser.add_argument("--mock-mutation", action="append", default=[])
     feature_parser.add_argument("--plan-path")
+    feature_parser.add_argument("--task-spec")
     feature_parser.add_argument("--no-scaffold-plan", action="store_true")
     feature_parser.add_argument("--base-ref", default="HEAD")
     feature_parser.add_argument("--model-policy")

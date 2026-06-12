@@ -13,11 +13,25 @@ from hyrule_engineering_loop.backend import (
 )
 from hyrule_engineering_loop.gate_runner import run_gate_commands, select_gate_commands_for_mutations
 from hyrule_engineering_loop.handoff import write_noc_handoff
+from hyrule_engineering_loop.judgment import (
+    agentic_evaluation_required,
+    invoke_role_judgment,
+    judgment_evidence,
+    run_agentic_evaluation,
+    worktree_diffs_for_judgment,
+)
 from hyrule_engineering_loop.llm import RoleReviewOutput, invoke_role_review, mock_llm_enabled
 from hyrule_engineering_loop.model_policy import (
     select_backend_for_state,
     select_model_for_node,
     select_model_for_role,
+)
+from hyrule_engineering_loop.task_spec import (
+    DEFAULT_BUDGET,
+    TaskSpecError,
+    parse_task_spec_text,
+    render_task_spec,
+    write_task_spec,
 )
 from hyrule_engineering_loop.policy import validate_gate_commands_for_state, validate_graph_state
 from hyrule_engineering_loop.prompts import load_role_prompts
@@ -54,6 +68,15 @@ ROLE_NODE_NAMES: dict[RoleName, str] = {
     "security_auditor": "security_auditor",
     "finops_integrity": "finops_integrity",
     "virtual_lab_chaos": "virtual_lab_chaos",
+}
+
+ROLE_PROMPT_FILES_HINT: dict[RoleName, str] = {
+    "network_architect": "role-network-architect/SKILL.md",
+    "systems_engineer": "role-systems-engineer/SKILL.md",
+    "devops_netops": "role-devops-netops/SKILL.md",
+    "security_auditor": "role-security-auditor/SKILL.md",
+    "finops_integrity": "role-finops-integrity/SKILL.md",
+    "virtual_lab_chaos": "role-virtual-lab-chaos/SKILL.md",
 }
 
 DOMAIN_TO_ROLE: dict[str, RoleName] = {
@@ -214,6 +237,7 @@ def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
         "llm_outputs": [
             {
                 "role": role,
+                "phase": "consult",
                 "approved": review.approved,
                 "notes": review.notes,
                 "proposed_mutation_paths": list(mutations),
@@ -222,6 +246,27 @@ def _role_review_update(role: RoleName, state: GraphState) -> StateUpdate:
             }
         ],
     }
+    if state.get("task_spec_required", False) and not any(
+        isinstance(entry, dict) and entry.get("role") == role
+        for entry in state.get("role_constraints", [])
+    ):
+        consult_mock = state.get("llm_mock_responses", {}).get(f"consult_{role}")
+        if isinstance(consult_mock, dict):
+            constraints = [str(item) for item in consult_mock.get("constraints", [])]
+            extra_criteria = [str(item) for item in consult_mock.get("acceptance_criteria", [])]
+        else:
+            constraints = [
+                f"The exit criteria in skills/{ROLE_PROMPT_FILES_HINT.get(role, role)} "
+                "apply to the final diff."
+            ]
+            extra_criteria = []
+        result["role_constraints"] = [
+            {
+                "role": role,
+                "constraints": constraints,
+                "acceptance_criteria": extra_criteria,
+            }
+        ]
     if mutations:
         result["proposed_mutations"] = mutations
         result["proposed_mutation_operations"] = operations
@@ -246,6 +291,79 @@ def _reset_required_approvals(state: GraphState, roles: Iterable[RoleName]) -> R
     for role in roles:
         approvals[role] = False
     return approvals
+
+
+def planner_node(state: GraphState) -> StateUpdate:
+    print("[Node: Planner] Expanding intake into a task-spec sprint contract...")
+    if not state.get("task_spec_required", False):
+        return with_trace("planner", state, {}, input_keys=["task_spec_required"])
+
+    update: StateUpdate = {}
+    spec = dict(state.get("task_spec") or {})
+    if not spec:
+        request = state.get("feature_request", "")
+        intent = next(
+            (line.strip() for line in request.splitlines() if line.strip()),
+            "(no request text supplied)",
+        )[:300]
+        spec = {
+            "change_id": state["change_id"],
+            "change_class": str(state["change_class"]),
+            "risk_level": str(state["risk_level"]),
+            "customer_impact": str(state["customer_impact"]),
+            "repos": {
+                repo: list(paths)
+                for repo, paths in state.get("promotion_allowed_paths", {}).items()
+            },
+            "required_roles": list(required_roles_for_state(state)),
+            "gates": [" ".join(command) for command in state.get("gate_commands", [])]
+            or ["auto-selected from changed paths"],
+            "budget": dict(state.get("backend_budget") or DEFAULT_BUDGET),
+            "intake_source": "operator",
+            "intent": intent,
+            "acceptance_criteria": [
+                "The request is implemented within the allowed paths of each target repo.",
+                "All selected gates pass in the branch-backed worktree.",
+                "The diff introduces no secret material or denied content patterns.",
+            ],
+            "non_goals": "Anything outside the allowed paths; unrelated refactors.",
+            "rollback_sketch": state.get("rollback_plan")
+            or "Discard the generated worktree and branch; no production state changes.",
+        }
+        mock = state.get("llm_mock_responses", {}).get("planner")
+        if isinstance(mock, dict):
+            spec.update(mock)
+
+    try:
+        parsed = parse_task_spec_text(render_task_spec(spec))
+    except TaskSpecError as exc:
+        update = cast(StateUpdate, {
+            "requires_human_signoff": True,
+            "validation_errors": [
+                {
+                    "node": "planner",
+                    "domain": "devops",
+                    "message": f"task spec is structurally invalid: {exc}",
+                }
+            ],
+            "retry_counters": _increment_counter(state["retry_counters"], "planner"),
+        })
+        return with_trace(
+            "planner", state, update, input_keys=["feature_request", "task_spec", "change_class"]
+        )
+
+    update["task_spec"] = parsed
+    if not state.get("backend_budget"):
+        update["backend_budget"] = dict(parsed.get("budget", DEFAULT_BUDGET))
+    spec_path = state.get("task_spec_path")
+    if spec_path:
+        update["task_spec_path"] = write_task_spec(parsed, spec_path)
+    return with_trace(
+        "planner",
+        state,
+        update,
+        input_keys=["feature_request", "task_spec", "change_class", "risk_level"],
+    )
 
 
 def classification_node(state: GraphState) -> StateUpdate:
@@ -308,6 +426,7 @@ def _scaffold_feature_response(state: GraphState) -> RoleReviewOutput | None:
     if not target_repo or not plan_path:
         return None
 
+    findings = state.get("remediation_findings") or []
     content = (
         "# Engineering Loop Feature Intake\n\n"
         f"- change_id: {state['change_id']}\n"
@@ -316,6 +435,11 @@ def _scaffold_feature_response(state: GraphState) -> RoleReviewOutput | None:
         "## Request\n\n"
         f"{state['feature_request'].rstrip()}\n"
     )
+    if findings:
+        addressed = "\n".join(
+            f"- {finding.get('message', '')}" for finding in findings if isinstance(finding, dict)
+        )
+        content += f"\n## Remediation round\n\nAddressed judgment findings:\n\n{addressed}\n"
     return RoleReviewOutput.model_validate(
         {
             "approved": True,
@@ -324,7 +448,9 @@ def _scaffold_feature_response(state: GraphState) -> RoleReviewOutput | None:
                 {
                     "path": f"{target_repo}:{plan_path}",
                     "content": content,
-                    "operation": "create",
+                    # The scaffold file already exists in the worktree on a
+                    # remediation round, so the revised tranche replaces it.
+                    "operation": "replace" if findings else "create",
                 }
             ],
         }
@@ -336,7 +462,8 @@ def _implementation_writer_response(
     *,
     repo_context: dict[str, Any],
 ) -> tuple[RoleReviewOutput | None, dict[str, Any] | None]:
-    if state["proposed_mutations"]:
+    if state["proposed_mutations"] and not state.get("remediation_findings"):
+        # Mutations already resolved and no judgment findings to address.
         return None, None
     has_mock = "implementation_writer" in state.get("llm_mock_responses", {})
     if mock_llm_enabled() and not has_mock:
@@ -429,6 +556,33 @@ def worktree_setup_node(state: GraphState) -> StateUpdate:
 
 def delegate_implementation_node(state: GraphState) -> StateUpdate:
     print("[Node: Implementation Delegation] Executing coding-agent backend in guarded worktree...")
+    if state.get("task_spec_required", False) and not state.get("task_spec"):
+        refusal_update = cast(StateUpdate, {
+            "implementation_writer_status": "refused",
+            "requires_human_signoff": True,
+            "validation_errors": [
+                {
+                    "node": "delegate_implementation",
+                    "domain": "devops",
+                    "message": "a task spec is required for this run and none was produced",
+                }
+            ],
+            "retry_counters": _increment_counter(state["retry_counters"], "backend"),
+        })
+        return with_trace(
+            "delegate_implementation",
+            state,
+            refusal_update,
+            input_keys=["task_spec_required", "task_spec", "change_id"],
+        )
+
+    # Keep the spec document current: record the role consult notes so the
+    # file is the complete sprint contract the backend executes against.
+    spec_dict = state.get("task_spec")
+    spec_path = state.get("task_spec_path")
+    if spec_dict and spec_path:
+        write_task_spec(spec_dict, spec_path, role_constraints=state.get("role_constraints", []))
+
     repo_context = build_repo_context_bundle(state)
     selection = select_backend_for_state(state)
 
@@ -752,6 +906,134 @@ def policy_node(state: GraphState) -> StateUpdate:
         "retry_counters": _increment_counter(state["retry_counters"], "policy"),
     })
     return with_trace("policy", state, update, input_keys=["proposed_mutations", "gate_commands", "policy_file"])
+
+
+def role_judgment_node(state: GraphState) -> StateUpdate:
+    print("[Node: Role Judgment] Required roles ruling on the captured diff...")
+    required = required_roles_for_state(state)
+    prompts = load_role_prompts()
+    evidence = judgment_evidence(state)
+    diffs = worktree_diffs_for_judgment(state)
+    spec = task_spec_from_state(state)
+    constraints = constraints_from_state(state)
+    selection = select_backend_for_state(state)
+
+    judgment_entries: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+
+    # Read-only agentic evaluation for high/critical risk and routing/firewall
+    # classes: the evaluator may inspect the worktree but never modify it.
+    write_violation = False
+    if agentic_evaluation_required(state) and state.get("worktree_results"):
+        for worktree in state.get("worktree_results") or []:
+            backend = create_backend(selection.name, command=selection.command)
+            evaluation = run_agentic_evaluation(
+                backend=backend,
+                task_spec=spec,
+                worktree=Path(str(worktree.get("worktree_path", ""))),
+                constraints=constraints,
+            )
+            judgment_entries.append(
+                {"phase": "evaluation", "repo": worktree.get("repo"), **evaluation}
+            )
+            if evaluation["write_violation"]:
+                write_violation = True
+
+    if write_violation:
+        violation_update = cast(StateUpdate, {
+            "judgment_results": judgment_entries,
+            # Approvals granted at consult time do not survive a violated
+            # evaluation; the run must stop at human sign-off.
+            "role_approvals": {role: False for role in required},
+            "requires_human_signoff": True,
+            "validation_errors": [
+                {
+                    "node": "role_judgment",
+                    "domain": "security",
+                    "message": "read-only agentic evaluation attempted to modify the worktree",
+                }
+            ],
+            "retry_counters": _increment_counter(state["retry_counters"], "judgment"),
+        })
+        return with_trace(
+            "role_judgment",
+            state,
+            violation_update,
+            input_keys=["task_spec", "worktree_results", "gate_results"],
+        )
+
+    approvals: RoleApprovals = {}
+    llm_entries: list[dict[str, Any]] = []
+    findings_for_backend: list[dict[str, Any]] = []
+    for role in required:
+        model_selection = select_model_for_role(role, state)
+        judgment = invoke_role_judgment(
+            role=role,
+            system_prompt=prompts[role],
+            state=state,
+            model_selection=model_selection,
+            evidence=evidence,
+            diffs=diffs,
+        )
+        approved = judgment.verdict == "approve"
+        approvals[role] = approved
+        findings = [finding.model_dump() for finding in judgment.findings]
+        judgment_entries.append(
+            {
+                "phase": "judgment",
+                "role": role,
+                "verdict": judgment.verdict,
+                "findings": findings,
+                "evidence_reviewed": list(judgment.evidence_reviewed),
+            }
+        )
+        llm_entries.append(
+            {
+                "role": role,
+                "phase": "judgment",
+                "approved": approved,
+                "notes": judgment.notes,
+                "evidence_reviewed": list(judgment.evidence_reviewed),
+                "proposed_mutation_paths": [],
+                "source_files": [],
+                "model_selection": model_selection.as_dict(),
+            }
+        )
+        events.append(
+            trace_event(
+                node="role_judgment",
+                state=state,
+                update={
+                    "verdict": judgment.verdict,
+                    "finding_count": len(findings),
+                    "evidence_reviewed": list(judgment.evidence_reviewed),
+                },
+                input_keys=["task_spec", "worktree_results", "gate_results"],
+                role=role,
+            )
+        )
+        if not approved:
+            findings_for_backend.extend(findings)
+            errors.append(
+                {
+                    "node": "role_judgment",
+                    "domain": str(findings[0].get("domain", "judgment")) if findings else "judgment",
+                    "message": f"{role} requested changes on the diff"
+                    + (f": {findings[0].get('message')}" if findings else ""),
+                }
+            )
+
+    update = cast(StateUpdate, {
+        "role_approvals": approvals,
+        "judgment_results": judgment_entries,
+        "llm_outputs": llm_entries,
+        "remediation_findings": findings_for_backend,
+    })
+    if errors:
+        update["validation_errors"] = errors
+        update["retry_counters"] = _increment_counter(state["retry_counters"], "judgment")
+    return {**update, "trace_events": events}
 
 
 def promotion_node(state: GraphState) -> StateUpdate:
