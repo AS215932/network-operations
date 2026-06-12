@@ -132,8 +132,11 @@ class InventorySchemaTest(unittest.TestCase):
             "ci-pr must not be a member of the infra_vms group",
         )
 
-    def test_routers_group_is_exactly_the_three_routers(self):
-        self.assertEqual(set(self.groups["routers"]), {"rtr", "cr1-nl1", "cr1-de1"})
+    def test_routers_group_is_exactly_the_core_routers(self):
+        self.assertEqual(
+            set(self.groups["routers"]),
+            {"rtr", "cr1-nl1", "cr1-de1", "cr1-ch1"},
+        )
 
     def test_nameservers_are_a_subset_of_public_facing(self):
         ns = set(self.groups["nameservers"])
