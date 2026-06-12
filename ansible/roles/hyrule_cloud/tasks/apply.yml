@@ -5,7 +5,11 @@
 
 - name: Ensure base packages are installed
   ansible.builtin.apt:
-    name: "{{ hyrule_cloud_packages }}"
+    name: >-
+      {{
+        hyrule_cloud_packages
+        + (hyrule_cloud_monero_packages if (hyrule_cloud_monero_wallet_rpc_enabled | bool) else [])
+      }}
     state: present
     update_cache: true
     cache_valid_time: 3600
