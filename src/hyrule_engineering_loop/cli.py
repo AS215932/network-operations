@@ -13,9 +13,9 @@ from hyrule_engineering_loop.canary import CanaryDryRunError, run_sibling_repo_c
 from hyrule_engineering_loop.feature import (
     FeatureIntakeError,
     FeaturePreflightError,
+    run_backend_canary,
     run_feature_dry_live,
     run_feature_intake,
-    run_writer_canary,
 )
 from hyrule_engineering_loop.graph import build_graph
 from hyrule_engineering_loop.model_policy import (
@@ -203,6 +203,12 @@ def state_cleanup_command(args: argparse.Namespace) -> int:
     path = Path(args.state_path).expanduser().resolve()
     state = _read_state(path)
     promotions = list(state.get("promotion_results", []))
+    promoted_worktrees = {str(item.get("worktree_path")) for item in promotions}
+    promotions.extend(
+        item
+        for item in state.get("worktree_results", [])
+        if str(item.get("worktree_path")) not in promoted_worktrees
+    )
     rollback_promotions(promotions)
     state["promotion_cleanup_performed"] = True
     _write_state_file(path, state)
@@ -386,12 +392,12 @@ def feature_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def writer_canary_command(args: argparse.Namespace) -> int:
+def backend_canary_command(args: argparse.Namespace) -> int:
     if args.live and args.dry_live:
         print("[CLI] --live and --dry-live are mutually exclusive")
         return 1
     try:
-        result = run_writer_canary(
+        result = run_backend_canary(
             workspace_root=Path(args.workspace_root),
             output_root=Path(args.output_root),
             repo_name=args.repo_name,
@@ -404,7 +410,7 @@ def writer_canary_command(args: argparse.Namespace) -> int:
         print(json.dumps({"preflight": exc.result, "live_mode": args.live}, indent=2, sort_keys=True))
         return 1
     except FeatureIntakeError as exc:
-        print(f"[CLI] writer canary failed: {exc}")
+        print(f"[CLI] backend canary failed: {exc}")
         return 1
 
     final_state = result.get("final_state", {})
@@ -445,6 +451,14 @@ def models_show_command(args: argparse.Namespace) -> int:
             f"{item['provider']}/{item['model']} "
             f"tier={item['tier']} "
             f"reason={item['reason']}"
+        )
+    backend = snapshot.get("backend", {})
+    if backend:
+        print(
+            "backend: "
+            f"{backend.get('name', 'mock')} "
+            f"tier={backend.get('tier', 'unknown')} "
+            f"reason={backend.get('reason', 'unknown')}"
         )
     return 0
 
@@ -596,9 +610,22 @@ def build_parser() -> argparse.ArgumentParser:
     canary_parser.add_argument("--keep-worktree", action="store_true")
     canary_parser.set_defaults(func=sibling_canary_command)
 
+    backend_canary_parser = subparsers.add_parser(
+        "backend-canary",
+        help="run a live or dry-live docs-only coding-agent backend canary",
+    )
+    backend_canary_parser.add_argument("--workspace-root", required=True)
+    backend_canary_parser.add_argument("--repo-name", required=True)
+    backend_canary_parser.add_argument("--output-root", required=True)
+    backend_canary_parser.add_argument("--change-id", default="BACKEND_CANARY")
+    backend_canary_parser.add_argument("--model-policy")
+    backend_canary_parser.add_argument("--live", action="store_true")
+    backend_canary_parser.add_argument("--dry-live", action="store_true")
+    backend_canary_parser.set_defaults(func=backend_canary_command)
+
     writer_canary_parser = subparsers.add_parser(
         "writer-canary",
-        help="run a live or dry-live docs-only implementation-writer canary",
+        help="deprecated alias for backend-canary",
     )
     writer_canary_parser.add_argument("--workspace-root", required=True)
     writer_canary_parser.add_argument("--repo-name", required=True)
@@ -607,7 +634,7 @@ def build_parser() -> argparse.ArgumentParser:
     writer_canary_parser.add_argument("--model-policy")
     writer_canary_parser.add_argument("--live", action="store_true")
     writer_canary_parser.add_argument("--dry-live", action="store_true")
-    writer_canary_parser.set_defaults(func=writer_canary_command)
+    writer_canary_parser.set_defaults(func=backend_canary_command)
 
     feature_parser = subparsers.add_parser(
         "feature",

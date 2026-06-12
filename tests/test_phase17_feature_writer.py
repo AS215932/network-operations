@@ -166,5 +166,5 @@ def test_create_operation_refuses_existing_file(tmp_path: Path) -> None:
     final_state = build_graph().invoke(state)
 
     assert final_state["requires_human_signoff"] is True
-    assert final_state["retry_counters"]["promotion"] == 3
+    assert final_state["retry_counters"]["backend"] == 3
     assert any("create mutation target already exists" in error["message"] for error in final_state["validation_errors"])

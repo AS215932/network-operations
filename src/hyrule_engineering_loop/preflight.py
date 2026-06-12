@@ -6,11 +6,21 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from hyrule_engineering_loop.backend import (
+    SubprocessBackend,
+    assemble_backend_prompt,
+    constraints_from_state,
+    create_backend,
+    env_hygiene_violations,
+    scrubbed_backend_env,
+    task_spec_from_state,
+)
 from hyrule_engineering_loop.model_policy import (
     ModelPolicyNode,
     ModelSelection,
     provider_env,
     provider_env_names,
+    select_backend_for_state,
     select_model_for_node,
     validate_model_policy,
 )
@@ -102,6 +112,26 @@ def preflight_feature_state(
                 )
             )
 
+    backend_selection = select_backend_for_state(state)
+    backend_env = scrubbed_backend_env()
+    leaked = env_hygiene_violations(backend_env)
+    checks.append(
+        _check(
+            "backend_env_hygiene",
+            not leaked,
+            "scrubbed" if not leaked else f"credential-like vars leaked: {', '.join(leaked)}",
+        )
+    )
+    backend_spec = task_spec_from_state(state)
+    backend_constraints = constraints_from_state(state)
+    backend_prompt = assemble_backend_prompt(backend_spec, backend_constraints)
+    backend_instance = create_backend(backend_selection.name, command=backend_selection.command)
+    command_preview: list[str] | None = None
+    if isinstance(backend_instance, SubprocessBackend):
+        command_preview = backend_instance.build_command(
+            prompt="<assembled prompt>", constraints=backend_constraints
+        )
+
     prompt = load_role_prompts()["implementation_writer"]
     repo_context = build_repo_context_bundle(state)
     ok = all(bool(check["ok"]) for check in checks)
@@ -116,6 +146,14 @@ def preflight_feature_state(
             for node, selection in selections
         ],
         "provider_checks": provider_checks,
+        "backend": {
+            "selection": backend_selection.as_dict(),
+            "prompt_chars": len(backend_prompt),
+            "command_preview": command_preview,
+            "env_allowlisted_count": len(backend_env),
+            "max_iterations": backend_constraints.max_iterations,
+            "max_wall_clock_seconds": backend_constraints.max_wall_clock_seconds,
+        },
         "implementation_writer": {
             "prompt_chars": len(prompt),
             "repo_context": repo_context,
