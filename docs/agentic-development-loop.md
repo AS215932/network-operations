@@ -231,6 +231,9 @@ Pi uses one command as the daily entry point:
 /loop --plan
   -> read latest Plan Mode proposed plan and send it as the request
 
+/loop triage
+  -> review the intake queue (approved work + candidate inbox)
+
 /loop lessons
   -> review memory lessons and pending lesson proposals
 
@@ -239,6 +242,7 @@ Pi uses one command as the daily entry point:
        start new request
        show latest summary
        show latest trace
+       triage intake queue
        review lessons & proposals
        cleanup latest worktree
        approve latest state
@@ -878,6 +882,29 @@ Phase 22 (v2 Phase D) adds the memory + reflection flywheel:
   a lesson into a deterministic gate or policy rule
   (`engineering-loop-policy.yml`, a gate script, or a CI workflow), and
   the lesson is retired. Lessons are working memory; gates are law.
+
+Phase 23 (v2 Phase E) adds intake and the label-gated triage inbox:
+
+- the inbox is the GitHub issue tracker, gated by two labels:
+  `loop:candidate` (machine-proposed, awaiting human triage) and
+  `loop:approved` (human-blessed, eligible for autonomous runs — the only
+  thing the Phase F operations lane will consume). **Nothing in the loop
+  can apply `loop:approved`**; a human relabels after review;
+- `src/hyrule_engineering_loop/intake/` holds the heartbeat:
+  `github_issues.py` (org-repo scan, deterministic scoring by label
+  weights + age + body completeness, fingerprint dedupe, candidate filing
+  with self-contained Context / Action items / Related bodies) and
+  `signals.py` (read-only miners: Icinga unhandled problems, Prometheus
+  firing alerts, `drift-detection` / `netops-nightly` failures —
+  unconfigured sources skip gracefully; NetFlow joins later);
+- miners are strictly read-only (HTTP GETs, `gh run list`); the only write
+  in the whole package is candidate-issue creation, and a signal already
+  represented by an open issue files nothing (the body carries a hidden
+  `loop-fingerprint` marker);
+- operator surface: `hyrule-engineering-loop intake scan [--dry-run]`,
+  `intake queue`, and `intake labels --apply` (label creation is an
+  explicit operator action, never implicit); `/loop triage` in Pi shows
+  the queue.
 
 From Pi, use the global extension command:
 
