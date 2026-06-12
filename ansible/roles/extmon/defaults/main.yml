@@ -25,8 +25,12 @@ extmon_alert_repeat_interval: 1h
 # Public HTTPS endpoints — full TLS handshake + 2xx/3xx response.
 extmon_http_targets:
   - https://hyrule.host/
+  - https://hyrule.host/order
+  - https://hyrule.host/llms.txt
   - https://www.hyrule.host/
   - https://cloud.hyrule.host/health
+  - https://cloud.hyrule.host/.well-known/x402.json
+  - https://cloud.hyrule.host/v1/payments/networks
   - https://api.hyrule.host/health
   - https://mon.servify.network/
 

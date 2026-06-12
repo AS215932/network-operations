@@ -41,3 +41,23 @@
   # deliberately not notified here (#96).
   notify:
     - reload systemd
+
+- name: Ensure Monero wallet RPC directory exists
+  ansible.builtin.file:
+    path: "{{ hyrule_cloud_monero_wallet_dir }}"
+    state: directory
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0750"
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Install /etc/systemd/system/monero-wallet-rpc.service
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/monero-wallet-rpc.service"
+    dest: /etc/systemd/system/monero-wallet-rpc.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+  notify:
+    - reload systemd

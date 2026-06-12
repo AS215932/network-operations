@@ -50,6 +50,14 @@ hyrule_cloud_vault_secret_id_response_wrapping_path: >-
   {{ ('auth/approle/role/' ~ hyrule_cloud_vault_role_name ~ '/secret-id')
      if (hyrule_cloud_vault_wrapped_secret_id | length > 0) else '' }}
 hyrule_cloud_vault_render_hook: /usr/local/sbin/hyrule-cloud-vault-render-hook
+hyrule_cloud_monero_wallet_rpc_enabled: false
+hyrule_cloud_monero_wallet_rpc_service_name: monero-wallet-rpc
+hyrule_cloud_monero_wallet_rpc_env_file: "{{ hyrule_cloud_etc_dir }}/monero-wallet-rpc.env"
+hyrule_cloud_monero_wallet_rpc_password_file: "{{ hyrule_cloud_etc_dir }}/monero-wallet-rpc.password"
+hyrule_cloud_monero_wallet_dir: "{{ hyrule_cloud_state_dir }}/monero"
+hyrule_cloud_monero_wallet_file: "{{ hyrule_cloud_monero_wallet_dir }}/hyrule-viewonly"
+hyrule_cloud_monero_packages:
+  - monero
 hyrule_cloud_required_env_keys:
   - XCPNG_XO_TOKEN
   - XCPNG_DEFAULT_SR_UUID
@@ -62,8 +70,14 @@ hyrule_cloud_required_env_keys:
   - OPENPROVIDER_TECH_HANDLE
   - OPENPROVIDER_BILLING_HANDLE
   - PAYMENT_RECEIVER_ADDRESS
+  - PAYMENT_REQUIRE_NATIVE
+  - PAYMENT_BTC_XPUB
+  - PAYMENT_XMR_VIEWKEY
+  - PAYMENT_XMR_RPC_URL
   - HYRULE_DNS_TSIG_KEY
   - HYRULE_DATABASE_URL
+  - HYRULE_IP_PREFIX_PEPPER
+  - HYRULE_MAX_PAID_ACTIVE_VMS
 
 # Base apt packages on the target. uv is installed separately via the
 # upstream script (same idiom as hyrule_web / hyrule_mcp).

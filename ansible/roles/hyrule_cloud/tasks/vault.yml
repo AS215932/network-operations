@@ -11,6 +11,41 @@
          else hyrule_cloud_vault_secret_id }}
   no_log: true
 
+- name: Set hyrule-cloud Vault Agent template list
+  ansible.builtin.set_fact:
+    hyrule_cloud_vault_agent_templates:
+      - src: hyrule-cloud.env.ctmpl.j2
+        name: hyrule-cloud.env.ctmpl
+        destination: "{{ hyrule_cloud_env_file }}"
+        group: "{{ hyrule_cloud_app_group }}"
+        reload_command: "{{ hyrule_cloud_vault_render_hook }}"
+  no_log: "{{ hyrule_cloud_vault_agent_secret_id | length > 0 }}"
+
+- name: Add Monero wallet RPC Vault Agent templates
+  ansible.builtin.set_fact:
+    hyrule_cloud_vault_agent_templates: >-
+      {{
+        hyrule_cloud_vault_agent_templates
+        + [
+          {
+            'src': 'hyrule-cloud-monero.env.ctmpl.j2',
+            'name': 'hyrule-cloud-monero.env.ctmpl',
+            'destination': hyrule_cloud_monero_wallet_rpc_env_file,
+            'group': hyrule_cloud_app_group,
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+          },
+          {
+            'src': 'hyrule-cloud-monero-password.ctmpl.j2',
+            'name': 'hyrule-cloud-monero-password.ctmpl',
+            'destination': hyrule_cloud_monero_wallet_rpc_password_file,
+            'group': hyrule_cloud_app_group,
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+          },
+        ]
+      }}
+  no_log: "{{ hyrule_cloud_vault_agent_secret_id | length > 0 }}"
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
 - name: Set up Vault Agent for hyrule-cloud secret delivery
   ansible.builtin.include_role:
     name: vault_agent
@@ -19,12 +54,7 @@
     vault_agent_role_id: "{{ hyrule_cloud_vault_role_id }}"
     vault_agent_secret_id: "{{ hyrule_cloud_vault_agent_secret_id }}"
     vault_agent_secret_id_response_wrapping_path: "{{ hyrule_cloud_vault_secret_id_response_wrapping_path }}"
-    vault_agent_templates:
-      - src: hyrule-cloud.env.ctmpl.j2
-        name: hyrule-cloud.env.ctmpl
-        destination: "{{ hyrule_cloud_env_file }}"
-        group: "{{ hyrule_cloud_app_group }}"
-        reload_command: "{{ hyrule_cloud_vault_render_hook }}"
+    vault_agent_templates: "{{ hyrule_cloud_vault_agent_templates }}"
     vault_agent_extra_dirs:
       - path: "{{ hyrule_cloud_install_dir }}"
         group: "{{ hyrule_cloud_app_group }}"
@@ -38,6 +68,18 @@
   ansible.builtin.wait_for:
     path: "{{ hyrule_cloud_env_file }}"
     timeout: 45
+
+- name: Wait for Vault Agent to render Monero wallet RPC env file
+  ansible.builtin.wait_for:
+    path: "{{ hyrule_cloud_monero_wallet_rpc_env_file }}"
+    timeout: 45
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Wait for Vault Agent to render Monero wallet RPC password file
+  ansible.builtin.wait_for:
+    path: "{{ hyrule_cloud_monero_wallet_rpc_password_file }}"
+    timeout: 45
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
 
 - name: Stat Vault-rendered hyrule-cloud env file
   ansible.builtin.stat:
@@ -55,3 +97,47 @@
       {{ hyrule_cloud_env_file }} was not rendered with the expected
       root:{{ hyrule_cloud_app_group }} 0640 access. Check
       vault-agent-hyrule-cloud.service and the kv/data/hyrule-cloud secret.
+
+- name: Stat Vault-rendered Monero wallet RPC env file
+  ansible.builtin.stat:
+    path: "{{ hyrule_cloud_monero_wallet_rpc_env_file }}"
+  register: hyrule_cloud_monero_rendered_env
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Stat Vault-rendered Monero wallet RPC password file
+  ansible.builtin.stat:
+    path: "{{ hyrule_cloud_monero_wallet_rpc_password_file }}"
+  register: hyrule_cloud_monero_rendered_password
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Assert Vault-rendered Monero wallet RPC env file is usable
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_monero_rendered_env.stat.exists
+      - hyrule_cloud_monero_rendered_env.stat.size | int > 0
+      - hyrule_cloud_monero_rendered_env.stat.mode == "0640"
+      - hyrule_cloud_monero_rendered_env.stat.gr_name == hyrule_cloud_app_group
+    fail_msg: >-
+      {{ hyrule_cloud_monero_wallet_rpc_env_file }} was not rendered with
+      the expected root:{{ hyrule_cloud_app_group }} 0640 access.
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Assert Vault-rendered Monero wallet RPC password file is usable
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_monero_rendered_password.stat.exists
+      - hyrule_cloud_monero_rendered_password.stat.size | int > 0
+      - hyrule_cloud_monero_rendered_password.stat.mode == "0640"
+      - hyrule_cloud_monero_rendered_password.stat.gr_name == hyrule_cloud_app_group
+    fail_msg: >-
+      {{ hyrule_cloud_monero_wallet_rpc_password_file }} was not rendered with
+      the expected root:{{ hyrule_cloud_app_group }} 0640 access.
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
+- name: Enable and start Monero wallet RPC
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_monero_wallet_rpc_service_name }}.service"
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool

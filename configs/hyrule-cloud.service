@@ -3,8 +3,9 @@
 
 [Unit]
 Description=Hyrule Cloud API
-After=network.target postgresql.service
+After=network.target postgresql.service monero-wallet-rpc.service
 Requires=postgresql.service
+Wants=monero-wallet-rpc.service
 
 [Service]
 Type=exec

@@ -1,0 +1,40 @@
+# /etc/systemd/system/monero-wallet-rpc.service
+# Deploy to: api VM
+
+[Unit]
+Description=Hyrule Cloud Monero view-only wallet RPC
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hyrule
+Group=hyrule
+EnvironmentFile=/etc/hyrule-cloud/monero-wallet-rpc.env
+ExecStartPre=+/bin/sh -c 'install -d -o hyrule -g hyrule -m 0750 "$(dirname "$MONERO_WALLET_RPC_WALLET_FILE")"'
+ExecStartPre=/bin/sh -c 'test -f "$MONERO_WALLET_RPC_WALLET_FILE" || /usr/bin/monero-wallet-cli --generate-from-view-key "$MONERO_WALLET_RPC_WALLET_FILE" --address "$MONERO_WALLET_RPC_WALLET_ADDRESS" --view-key "$MONERO_WALLET_RPC_VIEW_KEY" --password-file "$MONERO_WALLET_RPC_WALLET_PASSWORD_FILE" --restore-height "$MONERO_WALLET_RPC_RESTORE_HEIGHT" --non-interactive'
+ExecStartPre=+/bin/sh -c 'chown hyrule:hyrule "$MONERO_WALLET_RPC_WALLET_FILE"* && chmod 0600 "$MONERO_WALLET_RPC_WALLET_FILE"*'
+ExecStart=/usr/bin/monero-wallet-rpc \
+  --wallet-file ${MONERO_WALLET_RPC_WALLET_FILE} \
+  --password-file ${MONERO_WALLET_RPC_WALLET_PASSWORD_FILE} \
+  --daemon-address ${MONERO_WALLET_RPC_DAEMON_ADDRESS} \
+  --rpc-bind-ip ${MONERO_WALLET_RPC_BIND_IP} \
+  --rpc-bind-port ${MONERO_WALLET_RPC_BIND_PORT} \
+  --disable-rpc-login \
+  --trusted-daemon
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=monero-wallet-rpc
+
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hyrule-cloud/monero
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target
