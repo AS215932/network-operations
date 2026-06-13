@@ -47,4 +47,9 @@ jobs:
       - name: pytest
         # HYRULE_MOCK_LLM defaults on; the suite runs fully offline with the
         # MockBackend and never invokes a real harness binary or provider.
-        run: ~/.local/bin/uv run --group dev python -m pytest -q
+        # TMPDIR=/tmp so pytest's tmp_path lands under /tmp: the worktree
+        # tests render NOC handoffs there, and the policy guard's
+        # allowed_handoff_dirs is ["/tmp"]. The runner's default TMPDIR is
+        # not /tmp, which would otherwise fail those tests on the handoff
+        # allowlist while passing locally.
+        run: TMPDIR=/tmp ~/.local/bin/uv run --group dev python -m pytest -q
