@@ -1,0 +1,43 @@
+---
+# hyrule-network-proxy — internal Go sidecar for paid network requests.
+
+hyrule_network_proxy_apply: false
+
+hyrule_network_proxy_user: hyrule-netproxy
+hyrule_network_proxy_group: hyrule-netproxy
+
+hyrule_network_proxy_repo: https://github.com/AS215932/hyrule-network-proxy.git
+hyrule_network_proxy_version: main
+
+hyrule_network_proxy_src_dir: /opt/hyrule-network-proxy/src
+hyrule_network_proxy_bin_path: /usr/local/bin/hyrule-network-proxy
+hyrule_network_proxy_etc_dir: /etc/hyrule-network-proxy
+hyrule_network_proxy_state_dir: /var/lib/hyrule-network-proxy
+hyrule_network_proxy_env_file: "{{ hyrule_network_proxy_etc_dir }}/env"
+hyrule_network_proxy_service_name: hyrule-network-proxy
+
+hyrule_network_proxy_api_listen_addr: "[{{ peers.netproxy.ipv6 }}]:8450"
+hyrule_network_proxy_metrics_listen_addr: "[{{ peers.netproxy.ipv6 }}]:8451"
+hyrule_network_proxy_auth_token: "{{ lookup('env', 'HYRULE_NETWORK_PROXY_TOKEN') | default('', true) }}"
+
+hyrule_network_proxy_tor_socks_addr: 127.0.0.1:9050
+hyrule_network_proxy_i2p_http_proxy: http://127.0.0.1:4444
+hyrule_network_proxy_yggdrasil_enabled: true
+
+hyrule_network_proxy_max_request_body_bytes: 65536
+hyrule_network_proxy_max_response_body_bytes: 65536
+hyrule_network_proxy_default_timeout_seconds: 15
+hyrule_network_proxy_max_timeout_seconds: 60
+hyrule_network_proxy_max_redirects: 3
+hyrule_network_proxy_log_level: info
+
+hyrule_network_proxy_packages:
+  - ca-certificates
+  - curl
+  - git
+  - golang-go
+  - tor
+  - i2pd
+  - yggdrasil
+
+hyrule_network_proxy_health_url: "http://[{{ peers.netproxy.ipv6 }}]:8451/healthz"

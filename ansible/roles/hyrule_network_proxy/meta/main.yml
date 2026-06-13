@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: hyrule_network_proxy
+  author: AS215932
+  description: Internal Hyrule Network Proxy sidecar deployment
+  license: MIT
+  min_ansible_version: "2.14"
+
+dependencies: []

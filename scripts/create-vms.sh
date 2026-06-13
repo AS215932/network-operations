@@ -100,6 +100,7 @@ create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
 create_vm vault "Vault secret plane" 1 2147483648 21474836480 "2a0c:b641:b50:2::c0"
 create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
+create_vm netproxy "Hyrule Network Proxy sidecar" 1 1073741824 21474836480 "2a0c:b641:b50:2::e0"
 
 # ci-pr — UNPRIVILEGED PR runner on the CUSTOMER-isolated vm bridge (xenbr-vm),
 # NOT infra. Resolve the vm-bridge network UUID and export VM_NET before running:

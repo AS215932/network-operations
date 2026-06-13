@@ -51,7 +51,8 @@ vault kv put kv/hyrule-cloud \
     ip_prefix_pepper="$(openssl rand -hex 32)" \
     dev_bypass_secret="" \
     tsig_secret="..." \
-    db_password="..."
+    db_password="..." \
+    network_proxy_token="..."
 ```
 
 Optional OpenBSD builder keys:

@@ -35,6 +35,16 @@ groups:
           summary: "BGP peer {{ $labels.peer }} not established on {{ $labels.instance }}"
           description: "Peer state is {{ $labels.state }}."
 
+      - alert: HyruleNetworkProxyDown
+        expr: up{job="hyrule-network-proxy"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "Hyrule Network Proxy metrics scrape down"
+          description: "Prometheus cannot scrape the internal network proxy sidecar on {{ $labels.instance }}. Paid network requests may fail or be preflight-blocked."
+
       - alert: NOCAgentGeminiQuotaLow
         expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 25
         for: 5m

@@ -31,6 +31,11 @@ on:
         type: string
         required: false
         default: ""
+      hyrule_network_proxy_sha:
+        description: Optional AS215932/hyrule-network-proxy commit SHA
+        type: string
+        required: false
+        default: ""
       impact:
         description: Short deploy impact note
         type: string
@@ -77,6 +82,7 @@ jobs:
           INPUT_HYRULE_MCP_SHA: ${{ inputs.hyrule_mcp_sha }}
           INPUT_HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
           INPUT_HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
+          INPUT_HYRULE_NETWORK_PROXY_SHA: ${{ inputs.hyrule_network_proxy_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -87,6 +93,7 @@ jobs:
           hyrule_mcp_sha="${INPUT_HYRULE_MCP_SHA:-}"
           hyrule_cloud_sha="${INPUT_HYRULE_CLOUD_SHA:-}"
           hyrule_web_sha="${INPUT_HYRULE_WEB_SHA:-}"
+          hyrule_network_proxy_sha="${INPUT_HYRULE_NETWORK_PROXY_SHA:-}"
 
           if [ "$EVENT_NAME" = "repository_dispatch" ]; then
             repo="${DISPATCH_REPOSITORY:-}"
@@ -111,6 +118,9 @@ jobs:
               AS215932/hyrule-web)
                 hyrule_web_sha="$sha"
                 ;;
+              AS215932/hyrule-network-proxy)
+                hyrule_network_proxy_sha="$sha"
+                ;;
               *)
                 echo "::error::unsupported promotion source repository: ${repo:-<missing>}"
                 exit 1
@@ -134,6 +144,7 @@ jobs:
             printf 'hyrule_mcp_sha=%s\n' "$hyrule_mcp_sha"
             printf 'hyrule_cloud_sha=%s\n' "$hyrule_cloud_sha"
             printf 'hyrule_web_sha=%s\n' "$hyrule_web_sha"
+            printf 'hyrule_network_proxy_sha=%s\n' "$hyrule_network_proxy_sha"
           } >> "$GITHUB_OUTPUT"
 
       - name: Load promotion branch
@@ -155,6 +166,7 @@ jobs:
           HYRULE_MCP_SHA: ${{ steps.resolve.outputs.hyrule_mcp_sha }}
           HYRULE_CLOUD_SHA: ${{ steps.resolve.outputs.hyrule_cloud_sha }}
           HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
+          HYRULE_NETWORK_PROXY_SHA: ${{ steps.resolve.outputs.hyrule_network_proxy_sha }}
         run: |
           scripts/ci/promote-app-pins.py \
             --title "$PROMOTION_TITLE" \
@@ -163,6 +175,7 @@ jobs:
             --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
             --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
             --hyrule-web-sha "$HYRULE_WEB_SHA" \
+            --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA" \
             --body-file /tmp/promotion-body.md
 
       - name: Validate pins
@@ -172,7 +185,7 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml; then
+          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No app pin changes requested; promotion PR not needed." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -188,7 +201,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml
+          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
           git commit -m "$COMMIT_MESSAGE"
           git push --force-with-lease origin "$BRANCH"
 

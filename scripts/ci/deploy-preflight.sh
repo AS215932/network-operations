@@ -37,13 +37,16 @@ check_repo_contracts() {
   if grep -InE "XO_TOKEN|xo_token" "$repo_root/ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2"; then
     error "github-runner Vault template must not render XO_TOKEN"
   fi
+  if ! grep -q "\.Data\.data\.network_proxy_token" "$repo_root/ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2"; then
+    error "github-runner Vault template must export HYRULE_NETWORK_PROXY_TOKEN for network-proxy applies"
+  fi
 
   for key in \
     xo_token sr_uuid vm_network_uuid xcpng_templates \
     openprovider_username openprovider_password \
     openprovider_owner_handle openprovider_admin_handle \
     openprovider_tech_handle openprovider_billing_handle \
-    payment_wallet tsig_secret db_password; do
+    payment_wallet tsig_secret db_password network_proxy_token; do
     if ! grep -q "\.Data\.data\.${key}" "$repo_root/ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"; then
       error "hyrule-cloud Vault template does not reference kv/data/hyrule-cloud key: ${key}"
     fi

@@ -3,7 +3,7 @@
 ## Production Deploys: Read This First
 
 This repository is the production deployment record for `noc-agent`,
-`hyrule-mcp`, `hyrule-cloud`, and `hyrule-web`. App repos do not deploy
+`hyrule-mcp`, `hyrule-cloud`, `hyrule-web`, and `hyrule-network-proxy`. App repos do not deploy
 production on merge.
 
 After an app repo's `ci` workflow succeeds on `main`, its

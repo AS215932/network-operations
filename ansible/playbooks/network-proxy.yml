@@ -1,0 +1,44 @@
+---
+# hyrule-network-proxy — apply the internal Go sidecar on the netproxy VM.
+#
+# Validate (no live changes):
+#   ansible-playbook playbooks/network-proxy.yml --tags validate \
+#     --connection=local --limit netproxy --skip-tags=snapshot
+#
+# Apply (live deploy):
+#   ansible-playbook playbooks/network-proxy.yml --tags apply \
+#     -e hyrule_network_proxy_apply=true \
+#     --limit netproxy
+#
+# Production deploys use hyrule_network_proxy_version from inventory host_vars.
+
+- name: hyrule-network-proxy — apply
+  hosts: netproxy
+  serial: 1
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - role: hyrule_network_proxy
+      tags: [hyrule_network_proxy]
+  post_tasks:
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [hyrule_network_proxy]

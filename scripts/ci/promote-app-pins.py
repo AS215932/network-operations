@@ -15,6 +15,11 @@ PIN_TARGETS = {
     "hyrule_mcp_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/hyrule-mcp", "noc"),
     "hyrule_cloud_version": ("ansible/inventory/host_vars/api.yml", "AS215932/hyrule-cloud", "cloud"),
     "hyrule_web_version": ("ansible/inventory/host_vars/web.yml", "AS215932/hyrule-web", "web"),
+    "hyrule_network_proxy_version": (
+        "ansible/inventory/host_vars/netproxy.yml",
+        "AS215932/hyrule-network-proxy",
+        "network-proxy",
+    ),
 }
 
 
@@ -24,6 +29,7 @@ def main() -> int:
     parser.add_argument("--hyrule-mcp-sha", default="")
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
+    parser.add_argument("--hyrule-network-proxy-sha", default="")
     parser.add_argument("--title", default="Promote app SHAs")
     parser.add_argument("--impact", default="Automated app SHA promotion.")
     parser.add_argument("--body-file", default="")
@@ -34,6 +40,7 @@ def main() -> int:
         "hyrule_mcp_version": args.hyrule_mcp_sha.strip(),
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
+        "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
     if not requested:

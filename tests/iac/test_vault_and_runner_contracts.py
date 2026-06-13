@@ -78,6 +78,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="hyrule_web_apply=true"
 \s+expected_apply_var="hyrule_web_apply=true"
 \s+;;
+\s+network-proxy\)
+\s+apply_var="hyrule_network_proxy_apply=true"
+\s+expected_apply_var="hyrule_network_proxy_apply=true"
+\s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
 \s+expected_apply_var="\$\{playbook//-/_\}_apply=true"
