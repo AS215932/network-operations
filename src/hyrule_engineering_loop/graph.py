@@ -37,7 +37,7 @@ from hyrule_engineering_loop.nodes import (
     workspace_cleanup_node,
     worktree_setup_node,
 )
-from hyrule_engineering_loop.state import GraphState, RoleName
+from hyrule_engineering_loop.state import GraphState
 
 Route = Literal[
     "network_architect",

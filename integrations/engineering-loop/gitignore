@@ -1,0 +1,13 @@
+# Stored as `gitignore` (no leading dot) so it is reviewable in
+# network-operations; extract-engineering-loop.sh installs it as `.gitignore`
+# in the new repo.
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.engineering-loop-state/
+*.egg-info/
+dist/
+build/

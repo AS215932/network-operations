@@ -20,6 +20,7 @@ change.
 | `noc-agent` | Python ≥3.14, PydanticAI / langgraph / redis / mcp | none | **Not protected** | No | Sourcery (to remove) | none yet |
 | `hyrule-mcp` | Python ≥3.14, mcp | none | **Not protected** | No | Sourcery (to remove) | none yet |
 | `as215932.net` | Static HTML / CSS + `deploy.sh` | none | **Not protected** | `deploy.sh` (trigger TBD) | Sourcery (to remove) | none yet |
+| `engineering-loop` | Python (uv), LangGraph | `ci.yml` (`ruff`, `mypy`, `pytest`) | **Protected** — required: `ruff`, `mypy`, `pytest` (strict) | No (opens draft PRs only) | claude-for-github | planned |
 
 Notes:
 
@@ -41,6 +42,13 @@ Notes:
 - `noc-agent` and `hyrule-mcp` both require **Python ≥3.14** and currently
   declare **no ruff/mypy**; both ship a `test_live_smoke.py` that needs live
   infrastructure (must be deselected in CI).
+- `engineering-loop` was extracted from `network-operations` (Phase G of the
+  v2 refactor, issue #196) with history preserved; see
+  `docs/ci/engineering-loop-extraction.md`. Its CI runs **only** on the
+  unprivileged `ci-pr` runner (group `public-pr`) — never `hyrule-ci` — because
+  its backend executes generated code; the daemon refuses to run when
+  `GITHUB_ACTIONS` is set. The full suite is offline (mock backend, no API
+  keys). Until the extraction lands this row is **pending**.
 
 ## Runner topology (today)
 
@@ -92,9 +100,12 @@ Code Scanning, free for these public repos.
 - **Two-runner security model**: keep the privileged `ci-runner` (`hyrule`,
   `hyrule-infra`, group `hyrule-ci`) for deploy/apply/Vault/labs only; add a new
   **unprivileged `ci-pr`** runner (label `hyrule-public-pr`, its own `public-pr`
-  runner group permitting all six repos) with no Vault, no `id_ci`, no
-  `secrets.env`, and no management-overlay reachability. All untrusted-PR-code
-  jobs (PR-Agent, Semgrep, lint/test/build/static checks) move to `ci-pr`.
+  runner group permitting all repos — the original six plus `engineering-loop`)
+  with no Vault, no `id_ci`, no `secrets.env`, and no management-overlay
+  reachability. All untrusted-PR-code jobs (PR-Agent, Semgrep,
+  lint/test/build/static checks) move to `ci-pr`. `engineering-loop` is
+  **`ci-pr`-only** by construction — its loop backend runs generated code, so
+  it must never touch the privileged runner.
 - **PR-Agent** replaces Sourcery: advisory, read/comment-only, OpenRouter
   primary `openrouter/deepseek/deepseek-v4-flash`, fallback
   `openrouter/minimax/minimax-m2.7`, pinned `The-PR-Agent/pr-agent` Docker
