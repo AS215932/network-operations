@@ -17,6 +17,8 @@ listen on all port 587 tls-require pki "{{ mail_hostname }}" auth mask-src filte
 action "local" lmtp "/var/dovecot/lmtp" alias <aliases>
 action "outbound" relay
 
-match from any for domain "{{ mail_domain }}" action "local"
+{% for domain in [mail_domain] + mail_extra_domains %}
+match from any for domain "{{ domain }}" action "local"
+{% endfor %}
 match from local for local action "local"
 match from any auth for any action "outbound"
