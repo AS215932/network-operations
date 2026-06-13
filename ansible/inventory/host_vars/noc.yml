@@ -33,17 +33,16 @@ monitoring_extra_services:
       http_expect_body_regex: '"status":"ok"'
 
   - name: noc-agent-mcp-health
-    check_command: http
+    # Custom check: surfaces /health/mcp's per-source JSON state instead of
+    # the generic check_http "503 + pattern not found" output.
+    # CheckCommand defined in configs/mon/icinga2/services/noc-agent-mcp-health.conf.
+    check_command: noc_agent_mcp_health
     interval: 1m
     retry: 30s
     notes: "MCP subprocess connectivity for Prometheus/SSH and Xen Orchestra tools"
     vars:
-      http_address: "{{ peers.noc.ipv6 }}"
-      http_port: 8000
-      http_uri: "/health/mcp"
-      http_ipv6: true
-      http_timeout: 10
-      http_expect_body_regex: '"status":"ok"'
+      noc_mcp_host: "{{ peers.noc.ipv6 }}"
+      noc_mcp_port: 8000
 
   - name: noc-agent-config-health
     check_command: http
