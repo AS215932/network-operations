@@ -4,6 +4,9 @@
 # public-pr). The loop's backend executes generated code, so this repo must
 # NEVER be added to the privileged hyrule-ci group or the hyrule/hyrule-infra
 # runner. Required checks for branch protection on main: ruff, mypy, pytest.
+#
+# The ci-pr runner has no uv preinstalled; each job installs it via the astral
+# script and calls it at ~/.local/bin (matching the hyrule-web CI convention).
 ---
 name: ci
 
@@ -21,21 +24,32 @@ jobs:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v6
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: ruff
-        run: uvx ruff check src tests
+        run: ~/.local/bin/uvx ruff check src tests
 
   mypy:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v6
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: mypy --strict
-        run: uv run --group dev mypy --strict src
+        run: ~/.local/bin/uv run --group dev mypy --strict src
 
   pytest:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
       - uses: actions/checkout@v6
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: pytest
         # HYRULE_MOCK_LLM defaults on; the suite runs fully offline with the
         # MockBackend and never invokes a real harness binary or provider.
-        run: uv run --group dev python -m pytest -q
+        # TMPDIR=/tmp so pytest's tmp_path lands under /tmp: the worktree
+        # tests render NOC handoffs there, and the policy guard's
+        # allowed_handoff_dirs is ["/tmp"]. The runner's default TMPDIR is
+        # not /tmp, which would otherwise fail those tests on the handoff
+        # allowlist while passing locally.
+        run: TMPDIR=/tmp ~/.local/bin/uv run --group dev python -m pytest -q
