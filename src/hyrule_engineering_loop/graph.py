@@ -122,8 +122,8 @@ def pre_gate_policy_router(state: GraphState) -> Route:
 
 
 def delegate_router(state: GraphState) -> Route:
-    """Route backend outcome onward; budget exhaustion and spec refusal stop."""
-    if state.get("implementation_writer_status") in {"budget_exhausted", "refused"}:
+    """Route backend outcome onward; budget/spec/stall failures stop the run."""
+    if state.get("implementation_writer_status") in {"budget_exhausted", "refused", "stalled"}:
         return "human_signoff"
     return "gate_execution"
 
