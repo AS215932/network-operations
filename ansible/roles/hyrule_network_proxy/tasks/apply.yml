@@ -1,0 +1,111 @@
+---
+- name: Assert network proxy auth token is available for apply
+  ansible.builtin.assert:
+    that:
+      - hyrule_network_proxy_auth_token | length >= 32
+    fail_msg: >-
+      HYRULE_NETWORK_PROXY_TOKEN must be available to the apply run and at
+      least 32 characters. Store network_proxy_token in kv/ci-runner for the
+      runner and kv/hyrule-cloud for the api VM.
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ hyrule_network_proxy_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure hyrule-network-proxy group exists
+  ansible.builtin.group:
+    name: "{{ hyrule_network_proxy_group }}"
+    system: true
+
+- name: Ensure hyrule-network-proxy user exists
+  ansible.builtin.user:
+    name: "{{ hyrule_network_proxy_user }}"
+    group: "{{ hyrule_network_proxy_group }}"
+    shell: /bin/bash
+    system: true
+
+- name: Ensure runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_network_proxy_user) }}"
+    group: "{{ item.group | default(hyrule_network_proxy_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_network_proxy_src_dir | dirname }}", mode: "0755" }
+    - { path: "{{ hyrule_network_proxy_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_network_proxy_state_dir }}", mode: "0750" }
+
+- name: Checkout hyrule-network-proxy at requested ref
+  ansible.builtin.git:
+    repo: "{{ hyrule_network_proxy_repo }}"
+    dest: "{{ hyrule_network_proxy_src_dir }}"
+    version: "{{ hyrule_network_proxy_version }}"
+    update: true
+  become: true
+  become_user: "{{ hyrule_network_proxy_user }}"
+  notify: restart hyrule-network-proxy
+
+- name: Build hyrule-network-proxy binary
+  ansible.builtin.command:
+    cmd: go build -o {{ hyrule_network_proxy_bin_path }} ./cmd/hyrule-network-proxy
+    chdir: "{{ hyrule_network_proxy_src_dir }}"
+  environment:
+    GOCACHE: "{{ hyrule_network_proxy_state_dir }}/go-build"
+    GOMODCACHE: "{{ hyrule_network_proxy_state_dir }}/go-mod"
+  notify: restart hyrule-network-proxy
+
+- name: Ensure binary ownership/mode
+  ansible.builtin.file:
+    path: "{{ hyrule_network_proxy_bin_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render hyrule-network-proxy env
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ hyrule_network_proxy_env_file }}"
+    owner: root
+    group: "{{ hyrule_network_proxy_group }}"
+    mode: "0640"
+  notify: restart hyrule-network-proxy
+
+- name: Install hyrule-network-proxy systemd unit
+  ansible.builtin.template:
+    src: hyrule-network-proxy.service.j2
+    dest: /etc/systemd/system/hyrule-network-proxy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart hyrule-network-proxy
+
+- name: Ensure supporting network daemons are enabled
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - tor
+    - i2pd
+    - yggdrasil
+
+- name: Ensure hyrule-network-proxy is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ hyrule_network_proxy_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for hyrule-network-proxy health endpoint
+  ansible.builtin.uri:
+    url: "{{ hyrule_network_proxy_health_url }}"
+    method: GET
+    status_code: 200
+  register: hyrule_network_proxy_health
+  retries: 10
+  delay: 2
+  until: hyrule_network_proxy_health.status == 200

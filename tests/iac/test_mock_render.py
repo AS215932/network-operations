@@ -57,6 +57,7 @@ class MockRenderTest(unittest.TestCase):
     def test_github_runner_vault_template_renders_without_cloud_token(self):
         rendered = self.render(REPO / "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2")
         self.assertIn("kv/data/ci-runner", rendered)
+        self.assertIn("HYRULE_NETWORK_PROXY_TOKEN", rendered)
         self.assertNotIn("XO_TOKEN", rendered)
 
     def test_hyrule_cloud_vault_template_contains_secret_keys(self):
@@ -70,6 +71,7 @@ class MockRenderTest(unittest.TestCase):
             "payment_wallet",
             "tsig_secret",
             "db_password",
+            "network_proxy_token",
         ):
             self.assertIn(f".Data.data.{key}", rendered)
 

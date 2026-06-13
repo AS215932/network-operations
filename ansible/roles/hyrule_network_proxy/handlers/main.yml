@@ -1,0 +1,6 @@
+---
+- name: restart hyrule-network-proxy
+  ansible.builtin.systemd:
+    name: hyrule-network-proxy
+    state: restarted
+    daemon_reload: true

@@ -8,6 +8,7 @@ on:
       - ansible/inventory/host_vars/noc.yml
       - ansible/inventory/host_vars/api.yml
       - ansible/inventory/host_vars/web.yml
+      - ansible/inventory/host_vars/netproxy.yml
       - configs/mon/icinga2/**
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
@@ -39,6 +40,7 @@ jobs:
             ansible/inventory/host_vars/noc.yml \
             ansible/inventory/host_vars/api.yml \
             ansible/inventory/host_vars/web.yml \
+            ansible/inventory/host_vars/netproxy.yml \
             configs/mon/icinga2 \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
@@ -75,6 +77,8 @@ jobs:
               add_once("cloud", "api")
           if "ansible/inventory/host_vars/web.yml" in changed:
               add_once("web", "web")
+          if "ansible/inventory/host_vars/netproxy.yml" in changed:
+              add_once("network-proxy", "netproxy")
           print(f"matrix={json.dumps({'include': matrix})}")
           print(f"has_changes={'true' if matrix else 'false'}")
           PY

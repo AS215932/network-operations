@@ -1,0 +1,10 @@
+---
+# Validate always runs; apply is gated so default invocations are safe.
+- name: Validate hyrule_network_proxy inputs
+  ansible.builtin.import_tasks: validate.yml
+  tags: [validate, always]
+
+- name: Apply hyrule_network_proxy role
+  ansible.builtin.import_tasks: apply.yml
+  when: hyrule_network_proxy_apply | bool
+  tags: [apply]

@@ -2,14 +2,16 @@
 
 ## Deployment Rules - Read Before Touching App Pins
 
-- Production deploys for `noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and
-  `hyrule-web` are controlled from this repository, not from app repos.
+- Production deploys for `noc-agent`, `hyrule-mcp`, `hyrule-cloud`,
+  `hyrule-web`, and `hyrule-network-proxy` are controlled from this
+  repository, not from app repos.
 - App repositories may merge code, but they must not be treated as production
   deployment records.
 - Production app versions are the pinned 40-character SHAs in:
   - `ansible/inventory/host_vars/noc.yml`
   - `ansible/inventory/host_vars/api.yml`
   - `ansible/inventory/host_vars/web.yml`
+  - `ansible/inventory/host_vars/netproxy.yml`
 - Normal promotion path:
   1. Merge app PRs after app CI is green.
   2. Run the `promote-apps` workflow in this repo with the merged app SHAs.
