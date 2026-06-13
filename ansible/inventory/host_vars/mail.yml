@@ -56,14 +56,19 @@ monitoring_extra_services:
 
 # --- Mail role ---
 mail_domain: as215932.net
+mail_extra_domains:
+  - hyrule.host
 mail_hostname: mail.as215932.net
 mail_ipv6: "{{ peers.mail.ipv6 }}"
 mail_ipv4: "{{ mail_failover_ipv4 | default('') }}"
 mail_ipv4_gw: "{{ mail_failover_ipv4_gateway | default('') }}"
 mail_shared_user: noc
+mail_dkim_extra_domains:
+  - hyrule.host
 mail_dovecot_listen: "*, ::"
 mail_role_addresses:
   - noc
   - abuse
   - peering
   - dh
+  - support
