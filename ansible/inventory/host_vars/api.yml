@@ -1,7 +1,7 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
-hyrule_cloud_version: df222b386625b46843a76ac6139fb0e4bc38a15a
+hyrule_cloud_version: 249613cfdd146b3c070176880facd89a997226b1
 hyrule_cloud_monero_wallet_rpc_enabled: true
 
 firewall_extra_rules:
