@@ -8,6 +8,10 @@ on:
       - ansible/inventory/host_vars/noc.yml
       - ansible/inventory/host_vars/api.yml
       - ansible/inventory/host_vars/web.yml
+      - configs/mon/icinga2/**
+      - configs/xo-mcp-package.json
+      - configs/noc-agent.env.j2
+      - ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -31,19 +35,46 @@ jobs:
       - id: detect
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only HEAD^ HEAD -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml)"
+          changed="$(git diff --name-only HEAD^ HEAD -- \
+            ansible/inventory/host_vars/noc.yml \
+            ansible/inventory/host_vars/api.yml \
+            ansible/inventory/host_vars/web.yml \
+            configs/mon/icinga2 \
+            configs/xo-mcp-package.json \
+            configs/noc-agent.env.j2 \
+            ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import sys
 
           changed = set(sys.argv[1].splitlines())
           matrix = []
-          if "ansible/inventory/host_vars/noc.yml" in changed:
-              matrix.append({"playbook": "noc", "limit": "noc"})
+
+          def add_once(playbook: str, limit: str) -> None:
+              entry = {"playbook": playbook, "limit": limit}
+              if entry not in matrix:
+                  matrix.append(entry)
+
+          mon_icinga_changed = any(path.startswith("configs/mon/icinga2/") for path in changed)
+          noc_changed = any(path in changed for path in {
+              "ansible/inventory/host_vars/noc.yml",
+              "configs/xo-mcp-package.json",
+              "configs/noc-agent.env.j2",
+              "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
+          })
+
+          # Ordering matters for NOC monitoring changes: install mon-side
+          # CheckCommand/script definitions before the monitoring role renders
+          # host services that reference them, then deploy noc-side services.
+          if mon_icinga_changed or noc_changed:
+              add_once("icinga2", "mon")
+          if noc_changed:
+              add_once("monitoring", "noc")
+              add_once("noc", "noc")
           if "ansible/inventory/host_vars/api.yml" in changed:
-              matrix.append({"playbook": "cloud", "limit": "api"})
+              add_once("cloud", "api")
           if "ansible/inventory/host_vars/web.yml" in changed:
-              matrix.append({"playbook": "web", "limit": "web"})
+              add_once("web", "web")
           print(f"matrix={json.dumps({'include': matrix})}")
           print(f"has_changes={'true' if matrix else 'false'}")
           PY

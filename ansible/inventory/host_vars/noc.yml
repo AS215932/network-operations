@@ -8,6 +8,11 @@
 noc_agent_version: c2ae3a9a59d2e6e9600b14c9b33350a029e65faf
 hyrule_mcp_version: 78b97ee626d665160b9bd3c3741589392655a00e
 
+# XO MCP occasionally takes >5s to answer tools/list via supergateway during
+# streamable-HTTP session churn. Keep Icinga + app health probes below their
+# 15s HTTP wrapper timeout while avoiding false 5s flaps.
+noc_agent_mcp_health_timeout_seconds: 12
+
 firewall_extra_rules:
   # Webhooks from Alertmanager + Icinga2 on mon.
   - { proto: tcp, dport: 8000, src: "{{ peers.mon.ipv6 }}", comment: "noc-agent webhook from mon (Alertmanager + Icinga)" }
