@@ -116,6 +116,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
+| proxy | TCP | 80 | Icinga Web via Caddy |
 | proxy | TCP | 3000 | Grafana via Caddy |
 | self | TCP | 9100 | node_exporter (Prometheus self-scrape) |
 | noc | TCP | 5665, 9090 | Icinga2 API / Prometheus query API for noc-agent |
