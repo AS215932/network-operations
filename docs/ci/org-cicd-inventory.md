@@ -48,7 +48,8 @@ Notes:
   unprivileged `ci-pr` runner (group `public-pr`) — never `hyrule-ci` — because
   its backend executes generated code; the daemon refuses to run when
   `GITHUB_ACTIONS` is set. The full suite is offline (mock backend, no API
-  keys). Until the extraction lands this row is **pending**.
+  keys). **Live** as of 2026-06-13: public repo, in the `public-pr` runner
+  group, `main` protected on the `ruff`/`mypy`/`pytest` checks (strict).
 
 ## Runner topology (today)
 
