@@ -10,6 +10,7 @@ from typing import Any, cast
 from langgraph.checkpoint.memory import MemorySaver
 
 from hyrule_engineering_loop.canary import CanaryDryRunError, run_sibling_repo_canary
+from hyrule_engineering_loop.daemon import DaemonConfig, daemon_once
 from hyrule_engineering_loop.feature import (
     FeatureIntakeError,
     FeaturePreflightError,
@@ -453,6 +454,31 @@ def backend_canary_command(args: argparse.Namespace) -> int:
 DEFAULT_INTAKE_REPO = "AS215932/network-operations"
 
 
+def daemon_command(args: argparse.Namespace) -> int:
+    """Run one budgeted operations-lane cycle."""
+    if not args.once:
+        print("[CLI] daemon currently supports only --once (timer-driven scheduling)")
+        return 2
+    config = DaemonConfig(
+        repos=tuple(args.repo) if args.repo else DaemonConfig.repos,
+        workspace_root=Path(args.workspace_root).expanduser()
+        if args.workspace_root
+        else DaemonConfig.workspace_root,
+        output_root=Path(args.output_root).expanduser()
+        if args.output_root
+        else DaemonConfig.output_root,
+        state_dir=Path(args.state_dir_path).expanduser()
+        if args.state_dir_path
+        else DaemonConfig.state_dir,
+        memory_dir=args.memory_dir,
+        max_runs_per_day=args.max_runs_per_day,
+        max_cost_usd_per_day=args.max_cost_usd_per_day,
+    )
+    report = daemon_once(config, client=GhCli())
+    print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+    return 0 if report.outcome not in {"error", "refused_ci"} else 1
+
+
 def intake_scan_command(args: argparse.Namespace) -> int:
     client = GhCli()
     signals, skipped = mine_all_signals(repo=args.repo, client=client)
@@ -766,6 +792,22 @@ def build_parser() -> argparse.ArgumentParser:
     feature_parser.add_argument("--dry-live", action="store_true")
     feature_parser.add_argument("--gate-command", nargs=argparse.REMAINDER)
     feature_parser.set_defaults(func=feature_command)
+
+    daemon_parser = subparsers.add_parser(
+        "daemon",
+        help="run one budgeted operations-lane cycle over the loop:approved queue",
+    )
+    daemon_parser.add_argument("--once", action="store_true", required=True)
+    daemon_parser.add_argument("--repo", action="append")
+    daemon_parser.add_argument("--workspace-root")
+    daemon_parser.add_argument("--output-root")
+    daemon_parser.add_argument("--state-dir-path", dest="state_dir_path")
+    daemon_parser.add_argument("--memory-dir")
+    daemon_parser.add_argument("--max-runs-per-day", type=int, default=DaemonConfig.max_runs_per_day)
+    daemon_parser.add_argument(
+        "--max-cost-usd-per-day", type=float, default=DaemonConfig.max_cost_usd_per_day
+    )
+    daemon_parser.set_defaults(func=daemon_command)
 
     intake_parser = subparsers.add_parser("intake", help="signal mining and triage inbox")
     intake_subparsers = intake_parser.add_subparsers(dest="intake_command", required=True)
