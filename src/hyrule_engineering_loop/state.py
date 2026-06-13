@@ -165,6 +165,8 @@ class GraphState(TypedDict):
     memory_dir: NotRequired[str]
     memory_context: NotRequired[Dict[str, Any]]
     reflection_results: NotRequired[Dict[str, Any]]
+    last_diff_fingerprint: NotRequired[str]
+    stall_rounds: NotRequired[int]
     diff_preview: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     trace_events: NotRequired[Annotated[List[Dict[str, Any]], operator.add]]
     loop_trace_path: NotRequired[str]

@@ -200,6 +200,7 @@ def build_feature_state(
     dry_live_mode: bool = False,
     task_spec_path: Path | None = None,
     memory_dir: str | None = None,
+    backend_budget: dict[str, Any] | None = None,
 ) -> GraphState:
     """Build a graph state from operator-friendly feature-intake arguments."""
     workspace_root = workspace_root.expanduser().resolve()
@@ -266,6 +267,8 @@ def build_feature_state(
         state["task_spec"] = supplied_spec
     if memory_dir is not None:
         state["memory_dir"] = memory_dir
+    if backend_budget is not None:
+        state["backend_budget"] = dict(backend_budget)
     if model_policy_file is not None:
         state["model_policy_file"] = model_policy_file
     return state
@@ -338,6 +341,7 @@ def run_feature_intake(
     live_mode: bool = False,
     task_spec: Path | None = None,
     memory_dir: str | None = None,
+    backend_budget: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the graph from a human-authored feature request."""
     state = build_feature_state(
@@ -358,6 +362,7 @@ def run_feature_intake(
         live_mode=live_mode,
         task_spec_path=task_spec,
         memory_dir=memory_dir,
+        backend_budget=backend_budget,
     )
     if live_mode:
         preflight = preflight_feature_state(state, output_root=output_root, live=True)

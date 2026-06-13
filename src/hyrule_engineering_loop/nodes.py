@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable, cast
@@ -58,6 +59,10 @@ from hyrule_engineering_loop.trace import trace_event, with_trace, write_loop_tr
 from hyrule_engineering_loop.workspace import cleanup_workspace
 
 StateUpdate = dict[str, Any]
+
+# Abort a run after this many consecutive remediation rounds with an
+# unchanged worktree diff (the Phase F no-progress kill criterion).
+STALL_ROUND_LIMIT = 3
 
 ALL_ROLES: tuple[RoleName, ...] = (
     "network_architect",
@@ -650,6 +655,8 @@ def delegate_implementation_node(state: GraphState) -> StateUpdate:
     all_operations = [*state.get("proposed_mutation_operations", []), *new_operations]
     backend_runs: list[dict[str, Any]] = []
     changed_paths: list[str] = []
+    run_diffs: list[str] = []
+    has_worktree_run = False
     requires_signoff = False
 
     if writer_status != "failed":
@@ -657,6 +664,7 @@ def delegate_implementation_node(state: GraphState) -> StateUpdate:
         constraints = constraints_from_state(state)
         worktrees = state.get("worktree_results") or []
         if worktrees:
+            has_worktree_run = True
             for worktree in worktrees:
                 repo = str(worktree.get("repo", ""))
                 backend = create_backend(
@@ -673,6 +681,7 @@ def delegate_implementation_node(state: GraphState) -> StateUpdate:
                 )
                 backend_runs.append({"repo": repo, **result.as_dict()})
                 changed_paths.extend(result.changed_paths)
+                run_diffs.append(f"{repo}\n{result.diff}")
                 if result.status == "budget_exhausted":
                     writer_status = "budget_exhausted"
                     requires_signoff = True
@@ -736,6 +745,35 @@ def delegate_implementation_node(state: GraphState) -> StateUpdate:
                 }
             )
             retry_key = retry_key or "backend"
+
+    # Kill criterion (Phase F): if the backend produces a diff byte-identical
+    # to the previous remediation round's, count a no-progress round. After
+    # STALL_ROUND_LIMIT consecutive unchanged rounds the run aborts to human
+    # sign-off — this catches a backend that cannot make progress even when
+    # the harness reports no cost (iteration/wall-clock budgets alone would
+    # let it spin). Only worktree runs carry a meaningful diff.
+    if has_worktree_run and writer_status not in {"failed", "budget_exhausted"}:
+        fingerprint = hashlib.sha256("\n".join(sorted(run_diffs)).encode()).hexdigest()
+        prior_fingerprint = state.get("last_diff_fingerprint")
+        if prior_fingerprint is not None and fingerprint == prior_fingerprint:
+            stall_rounds = int(state.get("stall_rounds", 0)) + 1
+        else:
+            stall_rounds = 0
+        update["last_diff_fingerprint"] = fingerprint
+        update["stall_rounds"] = stall_rounds
+        if stall_rounds >= STALL_ROUND_LIMIT:
+            writer_status = "stalled"
+            requires_signoff = True
+            errors.append(
+                {
+                    "node": "delegate_implementation",
+                    "domain": "devops",
+                    "message": (
+                        f"backend made no diff progress across {stall_rounds} consecutive "
+                        "remediation rounds; aborting to human sign-off"
+                    ),
+                }
+            )
 
     update["implementation_writer_status"] = writer_status
     if requires_signoff:

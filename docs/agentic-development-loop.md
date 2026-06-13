@@ -906,6 +906,40 @@ Phase 23 (v2 Phase E) adds intake and the label-gated triage inbox:
   explicit operator action, never implicit); `/loop triage` in Pi shows
   the queue.
 
+Phase 24 (v2 Phase F) adds the operations lane — scheduled, budgeted,
+one-item-at-a-time autonomy that still ends at a draft PR:
+
+- `hyrule-engineering-loop daemon --once` runs one cycle: acquire the run
+  lock, check the per-day budget ledger, pick the highest-scored
+  `loop:approved` issue, run the full graph, and either publish a **draft
+  PR** (clean run — the human pre-authorized the work by applying the
+  label; merge stays human-gated) or leave a journaled failure for triage,
+  then exit;
+- safety rails (`src/hyrule_engineering_loop/daemon.py`): a pid run lock
+  with stale-lock detection (one cycle at a time); per-run budgets
+  (iterations, wall-clock, cost) flowed into the backend, plus a per-day
+  ledger (runs + cost); and the no-progress kill criterion — an unchanged
+  worktree diff across `STALL_ROUND_LIMIT` (3) consecutive remediation
+  rounds aborts to human sign-off, so a backend that cannot make progress
+  stops even when the harness reports no cost;
+- **the backend never runs on a CI runner**: the daemon refuses outright
+  when `GITHUB_ACTIONS` is set, and the systemd unit carries
+  `ConditionEnvironment=!GITHUB_ACTIONS`;
+- observability: a one-line Discord run summary
+  (`HYRULE_DISCORD_WEBHOOK`) and an Icinga passive check result
+  (`HYRULE_ICINGA_*` → service `noc!engineering-loop`); the Icinga service
+  (`configs/mon/icinga2/services/engineering-loop.conf`) keeps active
+  `dummy` freshness checks enabled, so when the timer stops firing the
+  passive result goes stale and the check alerts CRIT;
+- scheduling: `configs/loop/hyrule-engineering-loop.{service,timer}`
+  (oneshot + hourly timer) on an operator machine first; a dedicated
+  `loop` VM later goes through the standard `docs/network-flows.md` +
+  firewall + monitoring onboarding three-steps.
+
+Autonomy stays PR-only end to end: the loop picks, builds, verifies, and
+opens draft PRs; every merge and every production apply remains a human
+action.
+
 From Pi, use the global extension command:
 
 ```text
