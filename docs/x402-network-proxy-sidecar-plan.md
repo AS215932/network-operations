@@ -51,8 +51,8 @@ The sidecar must **not** be called `proxy-cheap`, and the `residential` mode mus
 2. [x] Implement the sidecar internal HTTP API, routing modes, safety policy, logging, health, and metrics. Current sidecar commit: `b82dc72bbf382167062bff272606ce84ec20538c`.
 3. [x] Update `hyrule-cloud` API contract and provider to call the sidecar. Hyrule Cloud commit: `a1a3b3081172efecd72368f25351413ad84234cb`.
 4. [x] Update `hyrule-cloud` pricing, manifest, tests, and docs for `direct`/`tor`/`i2p`/`yggdrasil`. Hyrule Cloud commit: `a1a3b3081172efecd72368f25351413ad84234cb`.
-5. [x] Update `hyrule-infra` to provision and deploy the new `netproxy` VM/service. Hyrule Infra commit: `444f1c6`.
-6. [x] Add monitoring, logging, firewall, Vault, and deployment-promotion wiring. Hyrule Infra commit: `444f1c6`.
+5. [x] Update `hyrule-infra` to provision and deploy the new `netproxy` VM/service. Hyrule Infra commit: `69f81c4`.
+6. [x] Add monitoring, logging, firewall, Vault, and deployment-promotion wiring. Hyrule Infra commit: `69f81c4`.
 7. [ ] Validate with unit tests, integration tests, infra render tests, smoke tests, and staged rollout.
 
 ## Current State
