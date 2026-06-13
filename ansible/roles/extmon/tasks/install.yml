@@ -64,6 +64,86 @@
   notify: restart node_exporter
   tags: [apply]
 
+# --- BGP / diagnostic agents ---
+- name: Ensure extmon and BGPalerter directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { path: /etc/extmon, mode: "0750" }
+    - { path: /opt/bgpalerter, mode: "0755" }
+    - { path: /etc/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
+    - { path: /var/lib/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
+  tags: [apply]
+
+- name: Install extmon BGP and diagnostic agents
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: bgp-agent.py.j2, dest: /usr/local/bin/extmon-bgp-agent.py, mode: "0755" }
+    - { src: diag-agent.py.j2, dest: /usr/local/bin/extmon-diag-agent.py, mode: "0755" }
+    - { src: bgp-agent.env.j2, dest: /etc/extmon/bgp-agent.env, mode: "0600" }
+    - { src: diag-agent.env.j2, dest: /etc/extmon/diag-agent.env, mode: "0600" }
+  no_log: true
+  notify:
+    - restart extmon-bgp-agent
+    - restart extmon-diag-agent
+  tags: [apply]
+
+- name: Install extmon BGP and diagnostic systemd units
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: bgp-agent.service.j2, dest: extmon-bgp-agent.service }
+    - { src: diag-agent.service.j2, dest: extmon-diag-agent.service }
+  notify: reload systemd
+  tags: [apply]
+
+- name: Download pinned BGPalerter binary
+  get_url:
+    url: "{{ extmon_bgpalerter_url }}"
+    dest: /opt/bgpalerter/bgpalerter-linux-x64
+    checksum: "sha256:{{ extmon_bgpalerter_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart bgpalerter
+  tags: [apply]
+
+- name: Install BGPalerter config
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/bgpalerter/{{ item.dest }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  loop:
+    - { src: bgpalerter-config.yml.j2, dest: config.yml }
+    - { src: bgpalerter-prefixes.yml.j2, dest: prefixes.yml }
+  notify: restart bgpalerter
+  tags: [apply]
+
+- name: Install BGPalerter systemd unit
+  template:
+    src: bgpalerter.service.j2
+    dest: /etc/systemd/system/bgpalerter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  tags: [apply]
+
 # --- OVH expiry collector (Phase C/L0b) ---
 - name: Install ovh.conf for the collector
   copy:
@@ -139,6 +219,25 @@
     name: prometheus-alertmanager
     state: started
     enabled: true
+  tags: [apply]
+
+- name: Enable + start Routinator
+  systemd:
+    name: routinator
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start extmon BGP/diagnostic services
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - extmon-bgp-agent
+    - extmon-diag-agent
+    - bgpalerter
   tags: [apply]
 
 - name: Enable + start prometheus

@@ -26,6 +26,25 @@ scrape_configs:
           - '{{ extmon_prometheus_listen }}'
           - '{{ extmon_alertmanager_listen }}'
 
+  # --- BGP/routing intelligence ---
+  - job_name: extmon-bgp-agent
+    static_configs:
+      - targets: ['{{ extmon_bgp_agent_listen }}']
+
+  - job_name: blackbox-bgpalerter
+    metrics_path: /probe
+    params:
+      module: [http_2xx_v6]
+    static_configs:
+      - targets: ['http://{{ extmon_bgpalerter_listen }}/status']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '{{ extmon_blackbox_listen }}'
+
   # --- HTTPS endpoints (cert + 2xx) ---
   - job_name: blackbox-http
     metrics_path: /probe

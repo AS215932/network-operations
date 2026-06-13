@@ -62,3 +62,23 @@
   connection: local
   become: false
   tags: [validate, diff, apply]
+
+- name: Render BGP and diagnostic agent configs
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ playbook_dir }}/../generated/extmon/{{ item.dest }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - { src: bgp-agent.py.j2, dest: extmon-bgp-agent.py, mode: "0755" }
+    - { src: diag-agent.py.j2, dest: extmon-diag-agent.py, mode: "0755" }
+    - { src: bgp-agent.env.j2, dest: bgp-agent.env }
+    - { src: diag-agent.env.j2, dest: diag-agent.env }
+    - { src: bgp-agent.service.j2, dest: extmon-bgp-agent.service }
+    - { src: diag-agent.service.j2, dest: extmon-diag-agent.service }
+    - { src: bgpalerter-config.yml.j2, dest: bgpalerter-config.yml }
+    - { src: bgpalerter-prefixes.yml.j2, dest: bgpalerter-prefixes.yml }
+    - { src: bgpalerter.service.j2, dest: bgpalerter.service }
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]

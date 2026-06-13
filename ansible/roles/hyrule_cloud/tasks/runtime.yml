@@ -21,6 +21,14 @@
   # changed, so the handler would never fire anyway (dead notify, #96). The
   # restart is unconditional in health.yml on every apply.
 
+- name: Ensure Hyrule Cloud BGP data directory exists
+  ansible.builtin.file:
+    path: "{{ hyrule_cloud_state_dir }}/bgp"
+    state: directory
+    owner: "{{ hyrule_cloud_app_user }}"
+    group: "{{ hyrule_cloud_app_group }}"
+    mode: "0750"
+
 - name: Install Vault render hook for hyrule-cloud environment file
   ansible.builtin.template:
     src: vault-render-hook.sh.j2

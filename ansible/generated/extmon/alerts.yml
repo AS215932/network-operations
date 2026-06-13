@@ -43,6 +43,64 @@ groups:
         annotations:
           summary: 'TLS cert expires in <7d: {{ $labels.instance }}'
 
+  - name: extmon-bgp
+    interval: 60s
+    rules:
+      - alert: AS215932PrefixNotVisible
+        expr: bgp_prefix_visible{prefix="2a0c:b641:b50::/44"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'AS215932 prefix not visible from {{ $labels.source }}'
+          description: 'External BGP monitoring does not currently see 2a0c:b641:b50::/44.'
+
+      - alert: AS215932UnexpectedOrigin
+        expr: bgp_prefix_origin_visible{prefix="2a0c:b641:b50::/44",origin!="215932"} > 0
+        for: 2m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'Unexpected origin AS for AS215932 prefix: {{ $labels.origin }}'
+
+      - alert: AS215932RPKIInvalid
+        expr: bgp_rpki_valid{prefix="2a0c:b641:b50::/44",origin="215932"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'RPKI invalid/not-valid for 2a0c:b641:b50::/44 origin AS215932'
+
+      - alert: BGPSourceDown
+        expr: bgp_source_up == 0
+        for: 15m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'BGP data source down/degraded: {{ $labels.source }}'
+
+      - alert: BGPSourceStale
+        expr: time() - bgp_source_last_success_timestamp > 1800
+        for: 10m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'BGP data source stale: {{ $labels.source }}'
+
+      - alert: BGPalerterCriticalEvent
+        expr: increase(bgpalerter_alerts_total{severity="critical"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'BGPalerter critical BGP event for AS215932'
+
   - name: extmon-self
     interval: 30s
     rules:

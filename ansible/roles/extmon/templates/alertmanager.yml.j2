@@ -34,6 +34,13 @@ receivers:
           {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
           Source: extmon (external monitor) | Started: {{ .StartsAt.Format "2006-01-02 15:04 UTC" }}
           {{ end }}{% endraw %}
+{% if extmon_noc_alertmanager_webhook_url | default('') %}
+    webhook_configs:
+      - url: '{{ extmon_noc_alertmanager_webhook_url }}'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+{% endif %}
 
 inhibit_rules:
   # If a probe is critical, don't also fire the warn-level slow alert for

@@ -34,11 +34,43 @@
       - prometheus-node-exporter
       - ufw
       - python3-requests        # for the OVH expiry collector
+      - python3-dnspython       # DNS tooling for diagnostics
+      - routinator              # local RPKI validator / HTTP validity API
+      - iputils-ping
+      - traceroute
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
       - jq
     state: present
     update_cache: true
     cache_valid_time: 3600
   when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — bootstrap CAIDA BGPStream repositories
+  shell: |
+    set -euo pipefail
+    curl -s "https://pkg.caida.org/os/$(lsb_release -si | awk '{print tolower($0)}')/bootstrap.sh" | bash
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/sources.list.d/caida.list
+  when:
+    - extmon_apply | bool
+    - extmon_install_bgpstream | bool
+  tags: [apply]
+
+- name: Apply — install native BGPStream/PyBGPStream packages
+  apt:
+    name:
+      - bgpstream
+      - python3-pybgpstream
+    state: present
+    update_cache: true
+  when:
+    - extmon_apply | bool
+    - extmon_install_bgpstream | bool
   tags: [apply]
 
 - name: Apply — push configs and binaries

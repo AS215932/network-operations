@@ -26,6 +26,15 @@ extmon_apply: false
 # Use discord.com (v4 + v6) instead of discordapp.com (v4-only) so future
 # redeploys to v6-preferred providers stay clean.
 extmon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_DISCORD_WEBHOOK_URL') | default('') }}"
+extmon_noc_alertmanager_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_NOC_ALERTMANAGER_WEBHOOK_URL') | default('') }}"
+
+# BGP/network intelligence secrets. Cloudflare Radar is optional but improves
+# hijack/leak/MOAS visibility; Hyrule ingest is used once /v1/internal/bgp is live.
+extmon_bgp_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_CLOUDFLARE_API_TOKEN') | default('') }}"
+extmon_bgp_hyrule_ingest_url: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_HYRULE_INGEST_URL') | default('https://cloud.hyrule.host/v1/internal/bgp') }}"
+extmon_bgp_ingest_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_INGEST_TOKEN') | default('') }}"
+extmon_bgp_bgp_tools_user_agent: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_BGPTOOLS_USER_AGENT') | default('AS215932-bgp-observer/1.0 (noc@as215932.net; +https://as215932.net)') }}"
+extmon_diag_agent_token: "{{ lookup('ansible.builtin.env', 'EXTMON_DIAG_AGENT_TOKEN') | default('') }}"
 
 # OVH API credentials for the service-expiry collector (Phase C/L0b). Same
 # tokens as scripts/ovh-cli.py uses; rendered into /etc/ovh.conf on extmon.

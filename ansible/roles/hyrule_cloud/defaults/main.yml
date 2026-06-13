@@ -79,6 +79,7 @@ hyrule_cloud_required_env_keys:
   - HYRULE_IP_PREFIX_PEPPER
   - HYRULE_MAX_PAID_ACTIVE_VMS
   - HYRULE_NETWORK_PROXY_TOKEN
+  - HYRULE_BGP_INGEST_TOKEN
 
 # Base apt packages on the target. uv is installed separately via the
 # upstream script (same idiom as hyrule_web / hyrule_mcp).
