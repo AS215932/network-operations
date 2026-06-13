@@ -243,7 +243,7 @@ def render_lesson_proposal(state: GraphState, patterns: list[dict[str, Any]]) ->
         f"# Lesson proposal: {state['change_id']}",
         "",
         f"- generated_at: {datetime.now(UTC).isoformat()}",
-        f"- target lessons file(s): "
+        "- target lessons file(s): "
         + ", ".join(f"memory/lessons/{repo}.md" for repo in repos),
         "",
         "The loop never edits its own rulebook: review, edit, and merge the",

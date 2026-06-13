@@ -16,10 +16,10 @@ from typing import Any, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
-
 from hyrule_engineering_loop.model_policy import ModelPolicyNode, ModelSelection, provider_env
 from hyrule_engineering_loop.state import GraphState
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 class FileMutation(BaseModel):
