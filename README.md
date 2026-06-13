@@ -83,56 +83,32 @@ cr1-nl1 ===== cr1-de1
 
 ## Architecture diagrams
 
-> Place rendered diagrams in `docs/img/` and embed them here.
-> Suggested file names and contents:
+Rendered diagrams are intentionally not embedded until their source files and
+image artifacts are committed together. Planned additions:
 
-### Physical & logical topology
+| Planned asset | Description |
+|---------------|-------------|
+| `docs/diagrams/topology.mmd` / `docs/img/topology.png` | Full mesh of core routers (`cr1-nl1`, `cr1-de1`, `cr1-ch1`) with OSPFv3 internal connectivity and the edge router (`rtr`) at OVH. BGP multi-homing provides transit and IXP peering; WireGuard overlays stitch the stateless fabric together. |
+| `docs/diagrams/bgp-overview.mmd` / `docs/img/bgp-overview.png` | External BGP sessions to transit providers and IXPs; internal BGP policies for route filtering, RPKI validation, and ECMP load balancing. |
+| `docs/diagrams/deploy-flow.mmd` / `docs/img/deploy-flow.png` | App repositories (`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`) run CI on `main`, then request promotion via this repo. A promotion PR pins exact SHAs in inventory; after merge, `apply.yml` deploys through a GitHub environment approval gate. |
 
-![Network topology](docs/img/topology.png)
-
-*Full mesh of core routers (`cr1-nl1`, `cr1-de1`, `cr1-ch1`) with OSPFv3 internal
-connectivity and the edge router (`rtr`) at OVH. BGP multi-homing provides transit
-and IXP peering; WireGuard overlays stitch the stateless fabric together.*
-
-### BGP & peering overview
-
-![BGP overview](docs/img/bgp-overview.png)
-
-*External BGP sessions to transit providers and IXPs; internal BGP policies for
-route filtering, RPKI validation, and ECMP load balancing.*
-
-### Deployment flow
-
-![Deployment flow](docs/img/deploy-flow.png)
-
-*App repositories (`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`) run
-CI on `main`, then request promotion via this repo. A promotion PR pins exact
-SHAs in inventory; after merge, `apply.yml` deploys through a GitHub environment
-approval gate.*
-
-### How to regenerate
-
-Diagrams are authored as text (Mermaid, DOT/Graphviz, or Draw.io source) so they
-stay version-controlled. Sources live in `docs/diagrams/`.
-
-```bash
-# Example: render a Mermaid diagram to PNG
-npx -y @mermaid-js/mermaid-cli mmdc -i docs/diagrams/topology.mmd -o docs/img/topology.png
-```
+When adding diagrams, commit both the text source and rendered image so the
+public README never points at missing assets.
 
 ## Screenshots
 
-> Add production screenshots to `docs/img/screenshots/` and update the table
-> below. Keep sensitive data (passwords, keys, full IP ranges) out of frame.
+Production screenshots are also tracked as TODOs until sanitized image files are
+committed under `docs/img/screenshots/`. Keep sensitive data (passwords, keys,
+full IP ranges) out of frame.
 
-| Screenshot | Description |
-|------------|-------------|
-| ![Icinga dashboard](docs/img/screenshots/icinga-dashboard.png) | Icinga monitoring overview for core routers and services |
-| ![FRRouting CLI](docs/img/screenshots/frr-cli.png) | Sample FRRouting `vtysh` output showing BGP summary |
-| ![PeeringDB entry](docs/img/screenshots/peeringdb.png) | AS215932 PeeringDB page and contact details |
-| ![Weathermap](docs/img/screenshots/weathermap.png) | Network weathermap from https://as215932.net |
+| Planned asset | Description |
+|---------------|-------------|
+| `docs/img/screenshots/icinga-dashboard.png` | Icinga monitoring overview for core routers and services |
+| `docs/img/screenshots/frr-cli.png` | Sample FRRouting `vtysh` output showing BGP summary |
+| `docs/img/screenshots/peeringdb.png` | AS215932 PeeringDB page and contact details |
+| `docs/img/screenshots/weathermap.png` | Network weathermap from https://as215932.net |
 
-*Want to add one? Open a PR with the image in `docs/img/screenshots/` and a short caption.*
+*Want to add one? Open a PR with the image and a short caption.*
 
 ## Repository Structure
 ```
