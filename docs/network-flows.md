@@ -29,6 +29,7 @@ Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
 | log | Debian 13 | `2a0c:b641:b50:2::b0`, `10.0.0.60` (mgmt) | — | Vector aggregator + Loki (centralized logs) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane (proxied as `vault.as215932.net`) |
 | ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
+| netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
 | ci-pr | Debian 13 | `2a0c:b641:b51::c1` (customer-isolated) | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
@@ -45,7 +46,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 |------|---------|
 | `2a0c:b641:b50::/44` | AS215932 prefix (announced) |
 | `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::c` cr1-ch1, `::d` rtr) |
-| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::70`) |
+| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::e0`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (also `::c1` = ci-pr, the unprivileged PR runner) |
@@ -182,6 +183,23 @@ Self-hosted GitHub Actions runner. Picks up workflow jobs from
 | ops-prefix, vpn-clients | TCP | 22 | SSH (operator access for runner troubleshooting) |
 
 Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch action images), ci → api.anthropic.com TCP/443 (AI review), ci → every infra host TCP/22 (apply runs via `ansible-playbook --tags apply`), ci → mon TCP/9090 (Prometheus query during render-check), ci → log TCP/6000 (Vector agent).
+
+### netproxy (`2a0c:b641:b50:2::e0`)
+
+Internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud network
+requests. Hyrule Cloud verifies payment; this host only executes internal
+request jobs.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| api | TCP | 8450 | authenticated internal sidecar API |
+| mon | TCP | 8451 | sidecar health and Prometheus metrics |
+| mon | TCP | 9100 | node_exporter scrape |
+| ops-prefix, vpn-clients | TCP | 22 | SSH |
+
+Outbound (cross-cutting): netproxy → public Internet/Tor/I2P/Yggdrasil egress
+for `direct`, `tor`, `i2p`, and `yggdrasil` request modes, subject to sidecar
+SSRF/IP policy.
 
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
