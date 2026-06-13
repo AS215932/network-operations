@@ -18,7 +18,7 @@ Icinga snapshot diff.
 
 Full runbook: [docs/ci/deploy-runbook.md](docs/ci/deploy-runbook.md).
 
-Public operations repository for **AS215932** (Hyrule/Servify) - building a complete Internet Service Provider from scratch.
+Public operations repository for **Hyrule Networks (AS215932)** — building a complete Internet Service Provider from scratch.
 
 ## About
 
@@ -81,6 +81,35 @@ cr1-nl1 ===== cr1-de1
 - Stateless overlay for asymmetric routing
 - Distributed routing architecture with OSPF internal connectivity
 
+## Architecture diagrams
+
+Rendered diagrams are intentionally not embedded until their source files and
+image artifacts are committed together. Planned additions:
+
+| Planned asset | Description |
+|---------------|-------------|
+| `docs/diagrams/topology.mmd` / `docs/img/topology.png` | Full mesh of core routers (`cr1-nl1`, `cr1-de1`, `cr1-ch1`) with OSPFv3 internal connectivity and the edge router (`rtr`) at OVH. BGP multi-homing provides transit and IXP peering; WireGuard overlays stitch the stateless fabric together. |
+| `docs/diagrams/bgp-overview.mmd` / `docs/img/bgp-overview.png` | External BGP sessions to transit providers and IXPs; internal BGP policies for route filtering, RPKI validation, and ECMP load balancing. |
+| `docs/diagrams/deploy-flow.mmd` / `docs/img/deploy-flow.png` | App repositories (`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`) run CI on `main`, then request promotion via this repo. A promotion PR pins exact SHAs in inventory; after merge, `apply.yml` deploys through a GitHub environment approval gate. |
+
+When adding diagrams, commit both the text source and rendered image so the
+public README never points at missing assets.
+
+## Screenshots
+
+Production screenshots are also tracked as TODOs until sanitized image files are
+committed under `docs/img/screenshots/`. Keep sensitive data (passwords, keys,
+full IP ranges) out of frame.
+
+| Planned asset | Description |
+|---------------|-------------|
+| `docs/img/screenshots/icinga-dashboard.png` | Icinga monitoring overview for core routers and services |
+| `docs/img/screenshots/frr-cli.png` | Sample FRRouting `vtysh` output showing BGP summary |
+| `docs/img/screenshots/peeringdb.png` | AS215932 PeeringDB page and contact details |
+| `docs/img/screenshots/weathermap.png` | Network weathermap from https://as215932.net |
+
+*Want to add one? Open a PR with the image and a short caption.*
+
 ## Repository Structure
 ```
 network-operations/
@@ -111,19 +140,30 @@ Key documentation:
 - [Peering Guidelines](docs/peering.md)
 - [Agentic Development Loop](docs/agentic-development-loop.md)
 
-## Project Goals
+## Roadmap & milestones
+
+This is a living list of what we're building. Completed items are checked;
+ongoing work is tracked in [GitHub Issues](../../issues).
 
 - [x] Obtain AS number and IP allocations
 - [x] Establish BGP transit agreements
 - [x] Deploy at Internet Exchange Points
 - [x] Complete PeeringDB and IRR registration
-- [x] Implement core routing infrastructure
-- [ ] Expand IXP presence
+- [x] Implement core routing infrastructure (`cr1-nl1`, `cr1-de1`, `cr1-ch1`, `rtr`)
+- [x] Expand IXP presence
 - [ ] Grow peering relationships
-- [ ] Deploy additional services (Tor/I2PD/Yggdrasil relays, public resolvers, etc.)
-- [ ] x402 one-time service usage (like paying for _one_ tor request)
-- [ ] Automate configuration management
+- [ ] Deploy additional services (Tor / I2PD / Yggdrasil relays, public resolvers)
+- [ ] Implement x402 one-time service usage (e.g., pay-per-request)
+- [x] Automate configuration management
 - [ ] Build comprehensive monitoring stack
+- [ ] Publish live Looking Glass
+
+### Near-term priorities
+
+1. Stabilize automated promotion and deployment runbooks.
+2. Expand IXP peering in Western Europe.
+3. Ship public DNS resolvers over IPv6.
+4. Open-source reusable FRRouting policy templates.
 
 ## Using This Repository
 
@@ -144,6 +184,15 @@ Feel free to:
 - [RIPE Database: AS215932](https://apps.db.ripe.net/db-web-ui/query?searchtext=AS215932)
 - [PeeringDB: AS215932](https://www.peeringdb.com/asn/215932)
 - [Hurricane Electric BGP Toolkit](https://bgp.he.net/AS215932)
+
+## Related repositories
+
+- [`hyrule-mcp`](https://github.com/AS215932/hyrule-mcp) — Live MCP diagnostic substrate
+- [`engineering-loop`](https://github.com/AS215932/engineering-loop) — Autonomous infrastructure change loop
+- [`noc-agent`](https://github.com/AS215932/noc-agent) — Alert intake and incident analysis
+- [`as215932.net`](https://github.com/AS215932/as215932.net) — Public website and weathermap
+- [`hyrule-cloud`](https://github.com/AS215932/hyrule-cloud) — Agentic VPS hosting API with x402 payments
+- [`hyrule-web`](https://github.com/AS215932/hyrule-web) — Main branded website
 
 ## Contact
 

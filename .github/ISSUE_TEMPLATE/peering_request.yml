@@ -1,0 +1,45 @@
+name: Peering Request
+description: Request a BGP peering session with AS215932
+title: "[Peering] AS<your_asn> — <your_network_name>"
+labels: ["peering"]
+body:
+  - type: input
+    id: asn
+    attributes:
+      label: Your ASN
+      placeholder: "AS12345"
+    validations:
+      required: true
+  - type: input
+    id: peeringdb
+    attributes:
+      label: PeeringDB URL
+      placeholder: "https://www.peeringdb.com/asn/12345"
+    validations:
+      required: true
+  - type: checkboxes
+    id: requirements
+    attributes:
+      label: Peering requirements
+      options:
+        - label: Valid PeeringDB entry
+          required: true
+        - label: IRR objects registered
+          required: true
+        - label: 24/7 NOC contact
+          required: true
+        - label: RPKI ROA configured
+          required: true
+  - type: textarea
+    id: locations
+    attributes:
+      label: Desired IXP location(s)
+      description: Which of our IXP locations would you like to peer at?
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact email
+    validations:
+      required: true
