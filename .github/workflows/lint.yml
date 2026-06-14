@@ -12,14 +12,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  yamllint:
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    steps:
-      - uses: actions/checkout@v6
-      - name: yamllint
-        run: yamllint -c .yamllint .
-
-  ansible-lint:
+  lint:
+    name: lint
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     # roles_path lives in ansible/ansible.cfg, which isn't picked up when lint
     # runs from the repo root — point ansible at ansible/roles explicitly so
@@ -28,14 +22,20 @@ jobs:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
       - uses: actions/checkout@v6
+
+      - name: yamllint
+        id: yamllint
+        continue-on-error: true
+        run: yamllint -c .yamllint .
+
       - name: ansible-lint
+        id: ansible_lint
+        continue-on-error: true
         run: ansible-lint -c .ansible-lint ansible/playbooks/ ansible/roles/
 
-  shellcheck:
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    steps:
-      - uses: actions/checkout@v6
       - name: shellcheck
+        id: shellcheck
+        continue-on-error: true
         run: |
           set -e
           # Skip generated/, but lint all hand-written scripts.
@@ -48,11 +48,9 @@ jobs:
             echo "no shell scripts found, skipping"
           fi
 
-  jinja-syntax:
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    steps:
-      - uses: actions/checkout@v6
       - name: jinja2 syntax check
+        id: jinja_syntax
+        continue-on-error: true
         run: |
           python3 - <<'EOF'
           import sys
@@ -74,3 +72,13 @@ jobs:
                   fail = 1
           sys.exit(fail)
           EOF
+
+      - name: Fail if any lint check failed
+        if: >
+          steps.yamllint.outcome == 'failure' ||
+          steps.ansible_lint.outcome == 'failure' ||
+          steps.shellcheck.outcome == 'failure' ||
+          steps.jinja_syntax.outcome == 'failure'
+        run: |
+          echo "::error::one or more lint checks failed"
+          exit 1
