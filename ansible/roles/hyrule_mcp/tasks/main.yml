@@ -58,6 +58,7 @@
     - { path: "{{ hyrule_mcp_etc_dir }}", owner: root, mode: "0750" }
     - { path: "{{ hyrule_mcp_state_dir }}", mode: "0750" }
     - { path: "{{ hyrule_mcp_state_dir }}/.ssh", mode: "0700" }
+    - { path: "{{ hyrule_mcp_bgp_snapshot_dir }}", mode: "0750" }
   tags: [apply]
 
 - name: Check for controller id_noc_mcp private key
@@ -266,3 +267,35 @@
     - restart hyrule-mcp
     - restart noc-agent
     - restart noc-agent-bot
+
+- name: Install BGP router snapshot environment
+  template:
+    src: bgp-router-snapshot.env.j2
+    dest: "{{ hyrule_mcp_etc_dir }}/bgp-router-snapshot.env"
+    owner: root
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0640"
+  no_log: true
+  tags: [apply]
+
+- name: Install BGP router snapshot systemd units
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: bgp-router-snapshot.service.j2, dest: bgp-router-snapshot.service }
+    - { src: bgp-router-snapshot.timer.j2, dest: bgp-router-snapshot.timer }
+  tags: [apply]
+  notify: reload systemd
+
+- name: Enable + start BGP router snapshot timer
+  systemd:
+    name: bgp-router-snapshot.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: hyrule_mcp_pyproject.stat.exists
+  tags: [apply]

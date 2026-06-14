@@ -1,0 +1,21 @@
+[Unit]
+Description=AS215932 external BGP metrics agent
+After=network-online.target routinator.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+EnvironmentFile=/etc/extmon/bgp-agent.env
+ExecStart=/usr/local/bin/extmon-bgp-agent.py
+Restart=always
+RestartSec=10s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prometheus /tmp
+
+[Install]
+WantedBy=multi-user.target

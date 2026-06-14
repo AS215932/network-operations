@@ -22,3 +22,21 @@
 - name: reload systemd
   systemd:
     daemon_reload: true
+
+- name: restart extmon-bgp-agent
+  systemd:
+    name: extmon-bgp-agent
+    state: restarted
+    daemon_reload: true
+
+- name: restart extmon-diag-agent
+  systemd:
+    name: extmon-diag-agent
+    state: restarted
+    daemon_reload: true
+
+- name: restart bgpalerter
+  systemd:
+    name: bgpalerter
+    state: restarted
+    daemon_reload: true

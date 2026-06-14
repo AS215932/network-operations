@@ -167,10 +167,11 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | mon | TCP | 8000 | noc-agent webhooks (Alertmanager + Icinga2) |
+| extmon | TCP | 8000 | best-effort external Alertmanager webhook enrichment |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH (Claude Code MCP via SSH-stdio + interactive ops) |
 
-Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
+Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → cloud.hyrule.host TCP/443 (BGP snapshot ingest), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
 
 ### ci (`2a0c:b641:b50:2::d0`)
 

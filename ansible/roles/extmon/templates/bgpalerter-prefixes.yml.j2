@@ -1,0 +1,12 @@
+{% for item in extmon_bgp_prefixes %}
+{{ item.prefix }}:
+  description: {{ item.description | to_json }}
+  asn: {{ item.expected_origin | default(extmon_bgp_asn) }}
+  ignoreMorespecifics: false
+  group: default
+{% endfor %}
+
+options:
+  monitorASns:
+    {{ extmon_bgp_asn }}:
+      group: default

@@ -1,0 +1,10 @@
+2a0c:b641:b50::/44:
+  description: "AS215932 aggregate"
+  asn: 215932
+  ignoreMorespecifics: false
+  group: default
+
+options:
+  monitorASns:
+    215932:
+      group: default
