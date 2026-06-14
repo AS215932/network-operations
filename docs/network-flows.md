@@ -212,7 +212,7 @@ listener beyond node_exporter for mon.
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | mon | TCP | 9100 | node_exporter scrape |
-| ops-prefix, vpn-clients | TCP | 22 | SSH (operator canary/bootstrap only) |
+| ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
 
 Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
 pushes, draft PRs), loop → model provider APIs TCP/443 (through the selected
