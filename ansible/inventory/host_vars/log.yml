@@ -23,6 +23,7 @@ firewall_extra_rules:
   - { proto: tcp, dport: 6000, src: "{{ peers.irc.ipv6 }}",   comment: "Vector ingest from irc" }
   - { proto: tcp, dport: 6000, src: "{{ peers.noc.ipv6 }}",   comment: "Vector ingest from noc" }
   - { proto: tcp, dport: 6000, src: "{{ peers.ci.ipv6 }}",    comment: "Vector ingest from ci" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.loop.ipv6 }}",  comment: "Vector ingest from loop" }
   - { proto: tcp, dport: 6000, src: "{{ peers.cr1_nl1.loopback }}", comment: "Vector ingest from cr1-nl1 (over WG mesh)" }
   - { proto: tcp, dport: 6000, src: "{{ peers.cr1_de1.loopback }}", comment: "Vector ingest from cr1-de1 (over WG mesh)" }
 
