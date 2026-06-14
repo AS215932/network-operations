@@ -68,6 +68,18 @@ object Service "{{ svc.name }}" {
   check_command = "{{ svc.check_command }}"
   check_interval = {{ svc.interval | default('2m') }}
   retry_interval = {{ svc.retry | default('30s') }}
+{% if svc.max_check_attempts is defined %}
+  max_check_attempts = {{ svc.max_check_attempts }}
+{% endif %}
+{% if svc.enable_flapping is defined %}
+  enable_flapping = {{ svc.enable_flapping | lower }}
+{% endif %}
+{% if svc.flapping_threshold_low is defined %}
+  flapping_threshold_low = {{ svc.flapping_threshold_low }}
+{% endif %}
+{% if svc.flapping_threshold_high is defined %}
+  flapping_threshold_high = {{ svc.flapping_threshold_high }}
+{% endif %}
 {% if svc.notes is defined %}
   notes = "{{ svc.notes }}"
 {% endif %}

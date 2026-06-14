@@ -44,6 +44,13 @@ monitoring_extra_services:
     check_command: noc_agent_mcp_health
     interval: 1m
     retry: 30s
+    # Require ~2 minutes of consistent failure before a HARD CRITICAL so a
+    # single 1/3 soft flap does not page. Flapping detection surfaces the
+    # pattern when it repeatedly fails on one attempt and recovers.
+    max_check_attempts: 5
+    enable_flapping: true
+    flapping_threshold_low: 20
+    flapping_threshold_high: 35
     notes: "MCP subprocess connectivity for Prometheus/SSH and Xen Orchestra tools"
     vars:
       noc_mcp_host: "{{ peers.noc.ipv6 }}"
