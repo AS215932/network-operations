@@ -51,6 +51,15 @@
     mode: "0750"
   when: hyrule_cloud_monero_wallet_rpc_enabled | bool
 
+- name: Install Monero wallet RPC restore helper
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/hyrule-cloud-monero-restore-wallet"
+    dest: /usr/local/sbin/hyrule-cloud-monero-restore-wallet
+    owner: root
+    group: root
+    mode: "0755"
+  when: hyrule_cloud_monero_wallet_rpc_enabled | bool
+
 - name: Install /etc/systemd/system/monero-wallet-rpc.service
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../configs/monero-wallet-rpc.service"
