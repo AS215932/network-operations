@@ -6,7 +6,7 @@
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
 noc_agent_version: eb709a88236d29aec439927bbba63413ead9aa67
-hyrule_mcp_version: 9928d89b2206eb1e9b1609f7aad21283e6983cdc
+hyrule_mcp_version: 28152c695790870639cc37c91ee80fcfb0433a1a
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their
