@@ -11,6 +11,14 @@
 - Before committing and before pushing, re-check `git status --short`, `git branch --show-current`, and `gh pr list --head "$(git branch --show-current)"` to confirm the branch matches the task.
 - If you discover changes were made on the wrong branch, stop and split them onto a new branch from `main` before pushing.
 
+## Pull Request Hygiene - Do Not Hand Off Red PRs
+
+- After opening or updating a PR, wait for automated CI and AI agent reviews to complete before leaving it for a human reviewer.
+- Inspect failing checks, AI review comments, and normal review comments; fix real issues in follow-up commits on the same PR branch.
+- Respond to review comments that you address, and briefly explain if a comment is intentionally not changed.
+- Re-run or wait for CI after fixes, then confirm the required checks are green before asking for human review or saying the PR is ready.
+- If CI or an AI review is still pending when you must stop, say so explicitly and include the PR URL plus the pending/failing contexts.
+
 ## Deployment Rules - Read Before Touching App Pins
 
 - Production deploys for `noc-agent`, `hyrule-mcp`, `hyrule-cloud`,
