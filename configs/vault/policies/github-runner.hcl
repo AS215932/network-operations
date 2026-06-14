@@ -26,3 +26,15 @@ path "auth/approle/role/hyrule-cloud/role-id" {
 path "auth/approle/role/hyrule-cloud/secret-id" {
   capabilities = ["update"]
 }
+
+# Production engineering-loop applies run on the trusted ci runner and need to
+# bootstrap the loop VM's target-side Vault Agent. The runner may mint only a
+# short-lived, response-wrapped SecretID for the engineering-loop AppRole; it
+# still cannot read kv/engineering-loop runtime secrets.
+path "auth/approle/role/engineering-loop/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/engineering-loop/secret-id" {
+  capabilities = ["update"]
+}

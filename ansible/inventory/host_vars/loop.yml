@@ -4,6 +4,9 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
+engineering_loop_version: "23a2f5a8429def9cb8ce3c0a67f52b8d268d5633"
+engineering_loop_timer_enabled: false
+
 monitoring_register: true
 monitoring_role: loop
 monitoring_check_vars:
