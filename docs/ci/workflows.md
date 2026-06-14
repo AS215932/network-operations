@@ -9,7 +9,7 @@ Workflows match the runner label set `self-hosted, linux, x64, hyrule-infra`.
 |----------|---------|---------|----|
 | `lint.yml` | `pull_request`, `push` to `main` | yamllint + ansible-lint + shellcheck + Jinja2 syntax + static IaC contracts | 0b |
 | `render-check.yml` | `pull_request` touching `ansible/**`, `configs/**` | render every playbook + deploy preflight + assert `ansible/generated/` is fresh | 0b |
-| `iac-tests.yml` | `pull_request`, `push` to `main`, manual | DNS/inventory/Vault/FRR tests, render idempotency; Batfish/Containerlab run manually or when repo vars enable them | current |
+| `iac-tests.yml` | `pull_request`, `push` to `main`, manual | DNS/inventory/Vault/FRR tests, render idempotency; Batfish, Containerlab, and NETCONF/YANG labs run manually or when repo vars enable them | current |
 | `drift-detection.yml` | nightly + manual | `ansible-playbook --check --diff`; alerts NOC, never auto-applies | current |
 | `apply.yml` | `workflow_dispatch` | manual gated apply with runner preflight, snapshots, postflight Goss, diff | 0e |
 

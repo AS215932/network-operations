@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: frr_yang
+  author: AS215932
+  description: >-
+    Read-only FRRouting YANG/NETCONF capability audit. Collects evidence from
+    routers and writes local snapshots without changing router state.
+  license: BSD-2-Clause
+  min_ansible_version: "2.14"

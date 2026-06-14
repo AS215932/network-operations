@@ -1,19 +1,39 @@
+import json
 import re
+import sys
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 REPO = Path(__file__).resolve().parents[2]
-FRR_FILES = {
-    "rtr": REPO / "configs/rtr/frr.conf",
-    "cr1-nl1": REPO / "configs/cr1-nl1/frr.conf",
-    "cr1-de1": REPO / "configs/cr1-de1/frr.conf",
-}
-CORE_LOOPBACKS = {
-    "rtr": "2a0c:b641:b50::d",
-    "cr1-nl1": "2a0c:b641:b50::a",
-    "cr1-de1": "2a0c:b641:b50::b",
-}
+INVENTORY = REPO / "ansible/inventory"
+HOST_VARS = INVENTORY / "host_vars"
+ROUTERS_VARS = INVENTORY / "group_vars/routers.yml"
+CONFIGS = REPO / "configs"
+GENERATED = REPO / "ansible/generated"
+POLICY_INTENT = REPO / "configs/frr-policy-intent.yml"
+
+sys.path.insert(0, str(REPO / "scripts/netops"))
+from frr_semantic import parse_frr_config, semantic_json  # noqa: E402
+from render_frr_policy import effective_policy, load_intent, policy_json, render_policy_conf  # noqa: E402
+
+
+def load_yaml(path):
+    return yaml.safe_load(path.read_text()) or {}
+
+
+def router_hosts():
+    hosts = load_yaml(INVENTORY / "hosts.yml")
+    return sorted(hosts["all"]["children"]["routers"]["hosts"])
+
+
+ROUTERS = router_hosts()
+FRR_FILES = {router: CONFIGS / router / "frr.conf" for router in ROUTERS}
+ALL_VARS = load_yaml(INVENTORY / "group_vars/all.yml")
+CORE_LOOPBACKS = {router: ALL_VARS["peers"][router]["loopback"] for router in ROUTERS}
+POLICY_INTENT_DATA = load_intent(POLICY_INTENT)
 
 
 def frr_text(node):
@@ -28,6 +48,82 @@ def neighbors(text):
 
 
 class FrrStaticTest(unittest.TestCase):
+    def test_every_router_has_committed_frr_config(self):
+        self.assertEqual(set(ROUTERS), {"rtr", "cr1-nl1", "cr1-de1", "cr1-ch1"})
+        for node, path in FRR_FILES.items():
+            with self.subTest(node=node):
+                self.assertTrue(path.exists(), f"{node} missing {path}")
+                self.assertGreater(path.stat().st_size, 0, f"{node} config is empty")
+
+    def test_semantic_artifacts_are_current(self):
+        for node, path in FRR_FILES.items():
+            artifact = GENERATED / node / "frr-semantic.json"
+            with self.subTest(node=node):
+                self.assertTrue(artifact.exists(), f"run scripts/netops/frr_semantic.py --all; missing {artifact}")
+                expected = semantic_json(parse_frr_config(path, host=node))
+                # Validate JSON first so failures clearly distinguish malformed
+                # artifacts from stale-but-valid artifacts.
+                json.loads(artifact.read_text())
+                self.assertEqual(artifact.read_text(), expected)
+
+    def test_policy_intent_artifacts_are_current(self):
+        for node in FRR_FILES:
+            policy = effective_policy(POLICY_INTENT_DATA, node)
+            json_artifact = GENERATED / node / "frr-policy.json"
+            conf_artifact = GENERATED / node / "frr-policy.conf"
+            with self.subTest(node=node, artifact="json"):
+                self.assertTrue(json_artifact.exists(), f"run scripts/netops/render_frr_policy.py; missing {json_artifact}")
+                json.loads(json_artifact.read_text())
+                self.assertEqual(json_artifact.read_text(), policy_json(policy))
+            with self.subTest(node=node, artifact="conf"):
+                self.assertTrue(conf_artifact.exists(), f"run scripts/netops/render_frr_policy.py; missing {conf_artifact}")
+                self.assertEqual(conf_artifact.read_text(), render_policy_conf(policy))
+
+    def test_policy_intent_matches_committed_frr_policy(self):
+        for node, path in FRR_FILES.items():
+            semantic = parse_frr_config(path, host=node)
+            policy = effective_policy(POLICY_INTENT_DATA, node)
+            with self.subTest(node=node, section="prefix-lists"):
+                actual = {}
+                for name in policy["ipv6_prefix_lists"]:
+                    actual[name] = [
+                        {"seq": item["seq"], "action": item["action"], "value": item["value"]}
+                        for item in semantic["prefix_lists"]["ipv6"].get(name, [])
+                    ]
+                self.assertEqual(actual, policy["ipv6_prefix_lists"])
+            with self.subTest(node=node, section="as-path"):
+                actual = {}
+                for name in policy["as_path_access_lists"]:
+                    actual[name] = [
+                        {k: item[k] for k in ("seq", "action", "pattern") if item.get(k) is not None}
+                        for item in semantic["as_path_access_lists"].get(name, [])
+                    ]
+                self.assertEqual(actual, policy["as_path_access_lists"])
+            with self.subTest(node=node, section="route-maps"):
+                actual = {}
+                for name in policy["route_maps"]:
+                    actual[name] = []
+                    sequences = semantic["route_maps"].get(name, {}).get("sequences", {})
+                    for seq in sorted(sequences.values(), key=lambda item: item["seq"]):
+                        actual[name].append(
+                            {
+                                "seq": seq["seq"],
+                                "action": seq["action"],
+                                "matches": seq["matches"],
+                                "sets": seq["sets"],
+                                "on_match": seq["on_match"],
+                            }
+                        )
+                self.assertEqual(actual, policy["route_maps"])
+            with self.subTest(node=node, section="neighbor-route-maps"):
+                actual = {}
+                for instance in semantic["bgp"]["instances"]:
+                    af = instance["address_families"].get("ipv6 unicast", {})
+                    for neighbor, data in af.get("neighbors", {}).items():
+                        if data.get("route_maps"):
+                            actual[neighbor] = data["route_maps"]
+                self.assertEqual(actual, policy["neighbor_route_maps"])
+
     def test_bgp_router_ids_are_unique(self):
         ids = {}
         for node in FRR_FILES:
@@ -72,12 +168,39 @@ class FrrStaticTest(unittest.TestCase):
             referenced = set(re.findall(r"match ipv6 address prefix-list\s+(\S+)", text))
             self.assertTrue(referenced <= defined, f"{node}: undefined prefix-lists {referenced - defined}")
 
+    def test_route_maps_do_not_reference_undefined_as_path_lists(self):
+        for node in FRR_FILES:
+            text = frr_text(node)
+            defined = set(re.findall(r"^bgp as-path access-list\s+(\S+)", text, re.M))
+            referenced = set(re.findall(r"match as-path\s+(\S+)", text))
+            self.assertTrue(referenced <= defined, f"{node}: undefined AS-path lists {referenced - defined}")
+
     def test_route_map_references_are_defined(self):
         for node in FRR_FILES:
             text = frr_text(node)
             defined = set(re.findall(r"^route-map\s+(\S+)\s+", text, re.M))
             referenced = set(re.findall(r"neighbor\s+\S+\s+route-map\s+(\S+)\s+(?:in|out)", text))
             self.assertTrue(referenced <= defined, f"{node}: undefined route-maps {referenced - defined}")
+
+    def test_inventory_expected_frr_versions_match_config_headers(self):
+        for node in FRR_FILES:
+            host_vars = load_yaml(HOST_VARS / f"{node}.yml")
+            expected = host_vars.get("frr_version_expected")
+            match = re.search(r"^frr version\s+(\S+)", frr_text(node), re.M)
+            with self.subTest(node=node):
+                self.assertIsNotNone(expected, f"{node} has no frr_version_expected host var")
+                self.assertIsNotNone(match, f"{node} config has no frr version line")
+                self.assertEqual(expected, match.group(1))
+
+    def test_production_netconf_endpoint_and_writes_are_disabled(self):
+        router_defaults = load_yaml(ROUTERS_VARS)
+        self.assertFalse(router_defaults.get("frr_netconf_endpoint_enabled", False))
+        self.assertFalse(router_defaults.get("frr_netconf_write_enabled", False))
+        for node in FRR_FILES:
+            host_vars = load_yaml(HOST_VARS / f"{node}.yml")
+            with self.subTest(node=node):
+                self.assertFalse(host_vars.get("frr_netconf_endpoint_enabled", False))
+                self.assertFalse(host_vars.get("frr_netconf_write_enabled", False))
 
 
 if __name__ == "__main__":

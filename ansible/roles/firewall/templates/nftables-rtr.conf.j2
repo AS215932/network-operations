@@ -73,6 +73,7 @@ table inet filter {
 
         # Per-host service allowances.
 {% include 'partials/_extra_rules.j2' %}
+{% include 'partials/_netconf_endpoint_nft.j2' %}
 
 {% if firewall_extra_raw_nft %}
         # --- raw escape hatch ---

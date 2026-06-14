@@ -1,0 +1,121 @@
+---
+name: frr-yang-audit
+
+# Read-only production audit for FRR YANG/NETCONF capability evidence.
+# This workflow never opens NETCONF ports and never writes router config.
+
+on:
+  schedule:
+    - cron: '43 3 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Ansible --limit pattern
+        type: string
+        required: true
+        default: routers
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frr-yang-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 30
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Runner preflight
+        run: scripts/ci/deploy-preflight.sh --runner
+
+      - name: Run read-only FRR YANG audit
+        working-directory: ansible
+        env:
+          LIMIT: ${{ inputs.limit || 'routers' }}
+        run: |
+          set -euo pipefail
+          ansible-playbook playbooks/frr-yang.yml \
+            --tags audit \
+            --limit "$LIMIT" \
+            -e ansible_user=ci
+
+      - name: Summarize FRR YANG audit
+        if: always()
+        run: |
+          set -euo pipefail
+          snapshots_root="ansible/generated/frr-yang-snapshots"
+          if [ ! -d "$snapshots_root" ]; then
+            echo "No FRR YANG snapshots produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          latest="$(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -1 || true)"
+          if [ -z "$latest" ]; then
+            echo "No FRR YANG snapshots produced." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          python3 - "$latest" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+
+          def by_name(results, name):
+              for result in results or []:
+                  item = result.get('item') or {}
+                  if item.get('name') == name:
+                      return result
+              return {}
+
+          def has_text(result):
+              return bool((result.get('stdout') or '').strip())
+
+          print('## FRR YANG audit')
+          print()
+          print(f'Latest snapshot: `{root}`')
+          print()
+          print('| Host | Expected FRR | Observed FRR | mgmtd | sysrepoctl | Netopeer2 | TCP/830 listener | Write enabled |')
+          print('| --- | --- | --- | --- | --- | --- | --- | --- |')
+
+          for audit_file in sorted(root.glob('*/audit.json')):
+              data = json.loads(audit_file.read_text())
+              host = data.get('host', audit_file.parent.name)
+              expected = data.get('frr_version_expected') or ''
+              version_result = by_name(data.get('vtysh_results'), 'version')
+              observed = ''
+              for line in (version_result.get('stdout') or '').splitlines():
+                  if 'FRRouting' in line or line.lower().startswith('frr version'):
+                      observed = line.strip()
+                      break
+              mgmtd = 'yes' if by_name(data.get('vtysh_results'), 'mgmt_backend_adapter_all').get('rc') == 0 else 'no/unsupported'
+              executable_paths = by_name(data.get('capability_results'), 'executable_paths').get('stdout') or ''
+              sysrepoctl = 'yes' if 'sysrepoctl\t' in executable_paths and 'sysrepoctl\tnot-found' not in executable_paths else 'no'
+              netopeer2 = 'yes' if 'netopeer2-server\t' in executable_paths and 'netopeer2-server\tnot-found' not in executable_paths else 'no'
+              package_results = data.get('package_results') or []
+              listener_result = {}
+              for result in package_results:
+                  name = (result.get('item') or {}).get('name', '')
+                  if name.endswith('_netconf_listeners'):
+                      listener_result = result
+                      break
+              listener = 'yes' if has_text(listener_result) else 'no'
+              write_enabled = 'yes' if data.get('frr_netconf_write_enabled') else 'no'
+              print(f'| `{host}` | `{expected}` | `{observed}` | {mgmtd} | {sysrepoctl} | {netopeer2} | {listener} | {write_enabled} |')
+          PY
+
+      - name: Upload FRR YANG audit snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frr-yang-audit-snapshots
+          path: ansible/generated/frr-yang-snapshots/
+          if-no-files-found: ignore
+          retention-days: 30

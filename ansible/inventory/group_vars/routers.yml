@@ -2,3 +2,15 @@
 firewall_enable_forwarding: true
 firewall_allow_bgp: true
 firewall_allow_ospf6_on_wg: true
+
+# --- FRR NETCONF/YANG adoption metadata ---
+# Read-only audit is enabled for routers. NETCONF endpoint provisioning and
+# writes are separate, future-gated capabilities and default disabled.
+frr_yang_audit_enabled: true
+frr_netconf_endpoint_enabled: false
+frr_netconf_write_enabled: false
+frr_netconf_port: 830
+frr_netconf_allowed_sources_v6:
+  - "{{ peers.ci.ipv6 }}/128"
+  - "{{ peers.noc.ipv6 }}/128"
+  - "{{ ops_prefix_v6 }}"

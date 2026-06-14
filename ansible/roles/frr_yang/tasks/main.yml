@@ -1,0 +1,173 @@
+---
+# Read-only FRR YANG/NETCONF capability audit.
+# This role never changes router state. It executes observation commands and
+# writes evidence to the controller under ansible/generated/frr-yang-snapshots/.
+
+- name: Skip routers not opted in to FRR YANG audit
+  meta: end_host
+  when: not (frr_yang_audit_enabled | default(false) | bool)
+  tags: [always]
+
+- name: Load OS-specific vars
+  include_vars: "{{ ansible_os_family }}.yml"
+  tags: [always]
+
+- name: Choose FRR YANG audit snapshot id
+  delegate_to: localhost
+  delegate_facts: true
+  become: false
+  set_fact:
+    frr_yang_snapshot_id: "{{ frr_yang_snapshot_id | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%SZ')) }}"
+  run_once: true
+  changed_when: false
+  tags: [audit]
+
+- name: Set FRR YANG audit local paths
+  set_fact:
+    _frr_yang_snapshot_id: "{{ hostvars['localhost'].frr_yang_snapshot_id }}"
+    _frr_yang_snapshot_dir: "{{ frr_yang_snapshot_root }}/{{ hostvars['localhost'].frr_yang_snapshot_id }}/{{ inventory_hostname }}"
+  changed_when: false
+  tags: [audit]
+
+- name: Build FRR YANG vtysh audit command list
+  set_fact:
+    _frr_yang_vtysh_audit_commands: >-
+      {{ frr_yang_vtysh_audit_commands
+         + ([{'name': 'bgp_ipv6_summary_' ~ (frr_vrf_context | default('default')) ~ '_json',
+              'argv': ['vtysh', '-c', 'show bgp vrf ' ~ (frr_vrf_context | default('default')) ~ ' ipv6 summary json']}]
+            if (frr_vrf_context | default('default')) != 'default' else []) }}
+  changed_when: false
+  tags: [audit]
+
+- name: Ensure local FRR YANG snapshot directory exists
+  delegate_to: localhost
+  connection: local
+  become: false
+  file:
+    path: "{{ _frr_yang_snapshot_dir }}"
+    state: directory
+    mode: "0755"
+  changed_when: false
+  tags: [audit]
+
+- name: Run read-only vtysh audit commands
+  command:
+    argv: "{{ item.argv }}"
+  loop: "{{ _frr_yang_vtysh_audit_commands }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _frr_yang_vtysh_results
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [audit]
+
+- name: Run read-only package and NETCONF capability probes
+  shell: "{{ item.shell }}"
+  args:
+    executable: /bin/sh
+  loop: "{{ frr_yang_package_audit_commands | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _frr_yang_package_results
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [audit]
+
+- name: Run read-only FRR YANG capability probes
+  shell: "{{ item.shell }}"
+  args:
+    executable: /bin/sh
+  loop: "{{ frr_yang_capability_audit_commands }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: _frr_yang_capability_results
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  tags: [audit]
+
+- name: Write FRR YANG audit metadata JSON locally
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: |
+      {{ {
+        'snapshot_id': _frr_yang_snapshot_id,
+        'captured_at_utc': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
+        'host': inventory_hostname,
+        'ansible_host': ansible_host | default(inventory_hostname),
+        'ansible_os_family': ansible_os_family | default('unknown'),
+        'frr_version_expected': frr_version_expected | default(''),
+        'frr_yang_profile': frr_yang_profile | default(''),
+        'frr_vrf_context': frr_vrf_context | default('default'),
+        'frr_netconf_endpoint_enabled': frr_netconf_endpoint_enabled | default(false) | bool,
+        'frr_netconf_write_enabled': frr_netconf_write_enabled | default(false) | bool,
+        'frr_netconf_port': frr_netconf_port | default(830),
+        'frr_netconf_allowed_sources_v6': frr_netconf_allowed_sources_v6 | default([]),
+        'vtysh_results': _frr_yang_vtysh_results.results | default([]),
+        'package_results': _frr_yang_package_results.results | default([]),
+        'capability_results': _frr_yang_capability_results.results | default([])
+      } | to_nice_json }}
+    dest: "{{ _frr_yang_snapshot_dir }}/audit.json"
+    mode: "0644"
+  changed_when: false
+  tags: [audit]
+
+- name: Write vtysh stdout artifacts locally
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: "{{ item.stdout | default('') }}\n"
+    dest: "{{ _frr_yang_snapshot_dir }}/vtysh-{{ item.item.name }}.stdout"
+    mode: "0644"
+  loop: "{{ _frr_yang_vtysh_results.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  changed_when: false
+  tags: [audit]
+
+- name: Write vtysh stderr artifacts locally
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: "{{ item.stderr | default('') }}\n"
+    dest: "{{ _frr_yang_snapshot_dir }}/vtysh-{{ item.item.name }}.stderr"
+    mode: "0644"
+  loop: "{{ _frr_yang_vtysh_results.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  changed_when: false
+  tags: [audit]
+
+- name: Write package/capability stdout artifacts locally
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: "{{ item.stdout | default('') }}\n"
+    dest: "{{ _frr_yang_snapshot_dir }}/{{ item.item.name }}.stdout"
+    mode: "0644"
+  loop: "{{ (_frr_yang_package_results.results | default([])) + (_frr_yang_capability_results.results | default([])) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  changed_when: false
+  tags: [audit]
+
+- name: Write package/capability stderr artifacts locally
+  delegate_to: localhost
+  connection: local
+  become: false
+  copy:
+    content: "{{ item.stderr | default('') }}\n"
+    dest: "{{ _frr_yang_snapshot_dir }}/{{ item.item.name }}.stderr"
+    mode: "0644"
+  loop: "{{ (_frr_yang_package_results.results | default([])) + (_frr_yang_capability_results.results | default([])) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  changed_when: false
+  tags: [audit]

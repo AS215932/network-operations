@@ -6,6 +6,7 @@ name: iac-tests
 #   Tier 0  static-iac, ansible-idempotency   unprivileged ci-pr   required (via iac-gate)
 #   Tier 1  batfish                            privileged   ci      trusted-only (dispatch/nightly/var)
 #   Tier 2  containerlab-frr                   privileged   ci      trusted-only (dispatch/nightly/var)
+#   Tier 2  netconf-yang-lab                   privileged   ci      trusted-only (dispatch/nightly/var)
 #
 # Tier 0 runs untrusted PR code, so it lives on the unprivileged hyrule-public-pr
 # runner. Tiers 1-2 spin up Batfish / Containerlab (heavy lab infra + Docker) on
@@ -183,11 +184,34 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # ---- Tier 2: Containerlab NETCONF/YANG (privileged, trusted-only) ----
+  netconf-yang-lab:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    needs: [changes, static-iac]
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_NETCONF_YANG_TESTS == 'true') }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Containerlab NETCONF/YANG smoke test
+        run: scripts/ci/containerlab-netconf-yang-test.sh
+
+      - name: Upload NETCONF/YANG lab artifacts
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
+        with:
+          name: netconf-yang-lab-artifacts
+          path: |
+            tests/iac/containerlab/_artifacts/netconf-yang/**
+            clab-as215932-netconf/**
+          if-no-files-found: ignore
+          retention-days: 14
+
   # ---- Aggregating gate: the single REQUIRED context --------------------
   iac-gate:
     name: iac-gate
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
-    needs: [changes, static-iac, ansible-idempotency, batfish, containerlab-frr]
+    needs: [changes, static-iac, ansible-idempotency, batfish, containerlab-frr, netconf-yang-lab]
     if: always()
     timeout-minutes: 5
     steps:
@@ -199,6 +223,7 @@ jobs:
           ANSIBLE_IDEMPOTENCY: ${{ needs.ansible-idempotency.result }}
           BATFISH: ${{ needs.batfish.result }}
           CONTAINERLAB: ${{ needs.containerlab-frr.result }}
+          NETCONF_YANG_LAB: ${{ needs.netconf-yang-lab.result }}
         run: |
           set -euo pipefail
           echo "Tier results:"
@@ -208,6 +233,7 @@ jobs:
           echo "  ansible-idempotency = ${ANSIBLE_IDEMPOTENCY}"
           echo "  batfish (trusted)   = ${BATFISH}"
           echo "  containerlab (trust)= ${CONTAINERLAB}"
+          echo "  netconf-yang (trust)= ${NETCONF_YANG_LAB}"
           fail=0
 
           if [ "${CHANGES}" != "success" ]; then
@@ -229,7 +255,7 @@ jobs:
           fi
 
           # Trusted lab tiers may be skipped on PRs, but must never fail.
-          for pair in "batfish:${BATFISH}" "containerlab-frr:${CONTAINERLAB}"; do
+          for pair in "batfish:${BATFISH}" "containerlab-frr:${CONTAINERLAB}" "netconf-yang-lab:${NETCONF_YANG_LAB}"; do
             name="${pair%%:*}"; res="${pair##*:}"
             if [ "${res}" != "success" ] && [ "${res}" != "skipped" ]; then
               echo "::error::lab tier ${name} reported a failure (${res})"

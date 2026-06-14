@@ -1,0 +1,12 @@
+{# Disabled-by-default FRR NETCONF/YANG endpoint allowance.
+   The server itself must bind only overlay/loopback addresses. This firewall
+   scaffold is rendered only when a host opts in with
+   frr_netconf_endpoint_enabled=true. #}
+{% if frr_netconf_endpoint_enabled | default(false) | bool %}
+{% set netconf_sources = frr_netconf_allowed_sources_v6 | default([]) %}
+{% if netconf_sources | length > 0 %}
+# --- FRR NETCONF/YANG endpoint (disabled by default) ---
+pass in quick on wg inet6 proto tcp from { {{ netconf_sources | join(', ') }} } to any port = {{ frr_netconf_port | default(830) }} flags S/SA keep state label "NETCONF_RULE: FRR NETCONF/YANG approved sources"
+
+{% endif %}
+{% endif %}

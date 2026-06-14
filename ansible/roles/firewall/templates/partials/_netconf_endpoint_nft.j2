@@ -1,0 +1,10 @@
+{# Disabled-by-default FRR NETCONF/YANG endpoint allowance.
+   The server itself must bind only overlay/loopback addresses. This firewall
+   scaffold opens TCP/830 only to approved management sources when a host opts
+   in with frr_netconf_endpoint_enabled=true. #}
+{% if frr_netconf_endpoint_enabled | default(false) | bool %}
+{% set netconf_sources = frr_netconf_allowed_sources_v6 | default([]) %}
+{% if netconf_sources | length > 0 %}
+        ip6 saddr { {{ netconf_sources | join(', ') }} } tcp dport {{ frr_netconf_port | default(830) }} counter accept comment "FRR NETCONF/YANG from approved management sources"
+{% endif %}
+{% endif %}
