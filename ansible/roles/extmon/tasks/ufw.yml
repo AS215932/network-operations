@@ -34,8 +34,7 @@
   loop: "{{ extmon_ssh_allow_v6 }}"
   tags: [apply]
 
-- name: ufw — allow ICMP echo (so monitoring of extmon itself works)
-  ufw:
-    rule: allow
-    proto: icmpv6
+- name: ufw — ICMP echo handled by packaged before-rules
+  debug:
+    msg: "UFW's default before.rules/before6.rules permit required ICMP/ICMPv6 control traffic; no explicit ufw module rule is portable here."
   tags: [apply]

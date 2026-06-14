@@ -80,14 +80,30 @@ processMonitors:
     params:
       useStatusCodes: true
 
+rest:
+  host: "127.0.0.1"
+  port: 8011
+
 monitoredPrefixesFiles:
   - prefixes.yml
 
+logging:
+  directory: logs
+  logRotatePattern: YYYY-MM-DD
+  compressOnRotation: true
+  maxFileSizeMB: 15
+  maxRetainedFiles: 10
+  useUTC: true
+
 rpki:
-  vrpProvider: rpkiclient
+  vrpProvider: api
+  url: http://127.0.0.1:8323/json
   refreshVrpListMinutes: 15
   markDataAsStaleAfterMinutes: 120
 
+notificationIntervalSeconds: 1800
+checkForUpdatesAtBoot: false
+persistStatus: true
 alertOnlyOnce: false
 fadeOffSeconds: 360
 checkFadeOffGroupsSeconds: 30
@@ -95,4 +111,4 @@ pidFile: bgpalerter.pid
 maxMessagesPerSecond: 6000
 multiProcess: false
 environment: production
-configVersion: 2
+configVersion: 3

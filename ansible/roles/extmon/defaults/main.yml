@@ -32,7 +32,19 @@ extmon_bgpalerter_version: "v2.0.1"
 extmon_bgpalerter_url: "https://github.com/nttgin/BGPalerter/releases/download/v2.0.1/bgpalerter-linux-x64"
 extmon_bgpalerter_sha256: "d5991f4efea97e1fd139d30e2583225dd12a709df0049bcfd5faead508b9871f"
 extmon_bgpalerter_listen: "127.0.0.1:8011"
+# Vultr's 4GB plan exposes slightly less than 4GiB usable RAM. BGPalerter's
+# check is against 4GiB physical RAM and ignores swap, so skip only that startup
+# guard while retaining the 4GB+swap sizing target.
+extmon_bgpalerter_skip_memory_check: true
 extmon_install_bgpstream: true
+
+# Debian does not ship Routinator in the default Debian 13 image used by
+# Vultr. NLnet Labs publishes first-party Debian packages; add that repo before
+# installing the RPKI validator.
+extmon_routinator_repo_enabled: true
+extmon_routinator_repo_key_url: "https://packages.nlnetlabs.nl/aptkey.asc"
+extmon_routinator_repo_keyring: "/usr/share/keyrings/nlnetlabs-archive-keyring.asc"
+extmon_routinator_repo: "deb [signed-by={{ extmon_routinator_repo_keyring }}] https://packages.nlnetlabs.nl/linux/debian {{ ansible_distribution_release | default('trixie') }} main"
 
 # --- Probe targets ---
 # Each target list is consumed by templates/prometheus.yml.j2 and turned into

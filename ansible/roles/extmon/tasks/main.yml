@@ -25,6 +25,42 @@
     - ansible_host == '0.0.0.0'
   tags: [apply]
 
+- name: Apply — install repository bootstrap packages
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3-apt
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — install NLnet Labs package signing key
+  get_url:
+    url: "{{ extmon_routinator_repo_key_url }}"
+    dest: "{{ extmon_routinator_repo_keyring }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - extmon_apply | bool
+    - extmon_routinator_repo_enabled | bool
+  tags: [apply]
+
+- name: Apply — enable NLnet Labs repository for Routinator
+  apt_repository:
+    repo: "{{ extmon_routinator_repo }}"
+    filename: nlnetlabs
+    state: present
+    update_cache: true
+  when:
+    - extmon_apply | bool
+    - extmon_routinator_repo_enabled | bool
+  tags: [apply]
+
 - name: Apply — install packages
   apt:
     name:
