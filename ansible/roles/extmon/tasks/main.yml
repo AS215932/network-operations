@@ -61,6 +61,15 @@
     - extmon_routinator_repo_enabled | bool
   tags: [apply]
 
+- name: Apply — remove unsupported CAIDA BGPStream apt source when disabled
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/caida.list
+    state: absent
+  when:
+    - extmon_apply | bool
+    - not (extmon_install_bgpstream | bool)
+  tags: [apply]
+
 - name: Apply — install packages
   apt:
     name:

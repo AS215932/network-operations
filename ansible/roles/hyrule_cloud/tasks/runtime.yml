@@ -78,3 +78,11 @@
   when: hyrule_cloud_monero_wallet_rpc_enabled | bool
   notify:
     - reload systemd
+
+- name: Stop and disable Monero wallet RPC when native rails are not configured
+  ansible.builtin.systemd:
+    name: monero-wallet-rpc.service
+    state: stopped
+    enabled: false
+  when: not (hyrule_cloud_monero_wallet_rpc_enabled | bool)
+  failed_when: false

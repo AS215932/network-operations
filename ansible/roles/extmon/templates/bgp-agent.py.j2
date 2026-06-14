@@ -23,6 +23,8 @@ CF_TOKEN = os.environ.get("EXTMON_BGP_CLOUDFLARE_API_TOKEN", "")
 BGPTOOLS_UA = os.environ.get("EXTMON_BGP_BGPTOOLS_USER_AGENT", "AS215932-bgp-observer/1.0")
 POLL_SECONDS = int(os.environ.get("EXTMON_BGP_POLL_SECONDS", "300"))
 ROUTINATOR_URL = os.environ.get("EXTMON_ROUTINATOR_URL", "http://127.0.0.1:8323")
+INGEST_URL = os.environ.get("EXTMON_BGP_HYRULE_INGEST_URL", "").rstrip("/")
+INGEST_TOKEN = os.environ.get("EXTMON_BGP_INGEST_TOKEN", "")
 
 STATE_LOCK = threading.Lock()
 STATE: dict[str, object] = {
@@ -40,6 +42,19 @@ def _fetch_json(url: str, *, headers: dict[str, str] | None = None, timeout: int
     req = urllib.request.Request(url, headers=headers or {})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def _post_json(url: str, payload: dict[str, object], *, timeout: int = 10) -> None:
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "AS215932-extmon-bgp-agent/1.0",
+    }
+    if INGEST_TOKEN:
+        headers["X-Hyrule-BGP-Ingest-Token"] = INGEST_TOKEN
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        resp.read()
 
 
 def _set_source(name: str, ok: bool, message: str = "") -> None:
@@ -113,6 +128,34 @@ def poll_cloudflare(prefix: str) -> None:
     _set_source("cloudflare_radar", True)
 
 
+def _ingest_source_statuses() -> None:
+    if not INGEST_URL or not INGEST_TOKEN:
+        return
+    with STATE_LOCK:
+        sources = dict(STATE["sources"])
+        prefixes = dict(STATE["prefixes"])
+        rpki = {"|".join(key): value for key, value in dict(STATE["rpki"]).items()}
+        last_poll = STATE["last_poll"]
+    for name, source in sources.items():
+        ok = bool(source.get("up"))
+        payload = {
+            "source_name": f"extmon:{name}",
+            "status": "ok" if ok else "error",
+            "error": None if ok else str(source.get("message") or "source unavailable"),
+            "payload": {
+                "asn": ASN,
+                "prefixes": prefixes,
+                "rpki": rpki,
+                "source": source,
+                "last_poll": last_poll,
+            },
+        }
+        try:
+            _post_json(f"{INGEST_URL}/ingest/status", payload)
+        except Exception:
+            pass
+
+
 def poll_once() -> None:
     for item in PREFIXES:
         prefix = item["prefix"]
@@ -134,6 +177,7 @@ def poll_once() -> None:
         _set_source("bgp_tools", False, str(exc))
     with STATE_LOCK:
         STATE["last_poll"] = time.time()
+    _ingest_source_statuses()
 
 
 def poll_loop() -> None:
