@@ -89,7 +89,9 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: production-infra
+  # Live applies remain strictly serialized. Dry-runs are render/check only and
+  # must not get stuck behind, or block, the production apply lane.
+  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra' }}
   cancel-in-progress: false
 
 jobs:
