@@ -1,0 +1,74 @@
+---
+# Dedicated Engineering Loop operations-lane deployment.
+# Default is validate/render only; live mutation requires
+# -e engineering_loop_apply=true from apply.yml.
+
+engineering_loop_apply: false
+
+engineering_loop_user: loop
+engineering_loop_group: loop
+
+engineering_loop_install_dir: /opt/engineering-loop
+engineering_loop_env_file: "{{ engineering_loop_install_dir }}/.env"
+engineering_loop_state_dir: /var/lib/engineering-loop
+engineering_loop_workspace_dir: "{{ engineering_loop_state_dir }}/workspace"
+engineering_loop_runs_dir: "{{ engineering_loop_state_dir }}/runs"
+engineering_loop_daemon_state_dir: "{{ engineering_loop_state_dir }}/state"
+engineering_loop_git_askpass_path: /usr/local/lib/engineering-loop/git-askpass
+
+engineering_loop_repo: https://github.com/AS215932/engineering-loop.git
+engineering_loop_version: main
+
+# GitHub issue/PR intake scope for first production rollout.
+engineering_loop_repos:
+  - AS215932/engineering-loop
+  - AS215932/network-operations
+  - AS215932/hyrule-cloud
+  - AS215932/hyrule-web
+  - AS215932/hyrule-mcp
+  - AS215932/noc-agent
+  - AS215932/hyrule-network-proxy
+
+# Local workspace checkout names. network-operations intentionally lands at
+# hyrule-infra to match the existing sibling checkout convention used by the
+# loop and app repos; noc-agent lands at hyrule-noc-agent for the same reason.
+engineering_loop_workspace_repositories:
+  - repo: https://github.com/AS215932/engineering-loop.git
+    dest: engineering-loop
+    version: main
+  - repo: https://github.com/AS215932/network-operations.git
+    dest: hyrule-infra
+    version: main
+  - repo: https://github.com/AS215932/hyrule-cloud.git
+    dest: hyrule-cloud
+    version: main
+  - repo: https://github.com/AS215932/hyrule-web.git
+    dest: hyrule-web
+    version: main
+  - repo: https://github.com/AS215932/hyrule-mcp.git
+    dest: hyrule-mcp
+    version: main
+  - repo: https://github.com/AS215932/noc-agent.git
+    dest: hyrule-noc-agent
+    version: main
+  - repo: https://github.com/AS215932/hyrule-network-proxy.git
+    dest: hyrule-network-proxy
+    version: main
+
+engineering_loop_allowed_paths:
+  - docs
+engineering_loop_max_runs_per_day: 2
+engineering_loop_max_cost_usd_per_day: 10
+engineering_loop_timer_enabled: false
+engineering_loop_memory_dir: "{{ engineering_loop_workspace_dir }}/hyrule-infra/memory"
+
+engineering_loop_git_user_name: "hyrule-engineering-loop[bot]"
+engineering_loop_git_user_email: "engineering-loop@as215932.net"
+
+engineering_loop_packages:
+  - python3
+  - python3-venv
+  - git
+  - ca-certificates
+  - curl
+  - gh

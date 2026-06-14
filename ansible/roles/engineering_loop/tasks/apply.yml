@@ -1,0 +1,134 @@
+---
+- name: Ensure Engineering Loop packages are installed
+  ansible.builtin.apt:
+    name: "{{ engineering_loop_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install uv (Python package manager)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+    executable: /bin/bash
+
+- name: Ensure Engineering Loop group exists
+  ansible.builtin.group:
+    name: "{{ engineering_loop_group }}"
+    state: present
+    system: true
+
+- name: Ensure Engineering Loop user exists
+  ansible.builtin.user:
+    name: "{{ engineering_loop_user }}"
+    group: "{{ engineering_loop_group }}"
+    home: "{{ engineering_loop_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure Engineering Loop directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(engineering_loop_user) }}"
+    group: "{{ item.group | default(engineering_loop_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ engineering_loop_install_dir }}", mode: "0755" }
+    - { path: "{{ engineering_loop_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_git_askpass_path | dirname }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
+
+- name: Checkout Engineering Loop runtime
+  ansible.builtin.git:
+    repo: "{{ engineering_loop_repo }}"
+    dest: "{{ engineering_loop_install_dir }}"
+    version: "{{ engineering_loop_version }}"
+    update: true
+    force: true
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+  notify: restart engineering-loop timer
+
+- name: Sync Engineering Loop runtime dependencies
+  ansible.builtin.command: /usr/local/bin/uv sync --frozen
+  args:
+    chdir: "{{ engineering_loop_install_dir }}"
+  register: engineering_loop_uv_sync
+  changed_when: >-
+    engineering_loop_uv_sync.stdout != '' or
+    'Resolved' in engineering_loop_uv_sync.stderr or
+    '+' in engineering_loop_uv_sync.stderr
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+  notify: restart engineering-loop timer
+
+- name: Checkout core AS215932 workspaces for daemon runs
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ engineering_loop_workspace_dir }}/{{ item.dest }}"
+    version: "{{ item.version | default('main') }}"
+    update: true
+    force: false
+  loop: "{{ engineering_loop_workspace_repositories }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+
+- name: Configure git identity for loop-authored draft PR branches
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --global
+      - "{{ item.key }}"
+      - "{{ item.value }}"
+  loop:
+    - { key: user.name, value: "{{ engineering_loop_git_user_name }}" }
+    - { key: user.email, value: "{{ engineering_loop_git_user_email }}" }
+  changed_when: false
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+
+- name: Install Engineering Loop Git askpass helper
+  ansible.builtin.template:
+    src: git-askpass.sh.j2
+    dest: "{{ engineering_loop_git_askpass_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+
+- name: Install Engineering Loop systemd service
+  ansible.builtin.template:
+    src: hyrule-engineering-loop.service.j2
+    dest: /etc/systemd/system/hyrule-engineering-loop.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart engineering-loop timer
+
+- name: Install Engineering Loop systemd timer
+  ansible.builtin.template:
+    src: hyrule-engineering-loop.timer.j2
+    dest: /etc/systemd/system/hyrule-engineering-loop.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart engineering-loop timer
+
+- name: Set Engineering Loop timer state
+  ansible.builtin.systemd:
+    name: hyrule-engineering-loop.timer
+    enabled: "{{ engineering_loop_timer_enabled | bool }}"
+    state: "{{ 'started' if engineering_loop_timer_enabled | bool else 'stopped' }}"
+    daemon_reload: true

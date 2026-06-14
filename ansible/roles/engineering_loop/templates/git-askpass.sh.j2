@@ -1,0 +1,17 @@
+#!/bin/sh
+# Managed by ansible/roles/engineering_loop.
+# GitHub HTTPS credential helper for the Engineering Loop daemon. The token is
+# supplied by the systemd EnvironmentFile rendered by Vault Agent; it is never
+# embedded into remote URLs or written to disk by this helper.
+
+case "$1" in
+  *Username*)
+    printf '%s\n' "x-access-token"
+    ;;
+  *Password*)
+    printf '%s\n' "${ENGINEERING_LOOP_GITHUB_TOKEN:-${GH_TOKEN:-}}"
+    ;;
+  *)
+    printf '\n'
+    ;;
+esac

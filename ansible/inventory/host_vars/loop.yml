@@ -1,0 +1,31 @@
+---
+# loop — dedicated Engineering Loop operations-lane VM.
+# Runs one budgeted, issue-driven agent cycle at a time. It is deliberately
+# not a deploy source for the infra fleet: no fleet SSH key, no production
+# Vault breadth, and no public listener beyond node_exporter for mon.
+
+monitoring_register: true
+monitoring_role: loop
+monitoring_check_vars:
+  engineering_loop: true
+
+monitoring_disks:
+  "disk /": { mountpoint: "/" }
+
+monitoring_extra_services:
+  - name: engineering-loop-timer
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    notes: "Engineering Loop hourly timer is active on the dedicated loop VM"
+    vars:
+      prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
+      systemd_unit: hyrule-engineering-loop.timer
+
+firewall_extra_rules:
+  # node_exporter scrape from mon only.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+
+# --- Logs --- (ships journald to log VM via Vector)
+logs_register: true
+logs_role: loop

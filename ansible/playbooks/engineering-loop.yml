@@ -1,0 +1,76 @@
+---
+# Engineering Loop rollout — installs the dedicated operations-lane daemon on
+# the loop VM. The daemon consumes human-approved GitHub issues and stops at a
+# draft PR. It never merges or applies production changes.
+#
+# Validate (no live changes; runs from controller):
+#   ansible-playbook playbooks/engineering-loop.yml --tags validate \
+#     --connection=local --limit loop --skip-tags=snapshot
+#
+# Apply (live deploy, timer remains disabled by default):
+#   ansible-playbook playbooks/engineering-loop.yml --tags apply \
+#     -e engineering_loop_apply=true --limit loop
+#
+# First bootstrap with Vault Agent requires:
+#   VAULT_ENGINEERING_LOOP_ROLE_ID=...
+#   VAULT_ENGINEERING_LOOP_SECRET_ID=...
+
+- name: engineering-loop — apply dedicated loop VM runtime
+  hosts: loop
+  serial: 1
+  gather_facts: true
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - role: firewall
+      vars:
+        firewall_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [firewall]
+    - role: monitoring
+      vars:
+        monitoring_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [monitoring]
+    - role: logs
+      vars:
+        logs_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [logs]
+    - role: engineering_loop
+      tags: [engineering_loop]
+    - role: vault_agent
+      vars:
+        vault_agent_name: engineering-loop
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_ENGINEERING_LOOP_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: "{{ lookup('env', 'VAULT_ENGINEERING_LOOP_SECRET_ID') | default('', true) }}"
+        vault_agent_env_destination: "{{ engineering_loop_env_file }}"
+        vault_agent_reload_command: /bin/true
+        vault_agent_env_reload_command: /bin/true
+        vault_agent_templates:
+          - src: engineering-loop.env.ctmpl.j2
+            name: engineering-loop.env.ctmpl
+            destination: "{{ engineering_loop_env_file }}"
+            group: "{{ engineering_loop_group }}"
+            reload_command: /bin/true
+        vault_agent_extra_dirs: []
+      when: (lookup('env', 'ENGINEERING_LOOP_SECRET_BACKEND') | default('vault', true)) == 'vault'
+      tags: [vault_agent]
+  post_tasks:
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [engineering_loop]

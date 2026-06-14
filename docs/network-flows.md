@@ -30,6 +30,7 @@ Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane (proxied as `vault.as215932.net`) |
 | ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
+| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
 | ci-pr | Debian 13 | `2a0c:b641:b51::c1` (customer-isolated) | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
@@ -46,7 +47,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 |------|---------|
 | `2a0c:b641:b50::/44` | AS215932 prefix (announced) |
 | `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::c` cr1-ch1, `::d` rtr) |
-| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::e0`) |
+| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::f0`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (also `::c1` = ci-pr, the unprivileged PR runner) |
@@ -201,6 +202,24 @@ Outbound (cross-cutting): netproxy → public Internet/Tor/I2P/Yggdrasil egress
 for `direct`, `tor`, `i2p`, and `yggdrasil` request modes, subject to sidecar
 SSRF/IP policy.
 
+### loop (`2a0c:b641:b50:2::f0`)
+
+Dedicated Engineering Loop operations-lane VM. It consumes human-approved
+`loop:approved` GitHub issues and stops at draft PRs. It is not an infra deploy
+source: no fleet SSH key, no app runtime secrets, no Vault breadth, and no public
+listener beyond node_exporter for mon.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| mon | TCP | 9100 | node_exporter scrape |
+| ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
+
+Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
+pushes, draft PRs), loop → model provider APIs TCP/443 (through the selected
+backend/provider auth), loop → mon TCP/5665 (Icinga passive check submission),
+loop → log TCP/6000 (Vector agent), loop → vault TCP/8200 (Vault Agent render).
+It does **not** SSH to the infra fleet.
+
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
 Unprivileged self-hosted GitHub Actions runner for **untrusted PR code**
@@ -229,7 +248,7 @@ on mon is the only read path.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci) | TCP | 6000 | Vector→Vector ingest from agents |
+| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci, netproxy, loop) | TCP | 6000 | Vector→Vector ingest from agents |
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP | 6000 | Vector→Vector ingest from rtr default-VRF processes; kernel routes this path via underlay |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
 | cr1-nl1, cr1-de1, cr1-ch1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
@@ -342,7 +361,7 @@ exceptions are:
 | ns2 → log | out | 6000 tcp | Off-net Vector agent → aggregator over public IPv6 |
 | dom0 → log | out | 6000 tcp | Hypervisor Vector agent → aggregator over mgmt v4 |
 | mon → log | out | 3100, 8686 tcp | Grafana query + Vector metrics scrape |
-| noc, mon, api, web, ci → vault | out | 8200 tcp | vault-agent / health checks → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
+| noc, mon, api, web, ci, loop → vault | out | 8200 tcp | vault-agent / health checks → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
 | mon → routers | out | 22 tcp (by_ssh) | icinga2 by_ssh checks, logged in as the dedicated `monitoring` system user. Privileged plugins (jool stats) are wrapped in `sudo`/`doas`, scoped to `/usr/local/lib/nagios/plugins/*` by the role-rendered drop. |
 
 ---
