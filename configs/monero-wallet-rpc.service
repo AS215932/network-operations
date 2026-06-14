@@ -12,7 +12,7 @@ User=hyrule
 Group=hyrule
 EnvironmentFile=/etc/hyrule-cloud/monero-wallet-rpc.env
 ExecStartPre=+/bin/sh -c 'install -d -o hyrule -g hyrule -m 0750 "$(dirname "$MONERO_WALLET_RPC_WALLET_FILE")"'
-ExecStartPre=/bin/sh -c 'test -f "$MONERO_WALLET_RPC_WALLET_FILE" || /usr/bin/monero-wallet-cli --generate-from-view-key "$MONERO_WALLET_RPC_WALLET_FILE" --address "$MONERO_WALLET_RPC_WALLET_ADDRESS" --view-key "$MONERO_WALLET_RPC_VIEW_KEY" --password-file "$MONERO_WALLET_RPC_WALLET_PASSWORD_FILE" --restore-height "$MONERO_WALLET_RPC_RESTORE_HEIGHT" --non-interactive'
+ExecStartPre=/usr/local/sbin/hyrule-cloud-monero-restore-wallet
 ExecStartPre=+/bin/sh -c 'chown hyrule:hyrule "$MONERO_WALLET_RPC_WALLET_FILE"* && chmod 0600 "$MONERO_WALLET_RPC_WALLET_FILE"*'
 ExecStart=/usr/bin/monero-wallet-rpc \
   --wallet-file ${MONERO_WALLET_RPC_WALLET_FILE} \

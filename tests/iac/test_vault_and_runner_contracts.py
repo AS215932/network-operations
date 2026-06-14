@@ -149,6 +149,39 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertLess(setup_index, flush_index)
         self.assertLess(flush_index, wait_index)
 
+    def test_monero_wallet_rpc_restore_uses_json_helper(self):
+        unit = (REPO / "configs/monero-wallet-rpc.service").read_text()
+        helper = (REPO / "configs/hyrule-cloud-monero-restore-wallet").read_text()
+        runtime_tasks = yaml.safe_load((REPO / "ansible/roles/hyrule_cloud/tasks/runtime.yml").read_text())
+        names = [task.get("name") for task in runtime_tasks]
+
+        helper_index = names.index("Install Monero wallet RPC restore helper")
+        service_index = names.index("Install /etc/systemd/system/monero-wallet-rpc.service")
+        helper_task = _task_by_name(runtime_tasks, "Install Monero wallet RPC restore helper")
+
+        self.assertIn("ExecStartPre=/usr/local/sbin/hyrule-cloud-monero-restore-wallet", unit)
+        self.assertNotIn("--generate-from-view-key", unit)
+        for unsupported_flag in ("--address", "--view-key", "--non-interactive"):
+            self.assertNotRegex(unit, re.compile(rf"(?:^|\s){re.escape(unsupported_flag)}(?:\s|$)", re.MULTILINE))
+
+        self.assertIn("--generate-from-json", helper)
+        self.assertIn("json.dump(payload, handle)", helper)
+        self.assertIn('"password": password_file.read_text().rstrip("\\n")', helper)
+        self.assertIn('"scan_from_height": restore_height', helper)
+        self.assertNotIn('"restore_height": restore_height', helper)
+        self.assertIn('required_env("MONERO_WALLET_RPC_WALLET_ADDRESS")', helper)
+        self.assertIn('required_env("MONERO_WALLET_RPC_VIEW_KEY")', helper)
+        self.assertIn("os.unlink(restore_json)", helper)
+
+        self.assertEqual(
+            helper_task["ansible.builtin.copy"]["src"],
+            "{{ playbook_dir }}/../../configs/hyrule-cloud-monero-restore-wallet",
+        )
+        self.assertEqual(helper_task["ansible.builtin.copy"]["dest"], "/usr/local/sbin/hyrule-cloud-monero-restore-wallet")
+        self.assertEqual(helper_task["ansible.builtin.copy"]["mode"], "0755")
+        self.assertEqual(helper_task["when"], "hyrule_cloud_monero_wallet_rpc_enabled | bool")
+        self.assertLess(helper_index, service_index)
+
     def test_github_runner_vault_token_sink_is_runner_readable(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())
         vault_tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
