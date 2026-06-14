@@ -11,6 +11,13 @@
          else hyrule_cloud_vault_secret_id }}
   no_log: true
 
+- name: Capture current hyrule-cloud Vault Agent state
+  ansible.builtin.systemd:
+    name: "vault-agent-{{ hyrule_cloud_vault_role_name }}"
+  register: hyrule_cloud_vault_agent_service
+  changed_when: false
+  failed_when: false
+
 - name: Set hyrule-cloud Vault Agent template list
   ansible.builtin.set_fact:
     hyrule_cloud_vault_agent_templates:
@@ -63,6 +70,10 @@
         group: "{{ hyrule_cloud_app_group }}"
         mode: "0750"
   no_log: "{{ hyrule_cloud_vault_agent_secret_id | length > 0 }}"
+
+- name: Flush handlers so Vault Agent uses updated AppRole/template inputs
+  ansible.builtin.meta: flush_handlers
+  when: hyrule_cloud_vault_agent_service.status.ActiveState | default("inactive") == "active"
 
 - name: Wait for Vault Agent to render hyrule-cloud env file
   ansible.builtin.wait_for:
