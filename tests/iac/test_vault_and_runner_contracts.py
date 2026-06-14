@@ -125,6 +125,30 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("XCPNG_XO_TOKEN", runner_template)
         self.assertNotIn("VAULT_HYRULE_CLOUD_SECRET_ID", runner_template)
 
+    def test_hyrule_cloud_flushes_vault_agent_before_render_waits(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/hyrule_cloud/tasks/vault.yml").read_text())
+        names = [task.get("name") for task in tasks]
+
+        state_index = names.index("Capture current hyrule-cloud Vault Agent state")
+        setup_index = names.index("Set up Vault Agent for hyrule-cloud secret delivery")
+        flush_index = names.index("Flush handlers so Vault Agent uses updated AppRole/template inputs")
+        wait_index = names.index("Wait for Vault Agent to render hyrule-cloud env file")
+
+        state_task = _task_by_name(tasks, "Capture current hyrule-cloud Vault Agent state")
+        self.assertEqual(state_task["register"], "hyrule_cloud_vault_agent_service")
+        self.assertFalse(state_task["changed_when"])
+        self.assertFalse(state_task["failed_when"])
+
+        flush_task = _task_by_name(tasks, "Flush handlers so Vault Agent uses updated AppRole/template inputs")
+        self.assertEqual(flush_task["ansible.builtin.meta"], "flush_handlers")
+        self.assertEqual(
+            flush_task["when"],
+            'hyrule_cloud_vault_agent_service.status.ActiveState | default("inactive") == "active"',
+        )
+        self.assertLess(state_index, setup_index)
+        self.assertLess(setup_index, flush_index)
+        self.assertLess(flush_index, wait_index)
+
     def test_github_runner_vault_token_sink_is_runner_readable(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())
         vault_tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
