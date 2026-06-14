@@ -87,13 +87,11 @@ peers:
     underlay: "2a09:4c0:100:2d88::8898"
     underlay_v4: "45.136.136.152"
     gateway6: "2a09:4c0:100:2d88::8bfe"
-  # Off-net external monitor (different ASN, different billing).
+  # Off-net external monitor (Vultr London; different ASN, different billing).
   # Probes AS215932 from the outside the same way real users do.
-  # ipv4/ipv6 are placeholders until the VPS is provisioned — fill in
-  # before applying ansible/playbooks/extmon.yml.
   extmon:
-    ipv4: "0.0.0.0"          # TODO: fill in after Vultr/DO provisioning
-    ipv6: "::"               # TODO: fill in after Vultr/DO provisioning
+    ipv4: "45.32.179.134"
+    ipv6: "2001:19f0:7402:0cd5:5400:06ff:fe40:7112"
 
 # --- BGP peer addresses (external transits) ---
 bgp_peers:
