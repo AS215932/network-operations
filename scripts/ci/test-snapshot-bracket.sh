@@ -33,6 +33,7 @@ declare -A test_limits=(
   [logs]=noc
   [noc]=noc
   [vault]=vault
+  [engineering-loop]=loop
   [knot]=dns
   [networkd_resolved]=noc
   [mail_openbsd]=mail

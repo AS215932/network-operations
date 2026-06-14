@@ -5,7 +5,7 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026061301 ; serial (YYYYMMDDNN)
+                  2026061401 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -40,6 +40,7 @@ rtr     IN  AAAA  2a0c:b641:b50:2::1
 web     IN  AAAA  2a0c:b641:b50:2::30
 proxy   IN  AAAA  2a0c:b641:b50:2::40
 netproxy IN AAAA  2a0c:b641:b50:2::e0
+loop    IN  AAAA  2a0c:b641:b50:2::f0
 xoa     IN  AAAA  2a0c:b641:b50:2::70
 
 ; Xen Orchestra UI — via Caddy reverse proxy on proxy VM

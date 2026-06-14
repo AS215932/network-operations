@@ -32,6 +32,7 @@ on:
           - ci-runner-key
           - knot
           - extmon
+          - engineering-loop
           - frr
           - rtr_routing
           - networkd_resolved

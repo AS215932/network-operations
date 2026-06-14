@@ -1,0 +1,47 @@
+# /etc/systemd/system/hyrule-engineering-loop.service
+# Managed by ansible/roles/engineering_loop. One timer fire runs exactly one
+# budgeted Engineering Loop cycle over the human-approved loop:approved queue.
+# Do not deploy this on ci/hyrule-infra runners; the backend executes generated
+# code in guarded worktrees.
+
+[Unit]
+Description=AS215932 Engineering Loop operations lane (one budgeted cycle)
+After=network-online.target vault-agent-engineering-loop.service
+Wants=network-online.target vault-agent-engineering-loop.service
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=oneshot
+User={{ engineering_loop_user }}
+Group={{ engineering_loop_group }}
+WorkingDirectory={{ engineering_loop_install_dir }}
+Environment=HOME={{ engineering_loop_state_dir }}
+Environment=HYRULE_MODEL_POLICY_FILE={{ engineering_loop_install_dir }}/configs/loop/model-policy.production.yml
+EnvironmentFile={{ engineering_loop_env_file }}
+ExecStart={{ engineering_loop_install_dir }}/.venv/bin/hyrule-engineering-loop daemon --once \
+{% for repo in engineering_loop_repos %}
+    --repo {{ repo }} \
+{% endfor %}
+    --workspace-root {{ engineering_loop_workspace_dir }} \
+    --output-root {{ engineering_loop_runs_dir }} \
+    --state-dir-path {{ engineering_loop_daemon_state_dir }} \
+    --memory-dir {{ engineering_loop_memory_dir }} \
+    --max-runs-per-day {{ engineering_loop_max_runs_per_day }} \
+    --max-cost-usd-per-day {{ engineering_loop_max_cost_usd_per_day }}
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=engineering-loop
+
+# Security hardening. The backend gets the repository worktrees and normal
+# toolchain only; production credentials are scrubbed before backend execution.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths={{ engineering_loop_install_dir }} {{ engineering_loop_state_dir }}
+
+[Install]
+WantedBy=multi-user.target
