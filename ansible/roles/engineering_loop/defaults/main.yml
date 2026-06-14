@@ -9,12 +9,17 @@ engineering_loop_user: loop
 engineering_loop_group: loop
 
 engineering_loop_install_dir: /opt/engineering-loop
+engineering_loop_config_dir: /etc/engineering-loop
 engineering_loop_env_file: "{{ engineering_loop_install_dir }}/.env"
 engineering_loop_state_dir: /var/lib/engineering-loop
 engineering_loop_workspace_dir: "{{ engineering_loop_state_dir }}/workspace"
 engineering_loop_runs_dir: "{{ engineering_loop_state_dir }}/runs"
 engineering_loop_daemon_state_dir: "{{ engineering_loop_state_dir }}/state"
-engineering_loop_git_askpass_path: /usr/local/lib/engineering-loop/git-askpass
+engineering_loop_lib_dir: /usr/local/lib/engineering-loop
+engineering_loop_git_askpass_path: "{{ engineering_loop_lib_dir }}/git-askpass"
+engineering_loop_github_app_token_path: "{{ engineering_loop_lib_dir }}/github-app-token"
+engineering_loop_daemon_wrapper_path: "{{ engineering_loop_lib_dir }}/run-daemon"
+engineering_loop_github_app_private_key_file: "{{ engineering_loop_config_dir }}/github-app.private-key.pem"
 
 engineering_loop_repo: https://github.com/AS215932/engineering-loop.git
 engineering_loop_version: main
@@ -72,3 +77,4 @@ engineering_loop_packages:
   - ca-certificates
   - curl
   - gh
+  - openssl

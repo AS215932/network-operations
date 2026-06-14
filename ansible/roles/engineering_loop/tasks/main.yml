@@ -5,6 +5,7 @@
       - engineering_loop_user | length > 0
       - engineering_loop_group | length > 0
       - engineering_loop_install_dir.startswith('/')
+      - engineering_loop_config_dir.startswith('/')
       - engineering_loop_state_dir.startswith('/')
       - engineering_loop_workspace_dir.startswith('/')
       - engineering_loop_runs_dir.startswith('/')
