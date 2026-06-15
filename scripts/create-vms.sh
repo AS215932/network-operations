@@ -99,7 +99,7 @@ create_vm mon "Monitoring (Icinga2 + Prometheus + Grafana)" 2 4294967296 4294967
 create_vm vpn "WireGuard VPN" 1 1073741824 10737418240 "2a0c:b641:b50:2::60"
 create_vm irc "Soju IRC bouncer" 1 1073741824 10737418240 "2a0c:b641:b50:2::80"
 create_vm vault "Vault secret plane" 1 2147483648 21474836480 "2a0c:b641:b50:2::c0"
-create_vm ci "GitHub Actions self-hosted runner" 1 2147483648 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
+create_vm ci "GitHub Actions self-hosted runner" 4 8589934592 21474836480 "2a0c:b641:b50:2::d0" 53687091200 8
 create_vm netproxy "Hyrule Network Proxy sidecar" 1 1073741824 21474836480 "2a0c:b641:b50:2::e0"
 
 # ci-pr — UNPRIVILEGED PR runner on the CUSTOMER-isolated vm bridge (xenbr-vm),
@@ -111,7 +111,7 @@ create_vm netproxy "Hyrule Network Proxy sidecar" 1 1073741824 21474836480 "2a0c
 VM_NET="${VM_NET:-}"
 if [ -n "$VM_NET" ]; then
   create_vm ci-pr "Unprivileged PR runner (PR-Agent/Semgrep/PR CI)" \
-    1 2147483648 21474836480 "2a0c:b641:b51::c1" "" "" "$VM_NET" "2a0c:b641:b51::1"
+    4 8589934592 21474836480 "2a0c:b641:b51::c1" "" "" "$VM_NET" "2a0c:b641:b51::1"
 else
   echo "SKIP ci-pr: export VM_NET=<xenbr-vm network UUID> to create it (see docs/ci/provision-ci-pr.md)."
 fi

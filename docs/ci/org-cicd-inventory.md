@@ -47,16 +47,12 @@ Notes:
 
 ## Runner topology (today)
 
-One org-scoped self-hosted runner:
+Two org-scoped self-hosted runners:
 
-- **`ci-runner`** on the `ci` VM (`2a0c:b641:b50:2::d0`), online, labels
-  `self-hosted, Linux, X64, hyrule, hyrule-infra`.
-- **Privileged**: Vault AppRole → `/etc/github-runner/secrets.env`, the fleet
-  deploy key `id_ci` (`/var/lib/github-runner/.ssh/id_ci`), Docker + Containerlab,
-  and overlay-v6 reach to every infra host. Provisioned by the toggle-driven
-  `ansible/roles/github_runner` role (+ `ansible/roles/ci_runner_key`). Host
-  vars: `ansible/inventory/host_vars/ci.yml`. Provisioning runbook:
-  `docs/ci/provision.md`.
+- **`ci-runner`** on the `ci` VM (`2a0c:b641:b50:2::d0`), sized **4 vCPU / 8 GiB RAM** plus a 20 GiB root disk and 50 GiB runner data disk, labels `self-hosted, Linux, X64, hyrule, hyrule-infra`.
+- **`ci-pr-runner-recovery2`** on the `ci-pr` VM (`2a0c:b641:b51::c1`), sized **4 vCPU / 8 GiB RAM** with a 20 GiB root disk, labels `self-hosted, Linux, X64, hyrule-public-pr`.
+- **Privileged `ci`**: Vault AppRole → `/etc/github-runner/secrets.env`, the fleet deploy key `id_ci` (`/var/lib/github-runner/.ssh/id_ci`), Docker + Containerlab, and overlay-v6 reach to every infra host. Provisioned by the toggle-driven `ansible/roles/github_runner` role (+ `ansible/roles/ci_runner_key`). Host vars: `ansible/inventory/host_vars/ci.yml`. Provisioning runbook: `docs/ci/provision.md`.
+- **Unprivileged `ci-pr`**: no Vault, no `id_ci`, no `secrets.env`, no management-overlay reachability, Docker only. Provisioned by `ansible/roles/github_runner` with the unprivileged host vars in `ansible/inventory/host_vars/ci-pr.yml`. Provisioning runbook: `docs/ci/provision-ci-pr.md`.
 
 Runner groups (org Actions settings):
 
@@ -64,11 +60,9 @@ Runner groups (org Actions settings):
 |-------|----|-----------|-------|---------|
 | `Default` | 1 | all | (all) | none |
 | `hyrule-ci` | 3 | selected | `hyrule-cloud`, `hyrule-web`, `network-operations` | `ci-runner` |
+| `public-pr` | org-scoped | selected | AS215932 repos with untrusted PR jobs | `ci-pr-runner-recovery2` |
 
-**Consequence**: today every `pull_request` job in web/cloud/network-operations
-runs untrusted PR code on the single privileged runner. The only controls are
-GitHub's fork-PR approval requirement (public repos) and the `hyrule-ci` group
-ACL. This is the exposure the two-runner model closes.
+**Consequence**: untrusted `pull_request` jobs run on the isolated `ci-pr` runner, while deploy/apply/lab work stays on the privileged `ci` runner. Each VM still runs a single GitHub Actions runner process, so resizing improves per-job runtime and memory headroom without increasing job concurrency.
 
 ## Secrets & credentials
 
@@ -90,14 +84,14 @@ Code Scanning, free for these public repos.
 | `claude` | all | keep |
 | `sourcery-ai` | all | **remove** — drop the `Sourcery review` required check on `network-operations` first, then uninstall/limit the app |
 
-## Target architecture (being implemented)
+## Current architecture
 
-- **Two-runner security model**: keep the privileged `ci-runner` (`hyrule`,
-  `hyrule-infra`, group `hyrule-ci`) for deploy/apply/Vault/labs only; add a new
-  **unprivileged `ci-pr`** runner (label `hyrule-public-pr`, its own `public-pr`
-  runner group permitting all six repos) with no Vault, no `id_ci`, no
-  `secrets.env`, and no management-overlay reachability. All untrusted-PR-code
-  jobs (PR-Agent, Semgrep, lint/test/build/static checks) move to `ci-pr`.
+- **Two-runner security model**: the privileged `ci-runner` (`hyrule`,
+  `hyrule-infra`, group `hyrule-ci`) runs deploy/apply/Vault/labs only. The
+  unprivileged `ci-pr` runner (label `hyrule-public-pr`, `public-pr` runner
+  group) has no Vault, no `id_ci`, no `secrets.env`, and no management-overlay
+  reachability. All untrusted-PR-code jobs (PR-Agent, Semgrep,
+  lint/test/build/static checks) run on `ci-pr`.
 - **PR-Agent** replaces Sourcery: advisory, read/comment-only, OpenRouter
   primary `openrouter/deepseek/deepseek-v4-flash`, fallback
   `openrouter/minimax/minimax-m2.7`, pinned `The-PR-Agent/pr-agent` Docker
