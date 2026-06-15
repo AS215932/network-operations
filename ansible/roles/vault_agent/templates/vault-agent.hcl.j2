@@ -42,8 +42,9 @@ auto_auth {
 template {
   source      = "{{ vault_agent_template_dir }}/{{ t.name }}"
   destination = "{{ t.destination }}"
-  perms       = 0640
-{% set render_command = "/bin/sh -c 'chgrp " ~ t.group ~ " " ~ t.destination ~ " && chmod 0640 " ~ t.destination ~ " && " ~ t.reload_command ~ "'" %}
+{% set destination_mode = t.mode | default('0640') %}
+  perms       = {{ destination_mode }}
+{% set render_command = "/bin/sh -c 'chgrp " ~ t.group ~ " " ~ t.destination ~ " && chmod " ~ destination_mode ~ " " ~ t.destination ~ " && " ~ t.reload_command ~ "'" %}
   command     = {{ render_command | to_json }}
 
   wait {

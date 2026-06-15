@@ -40,7 +40,8 @@ vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
 # Secret templates Vault Agent renders. Each entry: src (Jinja2 template in
 # this role's templates/), name (ctmpl filename written into the template
 # dir), destination (final rendered file), group (chgrp target on the
-# destination), reload_command (run after each render). The default pair
+# destination), optional mode (default 0640), reload_command (run after each
+# render). The default pair
 # reproduces the noc-agent behaviour exactly; other consumers — e.g.
 # github_runner — pass their own list.
 vault_agent_templates:

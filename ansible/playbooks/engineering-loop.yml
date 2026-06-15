@@ -70,11 +70,13 @@
             name: engineering-loop.env.ctmpl
             destination: "{{ engineering_loop_env_file }}"
             group: "{{ engineering_loop_group }}"
+            mode: "0640"
             reload_command: /bin/true
           - src: engineering-loop-github-app-key.pem.ctmpl.j2
             name: engineering-loop-github-app-key.pem.ctmpl
             destination: "{{ engineering_loop_github_app_private_key_file }}"
             group: "{{ engineering_loop_group }}"
+            mode: "0640"
             reload_command: /bin/true
         vault_agent_extra_dirs:
           - path: "{{ engineering_loop_config_dir }}"

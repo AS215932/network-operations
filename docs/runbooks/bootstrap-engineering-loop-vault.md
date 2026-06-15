@@ -51,6 +51,7 @@ Repository access must be limited to exactly these repositories:
 - `AS215932/hyrule-mcp`
 - `AS215932/noc-agent`
 - `AS215932/hyrule-network-proxy`
+- `AS215932/as215932.net`
 
 Required repository permissions:
 
@@ -65,7 +66,7 @@ or runner permissions.
 After creating the app:
 
 1. Generate and download one private key PEM.
-2. Install the app on the seven repositories above.
+2. Install the app on the eight repositories above.
 3. Record the app ID and installation ID.
 
 A quick way to discover the installation ID after installation is:
@@ -111,7 +112,7 @@ that process tree.
 ## Break-glass PAT fallback
 
 A fine-grained PAT is supported only as a temporary fallback. It must be scoped
-to the same seven repositories and permissions above, and should have a short
+to the same eight repositories and permissions above, and should have a short
 expiration. Prefer the GitHub App path.
 
 ```bash

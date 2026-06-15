@@ -31,7 +31,7 @@ installation_id="$ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID"
 private_key_file="$ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE"
 api_url="${ENGINEERING_LOOP_GITHUB_API_URL:-https://api.github.com}"
 
-[ -r "$private_key_file" ] || fatal "private key is not readable: $private_key_file"
+[ -r "$private_key_file" ] && [ -s "$private_key_file" ] || fatal "private key is not readable or empty: $private_key_file"
 command -v openssl >/dev/null 2>&1 || fatal "openssl is required"
 command -v curl >/dev/null 2>&1 || fatal "curl is required"
 command -v python3 >/dev/null 2>&1 || fatal "python3 is required"
