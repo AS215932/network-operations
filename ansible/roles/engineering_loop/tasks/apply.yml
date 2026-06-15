@@ -38,6 +38,7 @@
     mode: "{{ item.mode }}"
   loop:
     - { path: "{{ engineering_loop_install_dir }}", mode: "0755" }
+    - { path: "{{ engineering_loop_config_dir }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
     - { path: "{{ engineering_loop_state_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
@@ -103,6 +104,23 @@
     owner: root
     group: "{{ engineering_loop_group }}"
     mode: "0750"
+
+- name: Install Engineering Loop GitHub App token helper
+  ansible.builtin.template:
+    src: github-app-token.sh.j2
+    dest: "{{ engineering_loop_github_app_token_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+
+- name: Install Engineering Loop daemon wrapper
+  ansible.builtin.template:
+    src: run-daemon.sh.j2
+    dest: "{{ engineering_loop_daemon_wrapper_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+  notify: restart engineering-loop timer
 
 - name: Install Engineering Loop systemd service
   ansible.builtin.template:

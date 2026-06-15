@@ -1,9 +1,8 @@
 # Bootstrap Engineering Loop Vault secrets
 
 The dedicated `loop` VM runs the Engineering Loop daemon from a narrow Vault
-AppRole. This AppRole must only render the daemon's GitHub issue/PR token,
-model-provider credentials, and notification credentials into
-`/opt/engineering-loop/.env`.
+AppRole. This AppRole renders only GitHub App credentials, model-provider keys,
+and notification credentials for the Engineering Loop runtime.
 
 Do **not** place fleet SSH keys, broad Vault tokens, XO credentials, registrar
 credentials, or application runtime secrets in `kv/engineering-loop`.
@@ -38,10 +37,12 @@ vault write auth/approle/role/engineering-loop \
   secret_id_num_uses=0
 ```
 
-## Populate the KV payload
+## Create the GitHub App
 
-Use a fine-grained GitHub PAT or GitHub App installation token scoped only to
-these repositories:
+Create a GitHub App owned by `AS215932`, for example
+`hyrule-engineering-loop`.
+
+Repository access must be limited to exactly these repositories:
 
 - `AS215932/engineering-loop`
 - `AS215932/network-operations`
@@ -50,28 +51,75 @@ these repositories:
 - `AS215932/hyrule-mcp`
 - `AS215932/noc-agent`
 - `AS215932/hyrule-network-proxy`
+- `AS215932/as215932.net`
 
-Required GitHub permissions:
+Required repository permissions:
 
 - Metadata: read
 - Issues: read/write
 - Contents: read/write
 - Pull requests: read/write
 
-No admin or org-wide permissions are required.
+Do not grant organization administration, Actions/workflow, secrets, members,
+or runner permissions.
+
+After creating the app:
+
+1. Generate and download one private key PEM.
+2. Install the app on the eight repositories above.
+3. Record the app ID and installation ID.
+
+A quick way to discover the installation ID after installation is:
 
 ```bash
-vault kv put kv/engineering-loop \
-  github_token="..." \
-  discord_webhook="..." \
-  icinga_url="https://[2a0c:b641:b50:2::50]:5665/v1/actions/process-check-result" \
-  icinga_user="..." \
-  icinga_password="..." \
-  icinga_check="loop!engineering-loop" \
-  openrouter_api_key="..." \
-  anthropic_api_key="..." \
-  openai_api_key="..."
+gh api /orgs/AS215932/installations \
+  --jq '.installations[] | select(.app_slug=="hyrule-engineering-loop") | .id'
 ```
+
+## Populate the KV payload with GitHub App credentials
+
+Keep the downloaded PEM file on the trusted operator workstation only long
+enough to write it to Vault. Do not paste the PEM into issue or PR comments.
+
+```bash
+read -rp 'GitHub App ID: ' ENGINEERING_LOOP_GITHUB_APP_ID
+read -rp 'GitHub App installation ID: ' ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID
+read -rp 'Path to downloaded GitHub App private key PEM: ' ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE
+
+vault kv put kv/engineering-loop \
+  github_app_id="$ENGINEERING_LOOP_GITHUB_APP_ID" \
+  github_app_installation_id="$ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID" \
+  github_app_private_key=@"$ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE" \
+  discord_webhook="$(vault kv get -field=discord_webhook_url kv/ci-runner)" \
+  icinga_url="https://[2a0c:b641:b50:2::50]:5665/v1/actions/process-check-result" \
+  icinga_user="$(vault kv get -field=icinga_api_user kv/ci-runner)" \
+  icinga_password="$(vault kv get -field=icinga_api_password kv/ci-runner)" \
+  icinga_check="loop!engineering-loop" \
+  openrouter_api_key="$(vault kv get -field=openrouter_api_key kv/noc-agent)" \
+  anthropic_api_key="$(vault kv get -field=anthropic_api_key kv/noc-agent)" \
+  openai_api_key="$(vault kv get -field=openai_api_key kv/noc-agent)"
+
+unset ENGINEERING_LOOP_GITHUB_APP_ID
+unset ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID
+unset ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE
+```
+
+The `loop` VM does not store a long-lived GitHub token. Vault Agent renders the
+GitHub App ID, installation ID, and private key. The systemd wrapper mints a
+fresh short-lived installation token for each daemon run and exports it only to
+that process tree.
+
+## Break-glass PAT fallback
+
+A fine-grained PAT is supported only as a temporary fallback. It must be scoped
+to the same eight repositories and permissions above, and should have a short
+expiration. Prefer the GitHub App path.
+
+```bash
+vault kv patch kv/engineering-loop github_token="..."
+```
+
+Do not store a broad personal `gh` OAuth token in `kv/engineering-loop`.
 
 ## Refresh the ci runner policy
 
@@ -104,8 +152,11 @@ Use the production workflow after the policies and KV entry exist:
 3. Approve the GitHub `production` environment gate.
 4. Confirm `/opt/engineering-loop/.env` exists on `loop` with owner/root and
    group access for the `loop` service only.
-5. Confirm `vault-agent-engineering-loop.service` is active.
-6. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
+5. Confirm `/etc/engineering-loop/github-app.private-key.pem` exists with
+   owner `root`, group `loop`, and mode `0640`.
+6. Confirm `vault-agent-engineering-loop.service` is active.
+7. Run a manual empty-queue or docs-only canary before enabling the timer.
+8. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
    docs-only draft PR canary pass.
 
 ## Rollback

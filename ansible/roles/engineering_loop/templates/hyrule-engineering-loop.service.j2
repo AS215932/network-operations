@@ -18,16 +18,7 @@ WorkingDirectory={{ engineering_loop_install_dir }}
 Environment=HOME={{ engineering_loop_state_dir }}
 Environment=HYRULE_MODEL_POLICY_FILE={{ engineering_loop_install_dir }}/configs/loop/model-policy.production.yml
 EnvironmentFile={{ engineering_loop_env_file }}
-ExecStart={{ engineering_loop_install_dir }}/.venv/bin/hyrule-engineering-loop daemon --once \
-{% for repo in engineering_loop_repos %}
-    --repo {{ repo }} \
-{% endfor %}
-    --workspace-root {{ engineering_loop_workspace_dir }} \
-    --output-root {{ engineering_loop_runs_dir }} \
-    --state-dir-path {{ engineering_loop_daemon_state_dir }} \
-    --memory-dir {{ engineering_loop_memory_dir }} \
-    --max-runs-per-day {{ engineering_loop_max_runs_per_day }} \
-    --max-cost-usd-per-day {{ engineering_loop_max_cost_usd_per_day }}
+ExecStart={{ engineering_loop_daemon_wrapper_path }}
 TimeoutStartSec=3600
 StandardOutput=journal
 StandardError=journal

@@ -5,17 +5,18 @@
       - engineering_loop_user | length > 0
       - engineering_loop_group | length > 0
       - engineering_loop_install_dir.startswith('/')
+      - engineering_loop_config_dir.startswith('/')
       - engineering_loop_state_dir.startswith('/')
       - engineering_loop_workspace_dir.startswith('/')
       - engineering_loop_runs_dir.startswith('/')
       - engineering_loop_daemon_state_dir.startswith('/')
-      - engineering_loop_repos | length == 7
-      - engineering_loop_workspace_repositories | length == 7
+      - engineering_loop_repos | length == 8
+      - engineering_loop_workspace_repositories | length == 8
       - engineering_loop_max_runs_per_day | int <= 2
       - engineering_loop_max_cost_usd_per_day | float <= 10
     fail_msg: >-
       Engineering Loop production rollout must stay on the approved
-      seven-repo, low-and-slow budget profile unless a later PR explicitly
+      eight-repo, low-and-slow budget profile unless a later PR explicitly
       widens it.
   tags: [validate, always]
 

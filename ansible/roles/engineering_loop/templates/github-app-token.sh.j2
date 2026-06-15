@@ -1,0 +1,68 @@
+#!/bin/sh
+# Managed by ansible/roles/engineering_loop.
+# Mint a short-lived GitHub App installation token for one Engineering Loop run.
+# The token is printed to stdout for the caller to export; it is never written
+# to disk by this helper.
+# shellcheck shell=sh
+
+set -eu
+
+fatal() {
+  printf '%s\n' "github-app-token: $*" >&2
+  exit 1
+}
+
+require_env() {
+  name="$1"
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || fatal "missing required environment variable: $name"
+}
+
+b64url() {
+  openssl base64 -A | tr '+/' '-_' | tr -d '='
+}
+
+require_env ENGINEERING_LOOP_GITHUB_APP_ID
+require_env ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID
+require_env ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE
+
+app_id="$ENGINEERING_LOOP_GITHUB_APP_ID"
+installation_id="$ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID"
+private_key_file="$ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE"
+api_url="${ENGINEERING_LOOP_GITHUB_API_URL:-https://api.github.com}"
+
+[ -r "$private_key_file" ] && [ -s "$private_key_file" ] || fatal "private key is not readable or empty: $private_key_file"
+command -v openssl >/dev/null 2>&1 || fatal "openssl is required"
+command -v curl >/dev/null 2>&1 || fatal "curl is required"
+command -v python3 >/dev/null 2>&1 || fatal "python3 is required"
+
+now="$(date +%s)"
+iat="$((now - 60))"
+exp="$((now + 540))"
+
+header='{"alg":"RS256","typ":"JWT"}'
+payload="$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "$iat" "$exp" "$app_id")"
+
+encoded_header="$(printf '%s' "$header" | b64url)"
+encoded_payload="$(printf '%s' "$payload" | b64url)"
+signing_input="${encoded_header}.${encoded_payload}"
+signature="$(printf '%s' "$signing_input" | openssl dgst -sha256 -sign "$private_key_file" -binary | b64url)"
+jwt="${signing_input}.${signature}"
+
+response="$(curl -fsS \
+  -X POST \
+  -H "Authorization: Bearer ${jwt}" \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "${api_url%/}/app/installations/${installation_id}/access_tokens")"
+
+printf '%s' "$response" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+token = data.get("token")
+if not isinstance(token, str) or not token:
+    raise SystemExit("github-app-token: GitHub response did not contain a token")
+print(token)
+'

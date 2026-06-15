@@ -9,15 +9,20 @@ engineering_loop_user: loop
 engineering_loop_group: loop
 
 engineering_loop_install_dir: /opt/engineering-loop
+engineering_loop_config_dir: /etc/engineering-loop
 engineering_loop_env_file: "{{ engineering_loop_install_dir }}/.env"
 engineering_loop_state_dir: /var/lib/engineering-loop
 engineering_loop_workspace_dir: "{{ engineering_loop_state_dir }}/workspace"
 engineering_loop_runs_dir: "{{ engineering_loop_state_dir }}/runs"
 engineering_loop_daemon_state_dir: "{{ engineering_loop_state_dir }}/state"
-engineering_loop_git_askpass_path: /usr/local/lib/engineering-loop/git-askpass
+engineering_loop_lib_dir: /usr/local/lib/engineering-loop
+engineering_loop_git_askpass_path: "{{ engineering_loop_lib_dir }}/git-askpass"
+engineering_loop_github_app_token_path: "{{ engineering_loop_lib_dir }}/github-app-token"
+engineering_loop_daemon_wrapper_path: "{{ engineering_loop_lib_dir }}/run-daemon"
+engineering_loop_github_app_private_key_file: "{{ engineering_loop_config_dir }}/github-app.private-key.pem"
 
 engineering_loop_repo: https://github.com/AS215932/engineering-loop.git
-engineering_loop_version: main
+engineering_loop_version: "203957c0bffd306b59f8882d3548c3922633c349"
 
 # GitHub issue/PR intake scope for first production rollout.
 engineering_loop_repos:
@@ -28,10 +33,12 @@ engineering_loop_repos:
   - AS215932/hyrule-mcp
   - AS215932/noc-agent
   - AS215932/hyrule-network-proxy
+  - AS215932/as215932.net
 
 # Local workspace checkout names. network-operations intentionally lands at
 # hyrule-infra to match the existing sibling checkout convention used by the
 # loop and app repos; noc-agent lands at hyrule-noc-agent for the same reason.
+# The AS/routing identity repo keeps its canonical dotted checkout name.
 engineering_loop_workspace_repositories:
   - repo: https://github.com/AS215932/engineering-loop.git
     dest: engineering-loop
@@ -54,6 +61,9 @@ engineering_loop_workspace_repositories:
   - repo: https://github.com/AS215932/hyrule-network-proxy.git
     dest: hyrule-network-proxy
     version: main
+  - repo: https://github.com/AS215932/as215932.net.git
+    dest: as215932.net
+    version: main
 
 engineering_loop_allowed_paths:
   - docs
@@ -72,3 +82,4 @@ engineering_loop_packages:
   - ca-certificates
   - curl
   - gh
+  - openssl
