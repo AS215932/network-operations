@@ -4,7 +4,7 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "d45f89292fe95f2d37de79202782eeb6ea61a1b0"
+engineering_loop_version: "5f0a84e1daa914b8d4498de641e68d3752968057"
 engineering_loop_timer_enabled: true
 
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
