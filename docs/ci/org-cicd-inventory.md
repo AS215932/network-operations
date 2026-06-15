@@ -14,7 +14,7 @@ change.
 
 | Repo | Stack | Workflows (`main`) | Branch protection / required checks | Deploys? | AI review | Semgrep |
 |------|-------|--------------------|-------------------------------------|----------|-----------|---------|
-| `network-operations` | Ansible / IaC + Python tests | `lint.yml`, `render-check.yml`, `iac-tests.yml`, `apply.yml`, `drift-detection.yml` | **Protected** — required: `yamllint`, `ansible-lint`, `shellcheck`, `jinja-syntax`, `render`, `Sourcery review` (strict) | Yes (`apply.yml`, manual + `production`) | Sourcery (to remove) | none yet |
+| `network-operations` | Ansible / IaC + Python tests | `lint.yml`, `render-check.yml`, `iac-tests.yml`, `apply.yml`, `drift-detection.yml` | **Protected** — required: `lint`, `render`, `iac-gate`, `semgrep` (strict) | Yes (`apply.yml`, manual + `production`) | PR-Agent advisory | token-less SARIF |
 | `hyrule-web` | Python (uv) + TS/Vite | `ci.yml` (`test`, `frontend`), `deploy.yml` | **Protected** — required: `test`, `frontend` (strict) | Yes (`deploy.yml`, push→main / dispatch, `production`) | Sourcery (to remove) | none yet |
 | `hyrule-cloud` | Python (uv), FastAPI / x402 | `ci.yml` (`test`), `deploy.yml` | **Not protected** | Yes (`deploy.yml`, `production`) | Sourcery (to remove) | none yet |
 | `noc-agent` | Python ≥3.14, PydanticAI / langgraph / redis / mcp | none | **Not protected** | No | Sourcery (to remove) | none yet |
@@ -23,10 +23,13 @@ change.
 
 Notes:
 
-- Check names on `network-operations` are **bare job ids** (`yamllint`, not
-  `lint / yamllint`); `render` is the job in `render-check.yml`. The
-  `iac-tests.yml` jobs (`static-iac`, `ansible-idempotency`, `batfish`,
-  `containerlab-frr`) are **not** required yet.
+- Check names on `network-operations` are **bare job ids**: `lint`, `render`,
+  `iac-gate`, and `semgrep`. `lint.yml` intentionally reports a single `lint`
+  job while running yamllint, ansible-lint, shellcheck, and Jinja syntax checks
+  as steps to reduce queue slots on the single public PR runner. The
+  `iac-tests.yml` tier jobs (`static-iac`, `ansible-idempotency`, `batfish`,
+  `containerlab-frr`) are **not** required individually; `iac-gate` is the
+  required aggregate context.
 - `hyrule-cloud` `ci.yml` lints/types **touched files only**, and `mypy
   --strict` is currently suffixed `|| true` (deliberate, temporary — tracked as
   the post-A0 type-cleanup PR's exit criterion). Its in-file comment claims

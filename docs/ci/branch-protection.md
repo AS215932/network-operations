@@ -7,7 +7,7 @@ a blocking gate per `docs/ci/semgrep.md` once each repo's baseline is triaged.
 
 | Repo | Required checks | strict | reviews | enforce_admins |
 |------|-----------------|:------:|:-------:|:--------------:|
-| `network-operations` | `yamllint, ansible-lint, shellcheck, jinja-syntax, render, iac-gate, semgrep` | ✓ | 1 | off |
+| `network-operations` | `lint, render, iac-gate, semgrep` | ✓ | 1 | off |
 | `hyrule-web` | `test, frontend` | ✓ | 1 | off |
 | `hyrule-cloud` | `test, semgrep` | ✓ | 0 | off |
 | `noc-agent` | `semgrep` | ✓ | 0 | off |
