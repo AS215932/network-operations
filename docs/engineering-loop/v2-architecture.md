@@ -290,6 +290,11 @@ Safety rails:
 - a Discord webhook summary per run and an Icinga passive check
   ("loop ran / loop stuck / loop over budget");
 - never on the privileged `ci` runner — the backend executes generated code.
+- **Production canary**: before enabling the systemd timer, run a manual
+  docs-only end-to-end canary (e.g., a seeded `loop:approved` docs issue or
+  `sibling-canary`) to verify the full pipeline produces a valid draft PR
+  and passes policy gates without risk. Keep the timer disabled until the
+  canary succeeds.
 
 ### 10. PR contract
 
