@@ -37,5 +37,10 @@ exec {{ engineering_loop_install_dir }}/.venv/bin/hyrule-engineering-loop daemon
     --output-root {{ engineering_loop_runs_dir }} \
     --state-dir-path {{ engineering_loop_daemon_state_dir }} \
     --memory-dir {{ engineering_loop_memory_dir }} \
+{% for repo, prefixes in engineering_loop_allowed_paths.items() -%}
+{% for prefix in prefixes -%}
+    --allow {{ repo }}={{ prefix }} \
+{% endfor -%}
+{% endfor -%}
     --max-runs-per-day {{ engineering_loop_max_runs_per_day }} \
     --max-cost-usd-per-day {{ engineering_loop_max_cost_usd_per_day }}

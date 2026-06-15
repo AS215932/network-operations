@@ -65,8 +65,11 @@ engineering_loop_workspace_repositories:
     dest: as215932.net
     version: main
 
-engineering_loop_allowed_paths:
-  - docs
+# Per-repo write-path widening for the daemon (--allow REPO=PATH_PREFIX).
+# Keyed by the loop's sibling checkout name (e.g. hyrule-cloud; network-operations
+# maps to hyrule-infra). Empty by default: the daemon stays docs-only for any
+# repo not listed here. Widen per repo in host_vars when dogfooding code.
+engineering_loop_allowed_paths: {}
 engineering_loop_max_runs_per_day: 2
 engineering_loop_max_cost_usd_per_day: 10
 engineering_loop_timer_enabled: false
