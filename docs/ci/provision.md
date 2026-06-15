@@ -4,8 +4,7 @@ The `ci` VM hosts the self-hosted GitHub Actions runner that powers every
 workflow in `.github/workflows/`. It must exist before the workflows can
 do any work — until then the workflow jobs sit queued.
 
-Reasonable size: **1 vCPU, 2 GB RAM, 20 GB root disk + 50 GB runner data disk** (Debian 13). The runner is
-mostly I/O-bound during `ansible-playbook --tags validate` jobs.
+Reasonable size: **4 vCPU, 8 GiB RAM, 20 GiB root disk + 50 GiB runner data disk** (Debian 13). The runner still serializes one GitHub Actions job at a time, but the extra headroom keeps Docker, Ansible, and trusted lab bursts from stretching the PR/apply queue.
 
 ## 1. Provision the VM via Xen Orchestra
 
@@ -14,7 +13,7 @@ via overlay v6 `2a0c:b641:b50:2::70` or the dom0 jump `193.70.32.138`) — see
 `scripts/create-vms.sh` for the `vm.create` + `vdi.set` + `vm.setBootOrder` +
 `vm.start` sequence. The `ci` VM follows it with these parameters:
 
-- Template: **Debian 13 cloud-init**. Name: `ci`. 1 vCPU, 2 GiB RAM,
+- Template: **Debian 13 cloud-init**. Name: `ci`. 4 vCPU, 8 GiB RAM,
   20 GiB root disk on `local_storage` plus a second 50 GiB data disk attached
   at VBD position `8` so the guest sees it as `/dev/xvdi`.
 - VIF on `xenbr-infra` (overlay). Static IPv6 `2a0c:b641:b50:2::d0`
