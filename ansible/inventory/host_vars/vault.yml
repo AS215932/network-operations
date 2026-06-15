@@ -3,7 +3,7 @@
 
 firewall_extra_rules:
   - { proto: tcp, dport: 8200, src: "{{ peers.proxy.ipv6 }}", comment: "Vault API from Caddy proxy" }
-  - { proto: tcp, dport: 8200, src: ["{{ peers.noc.ipv6 }}", "{{ peers.mon.ipv6 }}", "{{ peers.api.ipv6 }}", "{{ peers.web.ipv6 }}", "{{ peers.ci.ipv6 }}"], comment: "Vault API from internal agents/checks" }
+  - { proto: tcp, dport: 8200, src: ["{{ peers.noc.ipv6 }}", "{{ peers.mon.ipv6 }}", "{{ peers.api.ipv6 }}", "{{ peers.web.ipv6 }}", "{{ peers.ci.ipv6 }}", "{{ peers.loop.ipv6 }}"], comment: "Vault API from internal agents/checks" }
   - { proto: tcp, dport: 8200, src: "{{ vpn_clients_subnet }}", comment: "Vault API from VPN operators" }
   - { proto: tcp, dport: 8200, src: "{{ ops_prefix_v6 }}", comment: "Vault API from ops prefix" }
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
