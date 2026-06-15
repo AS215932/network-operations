@@ -22,7 +22,7 @@ engineering_loop_daemon_wrapper_path: "{{ engineering_loop_lib_dir }}/run-daemon
 engineering_loop_github_app_private_key_file: "{{ engineering_loop_config_dir }}/github-app.private-key.pem"
 
 engineering_loop_repo: https://github.com/AS215932/engineering-loop.git
-engineering_loop_version: "203957c0bffd306b59f8882d3548c3922633c349"
+engineering_loop_version: "a8c6d3f12d2c36532ed0745728750adf4ac29396"
 
 # GitHub issue/PR intake scope for first production rollout.
 engineering_loop_repos:
