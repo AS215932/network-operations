@@ -43,7 +43,25 @@
     - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_memory_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_git_askpass_path | dirname }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
+
+- name: Migrate Engineering Loop memory out of managed repo workspaces
+  ansible.builtin.shell: |
+    set -euo pipefail
+    legacy={{ engineering_loop_legacy_memory_dir | quote }}
+    target={{ engineering_loop_memory_dir | quote }}
+    if [ "$legacy" = "$target" ] || [ ! -d "$legacy" ]; then
+      exit 0
+    fi
+    cp -a "$legacy"/. "$target"/
+    rm -rf "$legacy"
+    chown -R {{ engineering_loop_user | quote }}:{{ engineering_loop_group | quote }} "$target"
+    echo migrated
+  args:
+    executable: /bin/bash
+  register: engineering_loop_memory_migration
+  changed_when: engineering_loop_memory_migration.stdout != ''
 
 - name: Checkout Engineering Loop runtime
   ansible.builtin.git:
