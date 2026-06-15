@@ -5,7 +5,7 @@
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
 engineering_loop_version: "58735fa051d24290f128109b4267e136316cbc86"
-engineering_loop_timer_enabled: false
+engineering_loop_timer_enabled: true
 
 monitoring_register: true
 monitoring_role: loop
