@@ -43,7 +43,33 @@
     - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_memory_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_git_askpass_path | dirname }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
+
+- name: Check for legacy Engineering Loop memory inside managed workspace
+  ansible.builtin.stat:
+    path: "{{ engineering_loop_legacy_memory_dir }}"
+  register: engineering_loop_legacy_memory
+
+- name: Migrate Engineering Loop memory out of managed repo workspaces
+  ansible.builtin.copy:
+    src: "{{ engineering_loop_legacy_memory_dir }}/"
+    dest: "{{ engineering_loop_memory_dir }}/"
+    remote_src: true
+    owner: "{{ engineering_loop_user }}"
+    group: "{{ engineering_loop_group }}"
+    mode: preserve
+  when:
+    - engineering_loop_legacy_memory_dir != engineering_loop_memory_dir
+    - engineering_loop_legacy_memory.stat.exists
+
+- name: Remove legacy Engineering Loop memory from managed workspace
+  ansible.builtin.file:
+    path: "{{ engineering_loop_legacy_memory_dir }}"
+    state: absent
+  when:
+    - engineering_loop_legacy_memory_dir != engineering_loop_memory_dir
+    - engineering_loop_legacy_memory.stat.exists
 
 - name: Checkout Engineering Loop runtime
   ansible.builtin.git:

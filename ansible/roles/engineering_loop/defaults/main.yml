@@ -70,7 +70,8 @@ engineering_loop_allowed_paths:
 engineering_loop_max_runs_per_day: 2
 engineering_loop_max_cost_usd_per_day: 10
 engineering_loop_timer_enabled: false
-engineering_loop_memory_dir: "{{ engineering_loop_workspace_dir }}/hyrule-infra/memory"
+engineering_loop_memory_dir: "{{ engineering_loop_state_dir }}/memory"
+engineering_loop_legacy_memory_dir: "{{ engineering_loop_workspace_dir }}/hyrule-infra/memory"
 
 engineering_loop_git_user_name: "hyrule-engineering-loop[bot]"
 engineering_loop_git_user_email: "engineering-loop@as215932.net"
