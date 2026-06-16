@@ -124,6 +124,21 @@ per-cycle/per-day investigation + cost budgets. Memory (lessons / proposals /
 journal / observations) lives under `/var/lib/noc-agent/memory`; humans merge
 proposals into `lessons/`.
 
+### Activation sequence
+
+These env flags are **inert until `noc-agent` is promoted to a build that
+contains the proactive loop**. The production app version is the pinned
+`noc_agent_version` in `host_vars/noc.yml`; until that pin advances to a SHA
+with `app/proactive/`, `apply.yml` renders the new `NOC_PROACTIVE_*` vars but
+keeps running the old agent, so nothing starts. Correct order:
+
+1. Merge `noc-agent#20`.
+2. Promote `noc-agent` (the `promote-apps` flow bumps `noc_agent_version`).
+3. Merge this PR and run `apply.yml playbook=noc` (human `production` gate) — the
+   loop now starts with these flags.
+
+Merging this PR on its own is therefore safe: it cannot start the loop early.
+
 ### Deployed state and safety rails
 
 The loop ships **enabled and autonomous** (`noc-agent.env.ctmpl.j2`):
