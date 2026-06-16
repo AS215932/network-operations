@@ -131,6 +131,8 @@
   loop:
     - "{{ noc_agent_install_dir }}"
     - "{{ noc_agent_state_dir }}"
+    - "{{ noc_agent_state_dir }}/proactive"
+    - "{{ noc_agent_state_dir }}/memory"
   tags: [apply]
 
 - name: Ensure noc-agent root-owned config/runtime dirs exist
