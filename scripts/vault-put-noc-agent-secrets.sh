@@ -53,6 +53,19 @@ if [ -n "${NOC_ACTION_ALLOWED_SERVICES:-}" ]; then
   vault_args+=(noc_action_allowed_services="${NOC_ACTION_ALLOWED_SERVICES}")
 fi
 
+# Proactive-loop handoff via GitHub App. NOTE: `vault kv put` replaces the whole
+# secret, so set these (e.g. in secrets.local.sh) or a rotation will DROP the
+# app credentials and handoff reverts to a no-op:
+#   NOC_GITHUB_APP_ID            numeric App ID
+#   NOC_GITHUB_APP_PRIVATE_KEY_FILE  path to the App's .pem
+if [ -n "${NOC_GITHUB_APP_ID:-}" ]; then
+  vault_args+=(noc_github_app_id="${NOC_GITHUB_APP_ID}")
+fi
+
+if [ -n "${NOC_GITHUB_APP_PRIVATE_KEY_FILE:-}" ]; then
+  vault_args+=(noc_github_app_private_key=@"${NOC_GITHUB_APP_PRIVATE_KEY_FILE}")
+fi
+
 vault kv put kv/noc-agent "${vault_args[@]}"
 
 echo "Wrote kv/noc-agent."
