@@ -150,9 +150,15 @@ The standing safety rails are the budgets, which stay conservative:
   `multi_source_probe`) are **proposed, not auto-run** (`NOC_PROACTIVE_AUTO_HEAVY_PROBES=0`);
 - nothing mutates infrastructure — the loop reports and hands off only.
 
-Handoff (`loop:candidate` issues) is a no-op until an issues-scoped
-`NOC_GITHUB_TOKEN` exists in `kv/noc-agent` as `noc_github_token`; once present
-the loop opens/refreshes candidate issues for findings that warrant a change.
+Handoff (`loop:candidate` issues) is a no-op until GitHub auth is present in
+`kv/noc-agent`. Preferred is an org-owned **GitHub App** (Issues: RW + Metadata:
+R on `network-operations`): store `noc_github_app_id` and the PEM as
+`noc_github_app_private_key`. Vault Agent renders the key to
+`/etc/noc-agent/github-app.pem` and the app mints short-lived installation
+tokens at call time. A fine-grained PAT in `noc_github_token` works as a
+fallback. Keep these in `secrets.local.sh` (`NOC_GITHUB_APP_ID`,
+`NOC_GITHUB_APP_PRIVATE_KEY_FILE`) so `vault-put-noc-agent-secrets.sh` rotations
+don't drop them.
 
 To **canary cheaply**, set `NOC_PROACTIVE_SHADOW=1` (scan-and-report only) and
 re-apply; flip back to `0` once the scanners look right. To **pause**, set
