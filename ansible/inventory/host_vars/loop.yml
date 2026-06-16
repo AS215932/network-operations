@@ -15,6 +15,10 @@ engineering_loop_allowed_paths:
     - tests
     - scripts
     - docs
+  hyrule-web:
+    - frontend
+    - hyrule_web
+    - tests
 
 monitoring_register: true
 monitoring_role: loop
