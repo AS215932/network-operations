@@ -32,8 +32,9 @@ do **not**, by themselves, stop a workflow inside a repo permitted to both
 groups from selecting the wrong label. Job-level separation is the combination
 of:
 
-1. **Runner groups** (`public-pr` → all six repos; `hyrule-ci` → only repos that
-   deploy). A repo not in a group can't use it even if a workflow names the label.
+1. **Runner groups** (`public-pr` → selected public repos, including
+   `engineering-loop`; `hyrule-ci` → only repos that deploy). A repo not in a
+   group can't use it even if a workflow names the label.
 2. **Trigger discipline** — privileged labels (`hyrule`/`hyrule-infra`) appear
    only in trusted `push`/`workflow_dispatch`/`schedule`/deploy/`environment`
    jobs, **never** in a `pull_request` job. The heavy labs keep the privileged

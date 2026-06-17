@@ -21,7 +21,7 @@ To turn Semgrep into a true blocking gate once the baseline is triaged: drop
 per repo only after the existing findings are reviewed — don't block on
 historical findings. Recommended progression: baseline (reporting-only) → block
 new high-severity → high-confidence medium+ on the security-sensitive repos
-(`hyrule-cloud`, `noc-agent`, `hyrule-mcp`).
+(`engineering-loop`, `hyrule-cloud`, `noc-agent`, `hyrule-mcp`).
 
 ## Packs
 

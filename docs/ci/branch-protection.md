@@ -8,6 +8,7 @@ a blocking gate per `docs/ci/semgrep.md` once each repo's baseline is triaged.
 | Repo | Required checks | strict | reviews | enforce_admins |
 |------|-----------------|:------:|:-------:|:--------------:|
 | `network-operations` | `lint, render, iac-gate, semgrep` | ✓ | 1 | off |
+| `engineering-loop` | `pytest, ruff, mypy, semgrep` | ✓ | 0 | off |
 | `hyrule-web` | `test, frontend` | ✓ | 1 | off |
 | `hyrule-cloud` | `test, semgrep` | ✓ | 0 | off |
 | `noc-agent` | `semgrep` | ✓ | 0 | off |
@@ -21,7 +22,7 @@ lists only `claude-for-github`, `claude`).
 
 ## Why these settings
 
-- **No required reviews on the four newly-protected repos** (and `enforce_admins`
+- **No required reviews on the newly-protected repos** (and `enforce_admins`
   off everywhere): this is a solo-maintainer org. Requiring an approval with no
   second maintainer forces an `--admin` bypass on every merge (self-approval is
   forbidden) and risks a merge lockout. `network-operations`/`hyrule-web` keep
@@ -53,7 +54,7 @@ IaC changes, and the trusted lab tiers are success-or-skipped — see
 ## Reproducing the protection
 
 ```bash
-# Four repos protected on existing green contexts (no required reviews):
+# Repos protected on existing green contexts (no required reviews where noted):
 gh api -X PUT repos/AS215932/<repo>/branches/main/protection --input - <<'EOF'
 { "required_status_checks": {"strict": true, "contexts": [...]},
   "enforce_admins": false, "required_pull_request_reviews": null,

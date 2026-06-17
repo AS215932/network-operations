@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Profile/README optimization pass: roadmap, architecture diagrams, screenshots, contributing guide, and changelog.
 
+### Removed
+- In-repo Engineering Loop runtime, prompt/skill docs, Pi extension, model
+  policies, and loop-specific test suite after extraction to
+  `AS215932/engineering-loop`.
+
 ## [2025.06] — Infrastructure hardening & automation
 
 ### Added
