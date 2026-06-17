@@ -5,7 +5,7 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: 7941d456c8afd429136ceeb4e7e4898a155dfc80
+noc_agent_version: 39c8eed362525844a547b444550454e8c9f0a02e
 hyrule_mcp_version: 326bcc85e1c69f0d7c1839ebaa4abb73acd84185
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
