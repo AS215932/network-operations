@@ -1,10 +1,9 @@
 # AS215932 CI/CD inventory
 
-Authoritative snapshot of the org's CI/CD surface as of **2026-05-31**, captured
+Authoritative snapshot of the org's CI/CD surface as of **2026-06-17**, captured
 at the start of the CI/CD modernization effort (PR-Agent + Semgrep + two-runner
-security model). Verified live against the GitHub org and each repo's default
-branch. Update this file when workflows, runners, secrets, or required checks
-change.
+security model) and updated after the Engineering Loop extraction. Keep this
+file in sync when workflows, runners, secrets, or required checks change.
 
 > Naming note: the local working-copy directory `hyrule-infra/` maps to the
 > GitHub repo **`AS215932/network-operations`**. There is **no** repo named
@@ -15,6 +14,7 @@ change.
 | Repo | Stack | Workflows (`main`) | Branch protection / required checks | Deploys? | AI review | Semgrep |
 |------|-------|--------------------|-------------------------------------|----------|-----------|---------|
 | `network-operations` | Ansible / IaC + Python tests | `lint.yml`, `render-check.yml`, `iac-tests.yml`, `apply.yml`, `drift-detection.yml` | **Protected** — required: `lint`, `render`, `iac-gate`, `semgrep` (strict) | Yes (`apply.yml`, manual + `production`) | PR-Agent advisory | token-less SARIF |
+| `engineering-loop` | Python (uv), LangGraph, Pi extension | `ci.yml` (`pytest`, `ruff`, `mypy`), `semgrep.yml` | **Protected** — required: `pytest`, `ruff`, `mypy`, `semgrep` (strict) | No — runtime deploy state remains in `network-operations` | PR-Agent advisory | token-less SARIF |
 | `hyrule-web` | Python (uv) + TS/Vite | `ci.yml` (`test`, `frontend`), `deploy.yml` | **Protected** — required: `test`, `frontend` (strict) | Yes (`deploy.yml`, push→main / dispatch, `production`) | Sourcery (to remove) | none yet |
 | `hyrule-cloud` | Python (uv), FastAPI / x402 | `ci.yml` (`test`), `deploy.yml` | **Not protected** | Yes (`deploy.yml`, `production`) | Sourcery (to remove) | none yet |
 | `noc-agent` | Python ≥3.14, PydanticAI / langgraph / redis / mcp | none | **Not protected** | No | Sourcery (to remove) | none yet |
@@ -30,6 +30,9 @@ Notes:
   `iac-tests.yml` tier jobs (`static-iac`, `ansible-idempotency`, `batfish`,
   `containerlab-frr`) are **not** required individually; `iac-gate` is the
   required aggregate context.
+- `engineering-loop` now owns the loop runtime code, prompt/skill library,
+  Pi `/loop` extension, model policy, and loop test suite. `network-operations`
+  keeps only Ansible deployment state for the dedicated `loop` VM.
 - `hyrule-cloud` `ci.yml` lints/types **touched files only**, and `mypy
   --strict` is currently suffixed `|| true` (deliberate, temporary — tracked as
   the post-A0 type-cleanup PR's exit criterion). Its in-file comment claims
@@ -71,7 +74,7 @@ Runner groups (org Actions settings):
 | `HYRULE_INFRA_DEPLOY_KEY` | repo (`hyrule-web`, `hyrule-cloud`) | `deploy.yml` | Deploy key to checkout `network-operations` (Ansible) during app deploy |
 | Vault-rendered `/etc/github-runner/secrets.env` | on `ci` host | `apply.yml`, `deploy.yml`, `drift-detection.yml` | `DISCORD_WEBHOOK_URL`, `ICINGA_API_*`, etc. for privileged Ansible runs |
 | `id_ci` | on `ci` host | `apply.yml`, app `deploy.yml` | SSH as the `ci` deploy user across the fleet |
-| `OPENROUTER_API_KEY` | **org (planned)** | `pr-agent.yml` (all repos) | PR-Agent LLM calls via OpenRouter — read/comment-only, `ci-pr` only |
+| `OPENROUTER_API_KEY` | **org (planned)** | `pr-agent.yml` (selected public repos, including `engineering-loop`) | PR-Agent LLM calls via OpenRouter — read/comment-only, `ci-pr` only |
 
 Semgrep is **token-less** (no `SEMGREP_APP_TOKEN`): it uploads SARIF to GitHub
 Code Scanning, free for these public repos.
