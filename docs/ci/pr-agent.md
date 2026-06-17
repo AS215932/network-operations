@@ -8,7 +8,7 @@ a required check.
 - Action: `The-PR-Agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7` (v0.35.0, Docker-based), SHA-pinned.
 - Runner: `hyrule-public-pr` (unprivileged `ci-pr`) only.
 - Model: primary `openrouter/deepseek/deepseek-v4-flash`, fallback `openrouter/minimax/minimax-m2.7`.
-- Key: `OPENROUTER_API_KEY` org secret (visibility = the six repos), delivered per-job as `OPENROUTER__KEY`.
+- Key: `OPENROUTER_API_KEY` org secret (visibility = selected public repos, including `engineering-loop`), delivered per-job as `OPENROUTER__KEY`.
 - Config: `.pr_agent.toml` per repo (model, fallback, `extra_instructions`).
 
 ## The model-pin gotcha (important)
