@@ -1,0 +1,26 @@
+---
+# Debian router package/capability probes. All commands are read-only and
+# tolerate absent optional packages so the audit can report missing NETCONF
+# support without failing the run.
+
+frr_yang_package_audit_commands:
+  - name: debian_frr_packages
+    shell: |
+      dpkg-query -W -f='${binary:Package}\t${Version}\n' \
+        frr frr-pythontools frr-grpc sysrepo netopeer2 libyang3 2>&1 || true
+  - name: debian_sysrepo_modules
+    shell: |
+      if command -v sysrepoctl >/dev/null 2>&1; then
+        sysrepoctl -l
+      else
+        echo 'sysrepoctl not found'
+      fi
+  - name: debian_netconf_listeners
+    shell: |
+      if command -v ss >/dev/null 2>&1; then
+        ss -H -lnpt "( sport = :{{ frr_netconf_port }} )" 2>&1 || true
+      elif command -v netstat >/dev/null 2>&1; then
+        netstat -lntp 2>&1 | grep -E '(:|\.){{ frr_netconf_port }}\b' || true
+      else
+        echo 'ss/netstat not found'
+      fi

@@ -1,0 +1,11 @@
+---
+- name: FRR YANG — read-only audit
+  hosts: routers
+  # Facts come from group_vars (ansible_os_family preset), matching the other
+  # router playbooks. The role is read-only and writes artifacts on the
+  # controller under ansible/generated/frr-yang-snapshots/.
+  gather_facts: false
+  become: true
+  roles:
+    - frr_yang
+  tags: [frr_yang]

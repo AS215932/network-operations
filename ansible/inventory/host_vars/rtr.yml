@@ -3,6 +3,11 @@
 # Bridges: enX0 (mgmt), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
 # Carries IPv4 NAT/DNAT for legacy v4 service ingress + customer VM isolation.
 
+# --- FRR NETCONF/YANG audit metadata ---
+frr_version_expected: "10.6.0"
+frr_yang_profile: "debian-frr-10.6-stock-readonly"
+frr_vrf_context: overlay
+
 # --- networkd_resolved role override: drop-in goes on the overlay infra interface,
 #     not the mgmt link-local one (enX0 has no DNS to advertise).
 networkd_primary_unit: "10-enX2"

@@ -1,0 +1,69 @@
+---
+# Read-only FRR YANG/NETCONF capability audit defaults.
+# Production source of truth remains configs/<host>/frr.conf; this role only
+# observes router state and writes local evidence artifacts.
+
+frr_yang_audit_enabled: false
+
+# Runtime snapshots are intentionally ignored by Git. They are uploaded by the
+# audit workflow and used for drift/debugging only.
+frr_yang_snapshot_root: "{{ playbook_dir }}/../generated/frr-yang-snapshots"
+
+# Standard NETCONF endpoint knobs. They are inventory metadata for now; endpoint
+# provisioning is a later, explicitly-gated step and defaults disabled.
+frr_netconf_endpoint_enabled: false
+frr_netconf_write_enabled: false
+frr_netconf_port: 830
+frr_netconf_allowed_sources_v6: []
+
+# Per-host metadata; host_vars should set exact values.
+frr_version_expected: ""
+frr_yang_profile: "stock-frr-readonly"
+frr_vrf_context: default
+
+# Commands explicitly requested by the adoption plan. All are read-only and run
+# with failed_when=false so unsupported daemons/capabilities are captured as
+# evidence instead of hiding partial results.
+frr_yang_vtysh_audit_commands:
+  - name: version
+    argv: ["vtysh", "-c", "show version"]
+  - name: bgp_ipv6_summary_json
+    argv: ["vtysh", "-c", "show bgp ipv6 summary json"]
+  - name: configuration_running_bgpd_json
+    argv: ["vtysh", "-c", "show configuration running json bgpd"]
+  - name: configuration_running_staticd_json
+    argv: ["vtysh", "-c", "show configuration running json staticd"]
+  - name: configuration_running_zebra_json
+    argv: ["vtysh", "-c", "show configuration running json zebra"]
+  - name: configuration_running_ospf6d_json
+    argv: ["vtysh", "-c", "show configuration running json ospf6d"]
+  - name: mgmt_backend_adapter_all
+    argv: ["vtysh", "-c", "show mgmt backend-adapter all"]
+
+# Cross-platform shell snippets for local capability evidence.
+frr_yang_capability_audit_commands:
+  - name: executable_paths
+    shell: |
+      for bin in vtysh mgmtd sysrepoctl sysrepocfg netopeer2-server sshd; do
+        if command -v "$bin" >/dev/null 2>&1; then
+          printf '%s\t%s\n' "$bin" "$(command -v "$bin")"
+        else
+          printf '%s\tnot-found\n' "$bin"
+        fi
+      done
+  - name: frr_yang_and_module_paths
+    shell: |
+      for path in \
+        /usr/share/yang \
+        /usr/local/share/yang \
+        /usr/share/frr \
+        /usr/local/share/frr \
+        /usr/lib/frr/modules \
+        /usr/lib/*/frr/modules \
+        /usr/local/lib/frr/modules; do
+        if [ -e "$path" ]; then
+          echo "### $path"
+          find "$path" -type f 2>/dev/null | sort | sed -n '1,200p'
+        fi
+      done
+      true

@@ -5,6 +5,11 @@
 
 ansible_python_interpreter: /usr/local/bin/python3.11
 
+# --- FRR NETCONF/YANG audit metadata ---
+frr_version_expected: "10.4.1"
+frr_yang_profile: "freebsd-frr10-10.4-stock-readonly"
+frr_vrf_context: default
+
 pf_ext_if: "vtnet0"
 pf_extra_ifs:
   - { name: "ixp_nl", dev: "vtnet1" }

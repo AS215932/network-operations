@@ -102,6 +102,7 @@ pass in quick on $ext_if {{ fam }} proto {{ proto }} {{ src_clause }} to any por
 {% endfor %}
 
 {% endif %}
+{% include 'partials/_netconf_endpoint_pf.j2' %}
 {% if firewall_extra_raw_pf %}
 # --- raw escape hatch ---
 {{ firewall_extra_raw_pf }}

@@ -191,7 +191,7 @@ class InventorySchemaTest(unittest.TestCase):
                 )
 
     def test_router_loopbacks_live_in_the_loopback_subnet(self):
-        for name in ("rtr", "cr1_nl1", "cr1_de1"):
+        for name in ("rtr", "cr1_nl1", "cr1_de1", "cr1_ch1"):
             lo = self.vars["peers"][name].get("loopback")
             with self.subTest(peer=name):
                 self.assertIsNotNone(lo, f"{name} has no loopback")

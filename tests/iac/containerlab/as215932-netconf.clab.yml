@@ -1,0 +1,33 @@
+---
+name: as215932-netconf
+
+# Trusted-only lab for standard NETCONF/YANG behavior. The image is built by
+# scripts/ci/containerlab-netconf-yang-test.sh from netconf/Dockerfile and is
+# intentionally lab-only; production routers must keep stock FRR packages.
+
+topology:
+  kinds:
+    linux:
+      image: as215932/frr-netconf-yang:local
+      binds:
+        - /lib/modules:/lib/modules:ro
+        - ./configs/vtysh.conf:/etc/frr/vtysh.conf:ro
+
+  nodes:
+    rtr:
+      kind: linux
+      binds:
+        - ./configs/rtr/frr.conf:/etc/frr/frr.conf:ro
+    cr1-nl1:
+      kind: linux
+      binds:
+        - ./configs/cr1-nl1/frr.conf:/etc/frr/frr.conf:ro
+    cr1-de1:
+      kind: linux
+      binds:
+        - ./configs/cr1-de1/frr.conf:/etc/frr/frr.conf:ro
+
+  links:
+    - endpoints: ["rtr:eth1", "cr1-nl1:eth1"]
+    - endpoints: ["rtr:eth2", "cr1-de1:eth1"]
+    - endpoints: ["cr1-nl1:eth2", "cr1-de1:eth2"]

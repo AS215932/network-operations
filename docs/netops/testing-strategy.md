@@ -13,6 +13,7 @@ the privileged `ci` runner on trusted triggers only.
 | 0 — static | `static-iac`, `ansible-idempotency` | `hyrule-public-pr` (unprivileged) | PRs with IaC path changes | **required** via `iac-gate` |
 | 1 — Batfish | `batfish` | `ci` (privileged) | `workflow_dispatch`, repo var `ENABLE_BATFISH_TESTS`, nightly | advisory / trusted-only |
 | 2 — Containerlab | `containerlab-frr` | `ci` (privileged) | `workflow_dispatch`, repo var `ENABLE_CONTAINERLAB_TESTS`, nightly | advisory / trusted-only |
+| 2 — NETCONF/YANG lab | `netconf-yang-lab` | `ci` (privileged) | `workflow_dispatch`, repo var `ENABLE_NETCONF_YANG_TESTS`, nightly | advisory / trusted-only |
 | 3 — deploy safety | `apply.yml` (manual, `production`, Icinga pre/post + Goss), `drift-detection.yml` (nightly check-mode) | `ci` (privileged) | manual / schedule | deploy-time |
 
 All of Tier 0 is in `.github/workflows/iac-tests.yml`. Tiers 1–2 also live there
@@ -57,7 +58,10 @@ session compatibility, iBGP full mesh across the three core routers, unique
 router-IDs, no undefined references, customer segment cannot reach infra
 management, authorized CI can reach management ports. Containerlab
 (`tests/iac/containerlab/`) deploys the core topology and checks FRR/BGP comes
-up. Deeper assertions (no unexpected eBGP, prefix-export hygiene,
+up. The trusted NETCONF/YANG lab builds a lab-only FRR image with sysrepo and
+Netopeer2, verifies NETCONF capability/schema discovery, exercises candidate
+validate/discard/commit/cleanup, and confirms BGP stays established afterwards.
+Deeper assertions (no unexpected eBGP, prefix-export hygiene,
 default-route/failover, topology-from-source-of-truth, advertise/withdraw sims)
 are tracked as a follow-up — they need the lab to develop and verify.
 
