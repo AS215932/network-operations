@@ -67,6 +67,7 @@
     argv:
       - docker
       - build
+      - --network=host
       - -t
       - "{{ knowledge_mcp_image }}"
       - --label
