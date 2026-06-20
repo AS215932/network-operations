@@ -11,9 +11,8 @@ knowledge_mcp_group: loop
 knowledge_mcp_install_dir: /opt/knowledge
 knowledge_mcp_state_dir: /var/lib/knowledge-mcp
 knowledge_mcp_repo: https://github.com/AS215932/knowledge.git
-# Use a commit SHA for production promotion; `main` keeps first bootstrap usable
-# after the Dockerfile lands.
-knowledge_mcp_version: main
+# Pinned AS215932/knowledge commit containing the Dockerfile and MCP HTTP health checks.
+knowledge_mcp_version: 8e97e89cca80a8e65030fb3c259acfd0f732aa06
 
 knowledge_mcp_container_name: hyrule-knowledge-mcp
 knowledge_mcp_image_repository: as215932/knowledge-mcp

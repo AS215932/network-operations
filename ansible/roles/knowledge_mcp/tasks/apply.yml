@@ -44,27 +44,39 @@
     dest: "{{ knowledge_mcp_install_dir }}"
     version: "{{ knowledge_mcp_version }}"
     update: true
-    force: true
+    force: false
   become: true
   become_user: "{{ knowledge_mcp_user }}"
   notify: restart knowledge-mcp
+
+- name: Inspect existing Knowledge MCP container image revision
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ knowledge_mcp_image }}"
+      - --format
+      - "{{ '{{' }} index .Config.Labels \"org.opencontainers.image.revision\" {{ '}}' }}"
+  register: knowledge_mcp_image_revision
+  failed_when: false
+  changed_when: false
 
 - name: Build Knowledge MCP container image
   ansible.builtin.command:
     argv:
       - docker
       - build
-      - --pull
       - -t
       - "{{ knowledge_mcp_image }}"
+      - --label
+      - "org.opencontainers.image.revision={{ knowledge_mcp_version }}"
       - .
   args:
     chdir: "{{ knowledge_mcp_install_dir }}"
   register: knowledge_mcp_docker_build
-  changed_when: >-
-    'Successfully built' in knowledge_mcp_docker_build.stdout or
-    'Successfully tagged' in knowledge_mcp_docker_build.stdout or
-    'writing image' in knowledge_mcp_docker_build.stderr
+  changed_when: true
+  when: knowledge_mcp_image_revision.stdout | trim != knowledge_mcp_version
   notify: restart knowledge-mcp
 
 - name: Install Knowledge MCP systemd service

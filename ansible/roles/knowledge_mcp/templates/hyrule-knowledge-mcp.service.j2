@@ -17,16 +17,17 @@ ExecStart=/usr/bin/docker run \
     --name {{ knowledge_mcp_container_name }} \
     --rm \
     --pull=never \
+    --network=host \
+    --user=65534:65534 \
     --read-only \
     --cap-drop=ALL \
     --security-opt no-new-privileges \
     --pids-limit={{ knowledge_mcp_pids_limit }} \
     --memory={{ knowledge_mcp_memory }} \
-    --tmpfs /tmp:rw,noexec,nosuid,size=64m \
-    -p {{ knowledge_mcp_host }}:{{ knowledge_mcp_port }}:8767 \
+    --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
     -e HYRULE_KNOWLEDGE_MCP_TRANSPORT={{ knowledge_mcp_transport }} \
-    -e HYRULE_KNOWLEDGE_MCP_BIND=0.0.0.0 \
-    -e HYRULE_KNOWLEDGE_MCP_PORT=8767 \
+    -e HYRULE_KNOWLEDGE_MCP_BIND={{ knowledge_mcp_host }} \
+    -e HYRULE_KNOWLEDGE_MCP_PORT={{ knowledge_mcp_port }} \
     -e HYRULE_KNOWLEDGE_MCP_PATH={{ knowledge_mcp_mcp_path }} \
     -e HYRULE_KNOWLEDGE_MCP_SSE_PATH={{ knowledge_mcp_sse_path }} \
     -e HYRULE_KNOWLEDGE_MCP_MESSAGE_PATH={{ knowledge_mcp_message_path }} \

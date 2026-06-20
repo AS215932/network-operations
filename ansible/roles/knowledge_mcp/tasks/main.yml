@@ -7,7 +7,7 @@
       - knowledge_mcp_install_dir.startswith('/')
       - knowledge_mcp_state_dir.startswith('/')
       - knowledge_mcp_transport in ['streamable-http', 'sse']
-      - knowledge_mcp_host in ['127.0.0.1', '::1']
+      - knowledge_mcp_host == '127.0.0.1'
       - knowledge_mcp_port | int > 1024
       - knowledge_mcp_port | int < 65536
     fail_msg: >-
