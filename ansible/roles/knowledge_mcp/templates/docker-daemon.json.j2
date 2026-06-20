@@ -1,0 +1,15 @@
+{% set docker_daemon_config = {} %}
+{% if knowledge_mcp_docker_ipv6_enabled | bool %}
+{% set _ = docker_daemon_config.update({
+  "ipv6": true,
+  "fixed-cidr-v6": knowledge_mcp_docker_fixed_cidr_v6,
+  "ip6tables": false,
+  "ip-masq": false
+}) %}
+{% endif %}
+{% if knowledge_mcp_docker_dns | length > 0 %}
+{% set _ = docker_daemon_config.update({
+  "dns": knowledge_mcp_docker_dns
+}) %}
+{% endif %}
+{{ docker_daemon_config | to_nice_json }}

@@ -49,6 +49,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::c` cr1-ch1, `::d` rtr) |
 | `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::f0`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
+| `2a0c:b641:b50:f0::/64` | loop VM Docker bridge containers (routed GUA /64 via loop) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (also `::c1` = ci-pr, the unprivileged PR runner) |
 | `10.0.0.0/24` | Mgmt v4 (dom0 ↔ XOA XAPI) |
@@ -63,7 +64,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| infra subnet, customer subnet, vpn-clients | TCP/UDP | 53 | DNS recursion (Unbound + DNS64) |
+| infra subnet, customer subnet, vpn-clients, loop Docker subnet | TCP/UDP | 53 | DNS recursion (Unbound + DNS64) |
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP/UDP | 53 | rtr's **own** DNS queries to its Unbound — Unbound is overlay-VRF-confined so rtr's default-VRF processes query it with the underlay source (#135) |
 | mon | TCP | 9100 | node_exporter scrape |
 | mon | TCP | 9342 | frr_exporter scrape |
@@ -220,9 +221,10 @@ Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
 pushes, draft PRs, and knowledge MCP image source checkouts/build context),
 loop → model provider APIs TCP/443 (through the selected backend/provider auth),
 loop → mon TCP/5665 (Icinga passive check submission), loop → log TCP/6000
-(Vector agent), loop → vault TCP/8200 (Vault Agent render), loop → container
-base-image registries TCP/443 during knowledge MCP Docker image builds. It does
-**not** SSH to the infra fleet.
+(Vector agent), loop → vault TCP/8200 (Vault Agent render). Docker bridge
+containers receive routed GUA addresses from `2a0c:b641:b50:f0::/64`, query
+rtr Unbound over IPv6, and use routed IPv6 egress for container base-image and
+package downloads. loop does **not** SSH to the infra fleet.
 
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
