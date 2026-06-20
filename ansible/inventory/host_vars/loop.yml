@@ -4,8 +4,16 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "768cde6c996e42f3f91d395347ba9809e2e020e5"
+engineering_loop_version: "34dd5e82c02b577a51d4f477b0bb50b716a5492f"
 engineering_loop_timer_enabled: true
+
+# Local read-only knowledge MCP server for Engineering Loop context. It is
+# deployed as a Docker container and bound to host loopback only.
+knowledge_mcp_version: "ec09b7df21f9c08d155d5b4d63b3dba21d976e93"
+knowledge_mcp_enabled: true
+knowledge_mcp_host: 127.0.0.1
+knowledge_mcp_port: 8767
+knowledge_mcp_transport: streamable-http
 
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
 # (still draft-PR + human-merge gated). All other repos stay docs-only.
@@ -37,6 +45,14 @@ monitoring_extra_services:
     vars:
       prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
       systemd_unit: hyrule-engineering-loop.timer
+  - name: knowledge-mcp-service
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    notes: "Knowledge MCP container service is active on loopback for Engineering Loop context"
+    vars:
+      prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
+      systemd_unit: hyrule-knowledge-mcp.service
 
 firewall_extra_rules:
   # node_exporter scrape from mon only.

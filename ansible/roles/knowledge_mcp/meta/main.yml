@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: knowledge_mcp
+  author: AS215932
+  description: Containerized AS215932 knowledge MCP server
+  license: private
+  min_ansible_version: "2.15"
+dependencies: []

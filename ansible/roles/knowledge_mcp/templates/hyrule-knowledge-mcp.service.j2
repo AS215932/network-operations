@@ -1,0 +1,53 @@
+# /etc/systemd/system/hyrule-knowledge-mcp.service
+# Managed by ansible/roles/knowledge_mcp. Read-only MCP server for the
+# AS215932 knowledge SQLite export. Bound to loopback on the dedicated loop VM.
+
+[Unit]
+Description=AS215932 Knowledge MCP server (containerized)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+ExecStartPre=-/usr/bin/docker rm -f {{ knowledge_mcp_container_name }}
+ExecStart=/usr/bin/docker run \
+    --name {{ knowledge_mcp_container_name }} \
+    --rm \
+    --pull=never \
+    --network=host \
+    --user=65534:65534 \
+    --read-only \
+    --cap-drop=ALL \
+    --security-opt no-new-privileges \
+    --pids-limit={{ knowledge_mcp_pids_limit }} \
+    --memory={{ knowledge_mcp_memory }} \
+    --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
+    -e HYRULE_KNOWLEDGE_MCP_TRANSPORT={{ knowledge_mcp_transport }} \
+    -e HYRULE_KNOWLEDGE_MCP_BIND={{ knowledge_mcp_host }} \
+    -e HYRULE_KNOWLEDGE_MCP_PORT={{ knowledge_mcp_port }} \
+    -e HYRULE_KNOWLEDGE_MCP_PATH={{ knowledge_mcp_mcp_path }} \
+    -e HYRULE_KNOWLEDGE_MCP_SSE_PATH={{ knowledge_mcp_sse_path }} \
+    -e HYRULE_KNOWLEDGE_MCP_MESSAGE_PATH={{ knowledge_mcp_message_path }} \
+    -e HYRULE_KNOWLEDGE_MCP_MOUNT_PATH={{ knowledge_mcp_mount_path }} \
+    -e HYRULE_KNOWLEDGE_MCP_LOG_LEVEL={{ knowledge_mcp_log_level }} \
+    {{ knowledge_mcp_image }}
+ExecStop=/usr/bin/docker stop {{ knowledge_mcp_container_name }}
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=knowledge-mcp
+
+# Keep the daemon as a read-only loopback dependency of the Engineering Loop.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=/run /var/run {{ knowledge_mcp_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

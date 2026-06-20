@@ -1,0 +1,98 @@
+---
+- name: Ensure Knowledge MCP packages are installed
+  ansible.builtin.apt:
+    name: "{{ knowledge_mcp_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled for Knowledge MCP
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Ensure Knowledge MCP group exists
+  ansible.builtin.group:
+    name: "{{ knowledge_mcp_group }}"
+    state: present
+    system: true
+
+- name: Ensure Knowledge MCP user exists
+  ansible.builtin.user:
+    name: "{{ knowledge_mcp_user }}"
+    group: "{{ knowledge_mcp_group }}"
+    home: "{{ knowledge_mcp_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure Knowledge MCP directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(knowledge_mcp_user) }}"
+    group: "{{ item.group | default(knowledge_mcp_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ knowledge_mcp_install_dir }}", mode: "0755" }
+    - { path: "{{ knowledge_mcp_state_dir }}", mode: "0750" }
+
+- name: Checkout Knowledge MCP source
+  ansible.builtin.git:
+    repo: "{{ knowledge_mcp_repo }}"
+    dest: "{{ knowledge_mcp_install_dir }}"
+    version: "{{ knowledge_mcp_version }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ knowledge_mcp_user }}"
+  notify: restart knowledge-mcp
+
+- name: Inspect existing Knowledge MCP container image revision
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ knowledge_mcp_image }}"
+      - --format
+      - "{{ '{{' }} index .Config.Labels \"org.opencontainers.image.revision\" {{ '}}' }}"
+  register: knowledge_mcp_image_revision
+  failed_when: false
+  changed_when: false
+
+- name: Build Knowledge MCP container image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - -t
+      - "{{ knowledge_mcp_image }}"
+      - --label
+      - "org.opencontainers.image.revision={{ knowledge_mcp_version }}"
+      - .
+  args:
+    chdir: "{{ knowledge_mcp_install_dir }}"
+  register: knowledge_mcp_docker_build
+  changed_when: true
+  when: knowledge_mcp_image_revision.stdout | trim != knowledge_mcp_version
+  notify: restart knowledge-mcp
+
+- name: Install Knowledge MCP systemd service
+  ansible.builtin.template:
+    src: hyrule-knowledge-mcp.service.j2
+    dest: /etc/systemd/system/hyrule-knowledge-mcp.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart knowledge-mcp
+
+- name: Set Knowledge MCP service state
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-mcp.service
+    enabled: "{{ knowledge_mcp_enabled | bool }}"
+    state: "{{ 'started' if knowledge_mcp_enabled | bool else 'stopped' }}"
+    daemon_reload: true

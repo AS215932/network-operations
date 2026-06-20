@@ -1,0 +1,21 @@
+---
+- name: Validate Knowledge MCP deployment inputs
+  ansible.builtin.assert:
+    that:
+      - knowledge_mcp_user | length > 0
+      - knowledge_mcp_group | length > 0
+      - knowledge_mcp_install_dir.startswith('/')
+      - knowledge_mcp_state_dir.startswith('/')
+      - knowledge_mcp_transport in ['streamable-http', 'sse']
+      - knowledge_mcp_host == '127.0.0.1'
+      - knowledge_mcp_port | int > 1024
+      - knowledge_mcp_port | int < 65536
+    fail_msg: >-
+      Knowledge MCP must remain a local loopback read-only service on the
+      dedicated loop VM unless a later PR explicitly widens the exposure.
+  tags: [validate, always]
+
+- name: Apply Knowledge MCP runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: knowledge_mcp_apply | bool
+  tags: [apply]
