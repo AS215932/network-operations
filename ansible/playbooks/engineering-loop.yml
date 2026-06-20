@@ -9,7 +9,7 @@
 #
 # Apply (live deploy, timer remains disabled by default):
 #   ansible-playbook playbooks/engineering-loop.yml --tags apply \
-#     -e engineering_loop_apply=true --limit loop
+#     -e engineering_loop_apply=true -e knowledge_mcp_apply=true --limit loop
 #
 # First bootstrap with Vault Agent requires either:
 #   VAULT_ENGINEERING_LOOP_ROLE_ID=...
@@ -47,6 +47,8 @@
       tags: [logs]
     - role: engineering_loop
       tags: [engineering_loop]
+    - role: knowledge_mcp
+      tags: [knowledge_mcp]
     - role: vault_agent
       vars:
         vault_agent_name: engineering-loop

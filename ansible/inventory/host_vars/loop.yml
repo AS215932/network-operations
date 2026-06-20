@@ -7,6 +7,14 @@
 engineering_loop_version: "768cde6c996e42f3f91d395347ba9809e2e020e5"
 engineering_loop_timer_enabled: true
 
+# Local read-only knowledge MCP server for Engineering Loop context. It is
+# deployed as a Docker container and bound to host loopback only.
+knowledge_mcp_version: main
+knowledge_mcp_enabled: true
+knowledge_mcp_host: 127.0.0.1
+knowledge_mcp_port: 8767
+knowledge_mcp_transport: streamable-http
+
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
 # (still draft-PR + human-merge gated). All other repos stay docs-only.
 engineering_loop_allowed_paths:
@@ -37,6 +45,14 @@ monitoring_extra_services:
     vars:
       prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
       systemd_unit: hyrule-engineering-loop.timer
+  - name: knowledge-mcp-service
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    notes: "Knowledge MCP container service is active on loopback for Engineering Loop context"
+    vars:
+      prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
+      systemd_unit: hyrule-knowledge-mcp.service
 
 firewall_extra_rules:
   # node_exporter scrape from mon only.

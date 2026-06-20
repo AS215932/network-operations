@@ -1,0 +1,37 @@
+---
+# Containerized AS215932 knowledge MCP server on the dedicated loop VM.
+# Default is validate/render only; live mutation requires
+# -e knowledge_mcp_apply=true from the engineering-loop playbook.
+
+knowledge_mcp_apply: false
+knowledge_mcp_enabled: true
+
+knowledge_mcp_user: loop
+knowledge_mcp_group: loop
+knowledge_mcp_install_dir: /opt/knowledge
+knowledge_mcp_state_dir: /var/lib/knowledge-mcp
+knowledge_mcp_repo: https://github.com/AS215932/knowledge.git
+# Use a commit SHA for production promotion; `main` keeps first bootstrap usable
+# after the Dockerfile lands.
+knowledge_mcp_version: main
+
+knowledge_mcp_container_name: hyrule-knowledge-mcp
+knowledge_mcp_image_repository: as215932/knowledge-mcp
+knowledge_mcp_image_tag: "{{ knowledge_mcp_version | regex_replace('[^A-Za-z0-9_.-]', '-') }}"
+knowledge_mcp_image: "{{ knowledge_mcp_image_repository }}:{{ knowledge_mcp_image_tag }}"
+knowledge_mcp_host: 127.0.0.1
+knowledge_mcp_port: 8767
+knowledge_mcp_transport: streamable-http
+knowledge_mcp_mcp_path: /mcp
+knowledge_mcp_sse_path: /sse
+knowledge_mcp_message_path: /messages/
+knowledge_mcp_mount_path: /
+knowledge_mcp_log_level: INFO
+knowledge_mcp_memory: 512m
+knowledge_mcp_pids_limit: 256
+
+knowledge_mcp_packages:
+  - docker.io
+  - git
+  - ca-certificates
+  - curl

@@ -207,7 +207,9 @@ SSRF/IP policy.
 Dedicated Engineering Loop operations-lane VM. It consumes human-approved
 `loop:approved` GitHub issues and stops at draft PRs. It is not an infra deploy
 source: no fleet SSH key, no app runtime secrets, no Vault breadth, and no public
-listener beyond node_exporter for mon.
+listener beyond node_exporter for mon. A containerized `hyrule-knowledge-mcp`
+service binds to `127.0.0.1:8767` only, exposing streamable HTTP MCP at `/mcp`,
+legacy SSE at `/sse` when configured, and `/health` for local smoke checks.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
@@ -215,10 +217,12 @@ listener beyond node_exporter for mon.
 | ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
 
 Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
-pushes, draft PRs), loop → model provider APIs TCP/443 (through the selected
-backend/provider auth), loop → mon TCP/5665 (Icinga passive check submission),
-loop → log TCP/6000 (Vector agent), loop → vault TCP/8200 (Vault Agent render).
-It does **not** SSH to the infra fleet.
+pushes, draft PRs, and knowledge MCP image source checkouts/build context),
+loop → model provider APIs TCP/443 (through the selected backend/provider auth),
+loop → mon TCP/5665 (Icinga passive check submission), loop → log TCP/6000
+(Vector agent), loop → vault TCP/8200 (Vault Agent render), loop → container
+base-image registries TCP/443 during knowledge MCP Docker image builds. It does
+**not** SSH to the infra fleet.
 
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
