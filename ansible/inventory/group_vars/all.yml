@@ -7,6 +7,8 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+# Routed GUA /64 for Docker bridge containers on the loop VM.
+loop_docker_subnet: "2a0c:b641:b50:f0::/64"
 customer_subnet: "2a0c:b641:b51::/48"
 wg_link_prefix: "2a0c:b641:b50:ff00::/56"  # all wg /127s sit under this
 router_loopback_subnet: "2a0c:b641:b50::/64"

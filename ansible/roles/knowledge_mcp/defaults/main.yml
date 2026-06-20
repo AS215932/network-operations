@@ -29,6 +29,15 @@ knowledge_mcp_log_level: INFO
 knowledge_mcp_memory: 512m
 knowledge_mcp_pids_limit: 256
 
+# Optional routed-GUA IPv6 Docker bridge support. This keeps Docker usable on
+# IPv6-only hosts without falling back to IPv4-only public resolvers or IPv4
+# masquerade.
+knowledge_mcp_docker_ipv6_enabled: false
+knowledge_mcp_docker_fixed_cidr_v6: ""
+knowledge_mcp_docker_dns: []
+knowledge_mcp_docker_daemon_config: /etc/docker/daemon.json
+knowledge_mcp_docker_sysctl_file: /etc/sysctl.d/99-knowledge-mcp-docker.conf
+
 knowledge_mcp_packages:
   - docker.io
   - git

@@ -6,6 +6,46 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Ensure Docker config directory exists
+  ansible.builtin.file:
+    path: "{{ knowledge_mcp_docker_daemon_config | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: knowledge_mcp_docker_ipv6_enabled | bool
+
+- name: Install Docker daemon routed IPv6 config for Knowledge MCP
+  ansible.builtin.template:
+    src: docker-daemon.json.j2
+    dest: "{{ knowledge_mcp_docker_daemon_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: knowledge_mcp_docker_daemon_config_result
+  when: knowledge_mcp_docker_ipv6_enabled | bool
+
+- name: Enable IPv6 forwarding for Knowledge MCP Docker routed subnet
+  sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: "1"
+    sysctl_file: "{{ knowledge_mcp_docker_sysctl_file }}"
+    state: present
+    reload: true
+  register: knowledge_mcp_docker_ipv6_forwarding
+  when: knowledge_mcp_docker_ipv6_enabled | bool
+
+- name: Restart Docker to apply Knowledge MCP routed IPv6 config
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: restarted
+  when:
+    - knowledge_mcp_docker_ipv6_enabled | bool
+    - >-
+      knowledge_mcp_docker_daemon_config_result.changed | default(false) or
+      knowledge_mcp_docker_ipv6_forwarding.changed | default(false)
+
 - name: Ensure Docker is enabled for Knowledge MCP
   ansible.builtin.systemd:
     name: docker
@@ -67,7 +107,6 @@
     argv:
       - docker
       - build
-      - --network=host
       - -t
       - "{{ knowledge_mcp_image }}"
       - --label
