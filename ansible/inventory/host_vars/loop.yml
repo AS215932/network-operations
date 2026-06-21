@@ -9,7 +9,7 @@ engineering_loop_timer_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.
-knowledge_mcp_version: "ec09b7df21f9c08d155d5b4d63b3dba21d976e93"
+knowledge_mcp_version: "69e9a30bcb11a6242f6d4adc4587e48ce20e5754"
 knowledge_mcp_enabled: true
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
