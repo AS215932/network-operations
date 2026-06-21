@@ -9,11 +9,14 @@ frr_apply: false
 # inventory_hostname matches the configs/ subdir (cr1-nl1, cr1-de1, rtr).
 frr_config_src_dir: "{{ playbook_dir }}/../../configs"
 
-# After a successful reload, re-evaluate inbound + outbound policy without
-# bouncing sessions. soft-reconfiguration inbound is enabled on the transit
-# peers (see configs/cr1-*/frr.conf), so this is non-disruptive.
+# After a successful reload, re-evaluate inbound policy and re-advertise changed
+# attributes without bouncing sessions. soft-reconfiguration inbound is enabled
+# on the transit peers (see configs/cr1-*/frr.conf), so this is non-disruptive.
+# Non-default BGP VRFs must override these commands (see rtr host_vars).
 frr_clear_bgp: true
-frr_clear_bgp_cmd: "vtysh -c 'clear bgp ipv6 unicast * soft'"
+frr_clear_bgp_cmds:
+  - "vtysh -c 'clear bgp ipv6 unicast * soft in'"
+  - "vtysh -c 'clear bgp ipv6 unicast * soft out'"
 
 # Rollback watchdog window. If the play does not cancel within this long, the
 # pre-change config is restored and FRR reloaded. BGP convergence is fast; the

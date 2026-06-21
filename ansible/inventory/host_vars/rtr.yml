@@ -8,12 +8,13 @@
 networkd_primary_unit: "10-enX2"
 
 # --- FRR role override ---
-# rtr runs BGP in the overlay VRF, so the frr role's post-reload soft clear must
-# target it. The role default (`clear bgp ipv6 unicast * soft`) hits the empty
-# default VRF and is a no-op here. See network-operations#150. (rtr's iBGP peers
-# carry no inbound route-maps today, so this only matters once rtr gains inbound
-# policy — e.g. future peering — but keep it correct.)
-frr_clear_bgp_cmd: "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft'"
+# rtr runs BGP in the overlay VRF, so the frr role's post-reload soft clears must
+# target it. The role defaults hit the empty default VRF and are no-ops here. See
+# network-operations#150. Keep both directions: inbound re-evaluates route-maps,
+# outbound re-advertises changed attributes such as local-pref to iBGP peers.
+frr_clear_bgp_cmds:
+  - "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft in'"
+  - "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft out'"
 
 # --- IPv4 variables for the preserved nat/forward block ---
 rtr_wan_ip:   "46.105.40.223"
