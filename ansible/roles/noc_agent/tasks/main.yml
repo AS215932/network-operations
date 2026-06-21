@@ -101,6 +101,54 @@
     daemon_reload: true
   tags: [apply]
 
+- name: Ensure PostgreSQL server is installed for CaseService state
+  apt:
+    name:
+      - postgresql
+      - postgresql-client
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Ensure PostgreSQL service is started
+  systemd:
+    name: postgresql
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]
+
+- name: Check noc-agent PostgreSQL role
+  command: psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='noc-agent'"
+  become: true
+  become_user: postgres
+  register: noc_agent_pg_role
+  changed_when: false
+  tags: [apply]
+
+- name: Create noc-agent PostgreSQL role
+  command: psql -v ON_ERROR_STOP=1 -c 'CREATE ROLE "noc-agent" LOGIN'
+  become: true
+  become_user: postgres
+  when: noc_agent_pg_role.stdout | trim != '1'
+  tags: [apply]
+
+- name: Check noc-agent PostgreSQL database
+  command: psql -tAc "SELECT 1 FROM pg_database WHERE datname='noc_agent'"
+  become: true
+  become_user: postgres
+  register: noc_agent_pg_database
+  changed_when: false
+  tags: [apply]
+
+- name: Create noc-agent PostgreSQL database
+  command: psql -v ON_ERROR_STOP=1 -c 'CREATE DATABASE noc_agent OWNER "noc-agent"'
+  become: true
+  become_user: postgres
+  when: noc_agent_pg_database.stdout | trim != '1'
+  tags: [apply]
+
 - name: Check if Node.js is already installed
   command: node --version
   register: nodejs_check
