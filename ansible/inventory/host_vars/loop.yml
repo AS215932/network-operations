@@ -4,7 +4,7 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "c6ffa040095b901f56ab213d7b8becac07cc92f9"
+engineering_loop_version: "d4781edbef0cab9ca983f622b4aa2a960df16a97"
 engineering_loop_timer_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
