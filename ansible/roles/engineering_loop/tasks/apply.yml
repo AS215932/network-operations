@@ -6,6 +6,20 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Install Engineering Loop Icinga CA trust anchor
+  ansible.builtin.copy:
+    src: "{{ engineering_loop_icinga_ca_src }}"
+    dest: "{{ engineering_loop_icinga_ca_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: engineering_loop_icinga_ca
+
+- name: Refresh system CA bundle for Engineering Loop
+  ansible.builtin.command: update-ca-certificates
+  changed_when: true
+  when: engineering_loop_icinga_ca.changed
+
 - name: Install uv (Python package manager)
   ansible.builtin.shell: |
     set -euo pipefail

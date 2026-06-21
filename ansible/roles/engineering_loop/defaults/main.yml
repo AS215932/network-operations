@@ -20,6 +20,8 @@ engineering_loop_git_askpass_path: "{{ engineering_loop_lib_dir }}/git-askpass"
 engineering_loop_github_app_token_path: "{{ engineering_loop_lib_dir }}/github-app-token"
 engineering_loop_daemon_wrapper_path: "{{ engineering_loop_lib_dir }}/run-daemon"
 engineering_loop_github_app_private_key_file: "{{ engineering_loop_config_dir }}/github-app.private-key.pem"
+engineering_loop_icinga_ca_src: "{{ playbook_dir }}/../../configs/mon/icinga2/icinga-ca.crt"
+engineering_loop_icinga_ca_dest: /usr/local/share/ca-certificates/as215932-icinga-ca.crt
 
 engineering_loop_repo: https://github.com/AS215932/engineering-loop.git
 engineering_loop_version: "a8c6d3f12d2c36532ed0745728750adf4ac29396"
