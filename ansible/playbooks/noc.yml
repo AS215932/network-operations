@@ -57,7 +57,7 @@
             status_code: 200
             timeout: 10
           register: noc_agent_case_health
-          retries: 12
+          retries: 36
           delay: 5
           until:
             - noc_agent_case_health.status == 200

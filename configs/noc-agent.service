@@ -19,6 +19,7 @@ ExecStart=/opt/noc-agent/.venv/bin/uvicorn app.main:app \
     --host :: \
     --port 8000 \
     --workers 2 \
+    --timeout-worker-healthcheck 60 \
     --log-level info \
     --access-log
 Restart=always
