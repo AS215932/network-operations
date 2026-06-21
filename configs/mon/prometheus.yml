@@ -16,7 +16,8 @@ rule_files:
 
 scrape_configs:
   # --- node_exporter (port 9100) ---
-  # System metrics from infrastructure VMs and routers.
+  # System metrics from infrastructure VMs and routers. Icinga's Prometheus-backed
+  # host and systemd checks key directly on these instance labels.
 
   - job_name: node-infra
     static_configs:
