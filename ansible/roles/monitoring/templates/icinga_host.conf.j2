@@ -71,6 +71,12 @@ object Service "{{ svc.name }}" {
 {% if svc.max_check_attempts is defined %}
   max_check_attempts = {{ svc.max_check_attempts }}
 {% endif %}
+{% if svc.enable_active_checks is defined %}
+  enable_active_checks = {{ svc.enable_active_checks | lower }}
+{% endif %}
+{% if svc.enable_passive_checks is defined %}
+  enable_passive_checks = {{ svc.enable_passive_checks | lower }}
+{% endif %}
 {% if svc.enable_flapping is defined %}
   enable_flapping = {{ svc.enable_flapping | lower }}
 {% endif %}

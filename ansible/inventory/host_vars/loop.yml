@@ -43,6 +43,13 @@ monitoring_disks:
   "disk /": { mountpoint: "/" }
 
 monitoring_extra_services:
+  - name: engineering-loop
+    check_command: dummy
+    interval: 1h
+    retry: 5m
+    enable_active_checks: false
+    enable_passive_checks: true
+    notes: "Passive run-status check submitted by the Engineering Loop daemon after every cycle"
   - name: engineering-loop-timer
     check_command: prom_systemd_unit
     interval: 2m
