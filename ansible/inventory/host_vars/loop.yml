@@ -4,7 +4,7 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "34dd5e82c02b577a51d4f477b0bb50b716a5492f"
+engineering_loop_version: "d4781edbef0cab9ca983f622b4aa2a960df16a97"
 engineering_loop_timer_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
@@ -43,6 +43,13 @@ monitoring_disks:
   "disk /": { mountpoint: "/" }
 
 monitoring_extra_services:
+  - name: engineering-loop
+    check_command: dummy
+    interval: 1h
+    retry: 5m
+    enable_active_checks: false
+    enable_passive_checks: true
+    notes: "Passive run-status check submitted by the Engineering Loop daemon after every cycle"
   - name: engineering-loop-timer
     check_command: prom_systemd_unit
     interval: 2m

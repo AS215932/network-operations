@@ -91,7 +91,7 @@ vault kv put kv/engineering-loop \
   github_app_installation_id="$ENGINEERING_LOOP_GITHUB_APP_INSTALLATION_ID" \
   github_app_private_key=@"$ENGINEERING_LOOP_GITHUB_APP_PRIVATE_KEY_FILE" \
   discord_webhook="$(vault kv get -field=discord_webhook_url kv/ci-runner)" \
-  icinga_url="https://[2a0c:b641:b50:2::50]:5665/v1/actions/process-check-result" \
+  icinga_url="https://mon.as215932.net:5665" \
   icinga_user="$(vault kv get -field=icinga_api_user kv/ci-runner)" \
   icinga_password="$(vault kv get -field=icinga_api_password kv/ci-runner)" \
   icinga_check="loop!engineering-loop" \
