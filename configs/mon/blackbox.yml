@@ -35,9 +35,9 @@ modules:
       tls_config:
         insecure_skip_verify: false
 
-  # Same as http_2xx but accepts self-signed / SAN-mismatch certs. Used for
-  # internal-IPv6 probes against services whose cert SAN only lists the
-  # public hostname (e.g. Vault on [::c0]:8200 — see vault_agent_vault_addr).
+  # Same as http_2xx but accepts self-signed / SAN-mismatch certs. Reserved
+  # for internal-IPv6 HTTPS probes against services whose cert SAN only lists
+  # a public hostname.
   http_2xx_skip_verify:
     prober: http
     timeout: 10s

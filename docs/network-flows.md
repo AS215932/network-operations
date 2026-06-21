@@ -367,7 +367,7 @@ exceptions are:
 | ns2 → log | out | 6000 tcp | Off-net Vector agent → aggregator over public IPv6 |
 | dom0 → log | out | 6000 tcp | Hypervisor Vector agent → aggregator over mgmt v4 |
 | mon → log | out | 3100, 8686 tcp | Grafana query + Vector metrics scrape |
-| noc, mon, api, web, ci, loop → vault | out | 8200 tcp | vault-agent / health checks → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
+| noc, mon, api, web, ci, loop → vault | out | 8200 tcp | vault-agent / health checks → Vault's plain-HTTP internal listener over direct IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Public TLS remains on `vault.as215932.net` via Caddy. |
 | mon → routers | out | 22 tcp (by_ssh) | icinga2 by_ssh checks, logged in as the dedicated `monitoring` system user. Privileged plugins (jool stats) are wrapped in `sudo`/`doas`, scoped to `/usr/local/lib/nagios/plugins/*` by the role-rendered drop. |
 
 ---

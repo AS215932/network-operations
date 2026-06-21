@@ -11,7 +11,8 @@ data_dir = "{{ logs_vector_data_dir }}"
 
 [api]
 enabled = true
-address = "127.0.0.1:{{ logs_vector_metrics_port }}"
+# Prometheus on mon scrapes this listener; firewall only permits mon.
+address = "[::]:{{ logs_vector_metrics_port }}"
 
 # --- Sources -----------------------------------------------------------------
 

@@ -11,7 +11,8 @@ data_dir = "/var/lib/vector"
 
 [api]
 enabled = true
-address = "127.0.0.1:8686"
+# Prometheus on mon scrapes this listener; firewall only permits mon.
+address = "[::]:8686"
 
 # --- Sources -----------------------------------------------------------------
 
