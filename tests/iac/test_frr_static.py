@@ -8,11 +8,13 @@ FRR_FILES = {
     "rtr": REPO / "configs/rtr/frr.conf",
     "cr1-nl1": REPO / "configs/cr1-nl1/frr.conf",
     "cr1-de1": REPO / "configs/cr1-de1/frr.conf",
+    "cr1-ch1": REPO / "configs/cr1-ch1/frr.conf",
 }
 CORE_LOOPBACKS = {
     "rtr": "2a0c:b641:b50::d",
     "cr1-nl1": "2a0c:b641:b50::a",
     "cr1-de1": "2a0c:b641:b50::b",
+    "cr1-ch1": "2a0c:b641:b50::c",
 }
 
 
@@ -78,6 +80,13 @@ class FrrStaticTest(unittest.TestCase):
             defined = set(re.findall(r"^route-map\s+(\S+)\s+", text, re.M))
             referenced = set(re.findall(r"neighbor\s+\S+\s+route-map\s+(\S+)\s+(?:in|out)", text))
             self.assertTrue(referenced <= defined, f"{node}: undefined route-maps {referenced - defined}")
+
+    def test_route_maps_do_not_reference_undefined_as_path_lists(self):
+        for node in FRR_FILES:
+            text = frr_text(node)
+            defined = set(re.findall(r"^bgp as-path access-list\s+(\S+)", text, re.M))
+            referenced = set(re.findall(r"match as-path\s+(\S+)", text))
+            self.assertTrue(referenced <= defined, f"{node}: undefined as-path lists {referenced - defined}")
 
 
 if __name__ == "__main__":

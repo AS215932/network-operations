@@ -14,7 +14,8 @@ and applies a delta-reload so iBGP/OSPF sessions are not flapped.
 5. Schedules an `at(1)` watchdog (default 5 min) that restores + reloads the
    backup if the play does not cancel it — covers a lockout from a bad policy.
 6. Moves the new config into place, **reloads** (FRR integrated delta-reload —
-   no restart), then **`clear bgp ipv6 unicast * soft`** to re-apply policy.
+   no restart), then soft-clears BGP **in** and **out** to re-apply policy and
+   re-advertise changed attributes.
 7. Cancels the watchdog once the reload completes cleanly.
 
 The reload runs on **every** apply (not gated on the file changing): `frr-reload`
@@ -27,7 +28,7 @@ where the on-disk file already matches the repo but the daemon never ingested it
 
 ## OS differences (`vars/<os_family>.yml`)
 
-| | FreeBSD (cr1-nl1, cr1-de1) | Debian (rtr) |
+| | FreeBSD (cr1-nl1, cr1-de1, cr1-ch1) | Debian (rtr) |
 |---|---|---|
 | `frr_conf_path` | `/usr/local/etc/frr/frr.conf` | `/etc/frr/frr.conf` |
 | `frr_reload_cmd` | `/usr/local/sbin/frr-reload` (port wrapper) | `systemctl reload frr` |
@@ -47,7 +48,7 @@ where the on-disk file already matches the repo but the daemon never ingested it
 ## Key variables (`defaults/main.yml`)
 
 - `frr_apply` (false) — push + reload, or validate-only.
-- `frr_clear_bgp` (true) / `frr_clear_bgp_cmd` — soft policy re-eval after reload.
+- `frr_clear_bgp` (true) / `frr_clear_bgp_cmds` — soft policy re-eval after reload.
 - `frr_watchdog_minutes` (5) — rollback window.
 
 ## Usage

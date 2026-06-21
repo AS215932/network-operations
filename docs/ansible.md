@@ -123,7 +123,7 @@ delta-reloads it; it does not template/render the config.
 The apply path mirrors the firewall role: stage `<conf>.new` → `vtysh -C -f`
 syntax check → backup → schedule an `at(1)` rollback watchdog
 (`frr_watchdog_minutes`, default 5) → swap into place → handler chain
-**validate → reload → `clear bgp ipv6 unicast * soft`** → cancel the watchdog.
+**validate → reload → soft-clear BGP in/out** → cancel the watchdog.
 `serial: 1` and the pre/post Icinga snapshot bracket are on the play, so a bad
 policy change blocks the next router instead of taking the mesh down.
 
@@ -139,8 +139,9 @@ ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 
 Or via the gated workflow: `gh workflow run apply.yml -F playbook=frr -F limit=rtr -F dry_run=false`.
 
-**Rollout order:** `--limit rtr` first (Debian), then `--limit cr1-de1`, then
-`--limit cr1-nl1`. The reload runs on **every** apply (frr-reload diffs against
+**Rollout order:** `--limit rtr` first (Debian), then one FreeBSD core at a
+time (`--limit cr1-de1`, `--limit cr1-nl1`, `--limit cr1-ch1`). The reload runs
+on **every** apply (frr-reload diffs against
 the running daemon, so a converged daemon is a no-op) — this is deliberate, so a
 daemon left stale by a botched reload still gets reconverged on a re-run.
 

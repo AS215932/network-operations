@@ -71,7 +71,8 @@
   tags: [apply]
 
 - name: Re-evaluate BGP policy (soft — re-applies route-maps without flapping sessions)
-  command: "{{ frr_clear_bgp_cmd }}"
+  command: "{{ item }}"
+  loop: "{{ frr_clear_bgp_cmds }}"
   changed_when: false
   when: frr_clear_bgp | default(true) | bool
   tags: [apply]
