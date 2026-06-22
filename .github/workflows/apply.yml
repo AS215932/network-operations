@@ -211,6 +211,7 @@ jobs:
           set -euo pipefail
 
           playbook="$PLAYBOOK"
+          extra_apply_vars=""
           case "$playbook" in
             cloud)
               apply_var="hyrule_cloud_apply=true"
@@ -224,6 +225,11 @@ jobs:
               apply_var="hyrule_network_proxy_apply=true"
               expected_apply_var="hyrule_network_proxy_apply=true"
               ;;
+            engineering-loop)
+              apply_var="engineering_loop_apply=true"
+              expected_apply_var="engineering_loop_apply=true"
+              extra_apply_vars="knowledge_mcp_apply=true"
+              ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
               expected_apply_var="${playbook//-/_}_apply=true"
@@ -236,10 +242,14 @@ jobs:
           fi
 
           printf 'APPLY_VAR=%s\n' "$apply_var" >> "$GITHUB_ENV"
+          printf 'APPLY_EXTRA_VARS=%s\n' "$extra_apply_vars" >> "$GITHUB_ENV"
           {
             echo "## Apply gate"
             echo
             echo "\`${apply_var}\`"
+            if [ -n "$extra_apply_vars" ]; then
+              echo "\`${extra_apply_vars}\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Mint hyrule-cloud Vault bootstrap
@@ -368,10 +378,15 @@ jobs:
           if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then
             user_args=()
           fi
+          extra_var_args=()
+          for extra_var in ${APPLY_EXTRA_VARS:-}; do
+            extra_var_args+=(-e "$extra_var")
+          done
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             "${user_args[@]}" \
             -e "${APPLY_VAR}" \
+            "${extra_var_args[@]}" \
             "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot

@@ -82,6 +82,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="hyrule_network_proxy_apply=true"
 \s+expected_apply_var="hyrule_network_proxy_apply=true"
 \s+;;
+\s+engineering-loop\)
+\s+apply_var="engineering_loop_apply=true"
+\s+expected_apply_var="engineering_loop_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true"
+\s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
 \s+expected_apply_var="\$\{playbook//-/_\}_apply=true"
@@ -89,7 +94,9 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+esac""",
         )
         self.assertIn('printf \'APPLY_VAR=%s\\n\' "$apply_var" >> "$GITHUB_ENV"', workflow)
+        self.assertIn('printf \'APPLY_EXTRA_VARS=%s\\n\' "$extra_apply_vars" >> "$GITHUB_ENV"', workflow)
         self.assertIn('-e "${APPLY_VAR}"', workflow)
+        self.assertIn('"${extra_var_args[@]}"', workflow)
         self.assertNotIn('-e "${apply_var}"', workflow)
         self.assertIn('user_args=(-e ansible_user=ci)', workflow)
         self.assertIn(
