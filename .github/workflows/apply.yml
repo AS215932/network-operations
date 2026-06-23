@@ -144,7 +144,7 @@ jobs:
           fi
 
       - name: Summarize app version pins
-        if: ${{ contains(fromJSON('["noc","cloud","web","network-proxy"]'), inputs.playbook) }}
+        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy"]'), inputs.playbook) }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
         run: |
@@ -153,7 +153,11 @@ jobs:
           case "$PLAYBOOK" in
             noc)
               host_vars="ansible/inventory/host_vars/noc.yml"
-              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp"
+              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp noc_knowledge_version|AS215932/knowledge"
+              ;;
+            engineering-loop)
+              host_vars="ansible/inventory/host_vars/loop.yml"
+              entries="engineering_loop_version|AS215932/engineering-loop knowledge_mcp_version|AS215932/knowledge"
               ;;
             cloud)
               host_vars="ansible/inventory/host_vars/api.yml"
