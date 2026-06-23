@@ -83,6 +83,8 @@ engineering_loop_knowledge_mcp_transport: streamable-http
 engineering_loop_knowledge_context_budget: 6000
 engineering_loop_knowledge_context_timeout: 20
 engineering_loop_knowledge_learning_dir: ""
+engineering_loop_noc_lhp_base_url: ""
+engineering_loop_lhp_callback_enabled: false
 
 engineering_loop_git_user_name: "hyrule-engineering-loop[bot]"
 engineering_loop_git_user_email: "engineering-loop@as215932.net"
