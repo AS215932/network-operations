@@ -1,0 +1,137 @@
+---
+- name: Ensure Knowledge Loop packages are installed
+  ansible.builtin.apt:
+    name: "{{ knowledge_loop_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install uv for Knowledge Loop
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+    executable: /bin/bash
+
+- name: Ensure Knowledge Loop group exists
+  ansible.builtin.group:
+    name: "{{ knowledge_loop_group }}"
+    state: present
+    system: true
+
+- name: Ensure Knowledge Loop user exists
+  ansible.builtin.user:
+    name: "{{ knowledge_loop_user }}"
+    group: "{{ knowledge_loop_group }}"
+    home: "{{ knowledge_loop_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure Knowledge Loop directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(knowledge_loop_user) }}"
+    group: "{{ item.group | default(knowledge_loop_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ knowledge_loop_install_dir }}", mode: "0755" }
+    - { path: "{{ knowledge_loop_config_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ knowledge_loop_state_dir }}", mode: "0750" }
+    - { path: "{{ knowledge_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ knowledge_loop_lib_dir }}", owner: root, mode: "0750" }
+
+- name: Checkout Knowledge Loop runtime
+  ansible.builtin.git:
+    repo: "{{ knowledge_loop_repo }}"
+    dest: "{{ knowledge_loop_install_dir }}"
+    version: "{{ knowledge_loop_version }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+  notify: restart knowledge-loop timer
+
+- name: Sync Knowledge Loop runtime dependencies
+  ansible.builtin.command: /usr/local/bin/uv sync --group dev --frozen
+  args:
+    chdir: "{{ knowledge_loop_install_dir }}"
+  register: knowledge_loop_uv_sync
+  changed_when: >-
+    knowledge_loop_uv_sync.stdout != '' or
+    'Resolved' in knowledge_loop_uv_sync.stderr or
+    '+' in knowledge_loop_uv_sync.stderr
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+  notify: restart knowledge-loop timer
+
+- name: Configure git identity for Knowledge Loop PR branches
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --global
+      - "{{ item.key }}"
+      - "{{ item.value }}"
+  loop:
+    - { key: user.name, value: "{{ knowledge_loop_git_user_name }}" }
+    - { key: user.email, value: "{{ knowledge_loop_git_user_email }}" }
+  changed_when: false
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+
+- name: Install Knowledge Loop Git askpass helper
+  ansible.builtin.template:
+    src: git-askpass.sh.j2
+    dest: "{{ knowledge_loop_git_askpass_path }}"
+    owner: root
+    group: "{{ knowledge_loop_group }}"
+    mode: "0750"
+
+- name: Install Knowledge Loop GitHub App token helper
+  ansible.builtin.template:
+    src: github-app-token.sh.j2
+    dest: "{{ knowledge_loop_github_app_token_path }}"
+    owner: root
+    group: "{{ knowledge_loop_group }}"
+    mode: "0750"
+
+- name: Install Knowledge Loop wrapper
+  ansible.builtin.template:
+    src: run-loop.sh.j2
+    dest: "{{ knowledge_loop_daemon_wrapper_path }}"
+    owner: root
+    group: "{{ knowledge_loop_group }}"
+    mode: "0750"
+  notify: restart knowledge-loop timer
+
+- name: Install Knowledge Loop systemd service
+  ansible.builtin.template:
+    src: hyrule-knowledge-loop.service.j2
+    dest: /etc/systemd/system/hyrule-knowledge-loop.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart knowledge-loop timer
+
+- name: Install Knowledge Loop systemd timer
+  ansible.builtin.template:
+    src: hyrule-knowledge-loop.timer.j2
+    dest: /etc/systemd/system/hyrule-knowledge-loop.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart knowledge-loop timer
+
+- name: Set Knowledge Loop timer state
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-loop.timer
+    enabled: "{{ knowledge_loop_timer_enabled | bool }}"
+    state: "{{ 'started' if knowledge_loop_timer_enabled | bool else 'stopped' }}"
+    daemon_reload: true

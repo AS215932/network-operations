@@ -1,0 +1,55 @@
+---
+# Source-managed Knowledge Loop producer agent. Disabled by default; live
+# mutation requires -e knowledge_loop_apply=true and the timer remains disabled
+# until a reviewed canary flips knowledge_loop_timer_enabled.
+
+knowledge_loop_apply: false
+knowledge_loop_enabled: true
+knowledge_loop_timer_enabled: false
+
+knowledge_loop_user: knowledge-loop
+knowledge_loop_group: knowledge-loop
+knowledge_loop_install_dir: /opt/knowledge-loop
+knowledge_loop_config_dir: /etc/knowledge-loop
+knowledge_loop_state_dir: /var/lib/knowledge-loop
+knowledge_loop_daemon_state_dir: "{{ knowledge_loop_state_dir }}/state"
+knowledge_loop_lib_dir: /usr/local/lib/knowledge-loop
+knowledge_loop_env_file: "{{ knowledge_loop_config_dir }}/knowledge-loop.env"
+knowledge_loop_git_askpass_path: "{{ knowledge_loop_lib_dir }}/git-askpass"
+knowledge_loop_github_app_token_path: "{{ knowledge_loop_lib_dir }}/github-app-token"
+knowledge_loop_daemon_wrapper_path: "{{ knowledge_loop_lib_dir }}/run-loop"
+knowledge_loop_github_app_private_key_file: "{{ knowledge_loop_config_dir }}/github-app.private-key.pem"
+
+knowledge_loop_repo: https://github.com/AS215932/knowledge.git
+knowledge_loop_version: main
+knowledge_loop_base_branch: main
+knowledge_loop_branch_prefix: bot/knowledge-loop
+knowledge_loop_create_pr: true
+knowledge_loop_max_cycles_per_day: 1
+knowledge_loop_max_prs_per_day: 1
+knowledge_loop_max_openrouter_calls_per_day: 0
+knowledge_loop_max_learning_events_per_day: 100
+knowledge_loop_dry_run_enrich_targets: []
+knowledge_loop_enrich_targets: []
+knowledge_loop_enrich_live: false
+knowledge_loop_learning_event_paths: []
+knowledge_loop_replace_learning_events: false
+knowledge_loop_skip_validation: false
+knowledge_loop_icinga_check: loop!knowledge-loop
+
+# Daily instead of hourly: ingest currently refreshes timestamps, so hourly would
+# create noisy PRs. Increase cadence only after stable no-op detection lands.
+knowledge_loop_timer_on_calendar: "*-*-* 03:37:00"
+knowledge_loop_timer_randomized_delay_sec: 900
+
+knowledge_loop_git_user_name: "hyrule-knowledge-loop[bot]"
+knowledge_loop_git_user_email: "knowledge-loop@as215932.net"
+
+knowledge_loop_packages:
+  - python3
+  - python3-venv
+  - git
+  - ca-certificates
+  - curl
+  - gh
+  - openssl

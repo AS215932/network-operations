@@ -1,0 +1,12 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart knowledge-loop timer
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-loop.timer
+    state: restarted
+    enabled: "{{ knowledge_loop_timer_enabled | bool }}"
+    daemon_reload: true
+  when: knowledge_loop_timer_enabled | bool

@@ -85,7 +85,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -105,6 +105,30 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
+    def test_knowledge_loop_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2").read_text()
+        key_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+
+        self.assertIn("role: knowledge_loop", playbook)
+        self.assertIn("vault_agent_name: knowledge-loop", playbook)
+        self.assertIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint knowledge-loop Vault bootstrap", workflow)
+        self.assertIn('auth/approle/role/knowledge-loop/role-id', workflow)
+        self.assertIn('path "auth/approle/role/knowledge-loop/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/knowledge-loop/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/knowledge-loop"', env_template)
+        self.assertIn('secret "kv/data/knowledge-loop"', key_template)
+        self.assertIn("OPENROUTER_API_KEY", env_template)
+        self.assertNotIn('secret "kv/data/engineering-loop"', env_template)
+        self.assertNotIn("ENGINEERING_LOOP_GITHUB", env_template)
+        self.assertNotIn("kv/data/knowledge-loop", runner_policy)
+        self.assertEqual(defaults["knowledge_loop_timer_enabled"], False)
+        self.assertEqual(defaults["knowledge_loop_max_openrouter_calls_per_day"], 0)
 
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()

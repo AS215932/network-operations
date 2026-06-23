@@ -1,0 +1,15 @@
+# /etc/systemd/system/hyrule-knowledge-loop.timer
+# Managed by ansible/roles/knowledge_loop. Disabled by default until a reviewed
+# canary flips knowledge_loop_timer_enabled.
+
+[Unit]
+Description=Schedule the AS215932 Knowledge Loop producer agent
+
+[Timer]
+OnCalendar={{ knowledge_loop_timer_on_calendar }}
+RandomizedDelaySec={{ knowledge_loop_timer_randomized_delay_sec }}
+Persistent=true
+Unit=hyrule-knowledge-loop.service
+
+[Install]
+WantedBy=timers.target

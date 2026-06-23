@@ -232,7 +232,7 @@ jobs:
             engineering-loop)
               apply_var="engineering_loop_apply=true"
               expected_apply_var="engineering_loop_apply=true"
-              extra_apply_vars="knowledge_mcp_apply=true"
+              extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true"
               ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
@@ -330,6 +330,45 @@ jobs:
 
           {
             echo "## engineering-loop Vault bootstrap"
+            echo
+            echo "Minted response-wrapped AppRole SecretID for this apply run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mint knowledge-loop Vault bootstrap
+        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${VAULT_KNOWLEDGE_LOOP_ROLE_ID:-}" ] && { [ -n "${VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_KNOWLEDGE_LOOP_SECRET_ID:-}" ]; }; then
+            echo "knowledge-loop Vault bootstrap already provided by environment"
+            exit 0
+          fi
+
+          token_file="/run/vault-agent/github-runner.token"
+          if [ ! -r "$token_file" ]; then
+            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
+            exit 1
+          fi
+          vault_token="$(cat "$token_file")"
+
+          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
+          export VAULT_TOKEN="$vault_token"
+
+          role_id="$(vault read -field=role_id auth/approle/role/knowledge-loop/role-id)"
+          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/knowledge-loop/secret-id)"
+
+          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
+            echo "::error::failed to mint knowledge-loop Vault bootstrap credentials"
+            exit 1
+          fi
+
+          echo "::add-mask::$role_id"
+          echo "::add-mask::$wrapped_secret_id"
+          printf 'VAULT_KNOWLEDGE_LOOP_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
+          printf 'VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
+
+          {
+            echo "## knowledge-loop Vault bootstrap"
             echo
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"
