@@ -4,8 +4,10 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "d4781edbef0cab9ca983f622b4aa2a960df16a97"
+engineering_loop_version: "eb37b1c4d1d7c3f349c8c6cdb3bd890f168c2755"
 engineering_loop_timer_enabled: true
+engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
+engineering_loop_lhp_callback_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.

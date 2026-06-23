@@ -181,6 +181,44 @@
     - "{{ noc_agent_state_dir }}"
     - "{{ noc_agent_state_dir }}/proactive"
     - "{{ noc_agent_state_dir }}/memory"
+    - "{{ noc_agent_state_dir }}/knowledge-candidates"
+  tags: [apply]
+
+- name: Ensure NOC Knowledge export dirs exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0755"
+  loop:
+    - "{{ noc_knowledge_install_dir }}"
+    - "{{ noc_knowledge_export_dir }}"
+  tags: [apply]
+
+- name: Checkout pinned NOC Knowledge export repository
+  git:
+    repo: "{{ noc_knowledge_repo }}"
+    dest: "{{ noc_knowledge_install_dir }}"
+    version: "{{ noc_knowledge_version }}"
+    accept_hostkey: true
+    update: true
+    force: true
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  tags: [apply]
+
+- name: Install pinned NOC Knowledge export files
+  copy:
+    src: "{{ noc_knowledge_install_dir }}/exports/{{ item }}"
+    dest: "{{ noc_knowledge_export_dir }}/{{ item }}"
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0644"
+    remote_src: true
+  loop:
+    - knowledge.sqlite
+    - manifest.json
   tags: [apply]
 
 - name: Ensure noc-agent root-owned config/runtime dirs exist

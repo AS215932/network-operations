@@ -5,8 +5,22 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: 14c6536710b8698da30d8126e1dd7a56c60bb286
+noc_agent_version: be0924a2903568558f0ce81370d6e1a099fc1bee
 hyrule_mcp_version: 05b1245710e6a67ad40ccd62c033755f48ad4958
+noc_knowledge_version: 5a6666cbb9d290868db3fb854ffed39099515b91
+
+# LHP-v1 rollout: coordinate the current proactive disk condition through
+# CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
+# 8fb421ff94bb1285; this config intentionally does not create persistent alert
+# suppression for it.
+noc_lhp_enabled: true
+noc_engineering_handoff_delivery_enabled: true
+noc_knowledge_context_enabled: true
+noc_case_verification_enabled: true
+noc_case_verification_dry_run: false
+noc_case_auto_resolve_enabled: false
+noc_disk_alert_handoff_enabled: true
+noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their
@@ -19,6 +33,9 @@ firewall_extra_rules:
 
   # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
   - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }
+
+  # Internal Loop Handoff Protocol fetch/callback traffic from Engineering Loop.
+  - { proto: tcp, dport: 8000, src: "{{ peers.loop.ipv6 }}", comment: "LHP-v1 Engineering Loop fetch/callback to noc-agent" }
 
   # Monitoring scrapes.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

@@ -137,6 +137,7 @@
         vault_agent_env_reload_command: >-
           /bin/grep -Eq ^NOC_APPROVAL_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
           /bin/grep -Eq ^HYRULE_MCP_ACTION_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
+          /bin/sh -c 'test "{{ "1" if noc_lhp_enabled | bool else "0" }}" != "1" || /bin/grep -Eq ^NOC_LHP_ENGINEERING_SECRET=................................ /opt/noc-agent/.env' &&
           /bin/systemctl restart xo-mcp.service &&
           /bin/systemctl restart noc-agent.service &&
           /bin/systemctl restart noc-agent-bot.service

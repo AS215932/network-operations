@@ -197,8 +197,9 @@ as215932.net, www.as215932.net {
 
 # NOC Agent operator dashboard — noc.servify.network
 # Only the token-gated operator surfaces are exposed (the control dashboard,
-# health, metrics). Webhooks, the approval callback, and mail polling stay
-# internal-only (reachable from mon directly), so they are NOT proxied here.
+# health, metrics). Webhooks, the approval callback, mail polling, and LHP-v1
+# Engineering fetch/callback endpoints stay internal-only (reachable from mon or
+# loop directly), so they are NOT proxied here.
 noc.servify.network {
     tls {
         dns rfc2136 {

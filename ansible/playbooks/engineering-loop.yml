@@ -66,14 +66,24 @@
           }}
         vault_agent_env_destination: "{{ engineering_loop_env_file }}"
         vault_agent_reload_command: /bin/true
-        vault_agent_env_reload_command: /bin/true
+        vault_agent_env_reload_command: >-
+          {% if engineering_loop_lhp_callback_enabled | bool %}
+          /bin/grep -Eq ^ENGINEERING_LOOP_NOC_LHP_SECRET=................................ {{ engineering_loop_env_file }}
+          {% else %}
+          /bin/true
+          {% endif %}
         vault_agent_templates:
           - src: engineering-loop.env.ctmpl.j2
             name: engineering-loop.env.ctmpl
             destination: "{{ engineering_loop_env_file }}"
             group: "{{ engineering_loop_group }}"
             mode: "0640"
-            reload_command: /bin/true
+            reload_command: >-
+              {% if engineering_loop_lhp_callback_enabled | bool %}
+              /bin/grep -Eq ^ENGINEERING_LOOP_NOC_LHP_SECRET=................................ {{ engineering_loop_env_file }}
+              {% else %}
+              /bin/true
+              {% endif %}
           - src: engineering-loop-github-app-key.pem.ctmpl.j2
             name: engineering-loop-github-app-key.pem.ctmpl
             destination: "{{ engineering_loop_github_app_private_key_file }}"
