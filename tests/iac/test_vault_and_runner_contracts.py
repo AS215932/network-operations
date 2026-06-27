@@ -85,7 +85,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -105,6 +105,103 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
+    def test_knowledge_loop_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2").read_text()
+        key_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+
+        self.assertIn("role: knowledge_loop", playbook)
+        self.assertIn("vault_agent_name: knowledge-loop", playbook)
+        self.assertIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint knowledge-loop Vault bootstrap", workflow)
+        self.assertIn('auth/approle/role/knowledge-loop/role-id', workflow)
+        self.assertIn('path "auth/approle/role/knowledge-loop/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/knowledge-loop/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/knowledge-loop"', env_template)
+        self.assertIn('secret "kv/data/knowledge-loop"', key_template)
+        self.assertIn("OPENROUTER_API_KEY", env_template)
+        self.assertNotIn('secret "kv/data/engineering-loop"', env_template)
+        self.assertNotIn("ENGINEERING_LOOP_GITHUB", env_template)
+        self.assertNotIn("kv/data/knowledge-loop", runner_policy)
+        self.assertEqual(defaults["knowledge_loop_timer_enabled"], False)
+        self.assertEqual(defaults["knowledge_loop_max_openrouter_calls_per_day"], 0)
+
+    def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+        # apply.yml forces knowledge_loop_apply for engineering-loop, so the loop
+        # checkout must be a reviewed 40-char commit, never floating `main`.
+        self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], False)
+
+        runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
+        # The runner needs the refreshed github-runner policy before the first apply
+        # mints the knowledge-loop SecretID, or the apply fails permission denied.
+        self.assertIn(
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl",
+            runbook,
+        )
+
+    def test_knowledge_loop_runs_in_workspace_not_pinned_install_dir(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        service = (REPO / "ansible/roles/knowledge_loop/templates/hyrule-knowledge-loop.service.j2").read_text()
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+
+        # The mutable repo clone lives under the state dir, separate from install_dir.
+        self.assertEqual(defaults["knowledge_loop_workspace_dir"], "{{ knowledge_loop_state_dir }}/workspace")
+        self.assertEqual(defaults["knowledge_loop_repo_workspace"], "{{ knowledge_loop_workspace_dir }}/knowledge")
+
+        # The loop mutates the workspace clone, not the pinned runtime checkout, but
+        # still runs the CLI from the install_dir venv.
+        self.assertIn("--repo-path {{ knowledge_loop_repo_workspace }}", run_loop)
+        self.assertNotIn("--repo-path {{ knowledge_loop_install_dir }}", run_loop)
+        self.assertIn("{{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge", run_loop)
+
+        # install_dir stays read-only at runtime; only the state dir is writable.
+        self.assertIn("ReadWritePaths={{ knowledge_loop_state_dir }}", service)
+        self.assertNotIn("ReadWritePaths={{ knowledge_loop_install_dir }}", service)
+
+        # apply clones the Knowledge repo into the workspace for loop runs.
+        self.assertIn('dest: "{{ knowledge_loop_repo_workspace }}"', apply)
+
+    def test_knowledge_loop_timer_starts_only_after_secrets_render(self):
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+        handlers = (REPO / "ansible/roles/knowledge_loop/handlers/main.yml").read_text()
+        # The role runs before the knowledge-loop vault_agent; with Persistent=true a
+        # premature start would fire the service with no env file / key. Gate both the
+        # start task and the restart handler on the rendered secrets existing.
+        self.assertIn("Check Knowledge Loop runtime secrets are rendered", apply)
+        self.assertIn("knowledge_loop_secret_files.results", apply)
+        self.assertIn("map(attribute='stat.exists') | min", apply)
+        self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
+
+    def test_vault_agent_restarts_in_role_not_via_shared_handler(self):
+        handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
+        tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        # engineering-loop.yml includes vault_agent twice (engineering-loop +
+        # knowledge-loop). A handler name (shared or templated) is resolved at play
+        # load and could restart the wrong instance, so the restart is done in-role
+        # where vault_agent_name binds at task-execution time.
+        self.assertNotIn("notify: restart vault agent", tasks)
+        self.assertNotIn("- name: restart vault agent", handlers)
+        self.assertIn("Enable and (re)start Vault Agent", tasks)
+        self.assertIn("'restarted'", tasks)
+        self.assertIn("vault_agent_config_state is changed", tasks)
+
+    def test_knowledge_loop_lets_vault_openrouter_budget_win(self):
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        # The Vault-rendered budget must win, so the wrapper only passes the Ansible
+        # default when the env var is unset (the CLI reads it as the argparse default).
+        self.assertIn('if [ -z "${HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY:-}" ]; then', run_loop)
+        # the flag must not be passed unconditionally in the base argv
+        self.assertNotIn(
+            "--max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }} \\",
+            run_loop,
+        )
 
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
