@@ -58,7 +58,7 @@
     mode: "0600"
   no_log: true
   when: vault_agent_role_id | length > 0
-  notify: restart vault agent {{ vault_agent_name }}
+  register: vault_agent_role_id_state
   tags: [apply]
 
 - name: Install Vault AppRole secret_id
@@ -70,7 +70,7 @@
     mode: "0600"
   no_log: true
   when: vault_agent_secret_id | length > 0
-  notify: restart vault agent {{ vault_agent_name }}
+  register: vault_agent_secret_id_state
   tags: [apply]
 
 - name: Render secret templates for Vault Agent
@@ -83,7 +83,7 @@
   loop: "{{ vault_agent_templates }}"
   loop_control:
     label: "{{ item.name }}"
-  notify: restart vault agent {{ vault_agent_name }}
+  register: vault_agent_templates_state
   tags: [apply]
 
 - name: Render Vault Agent configuration
@@ -93,7 +93,7 @@
     owner: root
     group: root
     mode: "0640"
-  notify: restart vault agent {{ vault_agent_name }}
+  register: vault_agent_config_state
   tags: [apply]
 
 - name: Install Vault Agent systemd unit
@@ -103,7 +103,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: restart vault agent {{ vault_agent_name }}
+  register: vault_agent_unit_state
   tags: [apply]
 
 - name: Check for existing Vault AppRole role_id
@@ -137,10 +137,22 @@
       host.
   tags: [apply]
 
-- name: Enable and start Vault Agent
+# Restart in-role (not via a handler) so vault_agent_name binds at task-execution
+# time. A play may include this role more than once, and a shared/templated
+# handler name would be deduped at play load and could restart the wrong instance.
+- name: Enable and (re)start Vault Agent
   systemd:
     name: "vault-agent-{{ vault_agent_name }}"
-    state: started
+    state: >-
+      {{
+        'restarted'
+        if (vault_agent_role_id_state is changed
+            or vault_agent_secret_id_state is changed
+            or vault_agent_templates_state is changed
+            or vault_agent_config_state is changed
+            or vault_agent_unit_state is changed)
+        else 'started'
+      }}
     enabled: true
     daemon_reload: true
   when:

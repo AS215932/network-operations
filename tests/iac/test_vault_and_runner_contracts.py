@@ -179,15 +179,29 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("map(attribute='stat.exists') | min", apply)
         self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
 
-    def test_vault_agent_restart_handler_is_per_instance(self):
+    def test_vault_agent_restarts_in_role_not_via_shared_handler(self):
         handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
         tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
         # engineering-loop.yml includes vault_agent twice (engineering-loop +
-        # knowledge-loop); a shared handler name would be deduped and could restart
-        # the wrong instance, leaving the other on stale config/secrets.
-        self.assertIn("name: restart vault agent {{ vault_agent_name }}", handlers)
-        self.assertNotIn("notify: restart vault agent\n", tasks)
-        self.assertIn("notify: restart vault agent {{ vault_agent_name }}", tasks)
+        # knowledge-loop). A handler name (shared or templated) is resolved at play
+        # load and could restart the wrong instance, so the restart is done in-role
+        # where vault_agent_name binds at task-execution time.
+        self.assertNotIn("notify: restart vault agent", tasks)
+        self.assertNotIn("- name: restart vault agent", handlers)
+        self.assertIn("Enable and (re)start Vault Agent", tasks)
+        self.assertIn("'restarted'", tasks)
+        self.assertIn("vault_agent_config_state is changed", tasks)
+
+    def test_knowledge_loop_lets_vault_openrouter_budget_win(self):
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        # The Vault-rendered budget must win, so the wrapper only passes the Ansible
+        # default when the env var is unset (the CLI reads it as the argparse default).
+        self.assertIn('if [ -z "${HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY:-}" ]; then', run_loop)
+        # the flag must not be passed unconditionally in the base argv
+        self.assertNotIn(
+            "--max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }} \\",
+            run_loop,
+        )
 
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()

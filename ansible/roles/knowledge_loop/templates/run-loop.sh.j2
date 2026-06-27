@@ -40,8 +40,15 @@ set -- loop --once \
   --base-branch {{ knowledge_loop_base_branch }} \
   --max-cycles-per-day {{ knowledge_loop_max_cycles_per_day }} \
   --max-prs-per-day {{ knowledge_loop_max_prs_per_day }} \
-  --max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }} \
   --max-learning-events-per-day {{ knowledge_loop_max_learning_events_per_day }}
+
+# Let a Vault-rendered OpenRouter budget win. The CLI reads
+# HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY (from kv/knowledge-loop) as
+# the argparse default only when the flag is absent, so passing the Ansible
+# default here would override a higher Vault budget and reject live enrichment.
+if [ -z "${HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY:-}" ]; then
+  set -- "$@" --max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }}
+fi
 
 {% if knowledge_loop_create_pr | bool -%}
 set -- "$@" --create-pr
