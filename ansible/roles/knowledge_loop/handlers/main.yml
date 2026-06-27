@@ -3,10 +3,18 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
+# Mirrors the guard on "Set Knowledge Loop timer state": with Persistent=true a
+# restart can immediately fire the service, so only restart once the knowledge-loop
+# Vault Agent has rendered the env file and key (knowledge_loop_secret_files is
+# registered by the stat task in apply.yml). Otherwise leave the timer for the next
+# apply to start post-render.
 - name: restart knowledge-loop timer
   ansible.builtin.systemd:
     name: hyrule-knowledge-loop.timer
     state: restarted
     enabled: "{{ knowledge_loop_timer_enabled | bool }}"
     daemon_reload: true
-  when: knowledge_loop_timer_enabled | bool
+  when:
+    - knowledge_loop_timer_enabled | bool
+    - knowledge_loop_secret_files is defined
+    - knowledge_loop_secret_files.results | map(attribute='stat.exists') | min

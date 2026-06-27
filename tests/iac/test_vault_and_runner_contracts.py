@@ -170,12 +170,24 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
     def test_knowledge_loop_timer_starts_only_after_secrets_render(self):
         apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+        handlers = (REPO / "ansible/roles/knowledge_loop/handlers/main.yml").read_text()
         # The role runs before the knowledge-loop vault_agent; with Persistent=true a
-        # premature start would fire the service with no env file / key. Gate the
-        # start on the rendered secrets existing.
+        # premature start would fire the service with no env file / key. Gate both the
+        # start task and the restart handler on the rendered secrets existing.
         self.assertIn("Check Knowledge Loop runtime secrets are rendered", apply)
         self.assertIn("knowledge_loop_secret_files.results", apply)
         self.assertIn("map(attribute='stat.exists') | min", apply)
+        self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
+
+    def test_vault_agent_restart_handler_is_per_instance(self):
+        handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
+        tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        # engineering-loop.yml includes vault_agent twice (engineering-loop +
+        # knowledge-loop); a shared handler name would be deduped and could restart
+        # the wrong instance, leaving the other on stale config/secrets.
+        self.assertIn("name: restart vault agent {{ vault_agent_name }}", handlers)
+        self.assertNotIn("notify: restart vault agent\n", tasks)
+        self.assertIn("notify: restart vault agent {{ vault_agent_name }}", tasks)
 
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()

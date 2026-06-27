@@ -1,5 +1,8 @@
 ---
-- name: restart vault agent
+# Name is per-instance: a play may include this role more than once (e.g.
+# engineering-loop + knowledge-loop). A shared handler name would be deduped to a
+# single definition, so a notify could restart the wrong Vault Agent instance.
+- name: restart vault agent {{ vault_agent_name }}
   systemd:
     name: "vault-agent-{{ vault_agent_name }}"
     state: restarted
