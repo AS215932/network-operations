@@ -145,6 +145,29 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             runbook,
         )
 
+    def test_knowledge_loop_runs_in_workspace_not_pinned_install_dir(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        service = (REPO / "ansible/roles/knowledge_loop/templates/hyrule-knowledge-loop.service.j2").read_text()
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+
+        # The mutable repo clone lives under the state dir, separate from install_dir.
+        self.assertEqual(defaults["knowledge_loop_workspace_dir"], "{{ knowledge_loop_state_dir }}/workspace")
+        self.assertEqual(defaults["knowledge_loop_repo_workspace"], "{{ knowledge_loop_workspace_dir }}/knowledge")
+
+        # The loop mutates the workspace clone, not the pinned runtime checkout, but
+        # still runs the CLI from the install_dir venv.
+        self.assertIn("--repo-path {{ knowledge_loop_repo_workspace }}", run_loop)
+        self.assertNotIn("--repo-path {{ knowledge_loop_install_dir }}", run_loop)
+        self.assertIn("{{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge", run_loop)
+
+        # install_dir stays read-only at runtime; only the state dir is writable.
+        self.assertIn("ReadWritePaths={{ knowledge_loop_state_dir }}", service)
+        self.assertNotIn("ReadWritePaths={{ knowledge_loop_install_dir }}", service)
+
+        # apply clones the Knowledge repo into the workspace for loop runs.
+        self.assertIn('dest: "{{ knowledge_loop_repo_workspace }}"', apply)
+
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
         runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()

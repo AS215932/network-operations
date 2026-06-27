@@ -22,16 +22,17 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=knowledge-loop
 
-# Hardening. The loop may write only its checkout and state dir. It has no
-# fleet SSH keys, Docker socket, app runtime credentials, wallet data, or broad
-# Vault access.
+# Hardening. The loop may write only its state dir (which holds the mutable repo
+# workspace and daemon state). The pinned install_dir runtime stays read-only. It
+# has no fleet SSH keys, Docker socket, app runtime credentials, wallet data, or
+# broad Vault access.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
 ProtectKernelModules=yes
 ProtectKernelTunables=yes
 ProtectSystem=strict
-ReadWritePaths={{ knowledge_loop_install_dir }} {{ knowledge_loop_state_dir }}
+ReadWritePaths={{ knowledge_loop_state_dir }}
 
 [Install]
 WantedBy=multi-user.target

@@ -41,6 +41,7 @@
     - { path: "{{ knowledge_loop_config_dir }}", owner: root, mode: "0750" }
     - { path: "{{ knowledge_loop_state_dir }}", mode: "0750" }
     - { path: "{{ knowledge_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ knowledge_loop_workspace_dir }}", mode: "0750" }
     - { path: "{{ knowledge_loop_lib_dir }}", owner: root, mode: "0750" }
 
 - name: Checkout Knowledge Loop runtime
@@ -63,6 +64,17 @@
     knowledge_loop_uv_sync.stdout != '' or
     'Resolved' in knowledge_loop_uv_sync.stderr or
     '+' in knowledge_loop_uv_sync.stderr
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+  notify: restart knowledge-loop timer
+
+- name: Checkout Knowledge repo workspace for loop runs
+  ansible.builtin.git:
+    repo: "{{ knowledge_loop_repo }}"
+    dest: "{{ knowledge_loop_repo_workspace }}"
+    version: "{{ knowledge_loop_base_branch }}"
+    update: true
+    force: false
   become: true
   become_user: "{{ knowledge_loop_user }}"
   notify: restart knowledge-loop timer

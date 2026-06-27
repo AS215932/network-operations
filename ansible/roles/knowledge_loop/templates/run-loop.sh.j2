@@ -34,7 +34,7 @@ export GIT_TERMINAL_PROMPT=0
 loop_bin="{{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge"
 
 set -- loop --once \
-  --repo-path {{ knowledge_loop_install_dir }} \
+  --repo-path {{ knowledge_loop_repo_workspace }} \
   --state-dir {{ knowledge_loop_daemon_state_dir }} \
   --branch-prefix {{ knowledge_loop_branch_prefix }} \
   --base-branch {{ knowledge_loop_base_branch }} \

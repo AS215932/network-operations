@@ -13,6 +13,11 @@ knowledge_loop_install_dir: /opt/knowledge-loop
 knowledge_loop_config_dir: /etc/knowledge-loop
 knowledge_loop_state_dir: /var/lib/knowledge-loop
 knowledge_loop_daemon_state_dir: "{{ knowledge_loop_state_dir }}/state"
+# Mutable repo clone the loop branches/commits/pushes from. Kept separate from the
+# pinned, read-only install_dir runtime so a loop run never leaves the reviewed
+# checkout on a bot branch or dirty.
+knowledge_loop_workspace_dir: "{{ knowledge_loop_state_dir }}/workspace"
+knowledge_loop_repo_workspace: "{{ knowledge_loop_workspace_dir }}/knowledge"
 knowledge_loop_lib_dir: /usr/local/lib/knowledge-loop
 knowledge_loop_env_file: "{{ knowledge_loop_config_dir }}/knowledge-loop.env"
 knowledge_loop_git_askpass_path: "{{ knowledge_loop_lib_dir }}/git-askpass"
