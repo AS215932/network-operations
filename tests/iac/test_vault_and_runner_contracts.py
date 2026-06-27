@@ -130,6 +130,21 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(defaults["knowledge_loop_timer_enabled"], False)
         self.assertEqual(defaults["knowledge_loop_max_openrouter_calls_per_day"], 0)
 
+    def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+        # apply.yml forces knowledge_loop_apply for engineering-loop, so the loop
+        # checkout must be a reviewed 40-char commit, never floating `main`.
+        self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], False)
+
+        runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
+        # The runner needs the refreshed github-runner policy before the first apply
+        # mints the knowledge-loop SecretID, or the apply fails permission denied.
+        self.assertIn(
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl",
+            runbook,
+        )
+
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
         runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()

@@ -48,6 +48,19 @@ Fallback token mode is supported for break-glass only:
 vault kv patch kv/knowledge-loop github_token="..."
 ```
 
+## Refresh the ci runner policy
+
+`apply.yml` mints the `knowledge-loop` SecretID with the trusted runner's Vault
+token, so live Vault must carry the new `auth/approle/role/knowledge-loop/*`
+paths from `github-runner.hcl` before the first `engineering-loop` apply. Apply
+the updated `github-runner` policy after merging the production cutover PR;
+otherwise the apply fails with permission denied at
+`auth/approle/role/knowledge-loop/secret-id`:
+
+```bash
+vault policy write github-runner configs/vault/policies/github-runner.hcl
+```
+
 ## First deploy bootstrap
 
 The trusted CI runner can mint a response-wrapped SecretID for `knowledge-loop`
