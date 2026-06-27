@@ -168,6 +168,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         # apply clones the Knowledge repo into the workspace for loop runs.
         self.assertIn('dest: "{{ knowledge_loop_repo_workspace }}"', apply)
 
+    def test_knowledge_loop_timer_starts_only_after_secrets_render(self):
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+        # The role runs before the knowledge-loop vault_agent; with Persistent=true a
+        # premature start would fire the service with no env file / key. Gate the
+        # start on the rendered secrets existing.
+        self.assertIn("Check Knowledge Loop runtime secrets are rendered", apply)
+        self.assertIn("knowledge_loop_secret_files.results", apply)
+        self.assertIn("map(attribute='stat.exists') | min", apply)
+
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
         runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()

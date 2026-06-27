@@ -141,9 +141,29 @@
     - reload systemd
     - restart knowledge-loop timer
 
+- name: Check Knowledge Loop runtime secrets are rendered
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ knowledge_loop_env_file }}"
+    - "{{ knowledge_loop_github_app_private_key_file }}"
+  loop_control:
+    label: "{{ item }}"
+  register: knowledge_loop_secret_files
+
+# The knowledge_loop role runs before the knowledge-loop vault_agent renders the
+# env file and GitHub App key. With Persistent=true a missed schedule fires the
+# service immediately on timer activation, so only start the timer once those
+# secrets exist; otherwise enable it and let the next apply (post-render) start it.
 - name: Set Knowledge Loop timer state
   ansible.builtin.systemd:
     name: hyrule-knowledge-loop.timer
     enabled: "{{ knowledge_loop_timer_enabled | bool }}"
-    state: "{{ 'started' if knowledge_loop_timer_enabled | bool else 'stopped' }}"
+    state: >-
+      {{
+        'started'
+        if (knowledge_loop_timer_enabled | bool
+            and knowledge_loop_secret_files.results | map(attribute='stat.exists') | min)
+        else 'stopped'
+      }}
     daemon_reload: true
