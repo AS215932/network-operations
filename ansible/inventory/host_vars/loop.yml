@@ -23,6 +23,15 @@ knowledge_mcp_docker_fixed_cidr_v6: "{{ loop_docker_subnet }}"
 knowledge_mcp_docker_dns:
   - "{{ peers.rtr.ipv6 }}"
 
+# Governed Knowledge Loop producer agent (distinct from the read-only Knowledge
+# MCP above). Pinned to the merged Knowledge revision that ships
+# `hyrule-knowledge loop --once` (AS215932/knowledge#18). The systemd timer stays
+# disabled until a reviewed canary flips knowledge_loop_timer_enabled; applying
+# now only provisions the runtime (user, pinned checkout, deps, disabled
+# service/timer). Live OpenRouter enrichment budget stays at the role default 0.
+knowledge_loop_version: "0b414aea6777ab067ae69c4fd82f715e847cc58e"
+knowledge_loop_timer_enabled: false
+
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
 # (still draft-PR + human-merge gated). All other repos stay docs-only.
 engineering_loop_allowed_paths:
