@@ -386,6 +386,24 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("openrouter_api_key", playbook)
         self.assertIn("openrouter_management_api_key", playbook)
 
+    def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
+        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
+        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/noc_agent/defaults/main.yml").read_text())
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/noc.yml").read_text())
+
+        for text in (vault_template, noc_env):
+            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE=", text)
+            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL=", text)
+
+        self.assertFalse(defaults["noc_agent_core_trace_enabled"])
+        self.assertEqual(defaults["noc_agent_core_trace_collector_url"], "")
+        self.assertTrue(host_vars["noc_agent_core_trace_enabled"])
+        self.assertEqual(
+            host_vars["noc_agent_core_trace_collector_url"],
+            "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace",
+        )
+
     def test_freebsd_playbooks_can_opt_into_become(self):
         freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())
 
