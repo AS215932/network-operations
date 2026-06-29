@@ -50,3 +50,15 @@ path "auth/approle/role/knowledge-loop/role-id" {
 path "auth/approle/role/knowledge-loop/secret-id" {
   capabilities = ["update"]
 }
+
+# Production engineering-loop applies also bootstrap the loop-host
+# agent-core-collector Vault Agent. The runner may mint only a short-lived,
+# response-wrapped SecretID for the collector AppRole; it still cannot read
+# kv/agent-core-collector runtime secrets.
+path "auth/approle/role/agent-core-collector/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/agent-core-collector/secret-id" {
+  capabilities = ["update"]
+}

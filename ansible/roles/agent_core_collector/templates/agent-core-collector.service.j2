@@ -1,0 +1,48 @@
+# /etc/systemd/system/{{ agent_core_collector_service_name }}
+# Managed by ansible/roles/agent_core_collector. Dockerized trace collector
+# bound only to loop's management-overlay IPv6 address.
+
+[Unit]
+Description=AS215932 agent-core trace collector (containerized)
+After=network-online.target docker.service postgresql.service vault-agent-agent-core-collector.service
+Wants=network-online.target docker.service postgresql.service vault-agent-agent-core-collector.service
+ConditionPathIsReadable={{ agent_core_collector_env_file }}
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+ExecStartPre=-/usr/bin/docker rm -f {{ agent_core_collector_container_name }}
+ExecStart=/usr/bin/docker run \
+    --name {{ agent_core_collector_container_name }} \
+    --rm \
+    --pull=never \
+    --network=host \
+    --user=65534:65534 \
+    --read-only \
+    --cap-drop=ALL \
+    --security-opt no-new-privileges \
+    --pids-limit={{ agent_core_collector_pids_limit }} \
+    --memory={{ agent_core_collector_memory }} \
+    --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
+    --env-file {{ agent_core_collector_env_file }} \
+    -e HYRULE_COLLECTOR_BIND={{ agent_core_collector_bind }} \
+    -e HYRULE_COLLECTOR_PORT={{ agent_core_collector_port }} \
+    {{ agent_core_collector_image }}
+ExecStop=/usr/bin/docker stop {{ agent_core_collector_container_name }}
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-core-collector
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=/run /var/run {{ agent_core_collector_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

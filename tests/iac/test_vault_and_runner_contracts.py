@@ -85,7 +85,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -129,6 +129,30 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/knowledge-loop", runner_policy)
         self.assertEqual(defaults["knowledge_loop_timer_enabled"], False)
         self.assertEqual(defaults["knowledge_loop_max_openrouter_calls_per_day"], 0)
+
+    def test_agent_core_collector_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2"
+        ).read_text()
+        collector_policy = (REPO / "configs/vault/policies/agent-core-collector.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+
+        self.assertIn("role: agent_core_collector", playbook)
+        self.assertIn("vault_agent_name: agent-core-collector", playbook)
+        self.assertIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint agent-core-collector Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/agent-core-collector/role-id", workflow)
+        self.assertIn('path "auth/approle/role/agent-core-collector/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/agent-core-collector/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/agent-core-collector"', env_template)
+        self.assertIn('path "kv/data/agent-core-collector"', collector_policy)
+        self.assertNotIn("kv/data/agent-core-collector", runner_policy)
+        self.assertRegex(str(host_vars["agent_core_collector_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
+        self.assertEqual(host_vars["agent_core_collector_port"], 8770)
 
     def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
         host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())

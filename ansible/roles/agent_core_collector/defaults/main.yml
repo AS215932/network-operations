@@ -1,0 +1,41 @@
+---
+# Dockerized agent-core trace collector on the dedicated loop VM.
+# Default is validate-only; live mutation requires -e agent_core_collector_apply=true.
+
+agent_core_collector_apply: false
+agent_core_collector_enabled: true
+
+agent_core_collector_user: agent-core-collector
+agent_core_collector_group: agent-core-collector
+agent_core_collector_install_dir: /opt/agent-core-collector
+agent_core_collector_config_dir: /etc/agent-core-collector
+agent_core_collector_env_file: /etc/agent-core-collector/collector.env
+agent_core_collector_state_dir: /var/lib/agent-core-collector
+
+agent_core_collector_repo: https://github.com/AS215932/agent-core.git
+# AS215932/agent-core v0.4.0 merge commit: collector health checks DB connectivity.
+agent_core_collector_version: "0faf25793eaa0ca4ad74382f544aa2e10d7c80db"
+
+agent_core_collector_container_name: agent-core-collector
+agent_core_collector_image_repository: as215932/agent-core-collector
+agent_core_collector_image_tag: "{{ agent_core_collector_version | regex_replace('[^A-Za-z0-9_.-]', '-') }}"
+agent_core_collector_image: "{{ agent_core_collector_image_repository }}:{{ agent_core_collector_image_tag }}"
+agent_core_collector_service_name: agent-core-collector.service
+
+agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
+agent_core_collector_port: 8770
+agent_core_collector_database_host: 127.0.0.1
+agent_core_collector_database_port: 5432
+agent_core_collector_database_name: agent_core_collector
+agent_core_collector_database_role: agent_core_collector
+
+agent_core_collector_memory: 512m
+agent_core_collector_pids_limit: 256
+
+agent_core_collector_packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - git
+  - postgresql
+  - postgresql-client

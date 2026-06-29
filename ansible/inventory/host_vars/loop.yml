@@ -28,6 +28,13 @@ knowledge_mcp_docker_fixed_cidr_v6: "{{ loop_docker_subnet }}"
 knowledge_mcp_docker_dns:
   - "{{ peers.rtr.ipv6 }}"
 
+# Collector-backed Agent-Core trace ingestion. The collector binds only to the
+# loop overlay address and stores events in local Postgres.
+agent_core_collector_version: "0faf25793eaa0ca4ad74382f544aa2e10d7c80db"
+agent_core_collector_enabled: true
+agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
+agent_core_collector_port: 8770
+
 # Governed Knowledge Loop producer agent (distinct from the read-only Knowledge
 # MCP above). Pinned to the merged Knowledge revision that ships
 # `hyrule-knowledge loop --once` (AS215932/knowledge#18). The workflow enables
@@ -84,10 +91,27 @@ monitoring_extra_services:
     vars:
       prom_instance: "[{{ peers.loop.ipv6 }}]:9100"
       systemd_unit: hyrule-knowledge-mcp.service
+  - name: agent-core-collector-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    max_check_attempts: 3
+    notes: "Agent-Core trace collector health endpoint over the management overlay"
+    vars:
+      http_address: "{{ peers.loop.ipv6 }}"
+      http_port: 8770
+      http_uri: /healthz
+      http_vhost: agent-core-collector.loop.as215932.internal
+      http_ssl: false
+      http_ipv6: true
+      http_timeout: 5
+      http_expect_body_regex: '"status":"ok"'
 
 firewall_extra_rules:
   # node_exporter scrape from mon only.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+  # Agent-Core collector: local loop producers, NOC producers, and mon health check only.
+  - { proto: tcp, dport: 8770, src: ["{{ peers.loop.ipv6 }}", "{{ peers.noc.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "agent-core collector" }
 
 firewall_forward_extra_raw_nft: |
   iifname docker0 ip6 saddr {{ loop_docker_subnet }} counter accept comment "loop Docker IPv6 egress"
