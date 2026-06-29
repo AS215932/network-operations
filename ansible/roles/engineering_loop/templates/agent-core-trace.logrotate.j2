@@ -1,0 +1,17 @@
+# /etc/logrotate.d/engineering-loop-agent-core-trace
+# Managed by ansible/roles/engineering_loop. Bounds the additive agent-core trace
+# sink so it cannot grow unbounded under the unit's ProtectSystem=strict /
+# ReadWritePaths confinement. The sink lives in the loop state dir (owned by the
+# loop user), so rotation runs as that user (su) and uses copytruncate because the
+# emitter reopens the path per write rather than holding a long-lived handle.
+{{ engineering_loop_agent_core_trace_path }} {
+    su {{ engineering_loop_user }} {{ engineering_loop_group }}
+    weekly
+    rotate 8
+    size 20M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
