@@ -184,6 +184,14 @@
     - reload systemd
     - restart engineering-loop timer
 
+- name: Install agent-core trace logrotate policy
+  ansible.builtin.template:
+    src: agent-core-trace.logrotate.j2
+    dest: /etc/logrotate.d/engineering-loop-agent-core-trace
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Set Engineering Loop timer state
   ansible.builtin.systemd:
     name: hyrule-engineering-loop.timer
