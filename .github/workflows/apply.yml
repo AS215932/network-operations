@@ -256,6 +256,30 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve snapshot requirement
+        id: snapshot
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+        run: |
+          set -euo pipefail
+
+          case "$PLAYBOOK" in
+            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|frr|networkd_resolved|mail_openbsd)
+              required=true
+              ;;
+            *)
+              required=false
+              ;;
+          esac
+
+          printf 'required=%s\n' "$required" >> "$GITHUB_OUTPUT"
+          printf 'SNAPSHOT_REQUIRED=%s\n' "$required" >> "$GITHUB_ENV"
+          {
+            echo "## Snapshot requirement"
+            echo
+            echo "\`${required}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Mint hyrule-cloud Vault bootstrap
         if: ${{ !inputs.dry_run && inputs.playbook == 'cloud' }}
         run: |
@@ -378,6 +402,7 @@ jobs:
       # and escalates with sudo — never root, never the operator's svag. An
       # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Pre-deploy Icinga snapshot
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         working-directory: ansible
         env:
           PLAYBOOK: ${{ inputs.playbook }}
@@ -385,6 +410,7 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
+            -e snapshot_required=true \
             -e snapshot_phase=pre
 
       - name: Render-only (dry run)
@@ -433,7 +459,7 @@ jobs:
             "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         working-directory: ansible
         env:
           PLAYBOOK: ${{ inputs.playbook }}
@@ -441,6 +467,7 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
+            -e snapshot_required=true \
             -e snapshot_phase=post
 
       - name: Post-deploy Goss validation
@@ -451,22 +478,21 @@ jobs:
         run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
 
       - name: Capture snapshot diff
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         id: diff
         run: |
           set -e
           shopt -s nullglob
           snapshots_root=ansible/generated/snapshots
           if [ ! -d "$snapshots_root" ]; then
-            echo "::warning::no snapshots directory found at $snapshots_root"
-            echo "diff=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::no snapshots directory found at $snapshots_root"
+            exit 1
           fi
           # Two most recent snapshot dirs are pre/post.
           mapfile -t dirs < <(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -2)
           if [ "${#dirs[@]}" -lt 2 ]; then
-            echo "::warning::need 2 snapshot dirs, found ${#dirs[@]}"
-            exit 0
+            echo "::error::need 2 snapshot dirs, found ${#dirs[@]}"
+            exit 1
           fi
           {
             echo "## Icinga snapshot diff"
@@ -497,9 +523,10 @@ jobs:
             --body-file /tmp/diff.md
 
       - name: Upload snapshots as artifact
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}
           path: ansible/generated/snapshots/
+          if-no-files-found: error
           retention-days: 30
