@@ -28,6 +28,8 @@ knowledge_mcp_mount_path: /
 knowledge_mcp_log_level: INFO
 knowledge_mcp_memory: 512m
 knowledge_mcp_pids_limit: 256
+knowledge_mcp_agent_core_trace_enabled: false
+knowledge_mcp_agent_core_trace_collector_url: ""
 
 # Optional routed-GUA IPv6 Docker bridge support. This keeps Docker usable on
 # IPv6-only hosts without falling back to IPv4-only public resolvers or IPv4

@@ -4,23 +4,26 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing the Phase 3 agent-core emitter + agent-core dep
-# (engineering-loop #24, #25). Required before enabling trace emission below: the prior
-# pin (eb37b1c) has no reader for HYRULE_ENGINEERING_AGENT_CORE_TRACE (per codex review).
-engineering_loop_version: "280063080b0d216b5ce26b81586708cf31010590"
+# Bumped to the build containing agent-core v0.4.0 sink_from_env support
+# (engineering-loop #26), so live loop cycles can fan out to the collector while
+# retaining the local JSONL trace sink.
+engineering_loop_version: "789e90bc5a791629d3b7ff69c6fc3bd22a92da30"
 engineering_loop_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 engineering_loop_lhp_callback_enabled: true
 # Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.
 engineering_loop_agent_core_trace_enabled: true
+engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.
-knowledge_mcp_version: "ae40865a920292efd65e50768ffee85ca0eb9fe7"
+knowledge_mcp_version: "32bca0c345988f2a504f00f9f30937424ac66c4e"
 knowledge_mcp_enabled: true
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
 knowledge_mcp_transport: streamable-http
+knowledge_mcp_agent_core_trace_enabled: true
+knowledge_mcp_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 # Docker uses routed IPv6 for egress: containers receive GUA addresses from
 # this /64, and rtr has a static/iBGP return route via loop's infra address.
 knowledge_mcp_docker_ipv6_enabled: true
@@ -36,15 +39,15 @@ agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
 
 # Governed Knowledge Loop producer agent (distinct from the read-only Knowledge
-# MCP above). Pinned to the merged Knowledge revision that ships
-# `hyrule-knowledge loop --once` (AS215932/knowledge#18). The workflow enables
-# knowledge_loop_apply for engineering-loop, so this pin keeps the first apply
-# reproducible instead of tracking floating `main`. The systemd timer stays
-# disabled until a reviewed canary flips knowledge_loop_timer_enabled; applying
-# now only provisions the runtime (user, pinned checkout, deps, disabled
-# service/timer). Live OpenRouter enrichment budget stays the role default 0.
-knowledge_loop_version: "0b414aea6777ab067ae69c4fd82f715e847cc58e"
-knowledge_loop_timer_enabled: false
+# MCP above). Pinned to the merged Knowledge revision that ships agent-core
+# v0.4.0 sink_from_env support (AS215932/knowledge#24). The canary runs daily,
+# opens at most one reviewed PR/day, and keeps live OpenRouter calls disabled.
+knowledge_loop_version: "32bca0c345988f2a504f00f9f30937424ac66c4e"
+knowledge_loop_timer_enabled: true
+knowledge_loop_agent_core_trace_enabled: true
+knowledge_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
+knowledge_loop_max_openrouter_calls_per_day: 0
+knowledge_loop_max_prs_per_day: 1
 
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
 # (still draft-PR + human-merge gated). All other repos stay docs-only.

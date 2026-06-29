@@ -33,6 +33,8 @@ ExecStart=/usr/bin/docker run \
     -e HYRULE_KNOWLEDGE_MCP_MESSAGE_PATH={{ knowledge_mcp_message_path }} \
     -e HYRULE_KNOWLEDGE_MCP_MOUNT_PATH={{ knowledge_mcp_mount_path }} \
     -e HYRULE_KNOWLEDGE_MCP_LOG_LEVEL={{ knowledge_mcp_log_level }} \
+    -e HYRULE_KNOWLEDGE_AGENT_CORE_TRACE={{ '1' if knowledge_mcp_agent_core_trace_enabled | bool else '0' }} \
+    -e HYRULE_KNOWLEDGE_AGENT_CORE_TRACE_COLLECTOR_URL={{ knowledge_mcp_agent_core_trace_collector_url }} \
     {{ knowledge_mcp_image }}
 ExecStop=/usr/bin/docker stop {{ knowledge_mcp_container_name }}
 TimeoutStopSec=20
