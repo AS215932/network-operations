@@ -385,6 +385,7 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
+            -e snapshot_required=true \
             -e snapshot_phase=pre
 
       - name: Render-only (dry run)
@@ -441,6 +442,7 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags snapshot \
             -e ansible_user=ci \
+            -e snapshot_required=true \
             -e snapshot_phase=post
 
       - name: Post-deploy Goss validation
@@ -458,15 +460,14 @@ jobs:
           shopt -s nullglob
           snapshots_root=ansible/generated/snapshots
           if [ ! -d "$snapshots_root" ]; then
-            echo "::warning::no snapshots directory found at $snapshots_root"
-            echo "diff=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::no snapshots directory found at $snapshots_root"
+            exit 1
           fi
           # Two most recent snapshot dirs are pre/post.
           mapfile -t dirs < <(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -2)
           if [ "${#dirs[@]}" -lt 2 ]; then
-            echo "::warning::need 2 snapshot dirs, found ${#dirs[@]}"
-            exit 0
+            echo "::error::need 2 snapshot dirs, found ${#dirs[@]}"
+            exit 1
           fi
           {
             echo "## Icinga snapshot diff"
@@ -502,4 +503,5 @@ jobs:
         with:
           name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}
           path: ansible/generated/snapshots/
+          if-no-files-found: error
           retention-days: 30
