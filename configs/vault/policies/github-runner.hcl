@@ -62,3 +62,15 @@ path "auth/approle/role/agent-core-collector/role-id" {
 path "auth/approle/role/agent-core-collector/secret-id" {
   capabilities = ["update"]
 }
+
+# Production engineering-loop applies also bootstrap the loop-host
+# agentic-observatory Vault Agent. The runner may mint only a short-lived,
+# response-wrapped SecretID for the observatory AppRole; it still cannot read
+# kv/agentic-observatory runtime secrets.
+path "auth/approle/role/agentic-observatory/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/agentic-observatory/secret-id" {
+  capabilities = ["update"]
+}

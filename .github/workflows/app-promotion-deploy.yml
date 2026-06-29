@@ -16,6 +16,7 @@ on:
       - ansible/roles/engineering_loop/**
       - ansible/roles/knowledge_mcp/**
       - ansible/roles/agent_core_collector/**
+      - ansible/roles/agentic_observatory/**
       - configs/mon/icinga2/**
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
@@ -24,6 +25,7 @@ on:
       - ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -59,6 +61,7 @@ jobs:
             ansible/roles/engineering_loop \
             ansible/roles/knowledge_mcp \
             ansible/roles/agent_core_collector \
+            ansible/roles/agentic_observatory \
             configs/mon/icinga2 \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
@@ -66,7 +69,8 @@ jobs:
             configs/noc-agent-bot.service \
             ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2)"
+            ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import sys
@@ -94,11 +98,13 @@ jobs:
               "ansible/playbooks/engineering-loop.yml",
               "ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2",
+              "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
           }) or any(
               path.startswith((
                   "ansible/roles/engineering_loop/",
                   "ansible/roles/knowledge_mcp/",
                   "ansible/roles/agent_core_collector/",
+                  "ansible/roles/agentic_observatory/",
               ))
               for path in changed
           )

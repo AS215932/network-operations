@@ -85,7 +85,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -153,6 +153,55 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertRegex(str(host_vars["agent_core_collector_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
         self.assertEqual(host_vars["agent_core_collector_port"], 8770)
+
+    def test_agentic_observatory_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2"
+        ).read_text()
+        policy = (REPO / "configs/vault/policies/agentic-observatory.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        apply_tasks = (REPO / "ansible/roles/agentic_observatory/tasks/apply.yml").read_text()
+        service_template = (
+            REPO / "ansible/roles/agentic_observatory/templates/agentic-observatory.service.j2"
+        ).read_text()
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+
+        self.assertIn("Ensure Agentic Observatory group exists before Vault Agent", playbook)
+        self.assertNotIn("when: agentic_observatory_apply | default(false) | bool", playbook)
+        self.assertIn("role: agentic_observatory", playbook)
+        self.assertIn("vault_agent_name: agentic-observatory", playbook)
+        self.assertIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint agentic-observatory Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/agentic-observatory/role-id", workflow)
+        self.assertIn('path "auth/approle/role/agentic-observatory/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/agentic-observatory/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/agentic-observatory"', env_template)
+        self.assertIn('path "kv/data/agentic-observatory"', policy)
+        self.assertNotIn("kv/data/agentic-observatory", runner_policy)
+        noc_env_template = (
+            REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2"
+        ).read_text()
+        self.assertIn("NOC_LOOP_CONSOLE_SECRET", noc_env_template)
+        self.assertIn("Install temporary GitHub netrc", apply_tasks)
+        self.assertIn("GIT_TERMINAL_PROMPT", apply_tasks)
+        self.assertIn("OBSERVATORY_GITHUB_TOKEN", apply_tasks)
+        self.assertIn("ReadWritePaths={{ agentic_observatory_state_dir }}", service_template)
+        self.assertNotIn(
+            "ReadWritePaths={{ agentic_observatory_state_dir }} {{ agentic_observatory_install_dir }}",
+            service_template,
+        )
+        self.assertRegex(str(host_vars["agentic_observatory_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["agentic_observatory_port"], 8780)
+        self.assertEqual(host_vars["agentic_observatory_read_only"], True)
+        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], False)
+        runbook = (REPO / "docs/runbooks/bootstrap-agentic-observatory-vault.md").read_text()
+        self.assertIn(
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl",
+            runbook,
+        )
+        self.assertIn("required for the private runtime checkout", runbook)
 
     def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
         host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())

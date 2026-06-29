@@ -1,0 +1,35 @@
+# /etc/systemd/system/{{ agentic_observatory_service_name }}
+# Managed by ansible/roles/agentic_observatory. Internal operator-only console.
+
+[Unit]
+Description=AS215932 Agentic Observatory
+After=network-online.target postgresql.service vault-agent-agentic-observatory.service
+Wants=network-online.target postgresql.service vault-agent-agentic-observatory.service
+ConditionPathIsReadable={{ agentic_observatory_env_file }}
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=simple
+User={{ agentic_observatory_user }}
+Group={{ agentic_observatory_group }}
+WorkingDirectory={{ agentic_observatory_install_dir }}
+EnvironmentFile={{ agentic_observatory_env_file }}
+Environment=OBSERVATORY_HOST={{ agentic_observatory_host }}
+Environment=OBSERVATORY_PORT={{ agentic_observatory_port }}
+ExecStart={{ agentic_observatory_install_dir }}/.venv/bin/uvicorn agentic_observatory.app:app --host {{ agentic_observatory_host }} --port {{ agentic_observatory_port }}
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agentic-observatory
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths={{ agentic_observatory_state_dir }}
+
+[Install]
+WantedBy=multi-user.target
