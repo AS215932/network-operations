@@ -37,7 +37,6 @@
         name: "{{ agentic_observatory_group }}"
         state: present
         system: true
-      when: agentic_observatory_apply | default(false) | bool
       tags: [apply, vault_agent, agentic_observatory]
   roles:
     - role: firewall

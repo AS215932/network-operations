@@ -51,6 +51,36 @@
       agentic-observatory AppRole/KV and run the Vault Agent role before
       applying agentic_observatory.
 
+- name: Read Agentic Observatory GitHub checkout token
+  ansible.builtin.shell: |
+    set -euo pipefail
+    python3 - {{ agentic_observatory_env_file | quote }} <<'PY'
+    import pathlib
+    import sys
+
+    prefix = "OBSERVATORY_GITHUB_TOKEN="
+    for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+        if line.startswith(prefix):
+            print(line[len(prefix):])
+            break
+    else:
+        raise SystemExit("OBSERVATORY_GITHUB_TOKEN missing")
+    PY
+  args:
+    executable: /bin/bash
+  register: agentic_observatory_github_token
+  changed_when: false
+  no_log: true
+
+- name: Assert Agentic Observatory private checkout token is available
+  ansible.builtin.assert:
+    that:
+      - agentic_observatory_github_token.stdout | length > 0
+    fail_msg: >-
+      Agentic Observatory requires OBSERVATORY_GITHUB_TOKEN for the private
+      AS215932/agentic-observatory runtime checkout. Populate the
+      agentic-observatory Vault secret or make the repository public.
+
 - name: Ensure Agentic Observatory PostgreSQL role has env password
   ansible.builtin.shell: |
     set -euo pipefail
@@ -120,15 +150,38 @@
   when: agentic_observatory_pg_database.stdout | trim != '1'
 
 - name: Checkout Agentic Observatory runtime
-  ansible.builtin.git:
-    repo: "{{ agentic_observatory_repo }}"
-    dest: "{{ agentic_observatory_install_dir }}"
-    version: "{{ agentic_observatory_version }}"
-    update: true
-    force: false
-  become: true
-  become_user: "{{ agentic_observatory_user }}"
-  notify: restart agentic observatory
+  block:
+    - name: Install temporary GitHub netrc for Agentic Observatory checkout
+      ansible.builtin.copy:
+        dest: "{{ agentic_observatory_state_dir }}/.netrc"
+        content: |
+          machine github.com
+            login x-access-token
+            password {{ agentic_observatory_github_token.stdout }}
+        owner: "{{ agentic_observatory_user }}"
+        group: "{{ agentic_observatory_group }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Checkout Agentic Observatory runtime source
+      ansible.builtin.git:
+        repo: "{{ agentic_observatory_repo }}"
+        dest: "{{ agentic_observatory_install_dir }}"
+        version: "{{ agentic_observatory_version }}"
+        update: true
+        force: false
+      become: true
+      become_user: "{{ agentic_observatory_user }}"
+      environment:
+        HOME: "{{ agentic_observatory_state_dir }}"
+        GIT_TERMINAL_PROMPT: "0"
+      notify: restart agentic observatory
+  always:
+    - name: Remove temporary GitHub netrc for Agentic Observatory checkout
+      ansible.builtin.file:
+        path: "{{ agentic_observatory_state_dir }}/.netrc"
+        state: absent
+      no_log: true
 
 - name: Sync Agentic Observatory runtime dependencies
   ansible.builtin.command: /usr/local/bin/uv sync --frozen

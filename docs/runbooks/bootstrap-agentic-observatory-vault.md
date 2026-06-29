@@ -12,7 +12,7 @@ Write these keys without logging secret values:
 - `operator_password_hash` (Argon2 hash)
 - `db_password` (URL-safe for the SQLAlchemy database URL)
 - `noc_loop_console_secret` (must match NOC `NOC_LOOP_CONSOLE_SECRET`)
-- `github_token` (read-only GitHub token/App installation token; may be blank for degraded GitHub context)
+- `github_token` (read-only GitHub token/App installation token; required for the private runtime checkout and runtime GitHub context)
 
 ## Policy/apply order
 
