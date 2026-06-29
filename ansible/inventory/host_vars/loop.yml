@@ -4,10 +4,15 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-engineering_loop_version: "eb37b1c4d1d7c3f349c8c6cdb3bd890f168c2755"
+# Bumped to the build containing the Phase 3 agent-core emitter + agent-core dep
+# (engineering-loop #24, #25). Required before enabling trace emission below: the prior
+# pin (eb37b1c) has no reader for HYRULE_ENGINEERING_AGENT_CORE_TRACE (per codex review).
+engineering_loop_version: "280063080b0d216b5ce26b81586708cf31010590"
 engineering_loop_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 engineering_loop_lhp_callback_enabled: true
+# Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.
+engineering_loop_agent_core_trace_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.
