@@ -41,6 +41,8 @@ knowledge_loop_learning_event_paths: []
 knowledge_loop_replace_learning_events: false
 knowledge_loop_skip_validation: false
 knowledge_loop_icinga_check: loop!knowledge-loop
+knowledge_loop_agent_core_trace_enabled: false
+knowledge_loop_agent_core_trace_collector_url: ""
 
 # Daily instead of hourly: ingest currently refreshes timestamps, so hourly would
 # create noisy PRs. Increase cadence only after stable no-op detection lands.

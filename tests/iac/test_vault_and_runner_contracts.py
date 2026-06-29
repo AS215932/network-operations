@@ -157,9 +157,14 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
     def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
         host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
         # apply.yml forces knowledge_loop_apply for engineering-loop, so the loop
-        # checkout must be a reviewed 40-char commit, never floating `main`.
+        # checkout must be a reviewed 40-char commit, never floating `main`. The
+        # live host may enable the reviewed daily canary, but role defaults remain off.
         self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
-        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], False)
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_max_openrouter_calls_per_day"], 0)
+        self.assertEqual(host_vars["knowledge_loop_max_prs_per_day"], 1)
+        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], True)
+        self.assertIn("/v1/trace", host_vars["knowledge_loop_agent_core_trace_collector_url"])
 
         runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
         # The runner needs the refreshed github-runner policy before the first apply
