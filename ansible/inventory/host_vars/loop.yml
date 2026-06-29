@@ -33,7 +33,7 @@ knowledge_mcp_docker_dns:
 
 # Collector-backed Agent-Core trace ingestion. The collector binds only to the
 # loop overlay address and stores events in local Postgres.
-agent_core_collector_version: "0faf25793eaa0ca4ad74382f544aa2e10d7c80db"
+agent_core_collector_version: "0765283c2644fcab53ccfb5b8b3ce4184b083adb"
 agent_core_collector_enabled: true
 agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
