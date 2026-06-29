@@ -5,7 +5,7 @@ $ORIGIN servify.network.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026061701 ; serial (YYYYMMDDNN)
+                  2026062901 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -56,6 +56,10 @@ mon     IN  AAAA  2a0c:b641:b50:2::40
 ; NOC Agent operator dashboard — via Caddy reverse proxy on proxy VM
 noc     IN  A     46.105.40.223
 noc     IN  AAAA  2a0c:b641:b50:2::40
+
+; Agentic Observatory operator console — via Caddy reverse proxy on proxy VM
+observatory IN A     46.105.40.223
+observatory IN AAAA  2a0c:b641:b50:2::40
 
 ; Core routers — underlay addresses (reachable from public internet)
 cr1-nl1 IN  A     194.28.98.69

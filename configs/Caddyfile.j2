@@ -195,6 +195,42 @@ as215932.net, www.as215932.net {
     }
 }
 
+# Agentic Observatory — internal operator-only console.
+observatory.servify.network {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key {{ tsig_secret }}
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [{{ peers.loop.ipv6 }}]:8780 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "same-origin"
+    }
+
+    log {
+        output file /var/log/caddy/agentic-observatory.log
+    }
+}
+
 # NOC Agent operator dashboard — noc.servify.network
 # Only the token-gated operator surfaces are exposed (the control dashboard,
 # health, metrics). Webhooks, the approval callback, mail polling, and LHP-v1
