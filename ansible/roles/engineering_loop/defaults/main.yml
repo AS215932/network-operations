@@ -86,6 +86,12 @@ engineering_loop_knowledge_learning_dir: ""
 engineering_loop_noc_lhp_base_url: ""
 engineering_loop_lhp_callback_enabled: false
 
+# agent-core observability emission (additive; default off). When enabled, each loop
+# cycle also writes agent-core TraceEvent/CostUsage JSON lines to the sink path
+# (must sit under a service ReadWritePaths entry, i.e. the state dir).
+engineering_loop_agent_core_trace_enabled: false
+engineering_loop_agent_core_trace_path: "{{ engineering_loop_state_dir }}/agent-core-trace.jsonl"
+
 engineering_loop_git_user_name: "hyrule-engineering-loop[bot]"
 engineering_loop_git_user_email: "engineering-loop@as215932.net"
 
