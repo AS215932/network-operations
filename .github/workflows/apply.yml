@@ -256,6 +256,30 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve snapshot requirement
+        id: snapshot
+        env:
+          PLAYBOOK: ${{ inputs.playbook }}
+        run: |
+          set -euo pipefail
+
+          case "$PLAYBOOK" in
+            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|frr|networkd_resolved|mail_openbsd)
+              required=true
+              ;;
+            *)
+              required=false
+              ;;
+          esac
+
+          printf 'required=%s\n' "$required" >> "$GITHUB_OUTPUT"
+          printf 'SNAPSHOT_REQUIRED=%s\n' "$required" >> "$GITHUB_ENV"
+          {
+            echo "## Snapshot requirement"
+            echo
+            echo "\`${required}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Mint hyrule-cloud Vault bootstrap
         if: ${{ !inputs.dry_run && inputs.playbook == 'cloud' }}
         run: |
@@ -378,6 +402,7 @@ jobs:
       # and escalates with sudo — never root, never the operator's svag. An
       # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Pre-deploy Icinga snapshot
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         working-directory: ansible
         env:
           PLAYBOOK: ${{ inputs.playbook }}
@@ -434,7 +459,7 @@ jobs:
             "${limit_args[@]}"
 
       - name: Post-deploy Icinga snapshot
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         working-directory: ansible
         env:
           PLAYBOOK: ${{ inputs.playbook }}
@@ -453,7 +478,7 @@ jobs:
         run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
 
       - name: Capture snapshot diff
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         id: diff
         run: |
           set -e
@@ -498,7 +523,7 @@ jobs:
             --body-file /tmp/diff.md
 
       - name: Upload snapshots as artifact
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}

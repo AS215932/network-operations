@@ -20,7 +20,7 @@
     ICINGA_API_USER: "{{ lookup('ansible.builtin.env', 'ICINGA_API_USER') | default('', true) }}"
     ICINGA_API_PASS: "{{ lookup('ansible.builtin.env', 'ICINGA_API_PASSWORD') | default('', true) }}"
   shell: |
-    set -eu
+    set -euo pipefail
 
     if [ -x /usr/local/bin/icinga-snapshot ] && [ -r /etc/icinga2/scripts/.icinga-snapshot.env ]; then
       /usr/local/bin/icinga-snapshot
@@ -33,8 +33,14 @@
     fi
 
     : "${ICINGA_API_URL:=https://localhost:5665}"
-    : "${ICINGA_API_USER:?ICINGA_API_USER unset and /etc/icinga2/scripts/.icinga-snapshot.env missing}"
-    : "${ICINGA_API_PASS:?ICINGA_API_PASS unset and /etc/icinga2/scripts/.icinga-snapshot.env missing}"
+    if [ -z "${ICINGA_API_USER:-}" ]; then
+      echo "icinga-snapshot: ICINGA_API_USER empty/unset and /etc/icinga2/scripts/.icinga-snapshot.env missing" >&2
+      exit 2
+    fi
+    if [ -z "${ICINGA_API_PASS:-}" ]; then
+      echo "icinga-snapshot: ICINGA_API_PASS empty/unset and /etc/icinga2/scripts/.icinga-snapshot.env missing" >&2
+      exit 2
+    fi
 
     if ! command -v jq >/dev/null 2>&1; then
       echo "icinga-snapshot: jq not installed" >&2

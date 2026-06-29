@@ -26,8 +26,14 @@ else
 fi
 
 : "${ICINGA_API_URL:=https://localhost:5665}"
-: "${ICINGA_API_USER:?ICINGA_API_USER unset in env file/env}"
-: "${ICINGA_API_PASS:?ICINGA_API_PASS unset in env file/env}"
+if [ -z "${ICINGA_API_USER:-}" ]; then
+  echo "icinga-snapshot: ICINGA_API_USER empty/unset in env file/env" >&2
+  exit 2
+fi
+if [ -z "${ICINGA_API_PASS:-}" ]; then
+  echo "icinga-snapshot: ICINGA_API_PASS empty/unset in env file/env" >&2
+  exit 2
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "icinga-snapshot: jq not installed" >&2
@@ -46,4 +52,10 @@ resp=$(curl -fsS -k \
   exit 2
 }
 
-printf '%s' "$resp" | jq -r '.results[]? | "\(.name)\tstate=\(.attrs.state)"' | sort
+lines=$(printf '%s' "$resp" | jq -r '.results[]? | "\(.name)\tstate=\(.attrs.state)"') || {
+  echo "icinga-snapshot: failed to parse icinga2 API response" >&2
+  exit 2
+}
+if [ -n "$lines" ]; then
+  printf '%s\n' "$lines" | sort
+fi
