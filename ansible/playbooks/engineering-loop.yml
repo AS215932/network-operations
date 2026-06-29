@@ -135,6 +135,38 @@
             mode: "0750"
       when: (lookup('env', 'KNOWLEDGE_LOOP_SECRET_BACKEND') | default('vault', true)) == 'vault'
       tags: [vault_agent, knowledge_loop]
+    - role: vault_agent
+      vars:
+        vault_agent_name: agent-core-collector
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/agent-core-collector/secret-id'
+            if (lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ agent_core_collector_env_file }}"
+        vault_agent_reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_env_reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_templates:
+          - src: agent-core-collector.env.ctmpl.j2
+            name: agent-core-collector.env.ctmpl
+            destination: "{{ agent_core_collector_env_file }}"
+            group: root
+            mode: "0640"
+            reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_extra_dirs:
+          - path: "{{ agent_core_collector_config_dir }}"
+            group: root
+            mode: "0750"
+      tags: [vault_agent, agent_core_collector]
+    - role: agent_core_collector
+      tags: [agent_core_collector]
   post_tasks:
     - name: Flush handlers before post-deploy snapshot
       ansible.builtin.meta: flush_handlers
