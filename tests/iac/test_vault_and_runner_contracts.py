@@ -154,7 +154,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
         self.assertEqual(host_vars["agent_core_collector_port"], 8770)
 
-    def test_reliability_governor_is_managed_but_not_enabled_by_default(self):
+    def test_reliability_governor_is_managed_with_safe_default_and_loop_enabled(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/engineering_loop/defaults/main.yml").read_text())
         host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
         apply_tasks = (REPO / "ansible/roles/engineering_loop/tasks/apply.yml").read_text()
@@ -172,7 +172,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         runbook = (REPO / "docs/runbooks/bootstrap-engineering-loop-vault.md").read_text()
 
         self.assertEqual(defaults["engineering_loop_governor_timer_enabled"], False)
-        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], False)
+        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], True)
         self.assertEqual(
             defaults["engineering_loop_governor_state_dir"],
             "{{ engineering_loop_state_dir }}/reliability-governor",
