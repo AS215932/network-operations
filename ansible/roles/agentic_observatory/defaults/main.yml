@@ -9,7 +9,7 @@ agentic_observatory_config_dir: /etc/agentic-observatory
 agentic_observatory_env_file: /etc/agentic-observatory/observatory.env
 agentic_observatory_state_dir: /var/lib/agentic-observatory
 agentic_observatory_repo: https://github.com/AS215932/agentic-observatory.git
-agentic_observatory_version: "02c7ba3af99b741ca3b49b2047ff2466fbd7e11a"
+agentic_observatory_version: "6e1d393bbc8ded63ff457ca16a7d2ecb14153a67"
 
 agentic_observatory_service_name: agentic-observatory.service
 agentic_observatory_host: "{{ peers.loop.ipv6 }}"
