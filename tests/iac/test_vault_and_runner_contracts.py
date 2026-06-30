@@ -154,6 +154,55 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
         self.assertEqual(host_vars["agent_core_collector_port"], 8770)
 
+    def test_reliability_governor_is_managed_but_not_enabled_by_default(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/engineering_loop/defaults/main.yml").read_text())
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+        apply_tasks = (REPO / "ansible/roles/engineering_loop/tasks/apply.yml").read_text()
+        validate_tasks = (REPO / "ansible/roles/engineering_loop/tasks/main.yml").read_text()
+        handlers = (REPO / "ansible/roles/engineering_loop/handlers/main.yml").read_text()
+        wrapper = (
+            REPO / "ansible/roles/engineering_loop/templates/run-reliability-governor.sh.j2"
+        ).read_text()
+        service = (
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.service.j2"
+        ).read_text()
+        timer = (
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.timer.j2"
+        ).read_text()
+        runbook = (REPO / "docs/runbooks/bootstrap-engineering-loop-vault.md").read_text()
+
+        self.assertEqual(defaults["engineering_loop_governor_timer_enabled"], False)
+        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], False)
+        self.assertEqual(
+            defaults["engineering_loop_governor_state_dir"],
+            "{{ engineering_loop_state_dir }}/reliability-governor",
+        )
+        self.assertEqual(len(defaults["engineering_loop_governor_repos"]), 8)
+        self.assertEqual(defaults["engineering_loop_governor_timer_calendar"], "*:0/15")
+        self.assertRegex(str(host_vars["engineering_loop_version"]), r"^[0-9a-f]{40}$")
+
+        self.assertIn("Install Reliability Governor wrapper", apply_tasks)
+        self.assertIn("Install Reliability Governor systemd service", apply_tasks)
+        self.assertIn("Install Reliability Governor systemd timer", apply_tasks)
+        self.assertIn("Set Reliability Governor timer state", apply_tasks)
+        self.assertIn("engineering_loop_governor_state_dir.startswith('/')", validate_tasks)
+        self.assertIn("engineering_loop_governor_limit | int <= 20", validate_tasks)
+        self.assertIn("restart reliability-governor timer", handlers)
+
+        self.assertIn("args=(reliability-governor --once)", wrapper)
+        self.assertIn("--registry \"{{ engineering_loop_install_dir }}/configs/loop/capability-registry.yml\"", wrapper)
+        self.assertIn("--state-dir-path \"{{ engineering_loop_governor_state_dir }}\"", wrapper)
+        self.assertIn("--knowledge-mcp-url \"{{ engineering_loop_knowledge_mcp_url }}\"", wrapper)
+        self.assertIn('exec "$loop_bin" "${args[@]}" "$@"', wrapper)
+
+        self.assertIn("ExecStart={{ engineering_loop_governor_wrapper_path }}", service)
+        self.assertIn("SyslogIdentifier=reliability-governor", service)
+        self.assertIn("EnvironmentFile={{ engineering_loop_env_file }}", service)
+        self.assertIn("hyrule-knowledge-mcp.service", service)
+        self.assertIn("Unit=hyrule-reliability-governor.service", timer)
+        self.assertIn("OnCalendar={{ engineering_loop_governor_timer_calendar }}", timer)
+        self.assertIn("run-reliability-governor --dry-run", runbook)
+
     def test_agentic_observatory_uses_dedicated_vault_scope(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
         playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()

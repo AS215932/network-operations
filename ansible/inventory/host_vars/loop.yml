@@ -4,11 +4,11 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing agent-core v0.4.0 sink_from_env support
-# (engineering-loop #26), so live loop cycles can fan out to the collector while
-# retaining the local JSONL trace sink.
-engineering_loop_version: "b8333f0ba91f360ab001084b3ca3eba3ca3fdacd"
+# Bumped to the build containing the Reliability Governor runtime
+# (engineering-loop #27) while retaining agent-core trace emission from #26.
+engineering_loop_version: "f5915ab5dfbecf4fbdcbc8acf554d2477e832d04"
 engineering_loop_timer_enabled: true
+engineering_loop_governor_timer_enabled: false
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 engineering_loop_lhp_callback_enabled: true
 # Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.

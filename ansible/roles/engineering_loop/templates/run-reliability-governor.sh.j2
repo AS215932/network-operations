@@ -1,0 +1,61 @@
+#!/bin/bash
+# Managed by ansible/roles/engineering_loop.
+# Runtime wrapper for the one-shot Reliability Governor. It shares the
+# Engineering Loop GitHub auth path and accepts extra CLI flags such as
+# --dry-run for production observation before the timer is enabled.
+# shellcheck shell=bash
+
+set -euo pipefail
+
+fatal() {
+  printf '%s\n' "reliability-governor: $*" >&2
+  exit 1
+}
+
+existing_token="${ENGINEERING_LOOP_GITHUB_TOKEN:-}"
+if [ -z "$existing_token" ]; then
+  existing_token="${GH_TOKEN:-}"
+fi
+
+if [ "${ENGINEERING_LOOP_GITHUB_AUTH_MODE:-}" = "app" ] || [ -n "${ENGINEERING_LOOP_GITHUB_APP_ID:-}" ]; then
+  token="$({{ engineering_loop_github_app_token_path }})"
+  [ -n "$token" ] || fatal "GitHub App token helper returned an empty token"
+  export GH_TOKEN="$token"
+  export ENGINEERING_LOOP_GITHUB_TOKEN="$token"
+elif [ -n "$existing_token" ]; then
+  export GH_TOKEN="$existing_token"
+  export ENGINEERING_LOOP_GITHUB_TOKEN="$existing_token"
+else
+  fatal "no GitHub authentication configured; set GitHub App credentials or a break-glass token"
+fi
+
+export GIT_ASKPASS={{ engineering_loop_git_askpass_path }}
+export GIT_TERMINAL_PROMPT=0
+
+loop_bin="{{ engineering_loop_install_dir }}/.venv/bin/hyrule-engineering-loop"
+
+args=(reliability-governor --once)
+{% for repo in engineering_loop_governor_repos -%}
+args+=(--repo "{{ repo }}")
+{% endfor -%}
+args+=(
+  --registry "{{ engineering_loop_install_dir }}/configs/loop/capability-registry.yml"
+  --state-dir-path "{{ engineering_loop_governor_state_dir }}"
+  --limit "{{ engineering_loop_governor_limit }}"
+)
+
+{% if engineering_loop_knowledge_context_enabled | bool -%}
+if "$loop_bin" reliability-governor --help 2>/dev/null | grep -q -- '--knowledge-mcp-url'; then
+  args+=(
+    --knowledge-context
+    --knowledge-mcp-url "{{ engineering_loop_knowledge_mcp_url }}"
+    --knowledge-mcp-transport "{{ engineering_loop_knowledge_mcp_transport }}"
+    --knowledge-context-budget "{{ engineering_loop_knowledge_context_budget }}"
+    --knowledge-context-timeout "{{ engineering_loop_knowledge_context_timeout }}"
+  )
+else
+  printf '%s\n' "reliability-governor: installed CLI lacks --knowledge-mcp-url; running without knowledge MCP context" >&2
+fi
+{% endif -%}
+
+exec "$loop_bin" "${args[@]}" "$@"

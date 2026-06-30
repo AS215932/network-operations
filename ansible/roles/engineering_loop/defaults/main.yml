@@ -19,6 +19,7 @@ engineering_loop_lib_dir: /usr/local/lib/engineering-loop
 engineering_loop_git_askpass_path: "{{ engineering_loop_lib_dir }}/git-askpass"
 engineering_loop_github_app_token_path: "{{ engineering_loop_lib_dir }}/github-app-token"
 engineering_loop_daemon_wrapper_path: "{{ engineering_loop_lib_dir }}/run-daemon"
+engineering_loop_governor_wrapper_path: "{{ engineering_loop_lib_dir }}/run-reliability-governor"
 engineering_loop_github_app_private_key_file: "{{ engineering_loop_config_dir }}/github-app.private-key.pem"
 engineering_loop_icinga_ca_src: "{{ playbook_dir }}/../../configs/mon/icinga2/icinga-ca.crt"
 engineering_loop_icinga_ca_dest: /usr/local/share/ca-certificates/as215932-icinga-ca.crt
@@ -75,6 +76,20 @@ engineering_loop_allowed_paths: {}
 engineering_loop_max_runs_per_day: 2
 engineering_loop_max_cost_usd_per_day: 10
 engineering_loop_timer_enabled: false
+engineering_loop_governor_timer_enabled: false
+engineering_loop_governor_repos:
+  - AS215932/engineering-loop
+  - AS215932/network-operations
+  - AS215932/hyrule-cloud
+  - AS215932/hyrule-web
+  - AS215932/hyrule-mcp
+  - AS215932/noc-agent
+  - AS215932/hyrule-network-proxy
+  - AS215932/as215932.net
+engineering_loop_governor_state_dir: "{{ engineering_loop_state_dir }}/reliability-governor"
+engineering_loop_governor_limit: 20
+engineering_loop_governor_timer_calendar: "*:0/15"
+engineering_loop_governor_timer_randomized_delay_sec: 120
 engineering_loop_memory_dir: "{{ engineering_loop_state_dir }}/memory"
 engineering_loop_legacy_memory_dir: "{{ engineering_loop_workspace_dir }}/hyrule-infra/memory"
 engineering_loop_knowledge_context_enabled: true
