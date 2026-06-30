@@ -20,6 +20,10 @@ agentic_observatory_database_role: agentic_observatory
 agentic_observatory_database_host: 127.0.0.1
 agentic_observatory_read_only: true
 agentic_observatory_actions_enabled: false
+# Comma-separated allowlist of write actions to expose when actions are enabled
+# (e.g. "feedback,ack"). Empty = deny-all, so writes stay off even if
+# actions_enabled flips true. Drives OBSERVATORY_ENABLED_ACTIONS.
+agentic_observatory_enabled_actions: ""
 agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 

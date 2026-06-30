@@ -62,6 +62,9 @@ agentic_observatory_host: "{{ peers.loop.ipv6 }}"
 agentic_observatory_port: 8780
 agentic_observatory_read_only: true
 agentic_observatory_actions_enabled: false
+# Staged write rollout: list actions to expose (e.g. "feedback,ack") and flip
+# read_only=false + actions_enabled=true to go live. Empty = writes stay off.
+agentic_observatory_enabled_actions: ""
 agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 
