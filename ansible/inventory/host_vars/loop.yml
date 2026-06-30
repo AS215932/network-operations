@@ -51,7 +51,7 @@ knowledge_loop_max_openrouter_calls_per_day: 0
 knowledge_loop_max_prs_per_day: 1
 
 # Agentic Observatory internal operator console.
-agentic_observatory_version: "af4dff69b26a448c1427710bddfb1b30df2a4e52"
+agentic_observatory_version: "151435004f6e622852a24ca50a574fea7735ef8d"
 agentic_observatory_user: agentic-observatory
 agentic_observatory_group: agentic-observatory
 agentic_observatory_config_dir: /etc/agentic-observatory
