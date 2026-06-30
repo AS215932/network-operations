@@ -1,0 +1,15 @@
+# /etc/systemd/system/hyrule-reliability-governor.timer
+# Managed by ansible/roles/engineering_loop. Disabled by default until the
+# operator runs and inspects a real production dry-run.
+
+[Unit]
+Description=Schedule the AS215932 Reliability Governor issue-routing pass
+
+[Timer]
+OnCalendar={{ engineering_loop_governor_timer_calendar }}
+RandomizedDelaySec={{ engineering_loop_governor_timer_randomized_delay_sec }}
+Persistent=true
+Unit=hyrule-reliability-governor.service
+
+[Install]
+WantedBy=timers.target

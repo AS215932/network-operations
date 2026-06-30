@@ -155,13 +155,21 @@ Use the production workflow after the policies and KV entry exist:
 5. Confirm `/etc/engineering-loop/github-app.private-key.pem` exists with
    owner `root`, group `loop`, and mode `0640`.
 6. Confirm `vault-agent-engineering-loop.service` is active.
-7. Run a manual empty-queue or docs-only canary before enabling the timer.
-8. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
-   docs-only draft PR canary pass.
+7. Run a manual empty-queue or docs-only canary before enabling the Engineering
+   daemon timer.
+8. Run and inspect a real Reliability Governor dry run before enabling the
+   Governor timer:
+   `sudo -u loop -H /usr/local/lib/engineering-loop/run-reliability-governor --dry-run`
+9. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
+   docs-only draft PR canary pass. Keep `hyrule-reliability-governor.timer`
+   disabled until the Governor dry run shows conservative routing, healthy
+   Knowledge MCP context, and successful NOC LHP fetches.
 
 ## Rollback
 
 ```bash
+systemctl disable --now hyrule-reliability-governor.timer
+systemctl stop hyrule-reliability-governor.service
 systemctl disable --now hyrule-engineering-loop.timer
 systemctl stop hyrule-engineering-loop.service
 systemctl stop vault-agent-engineering-loop.service
