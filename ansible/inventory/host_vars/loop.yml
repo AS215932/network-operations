@@ -8,7 +8,7 @@
 # (engineering-loop #27) while retaining agent-core trace emission from #26.
 engineering_loop_version: "f5915ab5dfbecf4fbdcbc8acf554d2477e832d04"
 engineering_loop_timer_enabled: true
-engineering_loop_governor_timer_enabled: false
+engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 engineering_loop_lhp_callback_enabled: true
 # Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.
