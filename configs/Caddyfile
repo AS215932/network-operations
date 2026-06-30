@@ -13,6 +13,12 @@
     email admin@servify.network
 }
 
+# Canonicalize the DNS-root-dot spelling browsers may preserve from copied FQDNs.
+:443 {
+    @observatory_root_dot host observatory.servify.network.
+    redir @observatory_root_dot https://observatory.servify.network{uri} permanent
+}
+
 # API — cloud.hyrule.host (canonical) and api.hyrule.host (compatibility)
 cloud.hyrule.host, api.hyrule.host {
     tls {
