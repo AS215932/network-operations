@@ -243,8 +243,13 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertRegex(str(host_vars["agentic_observatory_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agentic_observatory_port"], 8780)
+        # Writes stay off until the gated revision is deployed; the allowlist is
+        # pre-seeded but inert. The follow-up flip PR sets read_only=false /
+        # actions_enabled=true. Expanding the allowlist beyond the low-risk case
+        # actions must be a deliberate change that also updates this guardrail.
         self.assertEqual(host_vars["agentic_observatory_read_only"], True)
         self.assertEqual(host_vars["agentic_observatory_actions_enabled"], False)
+        self.assertEqual(host_vars["agentic_observatory_enabled_actions"], "feedback,ack")
         runbook = (REPO / "docs/runbooks/bootstrap-agentic-observatory-vault.md").read_text()
         self.assertIn(
             "vault policy write github-runner configs/vault/policies/github-runner.hcl",
