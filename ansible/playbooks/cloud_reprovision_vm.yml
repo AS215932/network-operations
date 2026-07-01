@@ -1,0 +1,124 @@
+---
+# One-shot operator repair for a paid VM record that was created while
+# HCP_LAUNCH_PROOF_REAL_XCPNG was disabled. It reuses hyrule-cloud's real
+# Orchestrator provisioning path against the existing VMRow, preserving the
+# paid quote/management URL while replacing the simulated RFC3849 IPv6 with a
+# real XCP-NG VM + dynamic DNS AAAA record.
+#
+# Run via apply.yml with playbook=cloud_reprovision_vm, limit=api.
+
+- name: hyrule-cloud — reprovision an existing paid VM
+  hosts: api
+  gather_facts: false
+  become: true
+
+  vars:
+    cloud_reprovision_vm_apply: false
+    cloud_reprovision_vm_id: vm_FpmGLbaDzlFTL3SRSi6nAQ
+
+  tasks:
+    - name: Refuse to run without explicit apply gate
+      ansible.builtin.assert:
+        that:
+          - cloud_reprovision_vm_apply | bool
+        fail_msg: "Set -e cloud_reprovision_vm_apply=true to reprovision {{ cloud_reprovision_vm_id }}."
+      tags: [apply]
+
+    - name: Re-run real Hyrule provisioning for existing paid VM
+      become: true
+      become_user: hyrule
+      ansible.builtin.shell: |
+        set -euo pipefail
+        cd /opt/hyrule-cloud
+        export PYTHONPATH=/opt/hyrule-cloud
+        export HCP_LAUNCH_PROOF_REAL_XCPNG="$(awk -F= '$1 == "HCP_LAUNCH_PROOF_REAL_XCPNG" {print $2}' /opt/hyrule-cloud/.env | tail -n1)"
+        .venv/bin/python - <<'PY'
+        import asyncio
+        import json
+        from copy import deepcopy
+
+        from hyrule_cloud.config import HyruleConfig
+        from hyrule_cloud.db import VMRow, create_db_engine, create_session_factory
+        from hyrule_cloud.models import VMStatus
+        from hyrule_cloud.orchestrator import Orchestrator
+
+        VM_ID = "{{ cloud_reprovision_vm_id }}"
+
+
+        async def main() -> None:
+            cfg = HyruleConfig()
+            if cfg.database_url.startswith("sqlite"):
+                raise RuntimeError("refusing to reprovision against sqlite database")
+            engine = create_db_engine(cfg.database_url)
+            session_factory = create_session_factory(engine)
+            orch = Orchestrator(cfg, session_factory)
+            await orch.startup()
+            try:
+                async with session_factory() as session:
+                    row = await session.get(VMRow, VM_ID)
+                    if row is None:
+                        raise RuntimeError(f"VM {VM_ID} not found")
+                    before = {
+                        "vm_id": row.vm_id,
+                        "status": str(row.status),
+                        "hostname": row.hostname,
+                        "ipv6": row.ipv6,
+                        "xcpng_uuid": row.xcpng_uuid,
+                        "payment_tx": row.payment_tx,
+                    }
+                    print("before=" + json.dumps(before, sort_keys=True))
+                    if not row.payment_tx:
+                        raise RuntimeError(f"VM {VM_ID} has no payment_tx; refusing operator reprovision")
+                    if row.xcpng_uuid:
+                        raise RuntimeError(f"VM {VM_ID} already has xcpng_uuid={row.xcpng_uuid}; refusing duplicate VM")
+
+                    meta = deepcopy(row.metadata_ or {})
+                    lp = deepcopy(meta.get("launch_proof", {}))
+                    lp["dns_aaaa_verified"] = False
+                    lp["ssh_smoke_status"] = "not_run"
+                    lp["operator_message"] = "Operator reprovisioning simulated paid VM with real XCP-NG/DNS resources."
+                    lp["customer_message"] = "Your VM is being reprovisioned with real network resources."
+                    meta["launch_proof"] = lp
+
+                    row.status = VMStatus.PROVISIONING
+                    row.ipv6 = None
+                    row.error = None
+                    row.metadata_ = meta
+                    await session.commit()
+
+                await orch._provision_vm(VM_ID)
+
+                async with session_factory() as session:
+                    row = await session.get(VMRow, VM_ID)
+                    if row is None:
+                        raise RuntimeError(f"VM {VM_ID} disappeared during provisioning")
+                    after = {
+                        "vm_id": row.vm_id,
+                        "status": str(row.status),
+                        "hostname": row.hostname,
+                        "ipv6": row.ipv6,
+                        "xcpng_uuid": row.xcpng_uuid,
+                        "error": row.error,
+                    }
+                    print("after=" + json.dumps(after, sort_keys=True))
+                    if str(row.status) != "ready" or not row.ipv6:
+                        raise RuntimeError(f"reprovision did not reach ready with IPv6: {after}")
+                    if row.ipv6.lower().startswith("2001:db8:"):
+                        raise RuntimeError(f"reprovision still has documentation IPv6: {after}")
+            finally:
+                await orch.shutdown()
+                await engine.dispose()
+
+
+        asyncio.run(main())
+        PY
+      args:
+        executable: /bin/bash
+      register: reprovision_result
+      changed_when: true
+      tags: [apply]
+
+    - name: Show reprovision result
+      ansible.builtin.debug:
+        var: reprovision_result.stdout_lines
+      tags: [apply]

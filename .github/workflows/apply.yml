@@ -24,6 +24,7 @@ on:
           - icinga2
           - logs
           - cloud
+          - cloud_reprovision_vm
           - web
           - noc
           - network-proxy
