@@ -4,9 +4,9 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing the Reliability Governor runtime
-# (engineering-loop #27) while retaining agent-core trace emission from #26.
-engineering_loop_version: "f5915ab5dfbecf4fbdcbc8acf554d2477e832d04"
+# Bumped to the build containing the Reliability Governor Knowledge role
+# normalization (engineering-loop #30) on top of the runtime from #27.
+engineering_loop_version: "f80727a25369ea7e021db417c92143c2937525b0"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
