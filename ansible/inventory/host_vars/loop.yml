@@ -17,7 +17,7 @@ engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.
-knowledge_mcp_version: "b7863d9b810826ea25a954cc673cc9297472e5df"
+knowledge_mcp_version: "bb2ed6e7385f698849ebede2e29b24b16ac39fc0"
 knowledge_mcp_enabled: true
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
@@ -43,7 +43,7 @@ agent_core_collector_port: 8770
 # v0.4.0 sink_from_env support, plus the Docker git runtime dependency fix
 # (AS215932/knowledge#25). The canary runs daily, opens at most one reviewed
 # PR/day, and keeps live OpenRouter calls disabled.
-knowledge_loop_version: "b7863d9b810826ea25a954cc673cc9297472e5df"
+knowledge_loop_version: "bb2ed6e7385f698849ebede2e29b24b16ac39fc0"
 knowledge_loop_timer_enabled: true
 knowledge_loop_agent_core_trace_enabled: true
 knowledge_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
