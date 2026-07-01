@@ -37,9 +37,11 @@
         import json
         from copy import deepcopy
 
+        from sqlalchemy import select
+
         from hyrule_cloud.config import HyruleConfig
-        from hyrule_cloud.db import VMRow, create_db_engine, create_session_factory
-        from hyrule_cloud.models import VMStatus
+        from hyrule_cloud.db import VMQuoteRow, VMRow, create_db_engine, create_session_factory
+        from hyrule_cloud.models import QuoteStatus, VMStatus
         from hyrule_cloud.orchestrator import Orchestrator
 
         VM_ID = "{{ cloud_reprovision_vm_id }}"
@@ -52,23 +54,32 @@
             engine = create_db_engine(cfg.database_url)
             session_factory = create_session_factory(engine)
             orch = Orchestrator(cfg, session_factory)
-            await orch.startup()
+            # Orchestrator.startup() only logs XCP-NG auth failures so the API
+            # can still serve non-provisioning routes. This repair must fail
+            # before touching the DB if XO credentials are not usable.
+            await orch.xcpng.login()
             try:
                 async with session_factory() as session:
                     row = await session.get(VMRow, VM_ID)
                     if row is None:
                         raise RuntimeError(f"VM {VM_ID} not found")
+                    quote = (
+                        await session.execute(select(VMQuoteRow).where(VMQuoteRow.vm_id == VM_ID))
+                    ).scalar_one_or_none()
+                    quote_status = str(quote.status) if quote is not None else None
                     before = {
                         "vm_id": row.vm_id,
                         "status": str(row.status),
                         "hostname": row.hostname,
                         "ipv6": row.ipv6,
                         "xcpng_uuid": row.xcpng_uuid,
-                        "payment_tx": row.payment_tx,
+                        "payment_tx_present": bool(row.payment_tx),
+                        "quote_id": quote.quote_id if quote is not None else None,
+                        "quote_status": quote_status,
                     }
                     print("before=" + json.dumps(before, sort_keys=True))
-                    if not row.payment_tx:
-                        raise RuntimeError(f"VM {VM_ID} has no payment_tx; refusing operator reprovision")
+                    if quote is None or QuoteStatus(quote.status) != QuoteStatus.CONSUMED:
+                        raise RuntimeError(f"VM {VM_ID} is not linked to a consumed paid quote; refusing operator reprovision")
                     if row.xcpng_uuid:
                         raise RuntimeError(f"VM {VM_ID} already has xcpng_uuid={row.xcpng_uuid}; refusing duplicate VM")
 
