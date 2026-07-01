@@ -113,7 +113,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertEqual(user_args["name"], "{{ knowledge_mcp_user }}")
         self.assertNotIn("home", user_args)
-        self.assertNotIn("create_home", user_args)
+        self.assertEqual(user_args["create_home"], False)
 
     def test_knowledge_loop_uses_dedicated_vault_scope(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()

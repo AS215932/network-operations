@@ -61,13 +61,14 @@
 # Don't pass `home:` for the shared loop user. On live hosts the loop daemon
 # keeps processes running as this account, and changing account metadata forces
 # usermod to fail while those processes exist. Runtime state is owned through
-# the explicit directory task below.
+# the explicit directory task below; create_home only controls first creation.
 - name: Ensure Knowledge MCP user exists
   ansible.builtin.user:
     name: "{{ knowledge_mcp_user }}"
     group: "{{ knowledge_mcp_group }}"
     shell: /usr/sbin/nologin
     system: true
+    create_home: false
 
 - name: Ensure Knowledge MCP directories exist
   ansible.builtin.file:
