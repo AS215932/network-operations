@@ -73,6 +73,9 @@ class MockRenderTest(unittest.TestCase):
             "tsig_secret",
             "db_password",
             "network_proxy_token",
+            "customer_ipv6_supernet",
+            "customer_ipv6_gateway",
+            "customer_ipv6_dns",
         ):
             self.assertIn(f".Data.data.{key}", rendered)
 

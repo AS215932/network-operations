@@ -465,6 +465,21 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             self.assertIsNotNone(restart_task, role)
             self.assertEqual(restart_task["ansible.builtin.systemd"]["state"], "restarted")
 
+    def test_hyrule_cloud_runs_migrations_before_restart(self):
+        health_tasks = yaml.safe_load((REPO / "ansible/roles/hyrule_cloud/tasks/health.yml").read_text())
+        task_names = [task["name"] for task in health_tasks]
+        migration_task = _task_by_name(health_tasks, "Run hyrule-cloud database migrations")
+
+        self.assertIsNotNone(migration_task)
+        self.assertLess(
+            task_names.index("Run hyrule-cloud database migrations"),
+            task_names.index("Restart hyrule-cloud (deterministic on every apply)"),
+        )
+        command = migration_task["ansible.builtin.command"]
+        self.assertEqual(command["cmd"], "/usr/local/bin/uv run alembic upgrade head")
+        self.assertEqual(command["chdir"], "{{ hyrule_cloud_install_dir }}")
+        self.assertEqual(migration_task["environment"]["PYTHONPATH"], "{{ hyrule_cloud_install_dir }}")
+
     def test_noc_action_signing_secret_has_no_empty_fallback(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
         noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
