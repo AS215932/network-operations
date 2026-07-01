@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 20
     if: github.actor != 'dependabot[bot]'
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
       # Run Semgrep via `docker run` (not a job-level `container:`) so the
       # Node-based upload-sarif action runs in the normal runner environment,
