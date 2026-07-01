@@ -7,7 +7,7 @@
 
 noc_agent_version: 4e6719c48c5c8943a3daaff6045ccb130c13e7b8
 hyrule_mcp_version: 05b1245710e6a67ad40ccd62c033755f48ad4958
-noc_knowledge_version: 5a6666cbb9d290868db3fb854ffed39099515b91
+noc_knowledge_version: bb2ed6e7385f698849ebede2e29b24b16ac39fc0
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
