@@ -44,6 +44,30 @@ Internet (IPv4 + IPv6)
 xenbr-mgmt (link-local): dom0, rtr enX0, xoa (+ 10.0.0.x for XOA→XAPI)
 ```
 
+### Customer VM IPv6 provisioning
+
+Customer VMs live on the shared XCP-NG `xenbr-vm` L2 segment behind `rtr`
+`enX3`. `rtr` owns the customer aggregate as `2a0c:b641:b51::1/48` in
+FRR and advertises `2a0c:b641:b51::/48` by BGP.
+
+There is intentionally no RA/DHCPv6 service on `enX3` for paid VMs. The
+customer design is one `/64` per VM, and RA is link-wide on the shared L2, so
+it cannot hand a different `/64` to each VM. Hyrule allocates a deterministic
+per-VM `/64` from `2a0c:b641:b51::/48` and passes Debian netplan v2
+`networkConfig` through XO:
+
+- prefix index `0` (`2a0c:b641:b51::/64`) is reserved for the router, legacy
+  shared addresses, and static canaries such as `ci-pr`;
+- paid VM prefixes start at index `1`, with the VM address set to `::2` inside
+  its allocated `/64`;
+- the default route points at `2a0c:b641:b51::1` with `on-link: true` because
+  the gateway address is outside each VM-specific `/64`;
+- DNS points at `2a0c:b641:b51::1`.
+
+This is a tactical allocator in `hyrule-cloud`, not the long-term source of
+truth. Proper IPAM deployment and Hyrule integration are tracked in
+<https://github.com/AS215932/network-operations/issues/346>.
+
 ### Routers (WireGuard mesh, iBGP + OSPF6)
 
 | Router | Location | OS | Underlay address | Loopback | Router-ID |
