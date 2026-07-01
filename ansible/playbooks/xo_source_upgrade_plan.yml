@@ -1,0 +1,110 @@
+---
+# Plan-only check for Xen Orchestra source upgrades on xoa.
+#
+# This playbook fetches the upstream source checkout, compares the checked-out
+# revision with the requested target ref, and writes a JSON plan on the
+# controller. It does not build, restart, or repoint XO symlinks.
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook playbooks/xo_source_upgrade_plan.yml --limit xoa \
+#     -e ansible_user=ci
+
+- name: Plan Xen Orchestra source upgrade
+  hosts: xoa
+  gather_facts: false
+  become: true
+  vars:
+    xo_root: /opt/xo
+    xo_source_dir: "{{ xo_root }}/xo-src/xen-orchestra"
+    xo_source_ref: origin/master
+    xo_plan_output: "{{ lookup('env', 'XO_SOURCE_PLAN_OUTPUT') | default('../xo-source-upgrade-plan.json', true) }}"
+
+  tasks:
+    - name: Verify existing XO source checkout
+      ansible.builtin.stat:
+        path: "{{ xo_source_dir }}/.git"
+      register: xo_source_git
+
+    - name: Assert XO source checkout exists
+      ansible.builtin.assert:
+        that:
+          - xo_source_git.stat.isdir | default(false)
+        fail_msg: >-
+          {{ xo_source_dir }} is not a Git checkout. The XO source upgrade
+          runbook expects the symlink/source layout used on xoa.
+
+    - name: Record currently active XO server symlink target
+      ansible.builtin.command: readlink -f {{ xo_root }}/xo-server
+      register: xo_current_server_target
+      changed_when: false
+
+    - name: Record active XO build revision
+      ansible.builtin.shell: |
+        set -euo pipefail
+        active_server_target="$(readlink -f {{ (xo_root + '/xo-server') | quote }})"
+        active_build_dir="$(dirname "$(dirname "$active_server_target")")"
+        cd "$active_build_dir"
+        git rev-parse --short HEAD
+      args:
+        executable: /bin/bash
+      register: xo_current_revision
+      changed_when: false
+
+    - name: Fetch latest Xen Orchestra source metadata
+      ansible.builtin.command: git fetch --all --tags --prune
+      args:
+        chdir: "{{ xo_source_dir }}"
+      changed_when: false
+
+    - name: Record target source revision
+      ansible.builtin.command: git rev-parse --short {{ xo_source_ref }}
+      args:
+        chdir: "{{ xo_source_dir }}"
+      register: xo_target_revision
+      changed_when: false
+
+    - name: Count active/target revision delta
+      ansible.builtin.command: git rev-list --left-right --count {{ xo_current_revision.stdout }}...{{ xo_source_ref }}
+      args:
+        chdir: "{{ xo_source_dir }}"
+      register: xo_revision_delta
+      changed_when: false
+
+    - name: Capture newest target commits not yet deployed
+      ansible.builtin.shell: |
+        set -euo pipefail
+        git log --oneline --decorate --max-count=10 {{ xo_current_revision.stdout }}..{{ xo_source_ref }}
+      args:
+        chdir: "{{ xo_source_dir }}"
+        executable: /bin/bash
+      register: xo_pending_commits
+      changed_when: false
+
+    - name: Build XO upgrade plan data
+      ansible.builtin.set_fact:
+        xo_upgrade_plan:
+          host: "{{ inventory_hostname }}"
+          source_dir: "{{ xo_source_dir }}"
+          active_server_target: "{{ xo_current_server_target.stdout }}"
+          current_revision: "{{ xo_current_revision.stdout }}"
+          current_revision_source: active-build
+          target_ref: "{{ xo_source_ref }}"
+          target_revision: "{{ xo_target_revision.stdout }}"
+          ahead: "{{ (xo_revision_delta.stdout.split()[0] | default('0')) | int }}"
+          behind: "{{ (xo_revision_delta.stdout.split()[1] | default('0')) | int }}"
+          upgrade_available: "{{ ((xo_revision_delta.stdout.split()[1] | default('0')) | int) > 0 }}"
+          pending_commits: "{{ xo_pending_commits.stdout_lines }}"
+          runbook_command: "cd ansible && ansible-playbook playbooks/xo_source_upgrade.yml --limit xoa -e ansible_user=ci"
+
+    - name: Write XO upgrade plan JSON on controller
+      ansible.builtin.copy:
+        dest: "{{ xo_plan_output }}"
+        content: "{{ xo_upgrade_plan | to_nice_json }}\n"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    - name: Show XO upgrade plan
+      ansible.builtin.debug:
+        var: xo_upgrade_plan

@@ -1,0 +1,206 @@
+---
+# Upgrade Xen Orchestra built from source on the xoa host.
+#
+# This playbook keeps the current /opt/xo symlink-based layout:
+#   /opt/xo/xo-src/xen-orchestra                 persistent source checkout
+#   /opt/xo/xo-builds/xen-orchestra-<timestamp>  immutable build trees
+#   /opt/xo/xo-server -> <build>/packages/xo-server
+#
+# Usage:
+#   cd ansible
+#   ansible-playbook playbooks/xo_source_upgrade.yml --limit xoa
+#
+# Override the target ref when needed:
+#   ansible-playbook playbooks/xo_source_upgrade.yml -e xo_source_ref=origin/master
+
+- name: Upgrade Xen Orchestra from source
+  hosts: xoa
+  gather_facts: true
+  vars:
+    xo_root: /opt/xo
+    xo_source_dir: "{{ xo_root }}/xo-src/xen-orchestra"
+    xo_builds_dir: "{{ xo_root }}/xo-builds"
+    xo_build_dir: "{{ xo_builds_dir }}/xen-orchestra-{{ ansible_facts.date_time.iso8601_basic_short }}"
+    xo_source_repo: https://github.com/vatesfr/xen-orchestra
+    xo_source_ref: origin/master
+    xo_service_name: xo-server
+    xo_backup_dir: "/root/xo-upgrade-backups/{{ ansible_facts.date_time.iso8601_basic_short }}"
+    xo_keep_builds: 3
+    xo_yarn_install_command: yarn --frozen-lockfile
+    xo_yarn_build_command: yarn build
+
+  tasks:
+    - name: Verify existing XO source checkout
+      ansible.builtin.stat:
+        path: "{{ xo_source_dir }}/.git"
+      register: xo_source_git
+
+    - name: Assert XO source checkout exists
+      ansible.builtin.assert:
+        that:
+          - xo_source_git.stat.isdir | default(false)
+        fail_msg: >-
+          {{ xo_source_dir }} is not a Git checkout. This playbook expects the
+          existing XO-from-source layout used on xoa.
+
+    - name: Record currently active XO server symlink target
+      ansible.builtin.command: readlink -f {{ xo_root }}/xo-server
+      register: xo_current_server_target
+      changed_when: false
+
+    - name: Record current source revision
+      ansible.builtin.command: git rev-parse --short HEAD
+      args:
+        chdir: "{{ xo_source_dir }}"
+      register: xo_current_revision
+      changed_when: false
+
+    - name: Fetch latest Xen Orchestra source
+      ansible.builtin.command: git fetch --all --tags --prune
+      args:
+        chdir: "{{ xo_source_dir }}"
+      changed_when: true
+
+    - name: Record target source revision
+      ansible.builtin.command: git rev-parse --short {{ xo_source_ref }}
+      args:
+        chdir: "{{ xo_source_dir }}"
+      register: xo_target_revision
+      changed_when: false
+
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ xo_backup_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Save Redis snapshot before XO upgrade
+      ansible.builtin.command: redis-cli BGSAVE
+      register: xo_redis_bgsave
+      changed_when: "'Background saving started' in xo_redis_bgsave.stdout or 'Background saving scheduled' in xo_redis_bgsave.stdout"
+      failed_when: false
+
+    - name: Backup XO config, service, symlinks, and Redis data
+      ansible.builtin.shell: |
+        set -euo pipefail
+        {
+          echo "current_revision={{ xo_current_revision.stdout }}"
+          echo "target_revision={{ xo_target_revision.stdout }}"
+          echo "current_server_target={{ xo_current_server_target.stdout }}"
+          find {{ xo_root | quote }} -maxdepth 1 -type l -ls || true
+        } > {{ (xo_backup_dir + '/manifest.txt') | quote }}
+        tar czf {{ (xo_backup_dir + '/xo-config-and-data.tgz') | quote }} \
+          /etc/systemd/system/{{ xo_service_name }}.service \
+          /root/.config/xo-server \
+          /root/.config/xo-cli \
+          /var/lib/xo-server \
+          /var/lib/redis \
+          2>/dev/null || true
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Create new build checkout at target ref
+      ansible.builtin.shell: |
+        set -euo pipefail
+        test ! -e {{ xo_build_dir | quote }}
+        git clone --shared {{ xo_source_dir | quote }} {{ xo_build_dir | quote }}
+        cd {{ xo_build_dir | quote }}
+        git remote set-url origin {{ xo_source_repo | quote }}
+        git fetch --all --tags --prune
+        git checkout --detach {{ xo_source_ref | quote }}
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Install XO JavaScript dependencies
+      ansible.builtin.command: "{{ xo_yarn_install_command }}"
+      args:
+        chdir: "{{ xo_build_dir }}"
+      environment:
+        HUSKY: "0"
+        TURBO_TELEMETRY_DISABLED: "1"
+      changed_when: true
+
+    - name: Build XO server and web packages
+      ansible.builtin.command: "{{ xo_yarn_build_command }}"
+      args:
+        chdir: "{{ xo_build_dir }}"
+      environment:
+        TURBO_TELEMETRY_DISABLED: "1"
+      changed_when: true
+
+    - name: Verify expected XO build artifacts exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ xo_build_dir }}/packages/xo-server/dist/cli.mjs"
+        - "{{ xo_build_dir }}/packages/xo-web/dist"
+        - "{{ xo_build_dir }}/packages/xo-cli"
+      register: xo_build_artifacts
+
+    - name: Assert expected XO build artifacts exist
+      ansible.builtin.assert:
+        that:
+          - xo_build_artifacts.results | map(attribute='stat.exists') | min
+        fail_msg: "XO build under {{ xo_build_dir }} did not produce all expected artifacts."
+
+    - name: Point /opt/xo symlinks at the new build
+      ansible.builtin.file:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        state: link
+        force: true
+      loop:
+        - { dest: "{{ xo_root }}/xo-server", src: "{{ xo_build_dir }}/packages/xo-server" }
+        - { dest: "{{ xo_root }}/xo-web", src: "{{ xo_build_dir }}/packages/xo-web" }
+        - { dest: "{{ xo_root }}/xo-web-v6", src: "{{ xo_build_dir }}/@xen-orchestra/web" }
+        - { dest: "{{ xo_root }}/xo-cli", src: "{{ xo_build_dir }}/packages/xo-cli" }
+      notify: Restart xo-server
+
+    - name: Flush restart before health checks
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for XO HTTP port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 80
+        timeout: 60
+
+    - name: Verify xo-server is active
+      ansible.builtin.systemd:
+        name: "{{ xo_service_name }}"
+      register: xo_service
+      changed_when: false
+      failed_when: xo_service.status.ActiveState != "active"
+
+    - name: Show XO upgrade summary
+      ansible.builtin.debug:
+        msg:
+          - "XO upgraded from {{ xo_current_revision.stdout }} to {{ xo_target_revision.stdout }}"
+          - "Active build: {{ xo_build_dir }}"
+          - "Backup: {{ xo_backup_dir }}"
+
+    - name: List old XO build directories
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find {{ xo_builds_dir | quote }} -maxdepth 1 -mindepth 1 -type d -name 'xen-orchestra-*' \
+          -printf '%T@ %p\n' | sort -nr | awk 'NR>{{ xo_keep_builds | int }} {print $2}'
+      args:
+        executable: /bin/bash
+      register: xo_old_builds
+      changed_when: false
+
+    - name: Remove old XO build directories beyond retention
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ xo_old_builds.stdout_lines }}"
+      when: xo_keep_builds | int > 0
+
+  handlers:
+    - name: Restart xo-server
+      ansible.builtin.systemd:
+        name: "{{ xo_service_name }}"
+        state: restarted
+        daemon_reload: true

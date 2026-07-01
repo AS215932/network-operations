@@ -1,0 +1,111 @@
+---
+# Apply XCP-ng/dom0 package updates.
+#
+# This installs available yum updates on the hypervisor. It does not reboot by
+# default because rebooting dom0 interrupts every VM on this single-host pool.
+# Set xcpng_reboot_after_update=true only inside an approved maintenance window.
+
+- name: Apply XCP-ng package updates
+  hosts: dom0
+  gather_facts: false
+  become: false
+  serial: 1
+  vars:
+    xcpng_reboot_after_update: false
+    xcpng_reboot_timeout: 900
+    xcpng_update_reboot_patterns:
+      - '^kernel($|-)'
+      - '^xen($|-)'
+      - '^xapi($|-)'
+      - '^sm($|-)'
+      - '^blktap($|-)'
+      - '^qemu($|-)'
+      - '^xcp-ng-release($|-)'
+
+  tasks:
+    - name: Validate this is XCP-ng dom0
+      ansible.builtin.raw: xe host-list --minimal
+      register: xcpng_host_uuid
+      changed_when: false
+
+    - name: Capture pending package list before update
+      ansible.builtin.raw: |
+        yum -q check-update 2>&1
+        rc=$?
+        if [ "$rc" -eq 100 ]; then
+          exit 0
+        fi
+        exit "$rc"
+      register: xcpng_check_update
+      changed_when: false
+
+    - name: Extract pending package names
+      ansible.builtin.set_fact:
+        xcpng_pending_packages: >-
+          {{
+            xcpng_check_update.stdout_lines
+            | select('match', '^[A-Za-z0-9_.:+-]+\.[A-Za-z0-9_]+\s+')
+            | map('regex_replace', '^([^\s.]+).*', '\\1')
+            | list
+          }}
+
+    - name: Determine whether pending updates are likely to need reboot
+      ansible.builtin.set_fact:
+        xcpng_reboot_likely: >-
+          {{
+            xcpng_pending_packages
+            | select('match', '(' ~ (xcpng_update_reboot_patterns | join('|')) ~ ')')
+            | list
+            | length > 0
+          }}
+
+    - name: Install XCP-ng package updates
+      ansible.builtin.raw: yum -y update
+      register: xcpng_yum_update
+      changed_when: xcpng_pending_packages | length > 0
+      when: xcpng_pending_packages | length > 0
+
+    - name: Show XCP-ng update summary
+      ansible.builtin.debug:
+        msg:
+          - "Host UUID: {{ xcpng_host_uuid.stdout | trim }}"
+          - "Updated packages pending before run: {{ xcpng_pending_packages | length }}"
+          - "Reboot likely needed: {{ xcpng_reboot_likely }}"
+          - "Reboot requested: {{ xcpng_reboot_after_update | bool }}"
+
+    - name: Warn when reboot is likely but not requested
+      ansible.builtin.debug:
+        msg: >-
+          XCP-ng updates include hypervisor/toolstack packages and likely need a
+          maintenance-window reboot. Re-run with
+          -e xcpng_reboot_after_update=true when ready.
+      when:
+        - xcpng_reboot_likely | bool
+        - not (xcpng_reboot_after_update | bool)
+
+    - name: Reboot XCP-ng host after updates when explicitly requested
+      ansible.builtin.raw: sleep 5 && shutdown -r now 'Rebooting XCP-ng after yum update via Ansible'
+      async: 1
+      poll: 0
+      when:
+        - xcpng_pending_packages | length > 0
+        - xcpng_reboot_after_update | bool
+
+    - name: Wait for XCP-ng SSH after reboot
+      ansible.builtin.wait_for_connection:
+        delay: 60
+        timeout: "{{ xcpng_reboot_timeout }}"
+      when:
+        - xcpng_pending_packages | length > 0
+        - xcpng_reboot_after_update | bool
+
+    - name: Verify XCP-ng host is responsive after optional reboot
+      ansible.builtin.raw: xe host-list --minimal
+      register: xcpng_post_update_host_uuid
+      changed_when: false
+
+    - name: Assert XCP-ng host UUID stayed consistent
+      ansible.builtin.assert:
+        that:
+          - (xcpng_post_update_host_uuid.stdout | trim) == (xcpng_host_uuid.stdout | trim)
+        fail_msg: "XCP-ng host UUID changed or xe is not healthy after update."

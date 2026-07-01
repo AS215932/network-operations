@@ -1,0 +1,177 @@
+---
+name: xcpng-update-plan
+
+on:
+  schedule:
+    # Weekly after the XO source planner. Plan-only: no yum update, no reboot.
+    - cron: '11 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      create_issue:
+        description: Create/update a GitHub issue when XCP-ng updates are available
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      create_issue:
+        description: Create/update a GitHub issue when XCP-ng updates are available
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 20
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+      XCPNG_UPDATE_PLAN_OUTPUT: ../xcpng-update-plan.json
+    outputs:
+      updates_available: ${{ steps.plan.outputs.updates_available }}
+      pending_count: ${{ steps.plan.outputs.pending_count }}
+      reboot_likely: ${{ steps.plan.outputs.reboot_likely }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Plan XCP-ng package updates
+        id: plan
+        working-directory: ansible
+        run: |
+          set -euo pipefail
+          ansible-playbook playbooks/xcpng_update_plan.yml --limit dom0
+
+          plan_path="${XCPNG_UPDATE_PLAN_OUTPUT}"
+          if [ ! -s "$plan_path" ]; then
+            echo "::error::XCP-ng update plan was not written to ${plan_path}"
+            exit 1
+          fi
+
+          updates_available="$(jq -r '.updates_available' "$plan_path")"
+          pending_count="$(jq -r '.pending_count' "$plan_path")"
+          reboot_likely="$(jq -r '.reboot_likely' "$plan_path")"
+
+          {
+            echo "updates_available=${updates_available}"
+            echo "pending_count=${pending_count}"
+            echo "reboot_likely=${reboot_likely}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize plan
+        run: |
+          set -euo pipefail
+          plan_path="xcpng-update-plan.json"
+          updates_available="$(jq -r '.updates_available' "$plan_path")"
+          pending_count="$(jq -r '.pending_count' "$plan_path")"
+          reboot_likely="$(jq -r '.reboot_likely' "$plan_path")"
+          runbook="$(jq -r '.runbook_command' "$plan_path")"
+          reboot_runbook="$(jq -r '.reboot_command' "$plan_path")"
+
+          {
+            echo "## XCP-ng update plan"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Updates available | \`${updates_available}\` |"
+            echo "| Pending packages | \`${pending_count}\` |"
+            echo "| Reboot likely | \`${reboot_likely}\` |"
+            echo
+            echo "Apply updates without reboot:"
+            echo
+            echo '```bash'
+            echo "$runbook"
+            echo '```'
+            echo
+            echo "Apply updates and reboot during maintenance window:"
+            echo
+            echo '```bash'
+            echo "$reboot_runbook"
+            echo '```'
+            echo
+            if [ "$updates_available" = "True" ] || [ "$updates_available" = "true" ]; then
+              echo "### Pending packages"
+              echo
+              jq -r '.pending_packages[]? | "- `" + . + "`"' "$plan_path"
+            else
+              echo "XCP-ng has no yum updates pending."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload XCP-ng update plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcpng-update-plan
+          path: xcpng-update-plan.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or update XCP-ng update issue
+        if: >-
+          (steps.plan.outputs.updates_available == 'true' || steps.plan.outputs.updates_available == 'True') &&
+          (github.event_name == 'schedule' || inputs.create_issue)
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs')
+            const plan = JSON.parse(fs.readFileSync('xcpng-update-plan.json', 'utf8'))
+            const title = `Update XCP-ng dom0 packages (${plan.pending_count} pending)`
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            const packages = (plan.pending_packages || [])
+              .map(name => `- \`${name}\``)
+              .join('\n') || '- No package list captured.'
+            const release = (plan.release || [])
+              .map(line => `- \`${line}\``)
+              .join('\n') || '- No release data captured.'
+            const body = [
+              'Weekly XCP-ng update planner found pending dom0 yum updates.',
+              '',
+              `- Host: \`${plan.host}\``,
+              `- Host UUID: \`${plan.host_uuid}\``,
+              `- Pending packages: \`${plan.pending_count}\``,
+              `- Reboot likely: \`${plan.reboot_likely}\``,
+              `- Planner run: ${runUrl}`,
+              '',
+              'Release:',
+              '',
+              release,
+              '',
+              'Apply updates without reboot:',
+              '',
+              '```bash',
+              plan.runbook_command,
+              '```',
+              '',
+              'Apply updates and reboot during an approved maintenance window:',
+              '',
+              '```bash',
+              plan.reboot_command,
+              '```',
+              '',
+              'Pending packages:',
+              '',
+              packages,
+              '',
+            ].join('\n')
+
+            const { owner, repo } = context.repo
+            const existing = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            })
+            const match = existing.data.find(issue => issue.title.startsWith('Update XCP-ng dom0 packages'))
+            if (match) {
+              await github.rest.issues.update({ owner, repo, issue_number: match.number, title, body })
+              core.notice(`Updated issue #${match.number}`)
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body })
+              core.notice(`Created issue #${created.data.number}`)
+            }

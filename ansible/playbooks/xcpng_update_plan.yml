@@ -1,0 +1,89 @@
+---
+# Plan-only check for XCP-ng/dom0 package updates.
+#
+# `yum check-update` exits 100 when updates are available, so this playbook
+# captures and normalizes that into a JSON plan on the controller. It does not
+# install packages or reboot the hypervisor.
+
+- name: Plan XCP-ng package updates
+  hosts: dom0
+  gather_facts: false
+  become: false
+  vars:
+    xcpng_plan_output: "{{ lookup('env', 'XCPNG_UPDATE_PLAN_OUTPUT') | default('../xcpng-update-plan.json', true) }}"
+    xcpng_update_reboot_patterns:
+      - '^kernel($|-)'
+      - '^xen($|-)'
+      - '^xapi($|-)'
+      - '^sm($|-)'
+      - '^blktap($|-)'
+      - '^qemu($|-)'
+      - '^xcp-ng-release($|-)'
+
+  tasks:
+    - name: Validate this is XCP-ng dom0
+      ansible.builtin.raw: xe host-list --minimal
+      register: xcpng_host_uuid
+      changed_when: false
+
+    - name: Read XCP-ng release
+      ansible.builtin.raw: cat /etc/xensource-inventory
+      register: xcpng_inventory
+      changed_when: false
+
+    - name: Check for available yum updates
+      ansible.builtin.raw: |
+        yum -q check-update 2>&1
+        rc=$?
+        if [ "$rc" -eq 100 ]; then
+          exit 0
+        fi
+        exit "$rc"
+      register: xcpng_check_update
+      changed_when: false
+
+    - name: Extract pending package names
+      ansible.builtin.set_fact:
+        xcpng_pending_packages: >-
+          {{
+            xcpng_check_update.stdout_lines
+            | select('match', '^[A-Za-z0-9_.:+-]+\.[A-Za-z0-9_]+\s+')
+            | map('regex_replace', '^([^\s.]+).*', '\\1')
+            | list
+          }}
+
+    - name: Determine whether pending updates are likely to need reboot
+      ansible.builtin.set_fact:
+        xcpng_reboot_likely: >-
+          {{
+            xcpng_pending_packages
+            | select('match', '(' ~ (xcpng_update_reboot_patterns | join('|')) ~ ')')
+            | list
+            | length > 0
+          }}
+
+    - name: Build XCP-ng update plan data
+      ansible.builtin.set_fact:
+        xcpng_update_plan:
+          host: "{{ inventory_hostname }}"
+          host_uuid: "{{ xcpng_host_uuid.stdout | trim }}"
+          release: "{{ xcpng_inventory.stdout_lines | select('match', '^(PRODUCT_VERSION|BUILD_NUMBER|PLATFORM_VERSION)=') | list }}"
+          updates_available: "{{ xcpng_pending_packages | length > 0 }}"
+          pending_count: "{{ xcpng_pending_packages | length }}"
+          reboot_likely: "{{ xcpng_reboot_likely }}"
+          pending_packages: "{{ xcpng_pending_packages }}"
+          raw_check_update: "{{ xcpng_check_update.stdout_lines }}"
+          runbook_command: "cd ansible && ansible-playbook playbooks/xcpng_update_apply.yml --limit dom0"
+          reboot_command: "cd ansible && ansible-playbook playbooks/xcpng_update_apply.yml --limit dom0 -e xcpng_reboot_after_update=true"
+
+    - name: Write XCP-ng update plan JSON on controller
+      ansible.builtin.copy:
+        dest: "{{ xcpng_plan_output }}"
+        content: "{{ xcpng_update_plan | to_nice_json }}\n"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+
+    - name: Show XCP-ng update plan
+      ansible.builtin.debug:
+        var: xcpng_update_plan
