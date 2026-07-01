@@ -106,6 +106,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
 
+    def test_knowledge_mcp_does_not_usermod_shared_loop_home(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/knowledge_mcp/tasks/apply.yml").read_text())
+        user_task = next(task for task in tasks if task["name"] == "Ensure Knowledge MCP user exists")
+        user_args = user_task["ansible.builtin.user"]
+
+        self.assertEqual(user_args["name"], "{{ knowledge_mcp_user }}")
+        self.assertNotIn("home", user_args)
+        self.assertNotIn("create_home", user_args)
+
     def test_knowledge_loop_uses_dedicated_vault_scope(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
         playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
