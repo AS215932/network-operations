@@ -30,10 +30,32 @@ starts with direct inspection. Do not assume a specific root cause without
    du -sh /var/* /opt/* /tmp/* /root/* 2>/dev/null | sort -rh | head -n 20
    ```
 
-4. Check for deleted-but-held (unlinked) files:
+4. Check systemd journal footprint explicitly:
+   ```bash
+   journalctl --disk-usage
+   ```
+
+5. Check for deleted-but-held (unlinked) files:
    ```bash
    lsof +L1
    ```
+
+6. Check Vector agent disk buffer (`xoa` ships logs to the aggregator):
+   ```bash
+   du -sh /var/lib/vector
+   ```
+
+## Rollback and safety snapshot
+
+Before mutative cleanup, protect operational state:
+
+1. From a second session or via the Xen Orchestra web UI, snapshot `xoa`
+   on `dom0`. Self-snapshot is possible because `xoa` manages itself through
+   XAPI on the mgmt link-local network.
+2. Prefer bounded `vacuum` and `logrotate` commands over `rm -rf`.
+
+Disk cleanup is largely non-reversible; the XO snapshot is the only safe
+rollback for deleted data.
 
 ## Safe remediation (human-loop approved)
 
@@ -91,6 +113,11 @@ ssh root@2a0c:b641:b50:2::70 'df -h /'
 - The Icinga/Prometheus `disk /` alert must clear.
 - The Xen Orchestra web UI must remain reachable through `proxy`.
 - `node_exporter` (`:9100`) must still be scraped by `mon`.
+- Core XO services remain active:
+  ```bash
+  ssh root@2a0c:b641:b50:2::70 'systemctl is-active xo-server || true'
+  ssh root@2a0c:b641:b50:2::70 'systemctl is-active redis-server || true'
+  ```
 - No alert suppression on `xoa` should be left in a permanent state.
 
 The NOC control plane must remain unaffected; confirm `/health`,
