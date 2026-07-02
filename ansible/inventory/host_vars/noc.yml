@@ -5,9 +5,9 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: 4e6719c48c5c8943a3daaff6045ccb130c13e7b8
-hyrule_mcp_version: 05b1245710e6a67ad40ccd62c033755f48ad4958
-noc_knowledge_version: bb2ed6e7385f698849ebede2e29b24b16ac39fc0
+noc_agent_version: 79530b57910d626ea0f6560d7448316e0cff9901
+hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
+noc_knowledge_version: 58181963dbec3638ec164b3a4a8d3f53d7c0570c
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
