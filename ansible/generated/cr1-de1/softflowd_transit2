@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# PROVIDE: softflowd_transit2
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="softflowd_transit2"
+rcvar="${name}_enable"
+pidfile="/var/run/${name}.pid"
+ctlfile="/var/run/${name}.ctl"
+command="/usr/sbin/daemon"
+softflowd_binary="/usr/local/sbin/softflowd"
+softflowd_args="-d -N -i vtnet1 -n [2a0c:b641:b50:2::110]:2055 -v 9 -s 1000 -m 65536 -T full -e 2a0c:b641:b50::b"
+command_args="-f -p ${pidfile} ${softflowd_binary} ${softflowd_args} -c ${ctlfile}"
+stop_cmd="${name}_stop"
+
+load_rc_config "$name"
+: ${softflowd_transit2_enable:="NO"}
+
+softflowd_transit2_stop()
+{
+    if [ -S "${ctlfile}" ]; then
+        /usr/local/bin/softflowctl -c "${ctlfile}" exit >/dev/null 2>&1 || true
+    fi
+    if [ -f "${pidfile}" ]; then
+        kill "$(cat "${pidfile}")" >/dev/null 2>&1 || true
+        rm -f "${pidfile}"
+    fi
+}
+
+run_rc_command "$1"

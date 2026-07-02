@@ -1,0 +1,65 @@
+---
+# Apply gate. False renders review artifacts under ansible/generated/<host>/ only.
+flow_apply: false
+
+# Only the dedicated flow VM should set this true.
+flow_collector_enabled: false
+
+flow_nfdump_user: www-data
+flow_nfdump_group: www-data
+flow_nfdump_root: /var/nfdump/profiles-data
+flow_nfdump_profile: live
+flow_nfdump_rotation: 1
+flow_nfdump_extensions: all
+
+flow_collectors:
+  - name: netflow
+    binary: nfcapd
+    port: 2055
+    description: NetFlow v5/v9
+  - name: ipfix
+    binary: nfcapd
+    port: 4739
+    description: IPFIX
+  - name: sflow
+    binary: sfcapd
+    port: 6343
+    description: sFlow
+
+flow_nfsen_install_dir: /var/www/nfsen-ng
+flow_nfsen_repo: https://github.com/mbolli/nfsen-ng.git
+flow_nfsen_version: v1.0-RC.1
+flow_nfsen_server_name: flow.as215932.net
+flow_nfsen_reload_interval: 30
+flow_nfsen_max_processes: 1
+flow_nfsen_max_stats_window: 604800
+flow_nfsen_import_years: 1
+
+flow_nfsen_ports:
+  - 22
+  - 53
+  - 80
+  - 443
+  - 179
+  - 2055
+  - 4739
+  - 6343
+
+flow_nfsen_filters:
+  - "proto tcp"
+  - "proto udp"
+  - "src net 2a0c:b641:b50::/44 or dst net 2a0c:b641:b50::/44"
+  - "dst port 80 or dst port 443"
+  - "dst port 179 or src port 179"
+
+flow_collector_packages:
+  - apache2
+  - composer
+  - git
+  - libapache2-mod-php
+  - nfdump
+  - php
+  - php-cli
+  - php-mbstring
+  - php-rrd
+  - rrdtool

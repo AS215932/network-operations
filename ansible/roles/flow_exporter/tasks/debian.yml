@@ -1,0 +1,41 @@
+---
+- name: Install softflowd
+  apt:
+    name: "{{ flow_exporter_debian_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Install softflowd systemd units
+  template:
+    src: softflowd.service.j2
+    dest: "/etc/systemd/system/softflowd-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: _flow_exporter_debian_units
+  loop: "{{ flow_exporter_interfaces }}"
+  notify: reload systemd for flow exporter
+  tags: [apply]
+
+- name: Flush systemd reload before starting softflowd
+  meta: flush_handlers
+  tags: [apply]
+
+- name: Enable and start softflowd units
+  systemd:
+    name: "softflowd-{{ item.name }}.service"
+    state: started
+    enabled: true
+  loop: "{{ flow_exporter_interfaces }}"
+  tags: [apply]
+
+- name: Restart changed softflowd units
+  systemd:
+    name: "softflowd-{{ item.item.name }}.service"
+    state: restarted
+    enabled: true
+  loop: "{{ _flow_exporter_debian_units.results | default([]) }}"
+  when: item.changed | default(false)
+  tags: [apply]

@@ -1,0 +1,5 @@
+---
+galaxy_info:
+  role_name: flow_exporter
+  description: Router softflowd flow exporter instances
+  min_ansible_version: "2.15"

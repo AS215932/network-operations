@@ -1,0 +1,30 @@
+---
+- name: Skip hosts not opted in to flow exporter role
+  meta: end_host
+  when: not (flow_exporter_enabled | default(false) | bool)
+  tags: [always]
+
+- name: Ensure at least one flow exporter interface is declared
+  assert:
+    that:
+      - flow_exporter_interfaces | length > 0
+    fail_msg: "flow_exporter_enabled is true but flow_exporter_interfaces is empty"
+  tags: [always]
+
+- name: Render flow exporter artifacts locally for review
+  include_tasks: render.yml
+  tags: [validate, diff, apply]
+
+- name: Apply Debian flow exporter
+  include_tasks: debian.yml
+  when:
+    - flow_exporter_apply | default(false) | bool
+    - ansible_os_family == "Debian"
+  tags: [apply]
+
+- name: Apply FreeBSD flow exporter
+  include_tasks: freebsd.yml
+  when:
+    - flow_exporter_apply | default(false) | bool
+    - ansible_os_family == "FreeBSD"
+  tags: [apply]

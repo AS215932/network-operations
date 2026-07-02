@@ -1,0 +1,21 @@
+---
+- name: Skip hosts not opted in to flow collector role
+  meta: end_host
+  when: not (flow_collector_enabled | default(false) | bool)
+  tags: [always]
+
+- name: Ensure flow collector runs on Debian
+  assert:
+    that:
+      - ansible_os_family == "Debian"
+    fail_msg: "flow_collector currently supports the Debian flow VM only"
+  tags: [always]
+
+- name: Render flow collector artifacts locally for review
+  include_tasks: render.yml
+  tags: [validate, diff, apply]
+
+- name: Apply flow collector
+  include_tasks: apply.yml
+  when: flow_apply | default(false) | bool
+  tags: [apply]

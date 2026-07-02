@@ -1,0 +1,19 @@
+[Unit]
+Description=NetFlow v5/v9 capture daemon for nfsen-ng (%i)
+Documentation=man:nfcapd(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+RuntimeDirectory=flow-nfcapd-netflow
+ExecStart=/usr/bin/nfcapd -D -P /run/flow-nfcapd-netflow/capture.pid -z -S 1 -T all -l /var/nfdump/profiles-data/live/netflow -p 2055
+PIDFile=/run/flow-nfcapd-netflow/capture.pid
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

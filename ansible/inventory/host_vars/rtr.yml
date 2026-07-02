@@ -90,3 +90,10 @@ monitoring_remove_legacy_root_by_ssh_key: true
 logs_register: true
 logs_role: router
 logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — router log volume is low (Vector requires ≥ 256 MiB + 32 B)
+
+# --- Flow export --- (sampled NetFlow v9 to the lightweight flow collector)
+flow_exporter_enabled: true
+flow_exporter_interfaces:
+  - { name: wan, interface: "{{ rtr_wan_if }}" }
+  - { name: infra, interface: enX2 }
+  - { name: customer, interface: enX3 }

@@ -1,0 +1,5 @@
+---
+- name: reload systemd for flow exporter
+  systemd:
+    daemon_reload: true
+  when: ansible_os_family == "Debian"

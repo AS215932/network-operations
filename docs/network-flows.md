@@ -7,7 +7,7 @@ AS215932. It's the input dataset for the firewall role: every rule in
 When you add a new service or peer, **update this file first**, then derive
 the firewall rules.
 
-Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
+Last sync: 2026-07-02 (flow collector source-of-truth added; live firewall verification still required after first apply).
 
 ---
 
@@ -31,6 +31,7 @@ Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
 | ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
 | loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
+| flow | Debian 13 | `2a0c:b641:b50:2::110` | — | lightweight NetFlow/IPFIX/sFlow collector + nfsen-ng raw-flow UI |
 | ci-pr | Debian 13 | `2a0c:b641:b51::c1` (customer-isolated) | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
@@ -232,6 +233,21 @@ containers receive routed GUA addresses from `2a0c:b641:b50:f0::/64`, query
 rtr Unbound over IPv6, and use routed IPv6 egress for container base-image and
 package downloads. loop does **not** SSH to the infra fleet.
 
+### flow (`2a0c:b641:b50:2::110`)
+
+Lightweight flow collector for sampled router traffic. `nfcapd`/`sfcapd` write
+raw capture files under `/var/nfdump/profiles-data/live/<source>/`; nfsen-ng is
+the internal raw-flow UI. Grafana on `mon` remains the primary NOC surface.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| rtr infra address, router loopback subnet, WG link prefix | UDP | 2055, 4739, 6343 | sampled NetFlow v9, future IPFIX, future sFlow exports from routers |
+| vpn-clients, ops-prefix, proxy, mon, noc | TCP | 80 | nfsen-ng internal HTTP UI |
+| mon | TCP | 9100 | node_exporter scrape |
+| ops-prefix, vpn-clients | TCP | 22 | SSH |
+
+Outbound (cross-cutting): flow → package/GitHub/Composer repositories over TCP/443 during role apply, flow → log TCP/6000 (Vector agent), flow → rtr TCP/UDP 53 for DNS recursion.
+
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
 Unprivileged self-hosted GitHub Actions runner for **untrusted PR code**
@@ -355,6 +371,8 @@ exceptions are:
 | mon → all hosts | out | 9100 tcp | node_exporter scrape |
 | mon → api | out | 9187 tcp | postgres_exporter |
 | mon → routers | out | 9342 tcp | frr_exporter |
+| routers → flow | out | 2055 udp | sampled NetFlow v9 export from softflowd |
+| routers → flow | out | 4739, 6343 udp | reserved for future IPFIX/sFlow exporters |
 | api/proxy → dns | out | 53 tcp | RFC 2136 dyn updates (TSIG) |
 | dns → ns2 | out | 53 tcp/udp | NOTIFY (TSIG `hyrule-dns`) |
 | ns2 → dns | out | 53 tcp | AXFR pull on NOTIFY (TSIG `hyrule-dns`) |

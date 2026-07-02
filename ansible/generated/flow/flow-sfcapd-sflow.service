@@ -1,0 +1,19 @@
+[Unit]
+Description=sFlow capture daemon for nfsen-ng (%i)
+Documentation=man:sfcapd(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+RuntimeDirectory=flow-sfcapd-sflow
+ExecStart=/usr/bin/sfcapd -D -P /run/flow-sfcapd-sflow/capture.pid -z -S 1 -T all -l /var/nfdump/profiles-data/live/sflow -p 6343
+PIDFile=/run/flow-sfcapd-sflow/capture.pid
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

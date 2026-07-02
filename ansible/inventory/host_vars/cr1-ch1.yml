@@ -50,3 +50,10 @@ monitoring_check_vars:
 logs_register: true
 logs_role: router
 logs_use_freebsd_syslogd: true
+
+# --- Flow export --- (sampled NetFlow v9 to the lightweight flow collector)
+flow_exporter_enabled: true
+flow_exporter_interfaces:
+  - { name: transit, interface: "{{ pf_ext_if }}" }
+  - { name: ixp-4ixp, interface: vmx1 }
+  - { name: ixp-sbix, interface: vmx2 }

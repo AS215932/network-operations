@@ -1,0 +1,19 @@
+[Unit]
+Description={{ item.description }} capture daemon for nfsen-ng (%i)
+Documentation=man:{{ item.binary }}(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User={{ flow_nfdump_user }}
+Group={{ flow_nfdump_group }}
+RuntimeDirectory=flow-{{ item.binary }}-{{ item.name }}
+ExecStart=/usr/bin/{{ item.binary }} -D -P /run/flow-{{ item.binary }}-{{ item.name }}/capture.pid -z -S {{ flow_nfdump_rotation }} -T {{ flow_nfdump_extensions }} -l {{ flow_nfdump_root }}/{{ flow_nfdump_profile }}/{{ item.name }} -p {{ item.port }}
+PIDFile=/run/flow-{{ item.binary }}-{{ item.name }}/capture.pid
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

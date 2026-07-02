@@ -1,0 +1,125 @@
+---
+- name: Install flow collector packages
+  apt:
+    name: "{{ flow_collector_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  tags: [apply]
+
+- name: Enable required Apache modules
+  command: "a2enmod {{ item }}"
+  register: _flow_a2enmod
+  changed_when: "'already enabled' not in _flow_a2enmod.stdout"
+  loop:
+    - deflate
+    - expires
+    - headers
+    - rewrite
+  notify: restart apache2
+  tags: [apply]
+
+- name: Ensure nfdump profile source directories exist
+  file:
+    path: "{{ flow_nfdump_root }}/{{ flow_nfdump_profile }}/{{ item.name }}"
+    state: directory
+    owner: "{{ flow_nfdump_user }}"
+    group: "{{ flow_nfdump_group }}"
+    mode: "0755"
+  loop: "{{ flow_collectors }}"
+  tags: [apply]
+
+- name: Install collector service units
+  template:
+    src: flow-capture.service.j2
+    dest: "/etc/systemd/system/flow-{{ item.binary }}-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ flow_collectors }}"
+  notify:
+    - reload systemd for flow collector
+    - restart flow collectors
+  tags: [apply]
+
+- name: Checkout nfsen-ng
+  git:
+    repo: "{{ flow_nfsen_repo }}"
+    dest: "{{ flow_nfsen_install_dir }}"
+    version: "{{ flow_nfsen_version }}"
+    force: false
+  tags: [apply]
+
+- name: Install nfsen-ng PHP dependencies
+  command: composer install --no-dev --no-interaction --prefer-dist
+  args:
+    chdir: "{{ flow_nfsen_install_dir }}"
+    creates: "{{ flow_nfsen_install_dir }}/vendor/autoload.php"
+  tags: [apply]
+
+- name: Ensure nfsen-ng ownership
+  file:
+    path: "{{ flow_nfsen_install_dir }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    recurse: true
+  tags: [apply]
+
+- name: Deploy nfsen-ng settings
+  template:
+    src: nfsen-settings.php.j2
+    dest: "{{ flow_nfsen_install_dir }}/backend/settings/settings.php"
+    owner: www-data
+    group: www-data
+    mode: "0640"
+  notify: restart nfsen-ng
+  tags: [apply]
+
+- name: Deploy nfsen-ng Apache vhost
+  template:
+    src: nfsen-ng-apache.conf.j2
+    dest: /etc/apache2/sites-available/nfsen-ng.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart apache2
+  tags: [apply]
+
+- name: Enable nfsen-ng Apache vhost
+  command: a2ensite nfsen-ng.conf
+  register: _flow_a2ensite
+  changed_when: "'already enabled' not in _flow_a2ensite.stdout"
+  notify: restart apache2
+  tags: [apply]
+
+- name: Deploy nfsen-ng systemd unit
+  template:
+    src: nfsen-ng.service.j2
+    dest: /etc/systemd/system/nfsen-ng.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd for flow collector
+    - restart nfsen-ng
+  tags: [apply]
+
+- name: Flush handlers before enabling services
+  meta: flush_handlers
+  tags: [apply]
+
+- name: Enable and start collector services
+  systemd:
+    name: "flow-{{ item.binary }}-{{ item.name }}.service"
+    state: started
+    enabled: true
+  loop: "{{ flow_collectors }}"
+  tags: [apply]
+
+- name: Enable and start nfsen-ng
+  systemd:
+    name: nfsen-ng
+    state: started
+    enabled: true
+  tags: [apply]

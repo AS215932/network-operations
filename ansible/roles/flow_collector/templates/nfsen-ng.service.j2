@@ -1,0 +1,15 @@
+[Unit]
+Description=nfsen-ng flow UI daemon
+After=network-online.target flow-nfcapd-netflow.service flow-nfcapd-ipfix.service flow-sfcapd-sflow.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+Restart=always
+RestartSec=2
+ExecStart=/bin/su - www-data --shell=/bin/bash -c '{{ flow_nfsen_install_dir }}/backend/cli.php start'
+ExecStop=/bin/su - www-data --shell=/bin/bash -c '{{ flow_nfsen_install_dir }}/backend/cli.php stop'
+
+[Install]
+WantedBy=multi-user.target

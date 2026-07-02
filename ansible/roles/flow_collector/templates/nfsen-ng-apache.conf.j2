@@ -1,0 +1,13 @@
+<VirtualHost *:80>
+    ServerName {{ flow_nfsen_server_name }}
+    DocumentRoot {{ flow_nfsen_install_dir }}
+
+    <Directory {{ flow_nfsen_install_dir }}>
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    ErrorLog ${APACHE_LOG_DIR}/nfsen-ng-error.log
+    CustomLog ${APACHE_LOG_DIR}/nfsen-ng-access.log combined
+</VirtualHost>

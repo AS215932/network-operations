@@ -1,0 +1,17 @@
+[Unit]
+Description=softflowd NetFlow exporter for rtr enX3
+Documentation=man:softflowd(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/softflowd -d -N -i enX3 -n [2a0c:b641:b50:2::110]:2055 -v 9 -s 1000 -m 65536 -T full -e 2a0c:b641:b50:2::1
+Restart=on-failure
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

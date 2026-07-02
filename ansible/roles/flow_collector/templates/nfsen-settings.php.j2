@@ -1,0 +1,57 @@
+<?php
+return [
+    'general' => [
+        'ports' => [
+{% for port in flow_nfsen_ports %}
+            {{ port }},
+{% endfor %}
+        ],
+        'sources' => [
+{% for collector in flow_collectors %}
+            '{{ collector.name }}',
+{% endfor %}
+        ],
+        'filters' => [
+{% for filter in flow_nfsen_filters %}
+            '{{ filter }}',
+{% endfor %}
+        ],
+        'db' => getenv('NFSEN_DATASOURCE') ?: 'RRD',
+        'processor' => 'NfDump',
+        'max_stats_window' => (int) (getenv('NFSEN_MAX_STATS_WINDOW') ?: {{ flow_nfsen_max_stats_window }}),
+        'netbox_url' => (string) (getenv('NFSEN_NETBOX_URL') ?: ''),
+        'netbox_token' => (string) (getenv('NFSEN_NETBOX_TOKEN') ?: ''),
+    ],
+    'frontend' => [
+        'reload_interval' => {{ flow_nfsen_reload_interval }},
+        'defaults' => [
+            'view' => 'graphs',
+            'graphs' => [
+                'display' => 'sources',
+                'datatype' => 'traffic',
+                'protocols' => ['any'],
+            ],
+            'flows' => [
+                'limit' => 100,
+            ],
+            'statistics' => [
+                'order_by' => 'bytes',
+            ],
+        ],
+    ],
+    'nfdump' => [
+        'binary' => getenv('NFSEN_NFDUMP_BINARY') ?: '/usr/bin/nfdump',
+        'profiles-data' => getenv('NFSEN_NFDUMP_PROFILES') ?: '{{ flow_nfdump_root }}',
+        'profile' => getenv('NFSEN_NFDUMP_PROFILE') ?: '{{ flow_nfdump_profile }}',
+        'max-processes' => (int) (getenv('NFSEN_NFDUMP_MAX_PROCESSES') ?: {{ flow_nfsen_max_processes }}),
+    ],
+    'db' => [
+        'RRD' => [
+            'data_path' => getenv('NFSEN_RRD_PATH') ?: null,
+            'import_years' => (int) (getenv('NFSEN_IMPORT_YEARS') ?: {{ flow_nfsen_import_years }}),
+        ],
+    ],
+    'log' => [
+        'priority' => \LOG_INFO,
+    ],
+];

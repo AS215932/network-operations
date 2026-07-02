@@ -1,0 +1,22 @@
+---
+# Apply gate. False renders review artifacts under ansible/generated/<host>/ only.
+flow_exporter_apply: false
+
+# Routers opt in from host_vars.
+flow_exporter_enabled: false
+flow_exporter_interfaces: []
+
+flow_exporter_collector_host: flow
+flow_exporter_collector_address: "{{ peers[flow_exporter_collector_host].ipv6 }}"
+flow_exporter_port: 2055
+flow_exporter_version: 9
+flow_exporter_sampling_rate: 1000
+flow_exporter_max_flows: 65536
+flow_exporter_track_level: full
+flow_exporter_non_promisc: true
+flow_exporter_bpf_filter: ""
+
+flow_exporter_debian_package: softflowd
+flow_exporter_freebsd_package: softflowd
+flow_exporter_debian_binary: /usr/sbin/softflowd
+flow_exporter_freebsd_binary: /usr/local/sbin/softflowd

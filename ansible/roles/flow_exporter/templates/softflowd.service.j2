@@ -1,0 +1,18 @@
+[Unit]
+Description=softflowd NetFlow exporter for {{ inventory_hostname }} {{ item.interface }}
+Documentation=man:softflowd(8)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+{% set exporter_ip = peers[inventory_hostname].ipv6 | default(peers[inventory_hostname].loopback | default('')) %}
+ExecStart={{ flow_exporter_debian_binary }} -d{{ ' -N' if flow_exporter_non_promisc | bool else '' }} -i {{ item.ifindex ~ ':' if item.ifindex is defined else '' }}{{ item.interface }} -n [{{ flow_exporter_collector_address }}]:{{ flow_exporter_port }} -v {{ flow_exporter_version }} -s {{ flow_exporter_sampling_rate }} -m {{ flow_exporter_max_flows }} -T {{ flow_exporter_track_level }}{{ (' -e ' ~ exporter_ip) if exporter_ip else '' }}{{ (' ' ~ flow_exporter_bpf_filter) if flow_exporter_bpf_filter | length > 0 else '' }}
+Restart=on-failure
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

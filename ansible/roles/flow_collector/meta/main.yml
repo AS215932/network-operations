@@ -1,0 +1,5 @@
+---
+galaxy_info:
+  role_name: flow_collector
+  description: Lightweight nfdump + nfsen-ng flow collector
+  min_ansible_version: "2.15"

@@ -1,0 +1,31 @@
+---
+- name: Ensure generated/<host> dir exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render Debian softflowd systemd units
+  delegate_to: localhost
+  become: false
+  template:
+    src: softflowd.service.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/softflowd-{{ item.name }}.service"
+    mode: "0644"
+  loop: "{{ flow_exporter_interfaces }}"
+  when: ansible_os_family == "Debian"
+  tags: [validate, diff, apply]
+
+- name: Render FreeBSD softflowd rc.d scripts
+  delegate_to: localhost
+  become: false
+  template:
+    src: softflowd.rcd.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/softflowd_{{ item.name | replace('-', '_') }}"
+    mode: "0755"
+  loop: "{{ flow_exporter_interfaces }}"
+  when: ansible_os_family == "FreeBSD"
+  tags: [validate, diff, apply]

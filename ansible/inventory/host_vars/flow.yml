@@ -1,0 +1,48 @@
+---
+# flow — lightweight NetFlow/IPFIX/sFlow collector + nfsen-ng raw-flow UI.
+#
+# The operational frontend remains Grafana on mon; this host keeps raw flow
+# files for drill-down during CDN/BGP regressions such as issue #351.
+
+firewall_extra_rules:
+  # Flow export from routers. softflowd exports sampled NetFlow v9 on 2055 by
+  # default; 4739 and 6343 are reserved for future IPFIX/sFlow exporters.
+  - { proto: udp, dport: [2055, 4739, 6343], src: ["{{ router_loopback_subnet }}", "{{ wg_link_prefix }}", "{{ peers.rtr.ipv6 }}/128"], comment: "flow export from routers" }
+
+  # Raw-flow UI. It is internal-only: direct from VPN/ops and available to proxy
+  # for a future authenticated Caddy frontend if we decide to expose one.
+  - { proto: tcp, dport: 80, src: ["{{ vpn_clients_subnet }}", "{{ ops_prefix_v6 }}", "{{ peers.proxy.ipv6 }}/128", "{{ peers.mon.ipv6 }}/128", "{{ peers.noc.ipv6 }}/128"], comment: "nfsen-ng internal HTTP UI" }
+
+  # Standard monitoring scrape.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+
+# Monitoring — register on mon (new host).
+monitoring_register: true
+monitoring_role: flow
+monitoring_extra_services:
+  - name: nfsen-ng-http
+    check_command: http
+    interval: 2m
+    retry: 30s
+    notes: "nfsen-ng raw-flow UI"
+    vars:
+      http_address: "{{ peers.flow.ipv6 }}"
+      http_port: 80
+      http_uri: "/"
+      http_ipv6: true
+  - name: netflow-collector
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 30s
+    notes: "nfcapd NetFlow v9 collector service"
+    vars:
+      prom_instance: "[{{ peers.flow.ipv6 }}]:9100"
+      systemd_unit: "flow-nfcapd-netflow.service"
+
+# Logs — ships journald/apache/collector service logs to Loki.
+logs_register: true
+logs_role: flow
+
+# Flow collector role knobs.
+flow_collector_enabled: true
+flow_nfsen_server_name: flow.as215932.net

@@ -1,0 +1,23 @@
+---
+- name: reload systemd for flow collector
+  systemd:
+    daemon_reload: true
+
+- name: restart flow collectors
+  systemd:
+    name: "flow-{{ item.binary }}-{{ item.name }}.service"
+    state: restarted
+    enabled: true
+  loop: "{{ flow_collectors }}"
+
+- name: restart apache2
+  systemd:
+    name: apache2
+    state: restarted
+    enabled: true
+
+- name: restart nfsen-ng
+  systemd:
+    name: nfsen-ng
+    state: restarted
+    enabled: true

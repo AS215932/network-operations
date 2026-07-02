@@ -1,0 +1,46 @@
+---
+- name: Ensure generated/<host> dir exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render collector service units
+  delegate_to: localhost
+  become: false
+  template:
+    src: flow-capture.service.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/flow-{{ item.binary }}-{{ item.name }}.service"
+    mode: "0644"
+  loop: "{{ flow_collectors }}"
+  tags: [validate, diff, apply]
+
+- name: Render nfsen-ng settings
+  delegate_to: localhost
+  become: false
+  template:
+    src: nfsen-settings.php.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/nfsen-settings.php"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Render nfsen-ng Apache vhost
+  delegate_to: localhost
+  become: false
+  template:
+    src: nfsen-ng-apache.conf.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/nfsen-ng-apache.conf"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Render nfsen-ng systemd unit
+  delegate_to: localhost
+  become: false
+  template:
+    src: nfsen-ng.service.j2
+    dest: "{{ playbook_dir }}/../generated/{{ inventory_hostname }}/nfsen-ng.service"
+    mode: "0644"
+  tags: [validate, diff, apply]

@@ -37,3 +37,9 @@ monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | defaul
 logs_register: true
 logs_role: router
 logs_use_freebsd_syslogd: true
+
+# --- Flow export --- (sampled NetFlow v9 to the lightweight flow collector)
+flow_exporter_enabled: true
+flow_exporter_interfaces:
+  - { name: transit, interface: "{{ pf_ext_if }}" }
+  - { name: ixp-nl, interface: vtnet1 }

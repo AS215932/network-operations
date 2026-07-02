@@ -61,6 +61,7 @@ peers:
   ci:      { ipv6: "2a0c:b641:b50:2::d0" }
   netproxy: { ipv6: "2a0c:b641:b50:2::e0" }
   loop:    { ipv6: "2a0c:b641:b50:2::f0" }
+  flow:    { ipv6: "2a0c:b641:b50:2::110" }
   # ci-pr — unprivileged PR runner, customer-isolated segment (not infra).
   # Key matches inventory_hostname (the monitoring template does
   # peers[inventory_hostname]); referenced via peers['ci-pr'] where needed.

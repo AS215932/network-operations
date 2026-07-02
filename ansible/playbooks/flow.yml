@@ -1,0 +1,65 @@
+---
+# Lightweight flow rollout.
+#
+# Collector only:
+#   ansible-playbook playbooks/flow.yml --tags collector,apply -e '{"flow_apply":true}' --limit flow
+#
+# Router exporters only:
+#   ansible-playbook playbooks/flow.yml --tags exporters,apply -e '{"flow_exporter_apply":true}' --limit routers
+#
+# Render-only review artifacts:
+#   ansible-playbook playbooks/flow.yml --tags validate --connection=local
+
+- name: Flow — collector firewall and services
+  hosts: flow
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - firewall
+    - flow_collector
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [flow, collector]
+
+- name: Flow — softflowd exporters on routers
+  hosts: routers
+  serial: 1
+  gather_facts: false
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - flow_exporter
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [flow, exporters]

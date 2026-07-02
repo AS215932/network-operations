@@ -1,0 +1,36 @@
+---
+- name: Install softflowd
+  community.general.pkgng:
+    name: "{{ flow_exporter_freebsd_package }}"
+    state: present
+  tags: [apply]
+
+- name: Install softflowd rc.d scripts
+  template:
+    src: softflowd.rcd.j2
+    dest: "/usr/local/etc/rc.d/softflowd_{{ item.name | replace('-', '_') }}"
+    owner: root
+    group: wheel
+    mode: "0755"
+  register: _flow_exporter_freebsd_scripts
+  loop: "{{ flow_exporter_interfaces }}"
+  tags: [apply]
+
+- name: Enable softflowd rc.d services
+  command: "sysrc softflowd_{{ item.name | replace('-', '_') }}_enable=YES"
+  changed_when: false
+  loop: "{{ flow_exporter_interfaces }}"
+  tags: [apply]
+
+- name: Start softflowd rc.d services
+  command: "service softflowd_{{ item.name | replace('-', '_') }} start"
+  changed_when: false
+  loop: "{{ flow_exporter_interfaces }}"
+  tags: [apply]
+
+- name: Restart changed softflowd rc.d services
+  command: "service softflowd_{{ item.item.name | replace('-', '_') }} restart"
+  changed_when: true
+  loop: "{{ _flow_exporter_freebsd_scripts.results | default([]) }}"
+  when: item.changed | default(false)
+  tags: [apply]
