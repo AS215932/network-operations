@@ -6,7 +6,8 @@
 mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default('') }}"
 
 firewall_extra_rules:
-  # Grafana via Caddy.
+  # Icinga Web + Grafana via Caddy.
+  - { proto: tcp, dport: 80, src: "{{ peers.proxy.ipv6 }}", comment: "Icinga Web from proxy" }
   - { proto: tcp, dport: 3000, src: "{{ peers.proxy.ipv6 }}", comment: "Grafana from proxy" }
 
   # Self-scrape (mon scrapes its own node_exporter).
