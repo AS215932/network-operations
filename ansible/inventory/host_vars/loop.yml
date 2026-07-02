@@ -4,9 +4,9 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing the Reliability Governor Knowledge role
-# normalization (engineering-loop #30) on top of the runtime from #27.
-engineering_loop_version: "86fa34ff8cde2298959670537f5a75b92d0a8b9f"
+# Bumped to the build containing runtime LoopDecisionEnvelope emission
+# (engineering-loop #34).
+engineering_loop_version: "1c3b6cc87dd405d23c37c4cabd8fe7620cf2485a"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
@@ -17,7 +17,7 @@ engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only.
-knowledge_mcp_version: "58181963dbec3638ec164b3a4a8d3f53d7c0570c"
+knowledge_mcp_version: "48684c9bb9ce9de781fbfbcae734c18b57d3e7fa"
 knowledge_mcp_enabled: true
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
@@ -39,11 +39,11 @@ agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
 
 # Governed Knowledge Loop producer agent (distinct from the read-only Knowledge
-# MCP above). Pinned to the merged Knowledge revision that ships agent-core
-# v0.4.0 sink_from_env support, plus the Docker git runtime dependency fix
-# (AS215932/knowledge#25). The canary runs daily, opens at most one reviewed
-# PR/day, and keeps live OpenRouter calls disabled.
-knowledge_loop_version: "58181963dbec3638ec164b3a4a8d3f53d7c0570c"
+# MCP above). Pinned to the merged Knowledge revision that ships runtime
+# LoopDecisionEnvelope emission plus shared decision memory export/query support
+# (AS215932/knowledge#30 and #31). The canary runs daily, opens at most one
+# reviewed PR/day, and keeps live OpenRouter calls disabled.
+knowledge_loop_version: "48684c9bb9ce9de781fbfbcae734c18b57d3e7fa"
 knowledge_loop_timer_enabled: true
 knowledge_loop_agent_core_trace_enabled: true
 knowledge_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
@@ -51,7 +51,7 @@ knowledge_loop_max_openrouter_calls_per_day: 0
 knowledge_loop_max_prs_per_day: 1
 
 # Agentic Observatory internal operator console.
-agentic_observatory_version: "ec740915b6d478217694539bcfd71f726b3fab1e"
+agentic_observatory_version: "2ecdfa07cc62264f45690a81400e86cda6d65921"
 agentic_observatory_user: agentic-observatory
 agentic_observatory_group: agentic-observatory
 agentic_observatory_config_dir: /etc/agentic-observatory
