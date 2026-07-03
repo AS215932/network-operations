@@ -171,8 +171,9 @@ Use the production workflow after the policies and KV entry exist:
 Repeat applies can run without a fresh SecretID when the Vault Agent service is
 already active, no rendered Vault Agent files changed, and the rendered
 destinations still exist. Any apply that changes the Vault Agent unit,
-configuration, or templates still needs a fresh wrapped SecretID or existing
-token sink so the service can restart safely.
+configuration, or templates still needs a fresh wrapped SecretID or an existing
+unconsumed SecretID file so the service can restart safely. The token sink is
+Vault Agent output state for clients, not restart bootstrap input.
 
 ## Rollback
 

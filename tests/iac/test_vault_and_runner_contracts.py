@@ -346,6 +346,17 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("vault_agent_restart_needed", task_text)
         self.assertIn("and not (vault_agent_restart_needed | bool)", task_text)
 
+        resolve_task = _task_by_name(tasks, "Resolve Vault Agent steady-state facts")
+        self.assertNotIn(
+            "vault_agent_existing_token_sink",
+            resolve_task["set_fact"]["vault_agent_has_bootstrap_material"],
+        )
+        assert_task = _task_by_name(tasks, "Assert Vault AppRole bootstrap credentials are present")
+        self.assertIn(
+            "not sufficient restart bootstrap material",
+            assert_task["assert"]["fail_msg"],
+        )
+
         restart_task = _task_by_name(tasks, "Enable and (re)start Vault Agent")
         self.assertIn(
             "vault_agent_has_bootstrap_material | bool or vault_agent_has_running_rendered_state | bool",
@@ -470,6 +481,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIsNotNone(token_permission_task)
         self.assertEqual(token_permission_task["file"]["group"], "{{ vault_agent_token_sink_group }}")
         self.assertEqual(token_permission_task["file"]["mode"], "{{ vault_agent_token_sink_mode }}")
+        self.assertIn(
+            "vault_agent_has_bootstrap_material | bool or vault_agent_existing_token_sink.stat.exists",
+            token_permission_task["when"],
+        )
 
         runner_vault_task = _task_by_name(runner_tasks, "Set up Vault Agent for runner secret delivery")
         self.assertIsNotNone(runner_vault_task)

@@ -153,7 +153,6 @@
       {{
         vault_agent_secret_id | length > 0
         or vault_agent_existing_secret_id.stat.exists
-        or vault_agent_existing_token_sink.stat.exists
       }}
     vault_agent_has_running_rendered_state: >-
       {{
@@ -184,7 +183,8 @@
       Vault Agent {{ vault_agent_name }} needs role_id and secret_id bootstrap
       values for the first deploy or any apply that must restart Vault Agent.
       Existing active service plus rendered destinations is accepted only for
-      steady-state, no-restart applies.
+      steady-state, no-restart applies; the token sink is output state and is
+      not sufficient restart bootstrap material.
   tags: [apply]
 
 # Restart in-role (not via a handler) so vault_agent_name binds at task-execution
@@ -215,5 +215,5 @@
   when:
     - vault_agent_token_sink_group != "root" or vault_agent_token_sink_mode != "0600"
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-    - vault_agent_has_bootstrap_material | bool
+    - vault_agent_has_bootstrap_material | bool or vault_agent_existing_token_sink.stat.exists
   tags: [apply]
