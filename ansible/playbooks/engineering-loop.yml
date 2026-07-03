@@ -1,0 +1,220 @@
+---
+# Engineering Loop rollout — installs the dedicated operations-lane daemon on
+# the loop VM. The daemon consumes human-approved GitHub issues and stops at a
+# draft PR. It never merges or applies production changes.
+#
+# Validate (no live changes; runs from controller):
+#   ansible-playbook playbooks/engineering-loop.yml --tags validate \
+#     --connection=local --limit loop --skip-tags=snapshot
+#
+# Apply (live deploy, timers remain disabled unless host vars enable them):
+#   ansible-playbook playbooks/engineering-loop.yml --tags apply \
+#     -e engineering_loop_apply=true -e knowledge_mcp_apply=true -e knowledge_loop_apply=true -e agentic_observatory_apply=true --limit loop
+#
+# First bootstrap with Vault Agent requires either:
+#   VAULT_ENGINEERING_LOOP_ROLE_ID=...
+#   VAULT_ENGINEERING_LOOP_WRAPPED_SECRET_ID=...
+# or, for break-glass/operator use only:
+#   VAULT_ENGINEERING_LOOP_ROLE_ID=...
+#   VAULT_ENGINEERING_LOOP_SECRET_ID=...
+
+- name: engineering-loop — apply dedicated loop VM runtime
+  hosts: loop
+  serial: 1
+  gather_facts: true
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+    - name: Ensure Agentic Observatory group exists before Vault Agent
+      ansible.builtin.group:
+        name: "{{ agentic_observatory_group }}"
+        state: present
+        system: true
+      tags: [apply, vault_agent, agentic_observatory]
+  roles:
+    - role: firewall
+      vars:
+        firewall_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [firewall]
+    - role: monitoring
+      vars:
+        monitoring_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [monitoring]
+    - role: logs
+      vars:
+        logs_apply: "{{ engineering_loop_apply | default(false) }}"
+      tags: [logs]
+    - role: engineering_loop
+      tags: [engineering_loop]
+    - role: knowledge_mcp
+      tags: [knowledge_mcp]
+    - role: knowledge_loop
+      tags: [knowledge_loop]
+    - role: vault_agent
+      vars:
+        vault_agent_name: engineering-loop
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_ENGINEERING_LOOP_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_ENGINEERING_LOOP_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_ENGINEERING_LOOP_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/engineering-loop/secret-id'
+            if (lookup('env', 'VAULT_ENGINEERING_LOOP_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ engineering_loop_env_file }}"
+        vault_agent_reload_command: /bin/true
+        vault_agent_env_reload_command: >-
+          {% if engineering_loop_lhp_callback_enabled | bool %}
+          /bin/grep -Eq ^ENGINEERING_LOOP_NOC_LHP_SECRET=................................ {{ engineering_loop_env_file }}
+          {% else %}
+          /bin/true
+          {% endif %}
+        vault_agent_templates:
+          - src: engineering-loop.env.ctmpl.j2
+            name: engineering-loop.env.ctmpl
+            destination: "{{ engineering_loop_env_file }}"
+            group: "{{ engineering_loop_group }}"
+            mode: "0640"
+            reload_command: >-
+              {% if engineering_loop_lhp_callback_enabled | bool %}
+              /bin/grep -Eq ^ENGINEERING_LOOP_NOC_LHP_SECRET=................................ {{ engineering_loop_env_file }}
+              {% else %}
+              /bin/true
+              {% endif %}
+          - src: engineering-loop-github-app-key.pem.ctmpl.j2
+            name: engineering-loop-github-app-key.pem.ctmpl
+            destination: "{{ engineering_loop_github_app_private_key_file }}"
+            group: "{{ engineering_loop_group }}"
+            mode: "0640"
+            reload_command: /bin/true
+        vault_agent_extra_dirs:
+          - path: "{{ engineering_loop_config_dir }}"
+            group: "{{ engineering_loop_group }}"
+            mode: "0750"
+      when: (lookup('env', 'ENGINEERING_LOOP_SECRET_BACKEND') | default('vault', true)) == 'vault'
+      tags: [vault_agent]
+    - role: vault_agent
+      vars:
+        vault_agent_name: knowledge-loop
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_KNOWLEDGE_LOOP_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_KNOWLEDGE_LOOP_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/knowledge-loop/secret-id'
+            if (lookup('env', 'VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ knowledge_loop_env_file }}"
+        vault_agent_reload_command: /bin/true
+        vault_agent_env_reload_command: /bin/true
+        vault_agent_templates:
+          - src: knowledge-loop.env.ctmpl.j2
+            name: knowledge-loop.env.ctmpl
+            destination: "{{ knowledge_loop_env_file }}"
+            group: "{{ knowledge_loop_group }}"
+            mode: "0640"
+            reload_command: /bin/true
+          - src: knowledge-loop-github-app-key.pem.ctmpl.j2
+            name: knowledge-loop-github-app-key.pem.ctmpl
+            destination: "{{ knowledge_loop_github_app_private_key_file }}"
+            group: "{{ knowledge_loop_group }}"
+            mode: "0640"
+            reload_command: /bin/true
+        vault_agent_extra_dirs:
+          - path: "{{ knowledge_loop_config_dir }}"
+            group: "{{ knowledge_loop_group }}"
+            mode: "0750"
+      when: (lookup('env', 'KNOWLEDGE_LOOP_SECRET_BACKEND') | default('vault', true)) == 'vault'
+      tags: [vault_agent, knowledge_loop]
+    - role: vault_agent
+      vars:
+        vault_agent_name: agent-core-collector
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/agent-core-collector/secret-id'
+            if (lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ agent_core_collector_env_file }}"
+        vault_agent_reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_env_reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_templates:
+          - src: agent-core-collector.env.ctmpl.j2
+            name: agent-core-collector.env.ctmpl
+            destination: "{{ agent_core_collector_env_file }}"
+            group: root
+            mode: "0640"
+            reload_command: "(/bin/systemctl try-restart agent-core-collector.service || /bin/true)"
+        vault_agent_extra_dirs:
+          - path: "{{ agent_core_collector_config_dir }}"
+            group: root
+            mode: "0750"
+      tags: [vault_agent, agent_core_collector]
+    - role: vault_agent
+      vars:
+        vault_agent_name: agentic-observatory
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_AGENTIC_OBSERVATORY_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_AGENTIC_OBSERVATORY_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/agentic-observatory/secret-id'
+            if (lookup('env', 'VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ agentic_observatory_env_file }}"
+        vault_agent_reload_command: "(/bin/systemctl try-restart agentic-observatory.service || /bin/true)"
+        vault_agent_env_reload_command: "(/bin/systemctl try-restart agentic-observatory.service || /bin/true)"
+        vault_agent_templates:
+          - src: agentic-observatory.env.ctmpl.j2
+            name: agentic-observatory.env.ctmpl
+            destination: "{{ agentic_observatory_env_file }}"
+            group: "{{ agentic_observatory_group }}"
+            mode: "0640"
+            reload_command: "(/bin/systemctl try-restart agentic-observatory.service || /bin/true)"
+        vault_agent_extra_dirs:
+          - path: "{{ agentic_observatory_config_dir }}"
+            group: "{{ agentic_observatory_group }}"
+            mode: "0750"
+      tags: [vault_agent, agentic_observatory]
+    - role: agentic_observatory
+      tags: [agentic_observatory]
+    - role: agent_core_collector
+      tags: [agent_core_collector]
+  post_tasks:
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      ansible.builtin.include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]
+  tags: [engineering_loop]

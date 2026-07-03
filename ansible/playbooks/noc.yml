@@ -47,6 +47,52 @@
       run_once: true
       tags: [snapshot, always]
   post_tasks:
+    - name: Verify noc-agent CaseService health
+      tags: [validate, apply]
+      block:
+        - name: Wait for noc-agent CaseService health endpoint
+          uri:
+            url: http://127.0.0.1:8000/health/cases
+            return_content: true
+            status_code: 200
+            timeout: 10
+          register: noc_agent_case_health
+          retries: 36
+          delay: 5
+          until:
+            - noc_agent_case_health.status == 200
+            - (noc_agent_case_health.json.status | default('')) == 'ok'
+            - (noc_agent_case_health.json.backend | default('')) == 'PostgresCaseStore'
+            - (noc_agent_case_health.json.outbox_worker.running | default(false)) | bool
+
+        - name: Show noc-agent CaseService health
+          debug:
+            var: noc_agent_case_health.json
+      rescue:
+        - name: Capture noc-agent service status
+          command: systemctl status noc-agent --no-pager -l
+          register: noc_agent_service_status
+          changed_when: false
+          failed_when: false
+
+        - name: Capture noc-agent journal
+          command: journalctl -u noc-agent -n 120 --no-pager
+          register: noc_agent_journal
+          changed_when: false
+          failed_when: false
+
+        - name: Show noc-agent service status
+          debug:
+            var: noc_agent_service_status.stdout_lines
+
+        - name: Show noc-agent recent journal
+          debug:
+            var: noc_agent_journal.stdout_lines
+
+        - name: Fail noc-agent health verification
+          fail:
+            msg: noc-agent /health/cases did not become healthy after deploy
+
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall
@@ -91,6 +137,7 @@
         vault_agent_env_reload_command: >-
           /bin/grep -Eq ^NOC_APPROVAL_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
           /bin/grep -Eq ^HYRULE_MCP_ACTION_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
+          /bin/sh -c 'test "{{ "1" if noc_lhp_enabled | bool else "0" }}" != "1" || /bin/grep -Eq ^NOC_LHP_ENGINEERING_SECRET=................................ /opt/noc-agent/.env' &&
           /bin/systemctl restart xo-mcp.service &&
           /bin/systemctl restart noc-agent.service &&
           /bin/systemctl restart noc-agent-bot.service

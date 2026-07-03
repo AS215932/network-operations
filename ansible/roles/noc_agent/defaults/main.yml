@@ -8,6 +8,24 @@ noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
 noc_agent_version: main
 noc_agent_secret_backend: vault
 
+noc_knowledge_repo: https://github.com/AS215932/knowledge.git
+noc_knowledge_version: main
+noc_knowledge_install_dir: /opt/noc-knowledge/repo
+noc_knowledge_export_dir: /opt/noc-knowledge/exports
+noc_knowledge_export_sqlite: "{{ noc_knowledge_export_dir }}/knowledge.sqlite"
+noc_knowledge_export_manifest: "{{ noc_knowledge_export_dir }}/manifest.json"
+
+noc_lhp_enabled: false
+noc_engineering_handoff_delivery_enabled: false
+noc_knowledge_context_enabled: false
+noc_case_verification_enabled: false
+noc_case_verification_dry_run: true
+noc_case_auto_resolve_enabled: false
+noc_disk_alert_handoff_enabled: false
+noc_lhp_disk_alert_fingerprint: ""
+noc_agent_core_trace_enabled: false
+noc_agent_core_trace_collector_url: ""
+
 noc_agent_google_wif_enabled: false
 noc_agent_google_wif_project_id: project-73d4ac43-0c8a-4ec0-ac5
 noc_agent_google_wif_project_number: "338142359138"

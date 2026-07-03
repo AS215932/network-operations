@@ -40,6 +40,24 @@ filter allows proto 89 on both the VRF master (`overlay`) and WG slaves
 must time out, while DNS to rtr on the customer gateway and public HTTPS egress
 must still work.
 
+## Customer VM addressing
+
+`enX3` carries the customer aggregate `2a0c:b641:b51::/48`; FRR assigns
+`2a0c:b641:b51::1/48` to the interface and advertises the aggregate. Paid VMs
+use one `/64` each from that `/48`.
+
+Do not enable `IPv6SendRA`, radvd, dnsmasq, Kea, or another link-wide
+RA/DHCPv6 service on `enX3` for this design. The customer VMs share one L2
+segment, and RA would advertise the same prefix information to every VM.
+Instead, `hyrule-cloud` allocates a per-VM `/64` and passes static Debian
+netplan `networkConfig` to XO. The guest address is `::2` inside its assigned
+`/64`; the default route uses `2a0c:b641:b51::1` with `on-link: true`.
+
+`2a0c:b641:b51::/64` remains reserved for router/legacy/static use, including
+the existing `ci-pr` address. Proper IPAM is tracked separately in
+<https://github.com/AS215932/network-operations/issues/346>; until then the
+Hyrule allocator is the tactical source of VM prefix assignments.
+
 ## IPv4 DNAT VRF leak
 
 The infra subnet `10.0.2.0/24` lives on `enX2` (overlay VRF). External

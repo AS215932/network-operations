@@ -1,0 +1,239 @@
+---
+- name: Ensure Engineering Loop packages are installed
+  ansible.builtin.apt:
+    name: "{{ engineering_loop_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install Engineering Loop Icinga CA trust anchor
+  ansible.builtin.copy:
+    src: "{{ engineering_loop_icinga_ca_src }}"
+    dest: "{{ engineering_loop_icinga_ca_dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: engineering_loop_icinga_ca
+
+- name: Refresh system CA bundle for Engineering Loop
+  ansible.builtin.command: update-ca-certificates
+  changed_when: true
+  when: engineering_loop_icinga_ca.changed
+
+- name: Install uv (Python package manager)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+    executable: /bin/bash
+
+- name: Ensure Engineering Loop group exists
+  ansible.builtin.group:
+    name: "{{ engineering_loop_group }}"
+    state: present
+    system: true
+
+- name: Ensure Engineering Loop user exists
+  ansible.builtin.user:
+    name: "{{ engineering_loop_user }}"
+    group: "{{ engineering_loop_group }}"
+    home: "{{ engineering_loop_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure Engineering Loop directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(engineering_loop_user) }}"
+    group: "{{ item.group | default(engineering_loop_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ engineering_loop_install_dir }}", mode: "0755" }
+    - { path: "{{ engineering_loop_config_dir }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
+    - { path: "{{ engineering_loop_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_governor_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_memory_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_git_askpass_path | dirname }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
+
+- name: Check for legacy Engineering Loop memory inside managed workspace
+  ansible.builtin.stat:
+    path: "{{ engineering_loop_legacy_memory_dir }}"
+  register: engineering_loop_legacy_memory
+
+- name: Migrate Engineering Loop memory out of managed repo workspaces
+  ansible.builtin.copy:
+    src: "{{ engineering_loop_legacy_memory_dir }}/"
+    dest: "{{ engineering_loop_memory_dir }}/"
+    remote_src: true
+    owner: "{{ engineering_loop_user }}"
+    group: "{{ engineering_loop_group }}"
+    mode: preserve
+  when:
+    - engineering_loop_legacy_memory_dir != engineering_loop_memory_dir
+    - engineering_loop_legacy_memory.stat.exists
+
+- name: Remove legacy Engineering Loop memory from managed workspace
+  ansible.builtin.file:
+    path: "{{ engineering_loop_legacy_memory_dir }}"
+    state: absent
+  when:
+    - engineering_loop_legacy_memory_dir != engineering_loop_memory_dir
+    - engineering_loop_legacy_memory.stat.exists
+
+- name: Checkout Engineering Loop runtime
+  ansible.builtin.git:
+    repo: "{{ engineering_loop_repo }}"
+    dest: "{{ engineering_loop_install_dir }}"
+    version: "{{ engineering_loop_version }}"
+    update: true
+    force: true
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+  notify: restart engineering-loop timer
+
+- name: Sync Engineering Loop runtime dependencies
+  ansible.builtin.command: /usr/local/bin/uv sync --frozen
+  args:
+    chdir: "{{ engineering_loop_install_dir }}"
+  register: engineering_loop_uv_sync
+  changed_when: >-
+    engineering_loop_uv_sync.stdout != '' or
+    'Resolved' in engineering_loop_uv_sync.stderr or
+    '+' in engineering_loop_uv_sync.stderr
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+  notify: restart engineering-loop timer
+
+- name: Checkout core AS215932 workspaces for daemon runs
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ engineering_loop_workspace_dir }}/{{ item.dest }}"
+    version: "{{ item.version | default('main') }}"
+    update: true
+    force: false
+  loop: "{{ engineering_loop_workspace_repositories }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+
+- name: Configure git identity for loop-authored draft PR branches
+  ansible.builtin.command:
+    argv:
+      - git
+      - config
+      - --global
+      - "{{ item.key }}"
+      - "{{ item.value }}"
+  loop:
+    - { key: user.name, value: "{{ engineering_loop_git_user_name }}" }
+    - { key: user.email, value: "{{ engineering_loop_git_user_email }}" }
+  changed_when: false
+  become: true
+  become_user: "{{ engineering_loop_user }}"
+
+- name: Install Engineering Loop Git askpass helper
+  ansible.builtin.template:
+    src: git-askpass.sh.j2
+    dest: "{{ engineering_loop_git_askpass_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+
+- name: Install Engineering Loop GitHub App token helper
+  ansible.builtin.template:
+    src: github-app-token.sh.j2
+    dest: "{{ engineering_loop_github_app_token_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+
+- name: Install Engineering Loop daemon wrapper
+  ansible.builtin.template:
+    src: run-daemon.sh.j2
+    dest: "{{ engineering_loop_daemon_wrapper_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+  notify: restart engineering-loop timer
+
+- name: Install Reliability Governor wrapper
+  ansible.builtin.template:
+    src: run-reliability-governor.sh.j2
+    dest: "{{ engineering_loop_governor_wrapper_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+  notify: restart reliability-governor timer
+
+- name: Install Engineering Loop systemd service
+  ansible.builtin.template:
+    src: hyrule-engineering-loop.service.j2
+    dest: /etc/systemd/system/hyrule-engineering-loop.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart engineering-loop timer
+
+- name: Install Reliability Governor systemd service
+  ansible.builtin.template:
+    src: hyrule-reliability-governor.service.j2
+    dest: /etc/systemd/system/hyrule-reliability-governor.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart reliability-governor timer
+
+- name: Install Engineering Loop systemd timer
+  ansible.builtin.template:
+    src: hyrule-engineering-loop.timer.j2
+    dest: /etc/systemd/system/hyrule-engineering-loop.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart engineering-loop timer
+
+- name: Install Reliability Governor systemd timer
+  ansible.builtin.template:
+    src: hyrule-reliability-governor.timer.j2
+    dest: /etc/systemd/system/hyrule-reliability-governor.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart reliability-governor timer
+
+- name: Install agent-core trace logrotate policy
+  ansible.builtin.template:
+    src: agent-core-trace.logrotate.j2
+    dest: /etc/logrotate.d/engineering-loop-agent-core-trace
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Set Engineering Loop timer state
+  ansible.builtin.systemd:
+    name: hyrule-engineering-loop.timer
+    enabled: "{{ engineering_loop_timer_enabled | bool }}"
+    state: "{{ 'started' if engineering_loop_timer_enabled | bool else 'stopped' }}"
+    daemon_reload: true
+
+- name: Set Reliability Governor timer state
+  ansible.builtin.systemd:
+    name: hyrule-reliability-governor.timer
+    enabled: "{{ engineering_loop_governor_timer_enabled | bool }}"
+    state: "{{ 'started' if engineering_loop_governor_timer_enabled | bool else 'stopped' }}"
+    daemon_reload: true

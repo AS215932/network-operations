@@ -30,6 +30,7 @@ Last sync: 2026-06-09 (verified live with `nft list ruleset` / `pfctl -sr`).
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane (proxied as `vault.as215932.net`) |
 | ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
+| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
 | ci-pr | Debian 13 | `2a0c:b641:b51::c1` (customer-isolated) | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
 | ns2 | Debian 13 | (off-net) `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | cr1-nl1 | FreeBSD 14.3 | loopback `2a0c:b641:b50::a` | — | core router (Servperso NL transit) |
@@ -46,8 +47,9 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 |------|---------|
 | `2a0c:b641:b50::/44` | AS215932 prefix (announced) |
 | `2a0c:b641:b50::/64` | Router loopbacks (`::a` cr1-nl1, `::b` cr1-de1, `::c` cr1-ch1, `::d` rtr) |
-| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::e0`) |
+| `2a0c:b641:b50:2::/64` | Infra subnet (rtr `::1`, VMs `::10`–`::f0`) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via vpn VM) |
+| `2a0c:b641:b50:f0::/64` | loop VM Docker bridge containers (routed GUA /64 via loop) |
 | `2a0c:b641:b50:ffXX::/127` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (also `::c1` = ci-pr, the unprivileged PR runner) |
 | `10.0.0.0/24` | Mgmt v4 (dom0 ↔ XOA XAPI) |
@@ -62,7 +64,7 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| infra subnet, customer subnet, vpn-clients | TCP/UDP | 53 | DNS recursion (Unbound + DNS64) |
+| infra subnet, customer subnet, vpn-clients, loop Docker subnet | TCP/UDP | 53 | DNS recursion (Unbound + DNS64) |
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP/UDP | 53 | rtr's **own** DNS queries to its Unbound — Unbound is overlay-VRF-confined so rtr's default-VRF processes query it with the underlay source (#135) |
 | mon | TCP | 9100 | node_exporter scrape |
 | mon | TCP | 9342 | frr_exporter scrape |
@@ -187,9 +189,11 @@ Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch ac
 
 ### netproxy (`2a0c:b641:b50:2::e0`)
 
-Internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud network
-requests. Hyrule Cloud verifies payment; this host only executes internal
-request jobs.
+Planned internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud
+network requests. Hyrule Cloud verifies payment; this host only executes
+internal request jobs. It is not live yet; Prometheus scrape targets remain
+disabled until [#214](https://github.com/AS215932/network-operations/issues/214)
+completes the rollout.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
@@ -201,6 +205,33 @@ request jobs.
 Outbound (cross-cutting): netproxy → public Internet/Tor/I2P/Yggdrasil egress
 for `direct`, `tor`, `i2p`, and `yggdrasil` request modes, subject to sidecar
 SSRF/IP policy.
+
+### loop (`2a0c:b641:b50:2::f0`)
+
+Dedicated Engineering Loop operations-lane VM. It consumes human-approved
+`loop:approved` GitHub issues and stops at draft PRs. It is not an infra deploy
+source: no fleet SSH key, no app runtime secrets, no Vault breadth, and no public
+listener beyond node_exporter for mon and the Agent-Core collector allowlist.
+A containerized `hyrule-knowledge-mcp` service binds to `127.0.0.1:8767` only,
+exposing streamable HTTP MCP at `/mcp`, legacy SSE at `/sse` when configured,
+and `/health` for local smoke checks. The `agent-core-collector` container binds
+`2a0c:b641:b50:2::f0:8770` and stores traces in local Postgres.
+
+| From | Proto | Port | Purpose |
+|------|-------|------|---------|
+| mon | TCP | 9100 | node_exporter scrape |
+| loop, noc, mon | TCP | 8770 | Agent-Core trace collector ingest (`/v1/trace`, `/v1/trace/batch`) and mon `/healthz` check |
+| ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
+
+Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
+pushes, draft PRs, and knowledge MCP image source checkouts/build context),
+loop → model provider APIs TCP/443 (through the selected backend/provider auth),
+loop → mon TCP/5665 (Icinga passive check submission), loop → log TCP/6000
+(Vector agent), loop → vault TCP/8200 (Vault Agent render), local loop producers
+→ loop TCP/8770 (Agent-Core trace ingestion). Docker bridge
+containers receive routed GUA addresses from `2a0c:b641:b50:f0::/64`, query
+rtr Unbound over IPv6, and use routed IPv6 egress for container base-image and
+package downloads. loop does **not** SSH to the infra fleet.
 
 ### ci-pr (`2a0c:b641:b51::c1`) — unprivileged PR runner, customer-isolated
 
@@ -230,7 +261,7 @@ on mon is the only read path.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
-| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci) | TCP | 6000 | Vector→Vector ingest from agents |
+| every infra host (rtr, dns, api, web, proxy, mon, vpn, xoa, irc, noc, ci, netproxy, loop) | TCP | 6000 | Vector→Vector ingest from agents |
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP | 6000 | Vector→Vector ingest from rtr default-VRF processes; kernel routes this path via underlay |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
 | cr1-nl1, cr1-de1, cr1-ch1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
@@ -343,7 +374,7 @@ exceptions are:
 | ns2 → log | out | 6000 tcp | Off-net Vector agent → aggregator over public IPv6 |
 | dom0 → log | out | 6000 tcp | Hypervisor Vector agent → aggregator over mgmt v4 |
 | mon → log | out | 3100, 8686 tcp | Grafana query + Vector metrics scrape |
-| noc, mon, api, web, ci → vault | out | 8200 tcp | vault-agent / health checks → Vault listener, direct internal IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Cert SAN covers `vault.as215932.net` only; agents use `tls_skip_verify`. |
+| noc, mon, api, web, ci, loop → vault | out | 8200 tcp | vault-agent / health checks → Vault's plain-HTTP internal listener over direct IPv6 (bypasses Caddy so a proxy outage doesn't break the secrets plane). Public TLS remains on `vault.as215932.net` via Caddy. |
 | mon → routers | out | 22 tcp (by_ssh) | icinga2 by_ssh checks, logged in as the dedicated `monitoring` system user. Privileged plugins (jool stats) are wrapped in `sudo`/`doas`, scoped to `/usr/local/lib/nagios/plugins/*` by the role-rendered drop. |
 
 ---

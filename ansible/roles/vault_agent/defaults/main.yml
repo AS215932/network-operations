@@ -21,6 +21,7 @@ vault_agent_token_sink_mode: "0600"
 vault_agent_template_dir: "{{ vault_agent_config_dir }}/templates"
 vault_agent_env_destination: /opt/noc-agent/.env
 vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt
+vault_agent_noc_github_app_key_destination: /etc/noc-agent/github-app.pem
 # Backward-compat alias: callers that set vault_agent_reload_command still work —
 # both per-template commands fall back to it. New callers should set the
 # per-template variant directly.
@@ -40,7 +41,8 @@ vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
 # Secret templates Vault Agent renders. Each entry: src (Jinja2 template in
 # this role's templates/), name (ctmpl filename written into the template
 # dir), destination (final rendered file), group (chgrp target on the
-# destination), reload_command (run after each render). The default pair
+# destination), optional mode (default 0640), reload_command (run after each
+# render). The default pair
 # reproduces the noc-agent behaviour exactly; other consumers — e.g.
 # github_runner — pass their own list.
 vault_agent_templates:
@@ -54,6 +56,12 @@ vault_agent_templates:
     destination: "{{ vault_agent_google_subject_token_destination }}"
     group: noc-agent
     # /bin/true by default — JWT re-renders must not bounce the consumer (#26).
+    reload_command: "{{ vault_agent_jwt_reload_command }}"
+  - src: noc-agent-github-app-key.pem.ctmpl.j2
+    name: noc-agent-github-app-key.pem.ctmpl
+    destination: "{{ vault_agent_noc_github_app_key_destination }}"
+    group: noc-agent
+    # noc-agent reads the PEM per handoff, so a re-render must not bounce it.
     reload_command: "{{ vault_agent_jwt_reload_command }}"
 
 # Extra directories the consumer needs created beyond the Vault Agent

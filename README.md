@@ -138,7 +138,7 @@ Key documentation:
 - [Network Architecture](docs/architecture.md)
 - [BGP Routing Policy](docs/bgp-policy.md)
 - [Peering Guidelines](docs/peering.md)
-- [Agentic Development Loop](docs/agentic-development-loop.md)
+- [Engineering Loop extraction pointer](docs/agentic-development-loop.md)
 
 ## Roadmap & milestones
 

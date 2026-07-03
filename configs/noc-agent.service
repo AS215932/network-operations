@@ -3,8 +3,8 @@
 
 [Unit]
 Description=AS215932 NOC Agent (Alertmanager + Icinga webhooks → PydanticAI investigation → Discord)
-After=network.target hyrule-mcp.service xo-mcp.service
-Wants=hyrule-mcp.service xo-mcp.service
+After=network.target postgresql.service hyrule-mcp.service xo-mcp.service
+Wants=postgresql.service hyrule-mcp.service xo-mcp.service
 
 [Service]
 Type=exec
@@ -19,6 +19,7 @@ ExecStart=/opt/noc-agent/.venv/bin/uvicorn app.main:app \
     --host :: \
     --port 8000 \
     --workers 2 \
+    --timeout-worker-healthcheck 60 \
     --log-level info \
     --access-log
 Restart=always

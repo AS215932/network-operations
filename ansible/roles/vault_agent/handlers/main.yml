@@ -1,6 +1,7 @@
 ---
-- name: restart vault agent
-  systemd:
-    name: "vault-agent-{{ vault_agent_name }}"
-    state: restarted
-    daemon_reload: true
+# Vault Agent restart-on-change is handled inline in tasks/main.yml ("Enable and
+# start Vault Agent"). A play may include this role more than once (e.g.
+# engineering-loop + knowledge-loop); a handler name shared across includes is
+# deduped to one definition and a templated name is resolved at play load, so a
+# notify could restart the wrong instance. Restarting inside the role binds
+# vault_agent_name at task-execution time, which is unambiguous per instance.

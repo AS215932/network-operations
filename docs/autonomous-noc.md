@@ -102,3 +102,76 @@ uv run --group dev python -m pytest -q
 ```
 
 Live smoke suites exist but are explicitly opt-in and read-only.
+
+## Proactive operations loop
+
+The reactive path above waits for an alert. `noc-agent` also ships an **active
+operator loop** (`app/proactive/`) that continuously sweeps Prometheus/Icinga
+for precursors and investigates the worst ones *before* a tripwire hardens. It
+is **read-only**, budgeted, human-gated, and **off by default**.
+
+Lifecycle per cycle: scan (cheap PromQL/Icinga) → rank → snapshot a decision
+context → gate against the daily ledger and severity floor → (non-shadow)
+render the top hotspot as a synthetic alert and run the *existing* investigation
+graph with heavy probes stripped → Discord digest (+ optional Icinga heartbeat)
+→ open an idempotent `loop:candidate` issue when a config change is warranted →
+record the prediction and, on deep cycles, evaluate prior predictions against
+real alerts and propose candidate lessons.
+
+Governance mirrors the engineering-loop: a per-day ledger
+(`/var/lib/noc-agent/proactive/ledger-<date>.json`), a singleton run-lock, and
+per-cycle/per-day investigation + cost budgets. Memory (lessons / proposals /
+journal / observations) lives under `/var/lib/noc-agent/memory`; humans merge
+proposals into `lessons/`.
+
+### Activation sequence
+
+These env flags are **inert until `noc-agent` is promoted to a build that
+contains the proactive loop**. The production app version is the pinned
+`noc_agent_version` in `host_vars/noc.yml`; until that pin advances to a SHA
+with `app/proactive/`, `apply.yml` renders the new `NOC_PROACTIVE_*` vars but
+keeps running the old agent, so nothing starts. Correct order:
+
+1. Merge `noc-agent#20`.
+2. Promote `noc-agent` (the `promote-apps` flow bumps `noc_agent_version`).
+3. Merge this PR and run `apply.yml playbook=noc` (human `production` gate) — the
+   loop now starts with these flags.
+
+Merging this PR on its own is therefore safe: it cannot start the loop early.
+
+### Deployed state and safety rails
+
+The loop ships **enabled and autonomous** (`noc-agent.env.ctmpl.j2`):
+`NOC_PROACTIVE_ENABLED=1`, `NOC_PROACTIVE_SHADOW=0`, `NOC_PROACTIVE_HANDOFF_ENABLED=1`.
+The standing safety rails are the budgets, which stay conservative:
+
+- 1 investigation per cycle, 12 per day, $10/day, `MEDIUM` severity floor;
+- heavy read-only probes (`tcpdump_capture`, `dns_probe_burst`,
+  `multi_source_probe`) are **proposed, not auto-run** (`NOC_PROACTIVE_AUTO_HEAVY_PROBES=0`);
+- nothing mutates infrastructure — the loop reports and hands off only.
+
+Handoff (`loop:candidate` issues) is a no-op until GitHub auth is present in
+`kv/noc-agent`. Preferred is an org-owned **GitHub App** (Issues: RW + Metadata:
+R on `network-operations`): store `noc_github_app_id` and the PEM as
+`noc_github_app_private_key`. Vault Agent renders the key to
+`/etc/noc-agent/github-app.pem` and the app mints short-lived installation
+tokens at call time. A fine-grained PAT in `noc_github_token` works as a
+fallback. Keep these in `secrets.local.sh` (`NOC_GITHUB_APP_ID`,
+`NOC_GITHUB_APP_PRIVATE_KEY_FILE`) so `vault-put-noc-agent-secrets.sh` rotations
+don't drop them.
+
+To **canary cheaply**, set `NOC_PROACTIVE_SHADOW=1` (scan-and-report only) and
+re-apply; flip back to `0` once the scanners look right. To **pause**, set
+`NOC_PROACTIVE_ENABLED=0` and re-apply, or `POST /control/proactive/pause`.
+Operators can also drive a single cycle or inspect status via the loopback
+control API: `GET /control/proactive/status`, `POST /control/proactive/run-once`,
+`POST /control/proactive/pause|resume` (all require `X-NOC-Control-Token`).
+All flag changes deploy via promotion + `apply.yml playbook=noc` (human
+`production` gate).
+
+### Optional Icinga heartbeat
+
+To alert if the loop stops, set `NOC_PROACTIVE_ICINGA_URL` to the Icinga API
+base and add a **passive** Service `proactive-loop` on the `noc` host (in
+`host_vars/noc.yml :: monitoring_extra_services`, with `enable_active_checks`
+false and a freshness threshold). Left unset, the loop posts no passive result.

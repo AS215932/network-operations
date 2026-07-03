@@ -1,4 +1,5 @@
 import json
+import subprocess
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -72,8 +73,59 @@ class MockRenderTest(unittest.TestCase):
             "tsig_secret",
             "db_password",
             "network_proxy_token",
+            "customer_ipv6_supernet",
+            "customer_ipv6_gateway",
+            "customer_ipv6_dns",
         ):
             self.assertIn(f".Data.data.{key}", rendered)
+
+    def test_reliability_governor_templates_render(self):
+        context = deepcopy(MOCK)
+        context.update(
+            {
+                "engineering_loop_user": "loop",
+                "engineering_loop_group": "loop",
+                "engineering_loop_install_dir": "/opt/engineering-loop",
+                "engineering_loop_state_dir": "/var/lib/engineering-loop",
+                "engineering_loop_env_file": "/opt/engineering-loop/.env",
+                "engineering_loop_git_askpass_path": "/usr/local/lib/engineering-loop/git-askpass",
+                "engineering_loop_github_app_token_path": "/usr/local/lib/engineering-loop/github-app-token",
+                "engineering_loop_governor_wrapper_path": "/usr/local/lib/engineering-loop/run-reliability-governor",
+                "engineering_loop_governor_repos": [
+                    "AS215932/engineering-loop",
+                    "AS215932/network-operations",
+                ],
+                "engineering_loop_governor_state_dir": "/var/lib/engineering-loop/reliability-governor",
+                "engineering_loop_governor_limit": 20,
+                "engineering_loop_governor_timer_calendar": "*:0/15",
+                "engineering_loop_governor_timer_randomized_delay_sec": 120,
+                "engineering_loop_knowledge_context_enabled": True,
+                "engineering_loop_knowledge_mcp_url": "http://127.0.0.1:8767/mcp",
+                "engineering_loop_knowledge_mcp_transport": "streamable-http",
+                "engineering_loop_knowledge_context_budget": 6000,
+                "engineering_loop_knowledge_context_timeout": 20,
+            }
+        )
+
+        wrapper = self.render(
+            REPO / "ansible/roles/engineering_loop/templates/run-reliability-governor.sh.j2",
+            context,
+        )
+        service = self.render(
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.service.j2",
+            context,
+        )
+        timer = self.render(
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.timer.j2",
+            context,
+        )
+
+        subprocess.run(["bash", "-n"], input=wrapper, text=True, check=True)
+        self.assertNotIn("{{", wrapper + service + timer)
+        self.assertIn('args+=(--repo "AS215932/engineering-loop")', wrapper)
+        self.assertIn("--dry-run", wrapper)
+        self.assertIn("ExecStart=/usr/local/lib/engineering-loop/run-reliability-governor", service)
+        self.assertIn("OnCalendar=*:0/15", timer)
 
     def test_hyrule_mcp_hosts_renders_freebsd_metadata_and_aliases(self):
         rendered = self.render(REPO / "configs/hyrule-mcp-hosts.yml.j2")

@@ -20,7 +20,7 @@ Contrast with the privileged `ci` runner: see `docs/ci/provision.md`.
 
 - `~/.ssh/id_servify` (ops workstation key — also authorizes `ci-pr` SSH).
 - `gh` authenticated to the AS215932 org.
-- Decide sizing: **1 vCPU, 2 GiB RAM, 20 GiB root** (Debian 13). No data disk.
+- Decide sizing: **4 vCPU, 8 GiB RAM, 20 GiB root** (Debian 13). No data disk. This remains a single GitHub Actions runner process (one job at a time); the larger VM reduces per-job runtime and avoids Docker/Semgrep/Ansible memory pressure without increasing PR job concurrency.
 
 ## 1. Create the VM on the customer (vm) bridge
 
@@ -36,7 +36,7 @@ export VM_NET=<that-uuid>
 
 # create-vms.sh skips ci-pr unless VM_NET is set. It uses args 9,10 =
 # NETWORK + GATEWAY to place ci-pr on the vm bridge with the rtr enX3 gateway:
-#   create_vm ci-pr "..." 1 2147483648 21474836480 "2a0c:b641:b51::c1" "" "" "$VM_NET" "2a0c:b641:b51::1"
+#   create_vm ci-pr "..." 4 8589934592 21474836480 "2a0c:b641:b51::c1" "" "" "$VM_NET" "2a0c:b641:b51::1"
 bash scripts/create-vms.sh   # or copy just the ci-pr block
 ```
 

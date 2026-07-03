@@ -7,6 +7,8 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+# Routed GUA /64 for Docker bridge containers on the loop VM.
+loop_docker_subnet: "2a0c:b641:b50:f0::/64"
 customer_subnet: "2a0c:b641:b51::/48"
 wg_link_prefix: "2a0c:b641:b50:ff00::/56"  # all wg /127s sit under this
 router_loopback_subnet: "2a0c:b641:b50::/64"
@@ -58,6 +60,7 @@ peers:
   vault:   { ipv6: "2a0c:b641:b50:2::c0" }
   ci:      { ipv6: "2a0c:b641:b50:2::d0" }
   netproxy: { ipv6: "2a0c:b641:b50:2::e0" }
+  loop:    { ipv6: "2a0c:b641:b50:2::f0" }
   # ci-pr — unprivileged PR runner, customer-isolated segment (not infra).
   # Key matches inventory_hostname (the monitoring template does
   # peers[inventory_hostname]); referenced via peers['ci-pr'] where needed.

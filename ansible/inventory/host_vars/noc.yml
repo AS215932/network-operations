@@ -5,8 +5,24 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: eb709a88236d29aec439927bbba63413ead9aa67
-hyrule_mcp_version: 78b97ee626d665160b9bd3c3741589392655a00e
+noc_agent_version: 515381e6c2e93f3307340eeb50a63481c7a678c4
+hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
+noc_knowledge_version: 48684c9bb9ce9de781fbfbcae734c18b57d3e7fa
+
+# LHP-v1 rollout: coordinate the current proactive disk condition through
+# CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
+# 8fb421ff94bb1285; this config intentionally does not create persistent alert
+# suppression for it.
+noc_lhp_enabled: true
+noc_engineering_handoff_delivery_enabled: true
+noc_knowledge_context_enabled: true
+noc_case_verification_enabled: true
+noc_case_verification_dry_run: false
+noc_case_auto_resolve_enabled: false
+noc_disk_alert_handoff_enabled: true
+noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
+noc_agent_core_trace_enabled: true
+noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their
@@ -17,6 +33,12 @@ firewall_extra_rules:
   # Webhooks from Alertmanager + Icinga2 on mon; best-effort external BGP alerts from extmon.
   - { proto: tcp, dport: 8000, src: "{{ peers.mon.ipv6 }}", comment: "noc-agent webhook from mon (Alertmanager + Icinga)" }
   - { proto: tcp, dport: 8000, src: "{{ peers.extmon.ipv6 }}", comment: "noc-agent webhook from extmon Alertmanager" }
+
+  # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
+  - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }
+
+  # Internal Loop Handoff Protocol fetch/callback traffic from Engineering Loop.
+  - { proto: tcp, dport: 8000, src: "{{ peers.loop.ipv6 }}", comment: "LHP-v1 Engineering Loop fetch/callback to noc-agent" }
 
   # Monitoring scrapes.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

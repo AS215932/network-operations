@@ -10,6 +10,17 @@
 - name: Flush handlers (reload systemd if the unit changed) before restart
   ansible.builtin.meta: flush_handlers
 
+- name: Run hyrule-cloud database migrations
+  ansible.builtin.command:
+    cmd: /usr/local/bin/uv run alembic upgrade head
+    chdir: "{{ hyrule_cloud_install_dir }}"
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  environment:
+    PYTHONPATH: "{{ hyrule_cloud_install_dir }}"
+  changed_when: false
+  when: hyrule_cloud_pyproject.stat.exists
+
 - name: Restart hyrule-cloud (deterministic on every apply)
   ansible.builtin.systemd:
     name: "{{ hyrule_cloud_service_name }}"

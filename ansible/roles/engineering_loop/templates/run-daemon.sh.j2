@@ -1,0 +1,68 @@
+#!/bin/sh
+# Managed by ansible/roles/engineering_loop.
+# Runtime wrapper for the one-shot Engineering Loop daemon. It prefers GitHub
+# App authentication and mints a fresh installation token for each timer/manual
+# run, then exports the token only to the daemon process and its child tools.
+# shellcheck shell=sh
+
+set -eu
+
+fatal() {
+  printf '%s\n' "engineering-loop: $*" >&2
+  exit 1
+}
+
+existing_token="${ENGINEERING_LOOP_GITHUB_TOKEN:-}"
+if [ -z "$existing_token" ]; then
+  existing_token="${GH_TOKEN:-}"
+fi
+
+if [ "${ENGINEERING_LOOP_GITHUB_AUTH_MODE:-}" = "app" ] || [ -n "${ENGINEERING_LOOP_GITHUB_APP_ID:-}" ]; then
+  token="$({{ engineering_loop_github_app_token_path }})"
+  [ -n "$token" ] || fatal "GitHub App token helper returned an empty token"
+  export GH_TOKEN="$token"
+  export ENGINEERING_LOOP_GITHUB_TOKEN="$token"
+elif [ -n "$existing_token" ]; then
+  export GH_TOKEN="$existing_token"
+  export ENGINEERING_LOOP_GITHUB_TOKEN="$existing_token"
+else
+  fatal "no GitHub authentication configured; set GitHub App credentials or a break-glass token"
+fi
+
+loop_bin="{{ engineering_loop_install_dir }}/.venv/bin/hyrule-engineering-loop"
+
+set -- daemon --once
+{% for repo in engineering_loop_repos -%}
+set -- "$@" --repo {{ repo }}
+{% endfor -%}
+set -- "$@" \
+  --workspace-root {{ engineering_loop_workspace_dir }} \
+  --output-root {{ engineering_loop_runs_dir }} \
+  --state-dir-path {{ engineering_loop_daemon_state_dir }} \
+  --memory-dir {{ engineering_loop_memory_dir }}
+{% for repo, prefixes in engineering_loop_allowed_paths.items() -%}
+{% for prefix in prefixes -%}
+set -- "$@" --allow {{ repo }}={{ prefix }}
+{% endfor -%}
+{% endfor -%}
+set -- "$@" \
+  --max-runs-per-day {{ engineering_loop_max_runs_per_day }} \
+  --max-cost-usd-per-day {{ engineering_loop_max_cost_usd_per_day }}
+
+{% if engineering_loop_knowledge_context_enabled | bool -%}
+if "$loop_bin" daemon --help 2>/dev/null | grep -q -- '--knowledge-mcp-url'; then
+  set -- "$@" \
+    --knowledge-context \
+    --knowledge-mcp-url {{ engineering_loop_knowledge_mcp_url }} \
+    --knowledge-mcp-transport {{ engineering_loop_knowledge_mcp_transport }} \
+    --knowledge-context-budget {{ engineering_loop_knowledge_context_budget }} \
+    --knowledge-context-timeout {{ engineering_loop_knowledge_context_timeout }}
+{% if engineering_loop_knowledge_learning_dir | length > 0 %}
+  set -- "$@" --knowledge-learning-dir {{ engineering_loop_knowledge_learning_dir }}
+{% endif %}
+else
+  printf '%s\n' "engineering-loop: installed CLI lacks --knowledge-mcp-url; running without knowledge MCP context" >&2
+fi
+{% endif -%}
+
+exec "$loop_bin" "$@"

@@ -82,6 +82,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="hyrule_network_proxy_apply=true"
 \s+expected_apply_var="hyrule_network_proxy_apply=true"
 \s+;;
+\s+engineering-loop\)
+\s+apply_var="engineering_loop_apply=true"
+\s+expected_apply_var="engineering_loop_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
 \s+expected_apply_var="\$\{playbook//-/_\}_apply=true"
@@ -89,7 +94,9 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+esac""",
         )
         self.assertIn('printf \'APPLY_VAR=%s\\n\' "$apply_var" >> "$GITHUB_ENV"', workflow)
+        self.assertIn('printf \'APPLY_EXTRA_VARS=%s\\n\' "$extra_apply_vars" >> "$GITHUB_ENV"', workflow)
         self.assertIn('-e "${APPLY_VAR}"', workflow)
+        self.assertIn('"${extra_var_args[@]}"', workflow)
         self.assertNotIn('-e "${apply_var}"', workflow)
         self.assertIn('user_args=(-e ansible_user=ci)', workflow)
         self.assertIn(
@@ -98,6 +105,244 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
+    def test_knowledge_mcp_does_not_usermod_shared_loop_home(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/knowledge_mcp/tasks/apply.yml").read_text())
+        user_task = next(task for task in tasks if task["name"] == "Ensure Knowledge MCP user exists")
+        user_args = user_task["ansible.builtin.user"]
+
+        self.assertEqual(user_args["name"], "{{ knowledge_mcp_user }}")
+        self.assertNotIn("home", user_args)
+        self.assertEqual(user_args["create_home"], False)
+
+    def test_knowledge_loop_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2").read_text()
+        key_template = (REPO / "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+
+        self.assertIn("role: knowledge_loop", playbook)
+        self.assertIn("vault_agent_name: knowledge-loop", playbook)
+        self.assertIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint knowledge-loop Vault bootstrap", workflow)
+        self.assertIn('auth/approle/role/knowledge-loop/role-id', workflow)
+        self.assertIn('path "auth/approle/role/knowledge-loop/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/knowledge-loop/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/knowledge-loop"', env_template)
+        self.assertIn('secret "kv/data/knowledge-loop"', key_template)
+        self.assertIn("OPENROUTER_API_KEY", env_template)
+        self.assertNotIn('secret "kv/data/engineering-loop"', env_template)
+        self.assertNotIn("ENGINEERING_LOOP_GITHUB", env_template)
+        self.assertNotIn("kv/data/knowledge-loop", runner_policy)
+        self.assertEqual(defaults["knowledge_loop_timer_enabled"], False)
+        self.assertEqual(defaults["knowledge_loop_max_openrouter_calls_per_day"], 0)
+
+    def test_agent_core_collector_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2"
+        ).read_text()
+        collector_policy = (REPO / "configs/vault/policies/agent-core-collector.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+
+        self.assertIn("role: agent_core_collector", playbook)
+        self.assertIn("vault_agent_name: agent-core-collector", playbook)
+        self.assertIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint agent-core-collector Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/agent-core-collector/role-id", workflow)
+        self.assertIn('path "auth/approle/role/agent-core-collector/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/agent-core-collector/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/agent-core-collector"', env_template)
+        self.assertIn('path "kv/data/agent-core-collector"', collector_policy)
+        self.assertNotIn("kv/data/agent-core-collector", runner_policy)
+        self.assertRegex(str(host_vars["agent_core_collector_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
+        self.assertEqual(host_vars["agent_core_collector_port"], 8770)
+
+    def test_reliability_governor_is_managed_with_safe_default_and_loop_enabled(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/engineering_loop/defaults/main.yml").read_text())
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+        apply_tasks = (REPO / "ansible/roles/engineering_loop/tasks/apply.yml").read_text()
+        validate_tasks = (REPO / "ansible/roles/engineering_loop/tasks/main.yml").read_text()
+        handlers = (REPO / "ansible/roles/engineering_loop/handlers/main.yml").read_text()
+        wrapper = (
+            REPO / "ansible/roles/engineering_loop/templates/run-reliability-governor.sh.j2"
+        ).read_text()
+        service = (
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.service.j2"
+        ).read_text()
+        timer = (
+            REPO / "ansible/roles/engineering_loop/templates/hyrule-reliability-governor.timer.j2"
+        ).read_text()
+        runbook = (REPO / "docs/runbooks/bootstrap-engineering-loop-vault.md").read_text()
+
+        self.assertEqual(defaults["engineering_loop_governor_timer_enabled"], False)
+        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], True)
+        self.assertEqual(
+            defaults["engineering_loop_governor_state_dir"],
+            "{{ engineering_loop_state_dir }}/reliability-governor",
+        )
+        self.assertEqual(len(defaults["engineering_loop_governor_repos"]), 8)
+        self.assertEqual(defaults["engineering_loop_governor_timer_calendar"], "*:0/15")
+        self.assertRegex(str(host_vars["engineering_loop_version"]), r"^[0-9a-f]{40}$")
+
+        self.assertIn("Install Reliability Governor wrapper", apply_tasks)
+        self.assertIn("Install Reliability Governor systemd service", apply_tasks)
+        self.assertIn("Install Reliability Governor systemd timer", apply_tasks)
+        self.assertIn("Set Reliability Governor timer state", apply_tasks)
+        self.assertIn("engineering_loop_governor_state_dir.startswith('/')", validate_tasks)
+        self.assertIn("engineering_loop_governor_limit | int <= 20", validate_tasks)
+        self.assertIn("restart reliability-governor timer", handlers)
+
+        self.assertIn("args=(reliability-governor --once)", wrapper)
+        self.assertIn("--registry \"{{ engineering_loop_install_dir }}/configs/loop/capability-registry.yml\"", wrapper)
+        self.assertIn("--state-dir-path \"{{ engineering_loop_governor_state_dir }}\"", wrapper)
+        self.assertIn("--knowledge-mcp-url \"{{ engineering_loop_knowledge_mcp_url }}\"", wrapper)
+        self.assertIn('exec "$loop_bin" "${args[@]}" "$@"', wrapper)
+
+        self.assertIn("ExecStart={{ engineering_loop_governor_wrapper_path }}", service)
+        self.assertIn("SyslogIdentifier=reliability-governor", service)
+        self.assertIn("EnvironmentFile={{ engineering_loop_env_file }}", service)
+        self.assertIn("hyrule-knowledge-mcp.service", service)
+        self.assertIn("Unit=hyrule-reliability-governor.service", timer)
+        self.assertIn("OnCalendar={{ engineering_loop_governor_timer_calendar }}", timer)
+        self.assertIn("run-reliability-governor --dry-run", runbook)
+
+    def test_agentic_observatory_uses_dedicated_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2"
+        ).read_text()
+        policy = (REPO / "configs/vault/policies/agentic-observatory.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        apply_tasks = (REPO / "ansible/roles/agentic_observatory/tasks/apply.yml").read_text()
+        service_template = (
+            REPO / "ansible/roles/agentic_observatory/templates/agentic-observatory.service.j2"
+        ).read_text()
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+
+        self.assertIn("Ensure Agentic Observatory group exists before Vault Agent", playbook)
+        self.assertNotIn("when: agentic_observatory_apply | default(false) | bool", playbook)
+        self.assertIn("role: agentic_observatory", playbook)
+        self.assertIn("vault_agent_name: agentic-observatory", playbook)
+        self.assertIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint agentic-observatory Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/agentic-observatory/role-id", workflow)
+        self.assertIn('path "auth/approle/role/agentic-observatory/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/agentic-observatory/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/agentic-observatory"', env_template)
+        self.assertIn('path "kv/data/agentic-observatory"', policy)
+        self.assertNotIn("kv/data/agentic-observatory", runner_policy)
+        noc_env_template = (
+            REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2"
+        ).read_text()
+        self.assertIn("NOC_LOOP_CONSOLE_SECRET", noc_env_template)
+        self.assertIn("Install temporary GitHub netrc", apply_tasks)
+        self.assertIn("GIT_TERMINAL_PROMPT", apply_tasks)
+        self.assertIn("OBSERVATORY_GITHUB_TOKEN", apply_tasks)
+        self.assertIn("ReadWritePaths={{ agentic_observatory_state_dir }}", service_template)
+        self.assertNotIn(
+            "ReadWritePaths={{ agentic_observatory_state_dir }} {{ agentic_observatory_install_dir }}",
+            service_template,
+        )
+        self.assertRegex(str(host_vars["agentic_observatory_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["agentic_observatory_port"], 8780)
+        # Stage 1 live: writes on, low-risk case actions only. The gated
+        # revision was deployed first (PR #329) before this flip. Expanding the
+        # allowlist beyond feedback,ack must be a deliberate change that also
+        # updates this guardrail.
+        self.assertEqual(host_vars["agentic_observatory_read_only"], False)
+        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], True)
+        self.assertEqual(host_vars["agentic_observatory_enabled_actions"], "feedback,ack")
+        runbook = (REPO / "docs/runbooks/bootstrap-agentic-observatory-vault.md").read_text()
+        self.assertIn(
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl",
+            runbook,
+        )
+        self.assertIn("required for the private runtime checkout", runbook)
+
+    def test_knowledge_loop_checkout_is_pinned_and_runner_policy_documented(self):
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/loop.yml").read_text())
+        # apply.yml forces knowledge_loop_apply for engineering-loop, so the loop
+        # checkout must be a reviewed 40-char commit, never floating `main`. The
+        # live host may enable the reviewed daily canary, but role defaults remain off.
+        self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_max_openrouter_calls_per_day"], 0)
+        self.assertEqual(host_vars["knowledge_loop_max_prs_per_day"], 1)
+        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], True)
+        self.assertIn("/v1/trace", host_vars["knowledge_loop_agent_core_trace_collector_url"])
+
+        runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
+        # The runner needs the refreshed github-runner policy before the first apply
+        # mints the knowledge-loop SecretID, or the apply fails permission denied.
+        self.assertIn(
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl",
+            runbook,
+        )
+
+    def test_knowledge_loop_runs_in_workspace_not_pinned_install_dir(self):
+        defaults = yaml.safe_load((REPO / "ansible/roles/knowledge_loop/defaults/main.yml").read_text())
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        service = (REPO / "ansible/roles/knowledge_loop/templates/hyrule-knowledge-loop.service.j2").read_text()
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+
+        # The mutable repo clone lives under the state dir, separate from install_dir.
+        self.assertEqual(defaults["knowledge_loop_workspace_dir"], "{{ knowledge_loop_state_dir }}/workspace")
+        self.assertEqual(defaults["knowledge_loop_repo_workspace"], "{{ knowledge_loop_workspace_dir }}/knowledge")
+
+        # The loop mutates the workspace clone, not the pinned runtime checkout, but
+        # still runs the CLI from the install_dir venv.
+        self.assertIn("--repo-path {{ knowledge_loop_repo_workspace }}", run_loop)
+        self.assertNotIn("--repo-path {{ knowledge_loop_install_dir }}", run_loop)
+        self.assertIn("{{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge", run_loop)
+
+        # install_dir stays read-only at runtime; only the state dir is writable.
+        self.assertIn("ReadWritePaths={{ knowledge_loop_state_dir }}", service)
+        self.assertNotIn("ReadWritePaths={{ knowledge_loop_install_dir }}", service)
+
+        # apply clones the Knowledge repo into the workspace for loop runs.
+        self.assertIn('dest: "{{ knowledge_loop_repo_workspace }}"', apply)
+
+    def test_knowledge_loop_timer_starts_only_after_secrets_render(self):
+        apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+        handlers = (REPO / "ansible/roles/knowledge_loop/handlers/main.yml").read_text()
+        # The role runs before the knowledge-loop vault_agent; with Persistent=true a
+        # premature start would fire the service with no env file / key. Gate both the
+        # start task and the restart handler on the rendered secrets existing.
+        self.assertIn("Check Knowledge Loop runtime secrets are rendered", apply)
+        self.assertIn("knowledge_loop_secret_files.results", apply)
+        self.assertIn("map(attribute='stat.exists') | min", apply)
+        self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
+
+    def test_vault_agent_restarts_in_role_not_via_shared_handler(self):
+        handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
+        tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        # engineering-loop.yml includes vault_agent twice (engineering-loop +
+        # knowledge-loop). A handler name (shared or templated) is resolved at play
+        # load and could restart the wrong instance, so the restart is done in-role
+        # where vault_agent_name binds at task-execution time.
+        self.assertNotIn("notify: restart vault agent", tasks)
+        self.assertNotIn("- name: restart vault agent", handlers)
+        self.assertIn("Enable and (re)start Vault Agent", tasks)
+        self.assertIn("'restarted'", tasks)
+        self.assertIn("vault_agent_config_state is changed", tasks)
+
+    def test_knowledge_loop_lets_vault_openrouter_budget_win(self):
+        run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
+        # The Vault-rendered budget must win, so the wrapper only passes the Ansible
+        # default when the env var is unset (the CLI reads it as the argparse default).
+        self.assertIn('if [ -z "${HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY:-}" ]; then', run_loop)
+        # the flag must not be passed unconditionally in the base argv
+        self.assertNotIn(
+            "--max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }} \\",
+            run_loop,
+        )
 
     def test_cloud_apply_mints_wrapped_vault_bootstrap(self):
         workflow = (REPO / ".github/workflows/apply.yml").read_text()
@@ -220,6 +465,21 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             self.assertIsNotNone(restart_task, role)
             self.assertEqual(restart_task["ansible.builtin.systemd"]["state"], "restarted")
 
+    def test_hyrule_cloud_runs_migrations_before_restart(self):
+        health_tasks = yaml.safe_load((REPO / "ansible/roles/hyrule_cloud/tasks/health.yml").read_text())
+        task_names = [task["name"] for task in health_tasks]
+        migration_task = _task_by_name(health_tasks, "Run hyrule-cloud database migrations")
+
+        self.assertIsNotNone(migration_task)
+        self.assertLess(
+            task_names.index("Run hyrule-cloud database migrations"),
+            task_names.index("Restart hyrule-cloud (deterministic on every apply)"),
+        )
+        command = migration_task["ansible.builtin.command"]
+        self.assertEqual(command["cmd"], "/usr/local/bin/uv run alembic upgrade head")
+        self.assertEqual(command["chdir"], "{{ hyrule_cloud_install_dir }}")
+        self.assertEqual(migration_task["environment"]["PYTHONPATH"], "{{ hyrule_cloud_install_dir }}")
+
     def test_noc_action_signing_secret_has_no_empty_fallback(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
         noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
@@ -257,6 +517,24 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
         self.assertIn("openrouter_api_key", playbook)
         self.assertIn("openrouter_management_api_key", playbook)
+
+    def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
+        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
+        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/noc_agent/defaults/main.yml").read_text())
+        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/noc.yml").read_text())
+
+        for text in (vault_template, noc_env):
+            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE=", text)
+            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL=", text)
+
+        self.assertFalse(defaults["noc_agent_core_trace_enabled"])
+        self.assertEqual(defaults["noc_agent_core_trace_collector_url"], "")
+        self.assertTrue(host_vars["noc_agent_core_trace_enabled"])
+        self.assertEqual(
+            host_vars["noc_agent_core_trace_collector_url"],
+            "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace",
+        )
 
     def test_freebsd_playbooks_can_opt_into_become(self):
         freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())

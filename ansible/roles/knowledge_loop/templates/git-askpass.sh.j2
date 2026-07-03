@@ -1,0 +1,16 @@
+#!/bin/sh
+# Managed by ansible/roles/knowledge_loop.
+# GitHub HTTPS credential helper for Knowledge Loop PR branches. The token is
+# supplied by Vault Agent/runtime wrapper and is never embedded into remotes.
+
+case "$1" in
+  *Username*)
+    printf '%s\n' "x-access-token"
+    ;;
+  *Password*)
+    printf '%s\n' "${KNOWLEDGE_LOOP_GITHUB_TOKEN:-${GH_TOKEN:-}}"
+    ;;
+  *)
+    printf '\n'
+    ;;
+esac
