@@ -21,8 +21,9 @@ auto_auth {
     config = {
       role_id_file_path = "{{ vault_agent_role_id_file }}"
       secret_id_file_path = "{{ vault_agent_secret_id_file }}"
-{% if vault_agent_secret_id_response_wrapping_path | length > 0 %}
-      secret_id_response_wrapping_path = "{{ vault_agent_secret_id_response_wrapping_path }}"
+{% set response_wrapping_path = vault_agent_effective_secret_id_response_wrapping_path | default(vault_agent_secret_id_response_wrapping_path) %}
+{% if response_wrapping_path | length > 0 %}
+      secret_id_response_wrapping_path = "{{ response_wrapping_path }}"
       remove_secret_id_file_after_reading = true
 {% else %}
       remove_secret_id_file_after_reading = false

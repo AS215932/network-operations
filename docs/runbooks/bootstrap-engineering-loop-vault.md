@@ -174,6 +174,9 @@ destinations still exist. Any apply that changes the Vault Agent unit,
 configuration, or templates still needs a fresh wrapped SecretID or an existing
 unconsumed SecretID file so the service can restart safely. The token sink is
 Vault Agent output state for clients, not restart bootstrap input.
+No-secret repeat applies preserve the existing response-wrapped AppRole mode in
+the rendered Vault Agent configuration, so omitting `VAULT_*_WRAPPED_SECRET_ID`
+does not rewrite the HCL into direct-SecretID mode.
 
 ## Rollback
 
