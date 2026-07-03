@@ -76,7 +76,13 @@ reports:
       isTemplateJSON: true
       templates:
         default: '{"source":"bgpalerter","channel":"${channel}","type":"${type}","summary":"${summary}","prefix":"${prefix}","asn":"${asn}","newprefix":"${newprefix}","neworigin":"${neworigin}","earliest":"${earliest}","latest":"${latest}"}'
-      showPaths: 5
+      # Must stay 0: with isTemplateJSON, BGPalerter appends the top paths into
+      # ${summary} when showPaths > 0, then JSON.parse()s the interpolated body.
+      # The path blob is not JSON-escaped, so a path-bearing hijack/visibility/
+      # RPKI alert would fail to parse and be dropped before reaching the agent —
+      # silently losing exactly the critical alerts. The agent only needs
+      # channel/type/severity anyway; paths are not consumed.
+      showPaths: 0
       hooks:
         default: http://{{ extmon_bgp_agent_listen }}/bgpalerter
 
