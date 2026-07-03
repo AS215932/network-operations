@@ -22,6 +22,11 @@ PREFIXES = json.loads(os.environ.get("EXTMON_BGP_PREFIXES", '[{"prefix": "2a0c:b
 CF_TOKEN = os.environ.get("EXTMON_BGP_CLOUDFLARE_API_TOKEN", "")
 BGPTOOLS_UA = os.environ.get("EXTMON_BGP_BGPTOOLS_USER_AGENT", "AS215932-bgp-observer/1.0")
 POLL_SECONDS = int(os.environ.get("EXTMON_BGP_POLL_SECONDS", "300"))
+# bgp.tools regenerates table.jsonl only ~every 30m and asks clients not to pull
+# it more often (https://bgp.tools/kb/api). Rate-limit our successful downloads
+# independently of the fast source-poll loop.
+BGPTOOLS_MIN_INTERVAL = int(os.environ.get("EXTMON_BGP_BGPTOOLS_MIN_INTERVAL", "1800"))
+_bgp_tools_last_fetch = 0.0
 ROUTINATOR_URL = os.environ.get("EXTMON_ROUTINATOR_URL", "http://127.0.0.1:8323")
 INGEST_URL = os.environ.get("EXTMON_BGP_HYRULE_INGEST_URL", "").rstrip("/")
 INGEST_TOKEN = os.environ.get("EXTMON_BGP_INGEST_TOKEN", "")
@@ -97,6 +102,11 @@ def poll_routinator(prefix: str) -> None:
 
 
 def poll_bgp_tools() -> None:
+    global _bgp_tools_last_fetch
+    # Skip if we pulled the full table within the min interval. Gated on the last
+    # *successful* fetch, so a transient failure still retries on the next cycle.
+    if time.time() - _bgp_tools_last_fetch < BGPTOOLS_MIN_INTERVAL:
+        return
     headers = {"User-Agent": BGPTOOLS_UA}
     req = urllib.request.Request("https://bgp.tools/table.jsonl", headers=headers)
     wanted = {p["prefix"] for p in PREFIXES}
@@ -115,6 +125,7 @@ def poll_bgp_tools() -> None:
             STATE["prefixes"].setdefault(prefix, {})["bgp_tools"] = {"visible": True, "origins": [row["asn"]]}
             STATE["bgp_tools_hits"][(prefix, str(row["asn"]))] = row["hits"]
     _set_source("bgp_tools", True)
+    _bgp_tools_last_fetch = time.time()
 
 
 def poll_cloudflare(prefix: str) -> None:

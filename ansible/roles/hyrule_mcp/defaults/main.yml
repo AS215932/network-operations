@@ -14,5 +14,8 @@ hyrule_mcp_local_key_path: "{{ noc_mcp_key_path }}"
 
 # BGP router table snapshots for paid Hyrule Cloud data products.
 hyrule_mcp_bgp_snapshot_dir: "{{ hyrule_mcp_state_dir }}/bgp-snapshots"
+# Age-based retention (days) for BGP snapshots. Enforced via systemd-tmpfiles
+# before the hourly timer is enabled — see incident #321 / the retention runbook.
+hyrule_mcp_bgp_snapshot_retention_days: 7
 hyrule_mcp_bgp_snapshot_ingest_url: "{{ lookup('ansible.builtin.env', 'HYRULE_BGP_INGEST_URL') | default('https://cloud.hyrule.host/v1/internal/bgp', true) }}"
 hyrule_mcp_bgp_snapshot_ingest_token: "{{ lookup('ansible.builtin.env', 'HYRULE_BGP_INGEST_TOKEN') | default('', true) }}"

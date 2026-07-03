@@ -291,6 +291,25 @@
   tags: [apply]
   notify: reload systemd
 
+- name: Enforce BGP snapshot retention before enabling the timer (incident 321)
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/hyrule-mcp-bgp-snapshots.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/hyrule_mcp. Age-based retention for the hourly
+      # BGP router snapshots so the timer cannot refill / like incident #321
+      # (snapshots reached ~14 GiB). See
+      # docs/runbooks/noc-bgp-snapshot-retention.md.
+      e {{ hyrule_mcp_bgp_snapshot_dir }} - - - {{ hyrule_mcp_bgp_snapshot_retention_days }}d
+  tags: [apply]
+
+- name: Activate snapshot retention now (do not wait for the daily clean timer)
+  ansible.builtin.command: systemd-tmpfiles --clean /etc/tmpfiles.d/hyrule-mcp-bgp-snapshots.conf
+  changed_when: false
+  tags: [apply]
+
 - name: Enable + start BGP router snapshot timer
   systemd:
     name: bgp-router-snapshot.timer
