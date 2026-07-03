@@ -7,7 +7,9 @@
 
 noc_agent_version: 515381e6c2e93f3307340eeb50a63481c7a678c4
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
-noc_knowledge_version: 48684c9bb9ce9de781fbfbcae734c18b57d3e7fa
+# Pinned to the Knowledge refresh that emits A0 GitHub issue context for
+# loop:knowledge-gap routing (AS215932/knowledge#32).
+noc_knowledge_version: 63d804150a31ed4ff730ff995ca2e5edbcb64953
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
