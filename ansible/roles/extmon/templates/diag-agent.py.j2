@@ -3,15 +3,17 @@
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import json
 import os
 import socket
 import subprocess
-import urllib.error
 import urllib.parse
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+REDIRECT_CODES = {301, 302, 303, 307, 308}
+MAX_REDIRECTS = 5
 
 TOKEN = os.environ.get("EXTMON_DIAG_AGENT_TOKEN", "")
 BLOCKED_PORTS = {0, 135, 137, 138, 139, 445, 3306, 5432, 6379, 11211, 27017}
@@ -20,7 +22,19 @@ ALLOWED_PORTS = {22, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995, 2525, 8080, 
 
 def blocked_ip(addr: str) -> bool:
     ip = ipaddress.ip_address(addr)
-    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+    # `not is_global` is the primary guard: it rejects private, loopback,
+    # link-local, multicast, reserved, unspecified AND shared/CGNAT space
+    # (100.64.0.0/10, IPv6 fc00::/7), which is_private/is_reserved miss. The
+    # explicit terms are kept as defence-in-depth.
+    return (
+        not ip.is_global
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
 
 
 def _is_ip_literal(host: str) -> bool:
@@ -49,19 +63,50 @@ def resolve_public(host: str) -> list[str]:
     return addrs
 
 
-class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Re-validate every redirect hop so a 30x to loopback/private/metadata
-    infrastructure cannot bypass the resolve_public() guard on the first URL."""
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """Connect to a pre-vetted IP while keeping the hostname for the Host
+    header, so the address that resolve_public() checked is the address we
+    actually connect to (defeats DNS rebinding between check and connect)."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        parsed = urllib.parse.urlparse(newurl)
-        if parsed.scheme not in {"http", "https"}:
-            raise urllib.error.HTTPError(newurl, code, "redirect scheme not allowed", headers, fp)
-        resolve_public(parsed.hostname or "")  # raises on blocked target
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+    def __init__(self, host, *, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        self.sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
 
 
-_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler())
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host, *, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        # SNI + cert validation still use the real hostname, not the pinned IP.
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+def _open_pinned(url: str, timeout: float):
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("only http/https allowed")
+    hostname = parsed.hostname or ""
+    pinned = resolve_public(hostname)[0]  # vetted here, connected below — same IP
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    conn_cls = _PinnedHTTPSConnection if parsed.scheme == "https" else _PinnedHTTPConnection
+    conn = conn_cls(hostname, port=port, pinned_ip=pinned, timeout=timeout)
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    conn.request("GET", path, headers={"User-Agent": "AS215932-extmon-diag/1.0", "Host": hostname})
+    return conn, conn.getresponse()
 
 
 def tcp(host: str, port: int, timeout: float = 10.0):
@@ -75,13 +120,18 @@ def tcp(host: str, port: int, timeout: float = 10.0):
 def http(url: str, timeout: float = 10.0):
     if "://" not in url:
         url = "https://" + url
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError("only http/https allowed")
-    resolve_public(parsed.hostname or "")
-    req = urllib.request.Request(url, headers={"User-Agent": "AS215932-extmon-diag/1.0"})
-    with _OPENER.open(req, timeout=timeout) as resp:
-        return {"ok": True, "status": resp.status, "headers": dict(resp.headers), "body_sample": resp.read(2048).decode("utf-8", "replace")}
+    # Follow redirects manually so every hop is re-vetted and re-pinned.
+    for _ in range(MAX_REDIRECTS + 1):
+        conn, resp = _open_pinned(url, timeout)
+        try:
+            location = resp.getheader("Location") if resp.status in REDIRECT_CODES else None
+            if location:
+                url = urllib.parse.urljoin(url, location)
+                continue
+            return {"ok": True, "status": resp.status, "headers": dict(resp.getheaders()), "body_sample": resp.read(2048).decode("utf-8", "replace")}
+        finally:
+            conn.close()
+    raise ValueError("too many redirects")
 
 
 def run_probe(kind: str, payload: dict):

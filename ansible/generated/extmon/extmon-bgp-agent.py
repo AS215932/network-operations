@@ -80,7 +80,10 @@ def poll_ripestat(prefix: str) -> None:
     routing = _fetch_json(f"https://stat.ripe.net/data/routing-status/data.json?resource={q}")
     data = routing.get("data", {})
     origins = [int(o.get("origin")) for o in data.get("origins", []) if str(o.get("origin", "")).isdigit()]
-    visible = bool(data.get("last_seen") or origins)
+    # Base visibility on the CURRENT announcer set, not `last_seen` — the latter
+    # is historical ever-seen metadata that stays populated after a withdrawal,
+    # which would keep bgp_prefix_visible=1 and silence AS215932PrefixNotVisible.
+    visible = bool(origins)
     visibility = data.get("visibility", {})
     with STATE_LOCK:
         STATE["prefixes"].setdefault(prefix, {})["ripestat"] = {"visible": visible, "origins": origins, "visibility": visibility}
