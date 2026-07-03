@@ -6,7 +6,7 @@
 
 # Bumped to the build containing Reliability Governor idempotency and
 # production-network human-gating for resolver infrastructure (#35).
-engineering_loop_version: "535cf5cb7da50053f67f85ec93ac0c1e58921576"
+engineering_loop_version: "2575131cf9b106d42de2234beedd733549b75011"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
