@@ -12,11 +12,28 @@ fatal() {
   exit 1
 }
 
+load_environment_file() {
+  local env_file="$1"
+  local line key value
+
+  # Vault Agent renders simple KEY=value lines. Load them as data so secret
+  # punctuation is never reinterpreted as shell syntax.
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      ""|\#*) continue ;;
+    esac
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    [ "$key" != "$line" ] || fatal "invalid EnvironmentFile line in $env_file: missing '='"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fatal "invalid EnvironmentFile key in $env_file: $key"
+    export "$key=$value"
+  done < "$env_file"
+}
+
 if [ -r "{{ engineering_loop_env_file }}" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  . "{{ engineering_loop_env_file }}"
-  set +a
+  load_environment_file "{{ engineering_loop_env_file }}"
 fi
 
 existing_token="${ENGINEERING_LOOP_GITHUB_TOKEN:-}"

@@ -160,8 +160,9 @@ Use the production workflow after the policies and KV entry exist:
 8. Run and inspect a real Reliability Governor dry run before enabling the
    Governor timer:
    `sudo -u loop -H /usr/local/lib/engineering-loop/run-reliability-governor --dry-run`
-   The wrapper loads `/opt/engineering-loop/.env` itself, matching the systemd
-   unit's `EnvironmentFile=` behavior for manual dry runs.
+   The wrapper loads `/opt/engineering-loop/.env` itself as literal `KEY=value`
+   data, matching the systemd unit's `EnvironmentFile=` source without
+   evaluating secrets as shell syntax.
 9. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
    docs-only draft PR canary pass. Keep `hyrule-reliability-governor.timer`
    disabled until the Governor dry run shows conservative routing, healthy
