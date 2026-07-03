@@ -180,3 +180,21 @@ groups:
           source: extmon
         annotations:
           summary: 'OVH expiry collector has not run in over an hour'
+
+      - alert: OVHCollectorErrors
+        # The collector always writes its textfile (a fresh timestamp) even when
+        # OVH API calls fail, so OVHCollectorStale alone can't see a partial
+        # failure. This consumes the error gauge so missing expiry/billing
+        # coverage pages — e.g. the rtr failover IP whose expiry breaks NAT64.
+        expr: ovh_collector_errors_total > 0
+        for: 30m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: '{% raw %}OVH expiry collector reported {{ $value }} error(s){% endraw %}'
+          description: |
+            One or more OVH API calls (/dedicated, /ip, /me/bill) failed on the
+            last runs, so ovh_service_expires_seconds / ovh_unpaid_bill_count may
+            be missing or stale despite a fresh collector timestamp. Check OVH
+            credentials / API status before an expiry slips through unmonitored.

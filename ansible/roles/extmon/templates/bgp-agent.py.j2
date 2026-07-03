@@ -157,14 +157,28 @@ def poll_cloudflare(prefix: str) -> None:
     # no origins, defeating the feed's whole purpose.
     routes = (realtime.get("result") or {}).get("routes") or []
     origins = []
-    for route in routes:
-        asn = route.get("origin_asn", route.get("originASN"))
+
+    def _add_origin(value):
         try:
-            asn = int(asn)
+            asn = int(value)
         except (TypeError, ValueError):
-            continue
+            return
         if asn not in origins:
             origins.append(asn)
+
+    for route in routes:
+        # Radar realtime route objects carry the origin in meta.prefix_origins
+        # or as the last AS in as_path — not a flat origin_asn field. Try all
+        # known shapes so a MOAS/hijack the Radar feed sees still yields origins.
+        meta = route.get("meta") or {}
+        for entry in (meta.get("prefix_origins") or []):
+            _add_origin(entry.get("origin") if isinstance(entry, dict) else entry)
+        as_path = route.get("as_path") or route.get("asPath") or []
+        if isinstance(as_path, list) and as_path:
+            _add_origin(as_path[-1])
+        for key in ("origin_asn", "originASN"):
+            if route.get(key) is not None:
+                _add_origin(route.get(key))
     with STATE_LOCK:
         STATE["prefixes"].setdefault(prefix, {})["cloudflare_radar"] = {"visible": bool(routes), "origins": origins}
     _set_source("cloudflare_radar", True)
