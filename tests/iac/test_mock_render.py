@@ -122,6 +122,8 @@ class MockRenderTest(unittest.TestCase):
 
         subprocess.run(["bash", "-n"], input=wrapper, text=True, check=True)
         self.assertNotIn("{{", wrapper + service + timer)
+        self.assertIn('if [ -r "/opt/engineering-loop/.env" ]; then', wrapper)
+        self.assertIn('. "/opt/engineering-loop/.env"', wrapper)
         self.assertIn('args+=(--repo "AS215932/engineering-loop")', wrapper)
         self.assertIn("--dry-run", wrapper)
         self.assertIn("ExecStart=/usr/local/lib/engineering-loop/run-reliability-governor", service)

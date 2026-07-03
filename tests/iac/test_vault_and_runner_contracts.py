@@ -333,6 +333,29 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("'restarted'", tasks)
         self.assertIn("vault_agent_config_state is changed", tasks)
 
+    def test_vault_agent_allows_no_restart_steady_state(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        task_text = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+
+        self.assertIsNotNone(_task_by_name(tasks, "Check for existing Vault Agent rendered destinations"))
+        self.assertIsNotNone(_task_by_name(tasks, "Check existing Vault Agent service state"))
+        self.assertIsNotNone(_task_by_name(tasks, "Resolve Vault Agent steady-state facts"))
+
+        self.assertIn("vault_agent_has_bootstrap_material", task_text)
+        self.assertIn("vault_agent_has_running_rendered_state", task_text)
+        self.assertIn("vault_agent_restart_needed", task_text)
+        self.assertIn("and not (vault_agent_restart_needed | bool)", task_text)
+
+        restart_task = _task_by_name(tasks, "Enable and (re)start Vault Agent")
+        self.assertIn(
+            "vault_agent_has_bootstrap_material | bool or vault_agent_has_running_rendered_state | bool",
+            restart_task["when"],
+        )
+        self.assertIn(
+            "vault_agent_restart_needed | bool and vault_agent_has_bootstrap_material | bool",
+            restart_task["systemd"]["state"],
+        )
+
     def test_knowledge_loop_lets_vault_openrouter_budget_win(self):
         run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
         # The Vault-rendered budget must win, so the wrapper only passes the Ansible

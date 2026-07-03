@@ -12,6 +12,13 @@ fatal() {
   exit 1
 }
 
+if [ -r "{{ engineering_loop_env_file }}" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "{{ engineering_loop_env_file }}"
+  set +a
+fi
+
 existing_token="${ENGINEERING_LOOP_GITHUB_TOKEN:-}"
 if [ -z "$existing_token" ]; then
   existing_token="${GH_TOKEN:-}"
