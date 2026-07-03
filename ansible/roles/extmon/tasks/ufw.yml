@@ -34,6 +34,18 @@
   loop: "{{ extmon_ssh_allow_v6 }}"
   tags: [apply]
 
+- name: ufw — allow the diagnostic agent port from explicit callers only
+  # No-op while extmon_diag_agent_allowed_sources is empty (the default), so the
+  # port stays closed until an operator opts a specific caller in. Pair with a
+  # reachable extmon_diag_agent_listen; see the note in defaults/main.yml.
+  ufw:
+    rule: allow
+    port: "{{ extmon_diag_agent_listen.split(':')[-1] }}"
+    proto: tcp
+    src: "{{ item }}"
+  loop: "{{ extmon_diag_agent_allowed_sources }}"
+  tags: [apply]
+
 - name: ufw — ICMP echo handled by packaged before-rules
   debug:
     msg: "UFW's default before.rules/before6.rules permit required ICMP/ICMPv6 control traffic; no explicit ufw module rule is portable here."

@@ -38,6 +38,14 @@ from Debian/CAIDA apt repositories.
 Loopback-only listeners; SSH from ops-prefix or AS215932 only; Alertmanager
 reaches Discord directly via outbound TLS — no inbound exposure required.
 
+`extmon-diag-agent` is loopback-only by default; the intended caller (the
+Hyrule Cloud diagnostics API) reaches it over an SSH port-forward, matching the
+other loopback services. To let a caller reach it directly, bind
+`extmon_diag_agent_listen` to a reachable address and add the caller IP(s) to
+`extmon_diag_agent_allowed_sources` (UFW then opens the port to just those
+sources). Do this only after the agent's input-validation hardening lands —
+tracked in AS215932/network-operations#361 — since it performs active probes.
+
 ## Probes
 
 Configured in [`roles/extmon/defaults/main.yml`](../ansible/roles/extmon/defaults/main.yml):
