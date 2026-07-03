@@ -4,9 +4,9 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing runtime LoopDecisionEnvelope emission
-# (engineering-loop #34).
-engineering_loop_version: "1c3b6cc87dd405d23c37c4cabd8fe7620cf2485a"
+# Bumped to the build containing Reliability Governor idempotency and
+# production-network human-gating for resolver infrastructure (#35).
+engineering_loop_version: "535cf5cb7da50053f67f85ec93ac0c1e58921576"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
