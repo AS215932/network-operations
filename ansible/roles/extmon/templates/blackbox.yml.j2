@@ -22,6 +22,17 @@ modules:
       tls_config:
         insecure_skip_verify: false
 
+  # Plain-HTTP loopback check for local REST endpoints (e.g. BGPalerter's
+  # /status on 127.0.0.1). Must NOT set fail_if_not_ssl — these are http://.
+  http_2xx_local:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      ip_protocol_fallback: false
+      valid_status_codes: [200, 204]
+      fail_if_not_ssl: false
+
   icmp_v4:
     prober: icmp
     timeout: 5s

@@ -93,13 +93,30 @@ groups:
           summary: 'BGP data source stale: {{ $labels.source }}'
 
       - alert: BGPalerterCriticalEvent
-        expr: increase(bgpalerter_alerts_total{severity="critical"}[10m]) > 0
+        # Fire from the last-event timestamp gauge, not increase() on the
+        # counter: a counter's first sample for a new labelset has no prior
+        # point, so increase() would miss the very first hijack/withdrawal.
+        expr: time() - max(bgpalerter_last_event_timestamp{severity="critical"}) < 600
         for: 0m
         labels:
           severity: critical
           source: extmon
         annotations:
           summary: 'BGPalerter critical BGP event for AS215932'
+
+      - alert: ExtmonBGPAgentDown
+        expr: up{job="extmon-bgp-agent"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'extmon BGP agent not serving /metrics'
+          description: |
+            up{job="extmon-bgp-agent"}=0 — the BGP monitoring agent is down, so
+            every bgp_prefix_*/bgp_source_*/BGPalerter series goes stale and the
+            BGP alerts above can no longer fire. This job is outside the
+            ExtmonComponentDown (extmon-self) matcher, hence its own rule.
 
   - name: extmon-self
     interval: 30s

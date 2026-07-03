@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import subprocess
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,12 +23,19 @@ def blocked_ip(addr: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
 
 
-def resolve_public(host: str) -> list[str]:
+def _is_ip_literal(host: str) -> bool:
     try:
-        if blocked_ip(host):
-            raise ValueError(f"blocked non-public target {host}")
+        ipaddress.ip_address(host)
+        return True
     except ValueError:
-        pass
+        return False
+
+
+def resolve_public(host: str) -> list[str]:
+    # A literal IP is checked directly; only skip the literal check for
+    # hostnames (where ip_address() would raise), never swallow a real block.
+    if _is_ip_literal(host) and blocked_ip(host):
+        raise ValueError(f"blocked non-public target {host}")
     infos = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
     addrs = []
     for info in infos:
@@ -36,7 +44,24 @@ def resolve_public(host: str) -> list[str]:
             raise ValueError(f"blocked resolved non-public target {addr}")
         if addr not in addrs:
             addrs.append(addr)
+    if not addrs:
+        raise ValueError(f"no public address for {host}")
     return addrs
+
+
+class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate every redirect hop so a 30x to loopback/private/metadata
+    infrastructure cannot bypass the resolve_public() guard on the first URL."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        if parsed.scheme not in {"http", "https"}:
+            raise urllib.error.HTTPError(newurl, code, "redirect scheme not allowed", headers, fp)
+        resolve_public(parsed.hostname or "")  # raises on blocked target
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_ValidatingRedirectHandler())
 
 
 def tcp(host: str, port: int, timeout: float = 10.0):
@@ -55,7 +80,7 @@ def http(url: str, timeout: float = 10.0):
         raise ValueError("only http/https allowed")
     resolve_public(parsed.hostname or "")
     req = urllib.request.Request(url, headers={"User-Agent": "AS215932-extmon-diag/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _OPENER.open(req, timeout=timeout) as resp:
         return {"ok": True, "status": resp.status, "headers": dict(resp.headers), "body_sample": resp.read(2048).decode("utf-8", "replace")}
 
 

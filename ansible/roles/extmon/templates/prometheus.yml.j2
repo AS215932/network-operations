@@ -34,7 +34,7 @@ scrape_configs:
   - job_name: blackbox-bgpalerter
     metrics_path: /probe
     params:
-      module: [http_2xx_v6]
+      module: [http_2xx_local]   # plain-http loopback; http_2xx_v6 sets fail_if_not_ssl
     static_configs:
       - targets: ['http://{{ extmon_bgpalerter_listen }}/status']
     relabel_configs:

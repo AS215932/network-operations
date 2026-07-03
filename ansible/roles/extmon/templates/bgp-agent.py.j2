@@ -34,6 +34,7 @@ STATE: dict[str, object] = {
     "bgp_tools_hits": {},
     "cf_events": {},
     "bgpalerter": {},
+    "bgpalerter_last_event": {},
     "last_poll": 0,
 }
 
@@ -118,7 +119,10 @@ def poll_bgp_tools() -> None:
 
 def poll_cloudflare(prefix: str) -> None:
     if not CF_TOKEN:
-        _set_source("cloudflare_radar", False, "missing token")
+        # Cloudflare Radar is an optional feed; when no token is configured the
+        # source is disabled, not down. Emitting bgp_source_up=0 here would make
+        # BGPSourceDown alert permanently on every token-less deployment, so skip
+        # registering the source entirely.
         return
     headers = {"Authorization": f"Bearer {CF_TOKEN}", "User-Agent": "AS215932-extmon/1.0"}
     q = urllib.parse.quote(prefix, safe="")
@@ -201,6 +205,7 @@ def metrics() -> str:
         rpki = dict(STATE["rpki"])
         hits = dict(STATE["bgp_tools_hits"])
         bgpalerter = dict(STATE["bgpalerter"])
+        bgpalerter_last = dict(STATE["bgpalerter_last_event"])
         last_poll = STATE["last_poll"]
     for name, source in sources.items():
         lines.append('bgp_source_up{source="%s"} %s' % (esc(name), source.get("up", 0)))
@@ -219,6 +224,11 @@ def metrics() -> str:
     for key, count in bgpalerter.items():
         channel, typ, severity = key.split("|", 2)
         lines.append('bgpalerter_alerts_total{channel="%s",type="%s",severity="%s"} %s' % (esc(channel), esc(typ), esc(severity), count))
+    # Per-severity timestamp of the most recent event. Alerting on this gauge
+    # catches the very first event, which increase(counter) cannot (a counter's
+    # first sample has no prior point to diff against).
+    for severity, ts in bgpalerter_last.items():
+        lines.append('bgpalerter_last_event_timestamp{severity="%s"} %s' % (esc(severity), ts))
     lines.append(f"bgp_agent_last_poll_timestamp {last_poll}")
     return "\n".join(lines) + "\n"
 
@@ -247,6 +257,7 @@ class Handler(BaseHTTPRequestHandler):
         key = f"{channel}|{typ}|{severity}"
         with STATE_LOCK:
             STATE["bgpalerter"][key] = int(STATE["bgpalerter"].get(key, 0)) + 1
+            STATE["bgpalerter_last_event"][severity] = time.time()
         self.send_response(204); self.end_headers()
 
     def log_message(self, fmt, *args):
