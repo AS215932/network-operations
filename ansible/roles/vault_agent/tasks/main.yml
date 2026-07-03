@@ -86,6 +86,41 @@
   register: vault_agent_templates_state
   tags: [apply]
 
+- name: Check existing Vault Agent configuration
+  stat:
+    path: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
+  register: vault_agent_existing_config
+  tags: [apply]
+
+- name: Read existing Vault Agent response wrapping path
+  command:
+    argv:
+      - awk
+      - '/^[[:space:]]*secret_id_response_wrapping_path[[:space:]]*=/{gsub(/^[^"]*"/, ""); gsub(/".*$/, ""); print; exit}'
+      - "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
+  register: vault_agent_existing_response_wrapping_path
+  changed_when: false
+  failed_when: false
+  when: vault_agent_existing_config.stat.exists
+  tags: [apply]
+
+- name: Resolve Vault Agent response wrapping path
+  set_fact:
+    vault_agent_effective_secret_id_response_wrapping_path: >-
+      {{
+        ''
+        if (
+          vault_agent_secret_id | length > 0
+          and vault_agent_secret_id_response_wrapping_path | length == 0
+        )
+        else (
+          vault_agent_secret_id_response_wrapping_path
+          if vault_agent_secret_id_response_wrapping_path | length > 0
+          else vault_agent_existing_response_wrapping_path.stdout | default('')
+        )
+      }}
+  tags: [apply]
+
 - name: Render Vault Agent configuration
   template:
     src: vault-agent.hcl.j2
@@ -126,15 +161,65 @@
   no_log: true
   tags: [apply]
 
+- name: Check for existing Vault Agent rendered destinations
+  stat:
+    path: "{{ item.destination }}"
+  loop: "{{ vault_agent_templates }}"
+  loop_control:
+    label: "{{ item.destination }}"
+  register: vault_agent_existing_rendered_destinations
+  no_log: true
+  tags: [apply]
+
+- name: Check existing Vault Agent service state
+  command:
+    argv:
+      - systemctl
+      - is-active
+      - "vault-agent-{{ vault_agent_name }}.service"
+  register: vault_agent_existing_service_state
+  changed_when: false
+  failed_when: false
+  tags: [apply]
+
+- name: Resolve Vault Agent steady-state facts
+  set_fact:
+    vault_agent_has_bootstrap_material: >-
+      {{
+        vault_agent_secret_id | length > 0
+        or vault_agent_existing_secret_id.stat.exists
+      }}
+    vault_agent_has_running_rendered_state: >-
+      {{
+        vault_agent_existing_service_state.stdout == "active"
+        and (vault_agent_existing_rendered_destinations.results | map(attribute='stat.exists') | min)
+      }}
+    vault_agent_restart_needed: >-
+      {{
+        vault_agent_role_id_state is changed
+        or vault_agent_secret_id_state is changed
+        or vault_agent_templates_state is changed
+        or vault_agent_config_state is changed
+        or vault_agent_unit_state is changed
+      }}
+  tags: [apply]
+
 - name: Assert Vault AppRole bootstrap credentials are present
   assert:
     that:
       - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-      - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
+      - >-
+        vault_agent_has_bootstrap_material | bool
+        or (
+          vault_agent_has_running_rendered_state | bool
+          and not (vault_agent_restart_needed | bool)
+        )
     fail_msg: >-
       Vault Agent {{ vault_agent_name }} needs role_id and secret_id bootstrap
-      values for the first deploy, or existing root-only AppRole files on the
-      host.
+      values for the first deploy or any apply that must restart Vault Agent.
+      Existing active service plus rendered destinations is accepted only for
+      steady-state, no-restart applies; the token sink is output state and is
+      not sufficient restart bootstrap material.
   tags: [apply]
 
 # Restart in-role (not via a handler) so vault_agent_name binds at task-execution
@@ -146,18 +231,14 @@
     state: >-
       {{
         'restarted'
-        if (vault_agent_role_id_state is changed
-            or vault_agent_secret_id_state is changed
-            or vault_agent_templates_state is changed
-            or vault_agent_config_state is changed
-            or vault_agent_unit_state is changed)
+        if (vault_agent_restart_needed | bool and vault_agent_has_bootstrap_material | bool)
         else 'started'
       }}
     enabled: true
     daemon_reload: true
   when:
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
+    - vault_agent_has_bootstrap_material | bool or vault_agent_has_running_rendered_state | bool
   tags: [apply]
 
 - name: Ensure Vault Agent token sink permissions
@@ -169,5 +250,5 @@
   when:
     - vault_agent_token_sink_group != "root" or vault_agent_token_sink_mode != "0600"
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
-    - vault_agent_secret_id | length > 0 or vault_agent_existing_secret_id.stat.exists or vault_agent_existing_token_sink.stat.exists
+    - vault_agent_has_bootstrap_material | bool or vault_agent_existing_token_sink.stat.exists
   tags: [apply]
