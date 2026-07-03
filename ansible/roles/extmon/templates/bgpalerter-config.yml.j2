@@ -52,11 +52,16 @@ monitors:
     name: rpki-diff
     params:
       enableDiffAlerts: true
-      enableExpirationAlerts: true
-      enableExpirationCheckTA: true
+      # ROA and TA *expiry* checks need a per-VRP `expires` field that the rpki
+      # provider below (Routinator's /json VRP export) does not supply — only an
+      # expiry-capable provider such as rpkiclient does. Leaving them on would
+      # advertise ROA-expiry coverage that can never fire, so they stay off until
+      # extmon has an expiry-capable VRP source. Diff + TA-deletion do not need
+      # expiry data and remain enabled.
+      enableExpirationAlerts: false
+      enableExpirationCheckTA: false
       enableDeletedCheckTA: true
       checkOnlyASns: true
-      roaExpirationAlertHours: 24
 
 reports:
   - file: reportFile
