@@ -35,7 +35,7 @@ extmon_install_bgpstream: false
 extmon_bgp_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_CLOUDFLARE_API_TOKEN') | default('') }}"
 extmon_bgp_hyrule_ingest_url: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_HYRULE_INGEST_URL') | default('https://cloud.hyrule.host/v1/internal/bgp', true) }}"
 extmon_bgp_ingest_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_INGEST_TOKEN') | default('', true) }}"
-extmon_bgp_bgp_tools_user_agent: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_BGPTOOLS_USER_AGENT') | default('AS215932-bgp-observer/1.0 (noc@as215932.net; +https://as215932.net)') }}"
+extmon_bgp_bgp_tools_user_agent: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_BGPTOOLS_USER_AGENT') | default('AS215932-bgp-observer/1.0 (noc@as215932.net; +https://as215932.net)', true) }}"
 extmon_diag_agent_token: "{{ lookup('ansible.builtin.env', 'EXTMON_DIAG_AGENT_TOKEN') | default('') }}"
 
 # OVH API credentials for the service-expiry collector (Phase C/L0b). Same
