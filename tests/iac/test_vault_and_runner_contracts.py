@@ -333,6 +333,67 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("'restarted'", tasks)
         self.assertIn("vault_agent_config_state is changed", tasks)
 
+    def test_vault_agent_allows_no_restart_steady_state(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        task_text = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+
+        self.assertIsNotNone(_task_by_name(tasks, "Check for existing Vault Agent rendered destinations"))
+        self.assertIsNotNone(_task_by_name(tasks, "Check existing Vault Agent service state"))
+        self.assertIsNotNone(_task_by_name(tasks, "Resolve Vault Agent steady-state facts"))
+
+        self.assertIn("vault_agent_has_bootstrap_material", task_text)
+        self.assertIn("vault_agent_has_running_rendered_state", task_text)
+        self.assertIn("vault_agent_restart_needed", task_text)
+        self.assertIn("and not (vault_agent_restart_needed | bool)", task_text)
+
+        resolve_task = _task_by_name(tasks, "Resolve Vault Agent steady-state facts")
+        self.assertNotIn(
+            "vault_agent_existing_token_sink",
+            resolve_task["set_fact"]["vault_agent_has_bootstrap_material"],
+        )
+        assert_task = _task_by_name(tasks, "Assert Vault AppRole bootstrap credentials are present")
+        self.assertIn(
+            "not sufficient restart bootstrap material",
+            assert_task["assert"]["fail_msg"],
+        )
+
+        restart_task = _task_by_name(tasks, "Enable and (re)start Vault Agent")
+        self.assertIn(
+            "vault_agent_has_bootstrap_material | bool or vault_agent_has_running_rendered_state | bool",
+            restart_task["when"],
+        )
+        self.assertIn(
+            "vault_agent_restart_needed | bool and vault_agent_has_bootstrap_material | bool",
+            restart_task["systemd"]["state"],
+        )
+
+    def test_vault_agent_preserves_wrapped_approle_mode_on_repeat_apply(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        names = [task["name"] for task in tasks]
+        template = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
+
+        check_index = names.index("Check existing Vault Agent configuration")
+        read_index = names.index("Read existing Vault Agent response wrapping path")
+        resolve_index = names.index("Resolve Vault Agent response wrapping path")
+        render_index = names.index("Render Vault Agent configuration")
+        self.assertLess(check_index, read_index)
+        self.assertLess(read_index, render_index)
+        self.assertLess(resolve_index, render_index)
+
+        read_task = _task_by_name(tasks, "Read existing Vault Agent response wrapping path")
+        self.assertEqual(read_task["when"], "vault_agent_existing_config.stat.exists")
+        self.assertIn("secret_id_response_wrapping_path", " ".join(read_task["command"]["argv"]))
+
+        resolve_expr = _task_by_name(tasks, "Resolve Vault Agent response wrapping path")["set_fact"][
+            "vault_agent_effective_secret_id_response_wrapping_path"
+        ]
+        self.assertIn("vault_agent_existing_response_wrapping_path.stdout", resolve_expr)
+        self.assertIn("vault_agent_secret_id | length > 0", resolve_expr)
+        self.assertIn("vault_agent_secret_id_response_wrapping_path | length == 0", resolve_expr)
+
+        self.assertIn("vault_agent_effective_secret_id_response_wrapping_path", template)
+        self.assertIn("secret_id_response_wrapping_path = \"{{ response_wrapping_path }}\"", template)
+
     def test_knowledge_loop_lets_vault_openrouter_budget_win(self):
         run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
         # The Vault-rendered budget must win, so the wrapper only passes the Ansible
@@ -447,6 +508,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIsNotNone(token_permission_task)
         self.assertEqual(token_permission_task["file"]["group"], "{{ vault_agent_token_sink_group }}")
         self.assertEqual(token_permission_task["file"]["mode"], "{{ vault_agent_token_sink_mode }}")
+        self.assertIn(
+            "vault_agent_has_bootstrap_material | bool or vault_agent_existing_token_sink.stat.exists",
+            token_permission_task["when"],
+        )
 
         runner_vault_task = _task_by_name(runner_tasks, "Set up Vault Agent for runner secret delivery")
         self.assertIsNotNone(runner_vault_task)

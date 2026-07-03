@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -122,10 +124,84 @@ class MockRenderTest(unittest.TestCase):
 
         subprocess.run(["bash", "-n"], input=wrapper, text=True, check=True)
         self.assertNotIn("{{", wrapper + service + timer)
+        self.assertIn('if [ -r "/opt/engineering-loop/.env" ]; then', wrapper)
+        self.assertIn('load_environment_file "/opt/engineering-loop/.env"', wrapper)
+        self.assertNotIn('. "/opt/engineering-loop/.env"', wrapper)
+        self.assertNotIn("set -a", wrapper)
         self.assertIn('args+=(--repo "AS215932/engineering-loop")', wrapper)
         self.assertIn("--dry-run", wrapper)
         self.assertIn("ExecStart=/usr/local/lib/engineering-loop/run-reliability-governor", service)
         self.assertIn("OnCalendar=*:0/15", timer)
+
+    def test_reliability_governor_env_loader_does_not_evaluate_secrets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            install_dir = tmp_path / "engineering-loop"
+            loop_bin = install_dir / ".venv/bin/hyrule-engineering-loop"
+            loop_bin.parent.mkdir(parents=True)
+            capture_path = tmp_path / "capture"
+            env_file = tmp_path / "engineering-loop.env"
+
+            loop_bin.write_text(
+                """#!/bin/bash
+if [ "${1:-}" = "reliability-governor" ] && [ "${2:-}" = "--help" ]; then
+  printf '%s\\n' "--knowledge-mcp-url"
+  exit 0
+fi
+{
+  printf 'token=%s\\n' "${ENGINEERING_LOOP_GITHUB_TOKEN:-}"
+  printf 'gh=%s\\n' "${GH_TOKEN:-}"
+  printf 'icinga=%s\\n' "${HYRULE_ICINGA_PASSWORD:-}"
+  printf 'args=%s\\n' "$*"
+} > "$TEST_CAPTURE_PATH"
+"""
+            )
+            loop_bin.chmod(0o755)
+            env_file.write_text(
+                "\n".join(
+                    [
+                        "ENGINEERING_LOOP_GITHUB_AUTH_MODE=token",
+                        "ENGINEERING_LOOP_GITHUB_TOKEN=abc$def;$(printf bad)`uname`",
+                        "HYRULE_ICINGA_PASSWORD=p@ss$word;$(false)`date`",
+                        "",
+                    ]
+                )
+            )
+
+            context = deepcopy(MOCK)
+            context.update(
+                {
+                    "engineering_loop_install_dir": str(install_dir),
+                    "engineering_loop_env_file": str(env_file),
+                    "engineering_loop_git_askpass_path": str(tmp_path / "git-askpass"),
+                    "engineering_loop_github_app_token_path": str(tmp_path / "github-app-token"),
+                    "engineering_loop_governor_repos": ["AS215932/engineering-loop"],
+                    "engineering_loop_governor_state_dir": str(tmp_path / "state"),
+                    "engineering_loop_governor_limit": 20,
+                    "engineering_loop_knowledge_context_enabled": True,
+                    "engineering_loop_knowledge_mcp_url": "http://127.0.0.1:8767/mcp",
+                    "engineering_loop_knowledge_mcp_transport": "streamable-http",
+                    "engineering_loop_knowledge_context_budget": 6000,
+                    "engineering_loop_knowledge_context_timeout": 20,
+                }
+            )
+
+            wrapper = self.render(
+                REPO / "ansible/roles/engineering_loop/templates/run-reliability-governor.sh.j2",
+                context,
+            )
+            wrapper_path = tmp_path / "run-reliability-governor"
+            wrapper_path.write_text(wrapper)
+            wrapper_path.chmod(0o755)
+
+            env = {**os.environ, "TEST_CAPTURE_PATH": str(capture_path)}
+            subprocess.run([str(wrapper_path), "--dry-run"], env=env, check=True)
+
+            capture = capture_path.read_text()
+            self.assertIn("token=abc$def;$(printf bad)`uname`", capture)
+            self.assertIn("gh=abc$def;$(printf bad)`uname`", capture)
+            self.assertIn("icinga=p@ss$word;$(false)`date`", capture)
+            self.assertIn("--dry-run", capture)
 
     def test_hyrule_mcp_hosts_renders_freebsd_metadata_and_aliases(self):
         rendered = self.render(REPO / "configs/hyrule-mcp-hosts.yml.j2")
