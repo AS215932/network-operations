@@ -51,7 +51,10 @@
 
 - name: Build hyrule-network-proxy binary
   ansible.builtin.command:
-    cmd: go build -o {{ hyrule_network_proxy_bin_path }} ./cmd/hyrule-network-proxy
+    cmd: >-
+      go build
+      -ldflags "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_network_proxy_version }}"
+      -o {{ hyrule_network_proxy_bin_path }} ./cmd/hyrule-network-proxy
     chdir: "{{ hyrule_network_proxy_src_dir }}"
   environment:
     GOCACHE: "{{ hyrule_network_proxy_state_dir }}/go-build"
