@@ -291,6 +291,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         run_loop = (REPO / "ansible/roles/knowledge_loop/templates/run-loop.sh.j2").read_text()
         service = (REPO / "ansible/roles/knowledge_loop/templates/hyrule-knowledge-loop.service.j2").read_text()
         apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
+        apply_tasks = yaml.safe_load(apply)
 
         # The mutable repo clone lives under the state dir, separate from install_dir.
         self.assertEqual(defaults["knowledge_loop_workspace_dir"], "{{ knowledge_loop_state_dir }}/workspace")
@@ -308,6 +309,17 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         # apply clones the Knowledge repo into the workspace for loop runs.
         self.assertIn('dest: "{{ knowledge_loop_repo_workspace }}"', apply)
+        runtime_checkout = next(task for task in apply_tasks if task.get("name") == "Checkout Knowledge Loop runtime")
+        workspace_stat = next(task for task in apply_tasks if task.get("name") == "Check existing Knowledge repo workspace checkout")
+        workspace_clean = next(task for task in apply_tasks if task.get("name") == "Clean untracked Knowledge repo workspace artifacts")
+        workspace_checkout = next(task for task in apply_tasks if task.get("name") == "Checkout Knowledge repo workspace for loop runs")
+        self.assertLess(apply_tasks.index(workspace_clean), apply_tasks.index(workspace_checkout))
+        self.assertEqual(runtime_checkout["ansible.builtin.git"].get("force", False), False)
+        self.assertEqual(workspace_stat["ansible.builtin.stat"]["path"], "{{ knowledge_loop_repo_workspace }}/.git")
+        self.assertEqual(workspace_clean["ansible.builtin.command"], "git clean -fdx")
+        self.assertEqual(workspace_clean["args"]["chdir"], "{{ knowledge_loop_repo_workspace }}")
+        self.assertEqual(workspace_clean["when"], "knowledge_loop_workspace_git_dir.stat.exists")
+        self.assertEqual(workspace_checkout["ansible.builtin.git"].get("force", False), True)
 
     def test_knowledge_loop_timer_starts_only_after_secrets_render(self):
         apply = (REPO / "ansible/roles/knowledge_loop/tasks/apply.yml").read_text()
