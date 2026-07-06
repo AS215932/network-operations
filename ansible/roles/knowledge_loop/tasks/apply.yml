@@ -74,7 +74,9 @@
     dest: "{{ knowledge_loop_repo_workspace }}"
     version: "{{ knowledge_loop_base_branch }}"
     update: true
-    force: false
+    # This is the mutable bot workspace. Failed loop runs may leave generated
+    # artifacts behind; deploys should restore it to the reviewed base branch.
+    force: true
   become: true
   become_user: "{{ knowledge_loop_user }}"
   notify: restart knowledge-loop timer
