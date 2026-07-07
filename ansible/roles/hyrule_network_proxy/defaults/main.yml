@@ -36,8 +36,17 @@ hyrule_network_proxy_packages:
   - curl
   - git
   - golang-go
+  - prometheus-node-exporter
   - tor
   - i2pd
   - yggdrasil
 
 hyrule_network_proxy_health_url: "http://[{{ peers.netproxy.ipv6 }}]:8451/healthz"
+
+hyrule_network_proxy_node_exporter_service_name: prometheus-node-exporter
+hyrule_network_proxy_node_exporter_env_path: /etc/default/prometheus-node-exporter
+hyrule_network_proxy_node_exporter_listen_addr: ":9100"
+hyrule_network_proxy_node_exporter_args: >-
+  --web.listen-address={{ hyrule_network_proxy_node_exporter_listen_addr }}
+  --collector.systemd
+  --collector.systemd.enable-restarts-metrics

@@ -15,6 +15,23 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Configure netproxy node_exporter listen address
+  ansible.builtin.lineinfile:
+    path: "{{ hyrule_network_proxy_node_exporter_env_path }}"
+    create: true
+    regexp: '^ARGS='
+    line: 'ARGS="{{ hyrule_network_proxy_node_exporter_args }}"'
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart node_exporter
+
+- name: Ensure netproxy node_exporter is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ hyrule_network_proxy_node_exporter_service_name }}"
+    enabled: true
+    state: started
+
 - name: Ensure hyrule-network-proxy group exists
   ansible.builtin.group:
     name: "{{ hyrule_network_proxy_group }}"
@@ -51,10 +68,14 @@
 
 - name: Build hyrule-network-proxy binary
   ansible.builtin.command:
-    cmd: >-
-      go build
-      -ldflags "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_network_proxy_version }}"
-      -o {{ hyrule_network_proxy_bin_path }} ./cmd/hyrule-network-proxy
+    argv:
+      - go
+      - build
+      - -ldflags
+      - "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_network_proxy_version }}"
+      - -o
+      - "{{ hyrule_network_proxy_bin_path }}"
+      - ./cmd/hyrule-network-proxy
     chdir: "{{ hyrule_network_proxy_src_dir }}"
   environment:
     GOCACHE: "{{ hyrule_network_proxy_state_dir }}/go-build"
