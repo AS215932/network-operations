@@ -188,11 +188,12 @@ Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch ac
 
 ### netproxy (`2a0c:b641:b50:2::e0`)
 
-Planned internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud
-network requests. Hyrule Cloud verifies payment; this host only executes
-internal request jobs. It is not live yet; Prometheus scrape targets remain
-disabled until [#214](https://github.com/AS215932/network-operations/issues/214)
-completes the rollout.
+Internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud network
+requests. Hyrule Cloud verifies payment; this host only executes internal
+request jobs. Prometheus scrape targets (node_exporter `:9100` and sidecar
+metrics `:8451`) are enabled and go green once the VM is provisioned and the
+sidecar applied per
+[#214](https://github.com/AS215932/network-operations/issues/214).
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
