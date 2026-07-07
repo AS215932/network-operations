@@ -71,6 +71,7 @@
     argv:
       - go
       - build
+      - -buildvcs=false
       - -ldflags
       - "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_network_proxy_version }}"
       - -o
