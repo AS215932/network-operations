@@ -41,7 +41,6 @@ vault kv put kv/hyrule-cloud \
     openprovider_billing_handle="..." \
     openprovider_nameservers='["ns1.openprovider.nl","ns2.openprovider.be","ns3.openprovider.eu"]' \
     payment_wallet="0x..." \
-    btc_xpub="xpub-or-zpub..." \
     xmr_viewkey="..." \
     xmr_wallet_address="..." \
     xmr_wallet_password="..." \
@@ -53,6 +52,12 @@ vault kv put kv/hyrule-cloud \
     tsig_secret="..." \
     db_password="..." \
     network_proxy_token="..."
+```
+
+Optional native BTC payment key, only needed when native BTC is enabled:
+
+```bash
+vault kv patch kv/hyrule-cloud btc_xpub="xpub-or-zpub..."
 ```
 
 Optional OpenBSD builder keys:
