@@ -252,3 +252,19 @@ scrape_configs:
         labels:
           site: ovh1
           role: netproxy
+
+  - job_name: hyrule-cloud
+    metrics_path: /metrics
+    # DB-backed payments/VM metrics from the hyrule-cloud app (x402 launch).
+    # 8402 is also the public API port behind Caddy, so the endpoint requires a
+    # bearer token; the operator writes it from Vault kv/hyrule-cloud:metrics_token
+    # (see hyrule-cloud docs/runbooks/x402-launch.md).
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/hyrule-cloud-metrics.token
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::20]:8402"   # hyrule-cloud API app metrics
+        labels:
+          site: ovh1
+          role: api
