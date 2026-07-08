@@ -1,0 +1,58 @@
+# Deploy to: /etc/prometheus/rules.d/hyrule-payments.yml on mon
+# x402 payments + VM provisioning health for cloud.hyrule.host.
+# Metrics come from the hyrule-cloud /metrics exporter (job: hyrule-cloud),
+# which aggregates the payment_events ledger in Postgres.
+
+groups:
+  - name: hyrule-payments
+    interval: 30s
+    rules:
+      - alert: HyrulePaymentSettlementFailures
+        expr: sum(increase(hyrule_payment_events_total{event_type="settle_failed"}[15m])) > 0
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "x402 settlement failures on cloud.hyrule.host"
+          description: "At least one payment settled unsuccessfully in the last 15 minutes. An agent tried to pay and the facilitator settlement failed — check Loki for payment_settlement_failed events and the facilitator status."
+
+      - alert: HyruleDevBypassUsedInProduction
+        expr: sum(increase(hyrule_payment_events_total{event_type="dev_bypass"}[1h])) > 0
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "payment dev bypass used on cloud.hyrule.host"
+          description: "A request skipped x402 payment via X-DEV-BYPASS. PAYMENT_DEV_BYPASS_SECRET must be empty in production — rotate Vault kv/hyrule-cloud dev_bypass_secret immediately."
+
+      - alert: HyrulePaymentVerificationFailureSpike
+        expr: sum(increase(hyrule_payment_events_total{event_type="verify_failed"}[1h])) > 10
+        for: 10m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "elevated x402 verification failures"
+          description: "More than 10 payment verification failures in the last hour. Could be a broken client in the wild, a facilitator issue, or someone probing the payment path."
+
+      - alert: HyruleVMProvisionFailureRatio
+        expr: |
+          sum(increase(hyrule_vm_provision_total{result="failed"}[1h]))
+            / clamp_min(sum(increase(hyrule_vm_provision_total[1h])), 1) > 0.2
+        for: 10m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "VM provisioning failing for paying customers"
+          description: "More than 20% of VM provisioning attempts failed over the last hour. Refunds are manual — every failure is a paying agent holding a refund promise. Check XCP-NG/XO and the orchestrator logs."
+
+      - alert: HyruleCloudMetricsDown
+        expr: up{job="hyrule-cloud"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "hyrule-cloud /metrics unreachable from mon"
+          description: "Prometheus cannot scrape the hyrule-cloud payments exporter. Either the app is down (blackbox /health will also fire) or the metrics bearer token is wrong."

@@ -20,7 +20,9 @@ ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
     --port 8402 \
     --workers 4 \
     --log-level info \
-    --access-log
+    --access-log \
+    --proxy-headers \
+    --forwarded-allow-ips "*"
 Restart=always
 RestartSec=5
 StandardOutput=journal
