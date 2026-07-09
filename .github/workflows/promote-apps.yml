@@ -211,12 +211,27 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: promotion/app-sha-pins
           PR_TITLE: ${{ steps.resolve.outputs.title }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          # Use the REST API rather than `gh pr create`/`gh pr edit`: those issue a
+          # GraphQL projectCards query that hard-fails (exit 1) since GitHub's
+          # Projects-classic sunset, which previously blocked every promotion PR.
+          body="$(cat /tmp/promotion-body.md)"
+          existing="$(gh api \
+            "repos/${REPO}/pulls?head=${REPO%%/*}:${BRANCH}&state=open" \
+            --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
+            gh api --method PATCH "repos/${REPO}/pulls/${existing}" \
+              -f title="$PR_TITLE" \
+              -f body="$body" >/dev/null
             echo "Updated PR #$existing" >> "$GITHUB_STEP_SUMMARY"
           else
-            gh pr create --base main --head "$BRANCH" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
+            number="$(gh api --method POST "repos/${REPO}/pulls" \
+              -f title="$PR_TITLE" \
+              -f head="$BRANCH" \
+              -f base=main \
+              -f body="$body" \
+              --jq '.number')"
+            echo "Opened PR #$number" >> "$GITHUB_STEP_SUMMARY"
           fi
