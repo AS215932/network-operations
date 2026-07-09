@@ -19,6 +19,9 @@ on:
       - ansible/roles/agent_core_collector/**
       - ansible/roles/agentic_observatory/**
       - configs/mon/icinga2/**
+      - configs/mon/prometheus-rules/**
+      - ansible/roles/prometheus/**
+      - ansible/playbooks/prometheus.yml
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
       - configs/noc-agent.service
@@ -67,6 +70,9 @@ jobs:
             ansible/roles/agent_core_collector \
             ansible/roles/agentic_observatory \
             configs/mon/icinga2 \
+            configs/mon/prometheus-rules \
+            ansible/roles/prometheus \
+            ansible/playbooks/prometheus.yml \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
             configs/noc-agent.service \
@@ -90,6 +96,12 @@ jobs:
                   matrix.append(entry)
 
           mon_icinga_changed = any(path.startswith("configs/mon/icinga2/") for path in changed)
+          prometheus_changed = any(
+              path.startswith("configs/mon/prometheus-rules/")
+              or path.startswith("ansible/roles/prometheus/")
+              or path == "ansible/playbooks/prometheus.yml"
+              for path in changed
+          )
           noc_changed = any(path in changed for path in {
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/noc.yml",
@@ -128,6 +140,8 @@ jobs:
               add_once("noc", "noc")
           if engineering_loop_changed:
               add_once("engineering-loop", "loop")
+          if prometheus_changed:
+              add_once("prometheus", "mon")
           if "ansible/inventory/host_vars/api.yml" in changed:
               add_once("cloud", "api")
           if "ansible/inventory/host_vars/web.yml" in changed:

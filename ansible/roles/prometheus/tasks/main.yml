@@ -1,0 +1,35 @@
+---
+# prometheus role — manages mon-side Prometheus alerting/recording rules under
+# /etc/prometheus/rules.d/. Ships the static rule files from
+# configs/mon/prometheus-rules/ with a staged, promtool-validated, reconciling
+# deploy, so rule changes go through the normal apply pipeline instead of a
+# manual cp.
+#
+# Scope is rules only. prometheus.yml itself and Alertmanager delivery
+# (127.0.0.1:9093 → noc-agent) are NOT managed here — see the alerting-delivery
+# gap tracked separately; without Alertmanager running, these rules fire but are
+# not delivered.
+#
+# `apply:` propagates the include's tags onto every task in the included file —
+# tags on a dynamic include_tasks otherwise cover only the include itself, so
+# `--tags apply` would run the include and skip the (untagged) work inside.
+
+- name: Skip — only runs on mon
+  meta: end_host
+  when: inventory_hostname != "mon"
+  tags: [always]
+
+- name: Validate rule files (controller-side, dry-run friendly)
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [validate, diff, apply]
+  tags: [validate, diff, apply]
+
+- name: Apply — publish rule files to mon
+  ansible.builtin.include_tasks:
+    file: install.yml
+    apply:
+      tags: [apply]
+  when: prometheus_apply | bool
+  tags: [apply]

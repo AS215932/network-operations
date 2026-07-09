@@ -22,6 +22,7 @@ on:
           - firewall
           - monitoring
           - icinga2
+          - prometheus
           - logs
           - cloud
           - cloud_reprovision_vm
