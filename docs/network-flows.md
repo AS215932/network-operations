@@ -264,6 +264,8 @@ on mon is the only read path.
 | rtr underlay (`2001:41d0:303:48a::2`) | TCP | 6000 | Vector→Vector ingest from rtr default-VRF processes; kernel routes this path via underlay |
 | mail (`2a0c:b641:b50:2::90`) | TCP | 6514 | Syslog ingest from OpenBSD `syslogd(8)` `@@host` (TCP, no UDP) |
 | cr1-nl1, cr1-de1, cr1-ch1 (loopbacks) | TCP | 6514 | Syslog ingest from FreeBSD `syslogd(8)` `@@host` (TCP, no UDP) — issue #17 |
+
+> ⚠️ **Config drift (issue #374):** `ansible/inventory/host_vars/log.yml` currently has firewall rules for `cr1-nl1` and `cr1-de1` on port 6514, but **omits `cr1-ch1`**. This means `cr1-ch1` syslog TCP is dropped at `log`'s input chain and the router produces no Loki entries. Additionally, the aggregator's `[transforms.syslog_enrich]` hardcodes `role = "mail"` for all syslog sources, so FreeBSD router logs that do arrive are mis-tagged. See `docs/runbooks/log-pipeline-postmortem-374.md` for the full remediation plan.
 | ns2 (`2001:41d0:304:300::7bfb`) | TCP | 6000 | Off-net Vector ingest over public IPv6 |
 | dom0 (mgmt v4 `10.0.0.0/24`) | TCP | 6000 | XCP-NG hypervisor Vector ingest over mgmt v4 |
 | mon | TCP | 3100 | Grafana queries Loki HTTP API |

@@ -236,3 +236,58 @@ After deploy:
 Each migration is one small per-repo PR. Deploys can land before, alongside,
 or after the host-side Vector agent rollout — Vector handles plaintext too,
 JSON renderers just give cleaner queries.
+
+## Operational issues and pipeline health (issue #374)
+
+The logging stack has several known gaps that operators should be aware of
+until the follow-up remediation PR lands. See
+`docs/runbooks/log-pipeline-postmortem-374.md` for the full incident report.
+
+### Buffer policy on small-root hosts
+
+The Vector agent sink currently uses `when_full = "block"` with a disk buffer.
+On hosts with small root filesystems (e.g. `rtr` at 2.8 GB with a 300 MB buffer)
+this creates a **silent failure mode**: when the buffer fills, the topology
+stops consuming new events but the process and systemd unit remain healthy.
+The only outward signal is a slow disk-pressure warning, which can take weeks
+to fire.
+
+**Recommendation:** switch agents to `"drop_newest"` with a smaller cap and
+rely on alerts (see below) rather than disk-pressure to detect back-pressure.
+The aggregator host (`log`) may keep `"block"` because it has a dedicated 50 GB
+volume and the failure mode is different.
+
+### FreeBSD / OpenBSD syslog forwarding
+
+FreeBSD routers (`cr1-nl1`, `cr1-de1`, `cr1-ch1`) and OpenBSD `mail` forward
+logs via `syslogd @@log:6514` TCP. Two problems affect this path today:
+
+1. **Missing firewall rule for `cr1-ch1`.** `ansible/inventory/host_vars/log.yml`
+   has 6514 allow rules for `cr1-nl1` and `cr1-de1` but not `cr1-ch1`, so its
+   syslog TCP is dropped at the log VM.
+2. **Mis-tagged role label.** The aggregator's `[transforms.syslog_enrich]`
+   hardcodes `.role = "mail"` for all syslog sources. FreeBSD router logs that
+   do arrive are therefore tagged `role="mail"` instead of `role="router"`,
+   making them hard to discover in Grafana.
+
+### Log-pipeline liveness alerting
+
+There is **no per-host log-liveness alert** today. The existing Prometheus
+rules (`VectorDown`, `LokiDown`, `VectorBufferStalling`) monitor the
+aggregator process and disk, not whether individual hosts are shipping events.
+A wedged agent or a blocked syslog path can go unnoticed for weeks.
+
+Two complementary approaches are recommended:
+
+1. **Loki Ruler** — evaluate LogQL `absent(count_over_time({host="X"}[1h]))`
+   for every expected host. This works even for FreeBSD routers that do not run
+   Vector. Requires configuring `alertmanager_url` in Loki's ruler section and
+   ensuring `log` can reach Alertmanager on `mon`.
+2. **Vector agent metrics scrape** — expose the agent's internal metrics on a
+   Prometheus scrape endpoint so `mon` can alert on
+   `vector_component_sent_events_total` and `vector_component_dropped_events_total`.
+   This only works for Linux hosts running Vector.
+
+Until these alerts are in place, operators should periodically run manual
+Grafana queries like `{host="rtr"}` and `{host="cr1-ch1"}` to confirm
+end-to-end flow.
