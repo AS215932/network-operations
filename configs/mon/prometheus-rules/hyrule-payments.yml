@@ -16,6 +16,15 @@ groups:
           summary: "x402 settlement failures on cloud.hyrule.host"
           description: "At least one payment settled unsuccessfully in the last 15 minutes. An agent tried to pay and the facilitator settlement failed — check Loki for payment_settlement_failed events and the facilitator status."
 
+      - alert: HyruleRefundOwed
+        expr: sum(increase(hyrule_payment_events_total{event_type="refund_owed"}[15m])) > 0
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "x402 refund owed to a paying customer on cloud.hyrule.host"
+          description: "A paid VM/create request failed after charge and recorded a refund_owed event in the last 15 minutes. Refunds are manual — an agent has paid and is owed USDC until an operator sends it. Check the payment_events ledger and Loki vm_refund_owed for the payer wallet, amount, and original tx, then refund per docs/runbooks/x402-launch.md."
+
       - alert: HyruleDevBypassUsedInProduction
         expr: sum(increase(hyrule_payment_events_total{event_type="dev_bypass"}[1h])) > 0
         labels:
