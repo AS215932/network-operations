@@ -34,6 +34,11 @@ apt-get install -y \
 echo "=== Configuring Prometheus ==="
 cp "$CONFIGS/prometheus.yml" /etc/prometheus/prometheus.yml
 cp "$CONFIGS/blackbox.yml" /etc/prometheus/blackbox.yml
+# Alerting/recording rules referenced by prometheus.yml (rule_files:
+# /etc/prometheus/rules.d/*.yml). Without this the hyrule-payments,
+# logs-pipeline, and noc-tripwire rules never load.
+mkdir -p /etc/prometheus/rules.d
+cp "$CONFIGS/prometheus-rules/"*.yml /etc/prometheus/rules.d/
 systemctl enable --now prometheus
 systemctl enable --now prometheus-blackbox-exporter
 systemctl enable --now prometheus-node-exporter
