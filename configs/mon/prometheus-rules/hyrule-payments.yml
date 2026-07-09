@@ -16,14 +16,26 @@ groups:
           summary: "x402 settlement failures on cloud.hyrule.host"
           description: "At least one payment settled unsuccessfully in the last 15 minutes. An agent tried to pay and the facilitator settlement failed — check Loki for payment_settlement_failed events and the facilitator status."
 
+      # increase(...[15m]) cannot see the FIRST refund_owed event: the DB-backed
+      # exporter only emits this series once a row exists, so it is born at value 1
+      # with no prior sample to diff against and increase() reads 0. Compare the
+      # current cumulative count against 15m ago instead, treating a never-yet-seen
+      # (absent) series as 0 via `or vector(0)`, so the very first owed refund fires.
+      # Windowed by design — this pages when a NEW refund becomes owed; it clears
+      # ~15m later, NOT when the operator actually sends the refund, because the
+      # append-only ledger has no refund-resolution signal yet (that arrives with
+      # refund automation). Until then the standing worklist lives on the payments
+      # dashboard; treat each firing as "go handle a new owed refund".
       - alert: HyruleRefundOwed
-        expr: sum(increase(hyrule_payment_events_total{event_type="refund_owed"}[15m])) > 0
+        expr: |
+          (sum(hyrule_payment_events_total{event_type="refund_owed"}) or vector(0))
+            - (sum(hyrule_payment_events_total{event_type="refund_owed"} offset 15m) or vector(0)) > 0
         labels:
           severity: critical
           source: prometheus
         annotations:
           summary: "x402 refund owed to a paying customer on cloud.hyrule.host"
-          description: "A paid VM/create request failed after charge and recorded a refund_owed event in the last 15 minutes. Refunds are manual — an agent has paid and is owed USDC until an operator sends it. Check the payment_events ledger and Loki vm_refund_owed for the payer wallet, amount, and original tx, then refund per docs/runbooks/x402-launch.md."
+          description: "A paid VM/create request failed after charge and recorded a new refund_owed event in the last 15 minutes. Refunds are manual — an agent has paid and is owed USDC until an operator sends it. Check the payment_events ledger and Loki vm_refund_owed for the payer wallet, amount, and original tx, then refund per the hyrule-cloud x402 launch runbook (AS215932/hyrule-cloud: docs/runbooks/x402-launch.md)."
 
       - alert: HyruleDevBypassUsedInProduction
         expr: sum(increase(hyrule_payment_events_total{event_type="dev_bypass"}[1h])) > 0
