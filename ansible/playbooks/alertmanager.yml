@@ -1,0 +1,24 @@
+---
+# alertmanager — install + configure Alertmanager on mon so Prometheus alerts
+# are actually delivered. Prometheus (configs/mon/prometheus.yml) already routes
+# to 127.0.0.1:9093; this playbook provisions that endpoint, rendering
+# configs/mon/alertmanager.yml.j2 → /etc/prometheus/alertmanager.yml (noc-agent
+# webhook + Discord). Without it every mon alert fires into a dead socket.
+#
+# Decoupled from playbooks/prometheus.yml (rules) on purpose: installing +
+# starting a service is a deliberate, independent apply from shipping rule files.
+#
+# Render-only (dry run):
+#   ansible-playbook playbooks/alertmanager.yml --tags validate \
+#       --connection=local --skip-tags=snapshot --limit mon
+# Apply (live):
+#   ansible-playbook playbooks/alertmanager.yml --tags apply \
+#       -e '{"alertmanager_apply":true}' --limit mon
+
+- name: alertmanager — validate + apply mon Alertmanager
+  hosts: mon
+  gather_facts: true
+  become: true
+  roles:
+    - alertmanager
+  tags: [alertmanager]

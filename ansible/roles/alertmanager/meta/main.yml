@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: alertmanager
+  description: Mon-side Alertmanager — delivers Prometheus alerts to noc-agent + Discord
+  author: AS215932 ops
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: [bookworm, trixie]
+
+dependencies: []

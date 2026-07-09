@@ -1,0 +1,20 @@
+---
+# Master apply gate. apply.yml passes `-e alertmanager_apply=true` for the
+# `alertmanager` playbook; CI render/validate (gate false) render the review
+# artifact only and never install packages or mutate the host.
+alertmanager_apply: false
+
+# Discord webhook for Prometheus alerts. Same secret the icinga2 role uses,
+# sourced from the Vault-rendered runner env; redacted in the review render.
+mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default(lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL'), true) | default('') }}"
+
+# Live config path Debian's prometheus-alertmanager reads.
+alertmanager_config_path: /etc/prometheus/alertmanager.yml
+
+# Staging path where the rendered config is amtool-validated before it is
+# published to the live path. Not read by Alertmanager.
+alertmanager_staging_path: /etc/prometheus/.alertmanager.yml.staged
+
+# Canonical template in the repo (configs/mon/, referenced — not vendored into
+# the role, matching how the prometheus role reads configs/mon/prometheus-rules).
+alertmanager_config_template: "{{ playbook_dir }}/../../configs/mon/alertmanager.yml.j2"

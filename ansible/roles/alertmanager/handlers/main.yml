@@ -1,0 +1,8 @@
+---
+# amtool validation runs as a pre-publish task in install.yml, so a broken
+# config never reaches the live path. This handler reloads Alertmanager (SIGHUP)
+# once the live config has actually changed.
+- name: reload alertmanager
+  ansible.builtin.systemd:
+    name: prometheus-alertmanager
+    state: reloaded

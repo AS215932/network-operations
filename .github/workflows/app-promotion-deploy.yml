@@ -22,6 +22,9 @@ on:
       - configs/mon/prometheus-rules/**
       - ansible/roles/prometheus/**
       - ansible/playbooks/prometheus.yml
+      - configs/mon/alertmanager.yml.j2
+      - ansible/roles/alertmanager/**
+      - ansible/playbooks/alertmanager.yml
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
       - configs/noc-agent.service
@@ -73,6 +76,9 @@ jobs:
             configs/mon/prometheus-rules \
             ansible/roles/prometheus \
             ansible/playbooks/prometheus.yml \
+            configs/mon/alertmanager.yml.j2 \
+            ansible/roles/alertmanager \
+            ansible/playbooks/alertmanager.yml \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
             configs/noc-agent.service \
@@ -100,6 +106,12 @@ jobs:
               path.startswith("configs/mon/prometheus-rules/")
               or path.startswith("ansible/roles/prometheus/")
               or path == "ansible/playbooks/prometheus.yml"
+              for path in changed
+          )
+          alertmanager_changed = any(
+              path == "configs/mon/alertmanager.yml.j2"
+              or path.startswith("ansible/roles/alertmanager/")
+              or path == "ansible/playbooks/alertmanager.yml"
               for path in changed
           )
           noc_changed = any(path in changed for path in {
@@ -142,6 +154,8 @@ jobs:
               add_once("engineering-loop", "loop")
           if prometheus_changed:
               add_once("prometheus", "mon")
+          if alertmanager_changed:
+              add_once("alertmanager", "mon")
           if "ansible/inventory/host_vars/api.yml" in changed:
               add_once("cloud", "api")
           if "ansible/inventory/host_vars/web.yml" in changed:

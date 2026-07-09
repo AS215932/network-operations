@@ -1,0 +1,41 @@
+---
+# Install Alertmanager and publish a validated config. The rendered config is
+# amtool-checked in a staging path BEFORE it replaces the live file, so a broken
+# config can't be loaded on the next reload/restart. Tags inherited from the
+# include in main.yml via `apply:`.
+
+- name: Install prometheus-alertmanager
+  ansible.builtin.apt:
+    name: prometheus-alertmanager
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Stage rendered alertmanager.yml
+  ansible.builtin.template:
+    src: "{{ alertmanager_config_template }}"
+    dest: "{{ alertmanager_staging_path }}"
+    owner: root
+    group: prometheus
+    mode: "0640"
+
+- name: Validate staged config with amtool before publishing to live
+  ansible.builtin.command:
+    argv: [amtool, check-config, "{{ alertmanager_staging_path }}"]
+  changed_when: false
+
+- name: Publish validated alertmanager.yml to the live path
+  ansible.builtin.copy:
+    src: "{{ alertmanager_staging_path }}"
+    dest: "{{ alertmanager_config_path }}"
+    remote_src: true
+    owner: root
+    group: prometheus
+    mode: "0640"
+  notify: reload alertmanager
+
+- name: Enable + start alertmanager
+  ansible.builtin.systemd:
+    name: prometheus-alertmanager
+    state: started
+    enabled: true
