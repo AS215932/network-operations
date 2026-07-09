@@ -16,20 +16,28 @@ groups:
           summary: "x402 settlement failures on cloud.hyrule.host"
           description: "At least one payment settled unsuccessfully in the last 15 minutes. An agent tried to pay and the facilitator settlement failed — check Loki for payment_settlement_failed events and the facilitator status."
 
-      # increase(...[15m]) cannot see the FIRST refund_owed event: the DB-backed
-      # exporter only emits this series once a row exists, so it is born at value 1
-      # with no prior sample to diff against and increase() reads 0. Compare the
-      # current cumulative count against 15m ago instead, treating a never-yet-seen
-      # (absent) series as 0 via `or vector(0)`, so the very first owed refund fires.
-      # Windowed by design — this pages when a NEW refund becomes owed; it clears
-      # ~15m later, NOT when the operator actually sends the refund, because the
-      # append-only ledger has no refund-resolution signal yet (that arrives with
-      # refund automation). Until then the standing worklist lives on the payments
-      # dashboard; treat each firing as "go handle a new owed refund".
+      # Detect a NEW refund_owed row, working around two exporter quirks:
+      #  (1) the DB-backed exporter emits this series only once a row exists, so it
+      #      is born at value 1 and plain increase(...[15m]) can't see the first
+      #      event. Diff current vs 15m-ago cumulative count, treating a never-seen
+      #      series as 0 via `or vector(0)`, so the very first owed refund fires.
+      #  (2) a >15m scrape gap ALSO makes the 15m-ago side absent; without a guard
+      #      `or vector(0)` would read the recovered (unchanged) count as a positive
+      #      delta and replay old rows as a fake new refund. Gate on the target
+      #      having been successfully scraped 15m ago (`up == 1`) so only a genuinely
+      #      new series — not a scrape gap — can fire.
+      # Windowed by design — pages per newly-owed refund; clears ~15m later, NOT when
+      # the operator sends the refund (append-only ledger has no resolution signal;
+      # an outstanding gauge is tracked in AS215932/hyrule-cloud#48). Can simplify
+      # back to plain increase() once the exporter seeds event_types at 0
+      # (AS215932/hyrule-cloud#47).
       - alert: HyruleRefundOwed
         expr: |
-          (sum(hyrule_payment_events_total{event_type="refund_owed"}) or vector(0))
-            - (sum(hyrule_payment_events_total{event_type="refund_owed"} offset 15m) or vector(0)) > 0
+          (
+            (sum(hyrule_payment_events_total{event_type="refund_owed"}) or vector(0))
+              - (sum(hyrule_payment_events_total{event_type="refund_owed"} offset 15m) or vector(0))
+          ) > 0
+          and on() (max(up{job="hyrule-cloud"} offset 15m) == 1)
         labels:
           severity: critical
           source: prometheus
