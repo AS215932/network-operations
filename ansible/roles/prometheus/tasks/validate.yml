@@ -1,0 +1,20 @@
+---
+# Controller-side sanity check so the dry-run lane
+# (`--tags validate --connection=local`) catches a malformed rule file without
+# touching mon. The authoritative `promtool check rules` runs on mon in the
+# reload handler, where promtool ships with the prometheus package.
+- name: Sanity-check each rule file is a Prometheus rule-group document
+  vars:
+    _doc: "{{ lookup('file', item) | from_yaml }}"
+  ansible.builtin.assert:
+    that:
+      - _doc.groups is defined
+      - (_doc.groups | type_debug) == "list"
+    fail_msg: "{{ item | basename }} is not a valid Prometheus rules file (needs a top-level groups: list)"
+    success_msg: "{{ item | basename }} ok"
+    quiet: true
+  loop: "{{ query('ansible.builtin.fileglob', prometheus_rules_repo ~ '/*.yml') }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  delegate_to: localhost
+  run_once: true

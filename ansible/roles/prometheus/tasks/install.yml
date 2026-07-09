@@ -1,0 +1,20 @@
+---
+# Push the canonical rule files onto mon. Non-purging copy (matches the icinga2
+# role): files removed from the repo are not deleted from the host — remove
+# those out of band if needed.
+- name: Ensure rules.d exists
+  ansible.builtin.file:
+    path: "{{ prometheus_rules_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Prometheus rule files
+  ansible.builtin.copy:
+    src: "{{ prometheus_rules_repo }}/"
+    dest: "{{ prometheus_rules_dir }}/"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: validate and reload prometheus

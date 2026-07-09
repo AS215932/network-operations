@@ -1,0 +1,24 @@
+---
+# Chain bound to one listen name, run in file order. promtool validates the
+# deployed ruleset first; if it exits non-zero Ansible stops before the reload,
+# so a broken rule file never reaches the running Prometheus (mirrors the
+# icinga2 "validate then reload" handler chain).
+- name: List deployed rule files
+  ansible.builtin.find:
+    paths: "{{ prometheus_rules_dir }}"
+    patterns: "*.yml"
+  register: prometheus_deployed_rules
+  listen: validate and reload prometheus
+
+- name: Validate prometheus rules (promtool)
+  ansible.builtin.command:
+    argv: "{{ ['promtool', 'check', 'rules'] + (prometheus_deployed_rules.files | map(attribute='path') | list) }}"
+  changed_when: false
+  when: prometheus_deployed_rules.files | length > 0
+  listen: validate and reload prometheus
+
+- name: Reload prometheus
+  ansible.builtin.systemd:
+    name: prometheus
+    state: reloaded
+  listen: validate and reload prometheus
