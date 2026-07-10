@@ -32,9 +32,19 @@ class DriftDetectionTest(unittest.TestCase):
             )
 
     def test_existing_drift_targets_are_preserved(self):
-        # Guard against an edit dropping the previously-covered playbooks.
+        # Guard against an edit dropping any previously-covered playbook — the
+        # full set the sweep ran before prometheus/alertmanager were added, so a
+        # regression on ci / rtr_routing / networkd_resolved is caught too.
         playbooks = self._playbooks()
-        for expected in ("firewall", "monitoring", "icinga2", "logs"):
+        for expected in (
+            "firewall",
+            "monitoring",
+            "logs",
+            "icinga2",
+            "ci",
+            "rtr_routing",
+            "networkd_resolved",
+        ):
             self.assertIn(expected, playbooks)
 
 
