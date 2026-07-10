@@ -1,0 +1,66 @@
+---
+- name: Create soc-agent group
+  ansible.builtin.group:
+    name: "{{ soc_agent_group }}"
+    system: true
+
+- name: Create soc-agent user
+  ansible.builtin.user:
+    name: "{{ soc_agent_user }}"
+    group: "{{ soc_agent_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ soc_agent_state_dir }}"
+    create_home: false
+
+- name: Create SOC Agent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ soc_agent_user }}"
+    group: "{{ soc_agent_group }}"
+    mode: "0750"
+  loop:
+    - "{{ soc_agent_install_dir }}"
+    - "{{ soc_agent_config_dir }}"
+    - "{{ soc_agent_state_dir }}"
+
+- name: Clone SOC Agent at pinned version
+  ansible.builtin.git:
+    repo: "{{ soc_agent_repo }}"
+    dest: "{{ soc_agent_install_dir }}/repo"
+    version: "{{ soc_agent_version }}"
+    accept_newhostkey: true
+  become_user: "{{ soc_agent_user }}"
+  notify:
+    - restart soc-posture timer
+    - restart soc-agent service
+
+- name: Sync SOC Agent dependencies
+  ansible.builtin.command:
+    cmd: uv sync --frozen
+    chdir: "{{ soc_agent_install_dir }}/repo"
+  become_user: "{{ soc_agent_user }}"
+  register: soc_agent_uv_sync
+  changed_when: "'No changes' not in soc_agent_uv_sync.stderr"
+
+- name: Install soc-posture service
+  ansible.builtin.template:
+    src: soc-posture.service.j2
+    dest: /etc/systemd/system/soc-posture.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Install soc-posture timer
+  ansible.builtin.template:
+    src: soc-posture.timer.j2
+    dest: /etc/systemd/system/soc-posture.timer
+    mode: "0644"
+  notify: restart soc-posture timer
+
+- name: Install soc-agent service (LHP endpoints)
+  ansible.builtin.template:
+    src: soc-agent.service.j2
+    dest: /etc/systemd/system/soc-agent.service
+    mode: "0644"
+  notify: restart soc-agent service

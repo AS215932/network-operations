@@ -1,0 +1,45 @@
+---
+# SOC Agent (security governance loop) deployment. Default is validate/render
+# only; live mutation requires -e soc_agent_apply=true from apply.yml.
+#
+# SOC_MODE is the human-gated rollout ladder (shadow -> case_only ->
+# handoff_dry -> handoff_live); promotion criteria live in
+# docs/runbooks/soc-mode-promotion.md and are computed from labeled insight
+# records (`hyrule-knowledge insights metrics --loop soc`). Every rung change
+# is a reviewed promotion PR that edits soc_mode here.
+
+soc_agent_apply: false
+
+soc_agent_user: soc-agent
+soc_agent_group: soc-agent
+soc_agent_install_dir: /opt/soc-agent
+soc_agent_config_dir: /etc/soc-agent
+soc_agent_state_dir: /var/lib/soc-agent
+soc_agent_env_file: "{{ soc_agent_install_dir }}/.env"
+
+# Cloned via a per-deploy SSH alias (mirror the noc-agent deploy-key pattern).
+soc_agent_repo: "git@github-soc-agent:AS215932/soc-agent.git"
+# Pin to an exact reviewed SHA before the first apply (promotion-PR discipline).
+soc_agent_version: main
+
+# The FastAPI app serves the LHP origin endpoints (payload fetch + callbacks).
+soc_agent_listen_host: "::"
+soc_agent_listen_port: 8600
+
+# Rollout ladder position. shadow = read-only scanning, no cases, no handoffs.
+soc_mode: shadow
+soc_enabled: true
+soc_posture_enabled: true
+soc_redteam_enabled: false
+soc_redteam_allow_active_probes: false
+soc_lhp_enabled: false
+soc_case_verification_dry_run: true
+
+# Posture scan timer (socctl posture run-once). Disabled until the operator
+# flips it in host_vars after the first supervised runs.
+soc_posture_timer_enabled: false
+soc_posture_on_calendar: "*:0/30"
+
+# soc-agent FastAPI service (LHP endpoints). Only needed from handoff_dry up;
+# ships disabled.
+soc_agent_service_enabled: false

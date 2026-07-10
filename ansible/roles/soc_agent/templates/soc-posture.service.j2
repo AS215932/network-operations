@@ -1,0 +1,22 @@
+# Deploy path: /etc/systemd/system/soc-posture.service
+[Unit]
+Description=SOC Agent posture scan (one read-only cycle)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ soc_agent_user }}
+Group={{ soc_agent_group }}
+WorkingDirectory={{ soc_agent_install_dir }}/repo
+EnvironmentFile={{ soc_agent_env_file }}
+ExecStart=/usr/bin/uv run socctl posture run-once
+# The posture loop is read-only by construction; keep the sandbox tight.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ soc_agent_state_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

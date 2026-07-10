@@ -1,0 +1,23 @@
+---
+- name: Validate SOC Agent deployment inputs
+  ansible.builtin.assert:
+    that:
+      - soc_agent_user | length > 0
+      - soc_agent_install_dir.startswith('/')
+      - soc_agent_state_dir.startswith('/')
+      - soc_mode in ['shadow', 'case_only', 'handoff_dry', 'handoff_live']
+      # Ladder discipline: anything above shadow needs LHP wiring decisions
+      # recorded in host_vars, and handoff_live additionally needs the
+      # promotion-criteria evidence linked in the PR (see
+      # docs/runbooks/soc-mode-promotion.md).
+      - soc_mode == 'shadow' or soc_lhp_enabled | bool
+      - soc_redteam_allow_active_probes | bool == false
+    fail_msg: >-
+      SOC rollout must climb the SOC_MODE ladder one reviewed rung at a time;
+      active red-team probes stay off in v1 (redteam-safety-policy.md).
+  tags: [validate, always]
+
+- name: Apply SOC Agent runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: soc_agent_apply | bool
+  tags: [apply]

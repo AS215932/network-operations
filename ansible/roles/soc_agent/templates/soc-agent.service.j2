@@ -1,0 +1,22 @@
+# Deploy path: /etc/systemd/system/soc-agent.service
+[Unit]
+Description=SOC Agent LHP origin endpoints (payload fetch + engineering callbacks)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ soc_agent_user }}
+Group={{ soc_agent_group }}
+WorkingDirectory={{ soc_agent_install_dir }}/repo
+EnvironmentFile={{ soc_agent_env_file }}
+ExecStart=/usr/bin/uv run uvicorn app.main:app --host {{ soc_agent_listen_host }} --port {{ soc_agent_listen_port }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ soc_agent_state_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
