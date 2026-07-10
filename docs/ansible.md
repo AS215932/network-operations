@@ -35,6 +35,18 @@ Review the rendered files with `git diff` after a render run.
 
 ## Running an apply (later, post-merge)
 
+Merges to `main` that touch `ansible/**` trigger the `post-merge-apply`
+workflow automatically: it runs the same check-mode sweep as nightly
+drift-detection (`scripts/ci/check-drift.sh`), and if anything drifted, a
+single production-gated job applies the drifted playbooks serially, limited
+to the hosts that actually changed (`scripts/ci/drift-apply-plan.sh`). An
+operator reviews the detect job's diffs and approves the `production`
+environment gate — **check the diffs first**: if live is intentionally ahead
+of `main` (an unmerged deployed branch), approving reverts it. The `ci`
+playbook is never auto-applied (runner self-restart risk) and unreachable/
+failed hosts are skipped; both are listed in the run summary for manual
+follow-up. Manual applies still work any time:
+
 ```
 ansible-playbook playbooks/firewall.yml \
   --tags apply \
