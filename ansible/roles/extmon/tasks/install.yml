@@ -77,12 +77,12 @@
     - { path: /etc/extmon, mode: "0750" }
     - { path: /opt/bgpalerter, mode: "0755" }
     - { path: /etc/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
-    # No recurse: BGPalerter (User=prometheus) owns the files it writes here;
-    # recursing over a runtime log dir never converges in check mode and made
-    # the nightly drift run flag this task forever.
+    # No recurse: BGPalerter (User=prometheus) owns the files it writes in
+    # these runtime dirs; recursing over them never converges in check mode
+    # and made the nightly drift run flag this task forever.
     - { path: /etc/bgpalerter/logs, owner: prometheus, group: prometheus, mode: "0755" }
-    - { path: /etc/bgpalerter/alertdata, owner: prometheus, group: prometheus, mode: "0755", recurse: true }
-    - { path: /etc/bgpalerter/.cache, owner: prometheus, group: prometheus, mode: "0755", recurse: true }
+    - { path: /etc/bgpalerter/alertdata, owner: prometheus, group: prometheus, mode: "0755" }
+    - { path: /etc/bgpalerter/.cache, owner: prometheus, group: prometheus, mode: "0755" }
     - { path: /var/lib/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
   tags: [apply]
 
