@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p drift-logs
-          playbooks=(firewall monitoring logs icinga2 ci rtr_routing networkd_resolved)
+          playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved)
           status=0
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"
