@@ -89,12 +89,30 @@
     dest: "{{ item.dest }}"
     owner: root
     group: root
-    mode: "{{ item.mode }}"
+    mode: "0755"
   loop:
-    - { src: bgp-agent.py.j2, dest: /usr/local/bin/extmon-bgp-agent.py, mode: "0755" }
-    - { src: diag-agent.py.j2, dest: /usr/local/bin/extmon-diag-agent.py, mode: "0755" }
-    - { src: bgp-agent.env.j2, dest: /etc/extmon/bgp-agent.env, mode: "0600" }
-    - { src: diag-agent.env.j2, dest: /etc/extmon/diag-agent.env, mode: "0600" }
+    - { src: bgp-agent.py.j2, dest: /usr/local/bin/extmon-bgp-agent.py }
+    - { src: diag-agent.py.j2, dest: /usr/local/bin/extmon-diag-agent.py }
+  notify:
+    - restart extmon-bgp-agent
+    - restart extmon-diag-agent
+  tags: [apply]
+
+# Secret-bearing env files are only managed when the corresponding token is
+# present in the controller environment. The nightly drift check runs without
+# the extmon tokens; skipping (instead of diffing an empty render against the
+# live 0600 file) keeps drift green while every other file is still checked.
+- name: Install extmon agent env files (skipped when tokens are absent)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - { src: bgp-agent.env.j2, dest: /etc/extmon/bgp-agent.env, token: "{{ extmon_bgp_ingest_token }}" }
+    - { src: diag-agent.env.j2, dest: /etc/extmon/diag-agent.env, token: "{{ extmon_diag_agent_token }}" }
+  when: item.token | length > 0
   no_log: true
   notify:
     - restart extmon-bgp-agent

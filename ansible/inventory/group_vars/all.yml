@@ -160,6 +160,7 @@ ssh_users:
   cr1-nl1: svag
   cr1-de1: svag
   cr1-ch1: svag
+  extmon: root      # Vultr image login — matches inventory ansible_user
   default: svag
 
 # --- Centralized logging (Vector → Loki) ---

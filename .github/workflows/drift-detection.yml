@@ -40,18 +40,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p drift-logs
-          playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved)
+          playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved extmon)
           status=0
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"
             log="drift-logs/${playbook}.log"
             # ci-pr lives on the customer-isolated segment and is managed from
-            # the ops workstation, not from the privileged ci runner. extmon is
-            # an external placeholder until its VPS is provisioned.
+            # the ops workstation, not from the privileged ci runner.
             if ! ansible-playbook "playbooks/${playbook}.yml" \
                 --check --diff \
                 --tags apply \
-                --limit 'all:!ci-pr:!extmon' \
+                --limit 'all:!ci-pr' \
                 -e ansible_user=ci \
                 -e "${playbook}_apply=true" 2>&1 | tee "${log}"; then
               status=1

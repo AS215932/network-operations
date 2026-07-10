@@ -123,7 +123,7 @@
   when: extmon_apply | bool
   tags: [apply]
 
-- name: Apply — firewall (ufw)
+- name: Apply — retire ufw (host firewall owned by roles/firewall)
   include_tasks: ufw.yml
   when: extmon_apply | bool
   tags: [apply]
