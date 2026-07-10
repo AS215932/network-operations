@@ -44,14 +44,19 @@ class AppPromotionBotTest(unittest.TestCase):
 
         self.assertIn("actions/create-github-app-token@v2", workflow_text)
         self.assertIn("GH_TOKEN: ${{ steps.app-token.outputs.token }}", workflow_text)
-        # The branch must be rebuilt from main (github.sha) every run, never
-        # continued from its old tip: once main moves a pin via a manually
+        # The branch must be rebuilt from origin/main every run — never
+        # continued from its old tip (once main moves a pin via a manually
         # merged deploy PR, a never-rebased branch wedges into permanent
-        # merge conflict (PR #316).
-        self.assertIn('git checkout -B "$BRANCH"', workflow_text)
+        # merge conflict, PR #316) and never based on github.sha (a
+        # workflow_dispatch from a feature ref must not publish that ref's
+        # commits to the promotion branch).
+        self.assertIn('git checkout -B "$BRANCH" origin/main', workflow_text)
         self.assertNotIn('git checkout -B "$BRANCH" "origin/$BRANCH"', workflow_text)
         # Still-pending pins from the old tip are carried forward only when
         # the app repo confirms they are ahead of main's value.
         self.assertIn("scripts/ci/pending-app-promotions.py", workflow_text)
         self.assertIn("Carry forward pending app promotions", workflow_text)
         self.assertIn('git push --force-with-lease origin "$BRANCH"', workflow_text)
+        # The PR body is rendered from the full branch-vs-main pin delta so it
+        # also covers carried-forward pins and main-relative rollback SHAs.
+        self.assertIn("--body-from-ref origin/main", workflow_text)

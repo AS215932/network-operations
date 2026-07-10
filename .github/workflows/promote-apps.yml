@@ -153,16 +153,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Rebuild the branch from main on every run instead of continuing
-          # from the old tip: manually merged deploy PRs move pins on main
-          # directly, and a promotion branch that never rebases wedges into
-          # permanent merge conflict (PR #316). Old-branch pins still ahead of
-          # main are carried forward; superseded ones are dropped.
+          # Rebuild the branch from origin/main on every run instead of
+          # continuing from the old tip: manually merged deploy PRs move pins
+          # on main directly, and a promotion branch that never rebases wedges
+          # into permanent merge conflict (PR #316). Old-branch pins still
+          # ahead of main are carried forward; superseded ones are dropped.
+          # Explicitly origin/main, not github.sha: a workflow_dispatch from a
+          # feature ref must not publish that ref's commits to the branch.
+          git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          git checkout -B "$BRANCH" origin/main
           carry=""
           if git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"; then
             carry="$(scripts/ci/pending-app-promotions.py --old-ref "origin/$BRANCH")"
           fi
-          git checkout -B "$BRANCH"
           if [ -n "$carry" ]; then
             # $carry is a flag list built by pending-app-promotions.py
             # shellcheck disable=SC2086
@@ -183,15 +186,21 @@ jobs:
           HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
           HYRULE_NETWORK_PROXY_SHA: ${{ steps.resolve.outputs.hyrule_network_proxy_sha }}
         run: |
-          scripts/ci/promote-app-pins.py \
-            --title "$PROMOTION_TITLE" \
-            --impact "$PROMOTION_IMPACT" \
-            --noc-agent-sha "$NOC_AGENT_SHA" \
-            --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
-            --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
-            --hyrule-web-sha "$HYRULE_WEB_SHA" \
-            --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA" \
-            --body-file /tmp/promotion-body.md
+          set -euo pipefail
+          # Empty inputs are a valid self-heal run: rebuild + carry-forward
+          # only, no new pins.
+          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
+            echo "No new app SHAs requested; carry-forward/self-heal run only." >> "$GITHUB_STEP_SUMMARY"
+          else
+            scripts/ci/promote-app-pins.py \
+              --title "$PROMOTION_TITLE" \
+              --impact "$PROMOTION_IMPACT" \
+              --noc-agent-sha "$NOC_AGENT_SHA" \
+              --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
+              --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
+              --hyrule-web-sha "$HYRULE_WEB_SHA" \
+              --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA"
+          fi
 
       - name: Validate pins
         run: scripts/ci/iac-static.sh
@@ -229,9 +238,10 @@ jobs:
           # remote branch is missing those, and also when pending is false but
           # a stale remote branch exists — that push heals it back to main.
           head="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
           remote="$(git rev-parse -q --verify "refs/remotes/origin/$BRANCH" || true)"
           pending=false
-          if [ "$head" != "$GITHUB_SHA" ]; then
+          if [ "$head" != "$main_sha" ]; then
             pending=true
           fi
           echo "pending=$pending" >> "$GITHUB_OUTPUT"
@@ -240,6 +250,22 @@ jobs:
           elif [ "$pending" = "true" ] || [ -n "$remote" ]; then
             git push --force-with-lease origin "$BRANCH"
           fi
+
+      - name: Render promotion body
+        if: steps.push.outputs.pending == 'true'
+        env:
+          PROMOTION_TITLE: ${{ steps.resolve.outputs.title }}
+          PROMOTION_IMPACT: ${{ steps.resolve.outputs.impact }}
+        run: |
+          set -euo pipefail
+          # Render from the full branch-vs-main pin delta, not this run's
+          # inputs: the body must also cover carried-forward pins, and its
+          # rollback SHAs must be main's current (deployed) values.
+          scripts/ci/promote-app-pins.py \
+            --body-from-ref origin/main \
+            --title "$PROMOTION_TITLE" \
+            --impact "$PROMOTION_IMPACT" \
+            --body-file /tmp/promotion-body.md
 
       - name: Open or update promotion PR
         if: steps.push.outputs.pending == 'true'
