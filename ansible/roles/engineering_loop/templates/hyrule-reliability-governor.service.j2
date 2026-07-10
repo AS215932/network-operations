@@ -1,0 +1,37 @@
+# /etc/systemd/system/hyrule-reliability-governor.service
+# Managed by ansible/roles/engineering_loop. One timer fire reconciles GitHub
+# intake/candidate issues through Reliability Governor policy. It posts an
+# auditable decision record before label changes and never executes code.
+
+[Unit]
+Description=AS215932 Reliability Governor issue-routing pass
+After=network-online.target vault-agent-engineering-loop.service hyrule-knowledge-mcp.service
+Wants=network-online.target vault-agent-engineering-loop.service hyrule-knowledge-mcp.service
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=oneshot
+User={{ engineering_loop_user }}
+Group={{ engineering_loop_group }}
+WorkingDirectory={{ engineering_loop_install_dir }}
+Environment=HOME={{ engineering_loop_state_dir }}
+Environment=HYRULE_MODEL_POLICY_FILE={{ engineering_loop_install_dir }}/configs/loop/model-policy.production.yml
+EnvironmentFile={{ engineering_loop_env_file }}
+ExecStart={{ engineering_loop_governor_wrapper_path }}
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reliability-governor
+
+# Security hardening. The Governor writes only local decision records and uses
+# GitHub labels/comments for routing; it does not run the backend.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths={{ engineering_loop_install_dir }} {{ engineering_loop_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

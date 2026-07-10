@@ -7,28 +7,37 @@
 # captures this before and after a change and diffs the two to catch regressions
 # the rollout introduced (network-operations#149).
 #
-# Reads the local icinga2 API as the read-only `noc-agent` ApiUser (creds in
-# /etc/icinga2/scripts/.icinga-snapshot.env, rendered by the icinga2 role).
-# Degrades gracefully — any missing dependency or API error exits 0 with empty
-# output, so it never fails a deploy (the caller uses failed_when: false too).
+# Reads the local icinga2 API as the read-only `noc-agent` ApiUser. Credentials
+# are normally in /etc/icinga2/scripts/.icinga-snapshot.env (rendered by the
+# icinga2 role), but CI/apply may pass ICINGA_API_USER/ICINGA_API_PASS through
+# the environment while bootstrapping or repairing snapshot safety.
 
 set -eu
 
 env_file=/etc/icinga2/scripts/.icinga-snapshot.env
-if [ ! -r "$env_file" ]; then
-  echo "icinga-snapshot: $env_file missing (run the icinga2 role)" >&2
-  exit 0
+if [ -r "$env_file" ]; then
+  # shellcheck disable=SC1090
+  . "$env_file"
+elif [ -n "${ICINGA_API_USER:-}" ] && { [ -n "${ICINGA_API_PASS:-}" ] || [ -n "${ICINGA_API_PASSWORD:-}" ]; }; then
+  ICINGA_API_PASS="${ICINGA_API_PASS:-$ICINGA_API_PASSWORD}"
+else
+  echo "icinga-snapshot: $env_file missing and ICINGA_API_USER/ICINGA_API_PASS env not set" >&2
+  exit 2
 fi
-# shellcheck disable=SC1090
-. "$env_file"
 
 : "${ICINGA_API_URL:=https://localhost:5665}"
-: "${ICINGA_API_USER:?ICINGA_API_USER unset in env file}"
-: "${ICINGA_API_PASS:?ICINGA_API_PASS unset in env file}"
+if [ -z "${ICINGA_API_USER:-}" ]; then
+  echo "icinga-snapshot: ICINGA_API_USER empty/unset in env file/env" >&2
+  exit 2
+fi
+if [ -z "${ICINGA_API_PASS:-}" ]; then
+  echo "icinga-snapshot: ICINGA_API_PASS empty/unset in env file/env" >&2
+  exit 2
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "icinga-snapshot: jq not installed" >&2
-  exit 0
+  exit 2
 fi
 
 # Services not OK (state != 0) and in a HARD state (state_type == 1). POST with a
@@ -40,7 +49,13 @@ resp=$(curl -fsS -k \
   -d '{"filter":"service.state!=0 && service.state_type==1","attrs":["state"],"joins":["host.name"]}' \
   "${ICINGA_API_URL}/v1/objects/services" 2>/dev/null) || {
   echo "icinga-snapshot: icinga2 API query failed" >&2
-  exit 0
+  exit 2
 }
 
-printf '%s' "$resp" | jq -r '.results[]? | "\(.name)\tstate=\(.attrs.state)"' | sort
+lines=$(printf '%s' "$resp" | jq -r '.results[]? | "\(.name)\tstate=\(.attrs.state)"') || {
+  echo "icinga-snapshot: failed to parse icinga2 API response" >&2
+  exit 2
+}
+if [ -n "$lines" ]; then
+  printf '%s\n' "$lines" | sort
+fi

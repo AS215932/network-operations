@@ -57,6 +57,7 @@
     - { path: "{{ engineering_loop_workspace_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_runs_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_daemon_state_dir }}", mode: "0750" }
+    - { path: "{{ engineering_loop_governor_state_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_memory_dir }}", mode: "0750" }
     - { path: "{{ engineering_loop_git_askpass_path | dirname }}", owner: root, group: "{{ engineering_loop_group }}", mode: "0750" }
 
@@ -162,6 +163,15 @@
     mode: "0750"
   notify: restart engineering-loop timer
 
+- name: Install Reliability Governor wrapper
+  ansible.builtin.template:
+    src: run-reliability-governor.sh.j2
+    dest: "{{ engineering_loop_governor_wrapper_path }}"
+    owner: root
+    group: "{{ engineering_loop_group }}"
+    mode: "0750"
+  notify: restart reliability-governor timer
+
 - name: Install Engineering Loop systemd service
   ansible.builtin.template:
     src: hyrule-engineering-loop.service.j2
@@ -172,6 +182,17 @@
   notify:
     - reload systemd
     - restart engineering-loop timer
+
+- name: Install Reliability Governor systemd service
+  ansible.builtin.template:
+    src: hyrule-reliability-governor.service.j2
+    dest: /etc/systemd/system/hyrule-reliability-governor.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart reliability-governor timer
 
 - name: Install Engineering Loop systemd timer
   ansible.builtin.template:
@@ -184,9 +205,35 @@
     - reload systemd
     - restart engineering-loop timer
 
+- name: Install Reliability Governor systemd timer
+  ansible.builtin.template:
+    src: hyrule-reliability-governor.timer.j2
+    dest: /etc/systemd/system/hyrule-reliability-governor.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart reliability-governor timer
+
+- name: Install agent-core trace logrotate policy
+  ansible.builtin.template:
+    src: agent-core-trace.logrotate.j2
+    dest: /etc/logrotate.d/engineering-loop-agent-core-trace
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Set Engineering Loop timer state
   ansible.builtin.systemd:
     name: hyrule-engineering-loop.timer
     enabled: "{{ engineering_loop_timer_enabled | bool }}"
     state: "{{ 'started' if engineering_loop_timer_enabled | bool else 'stopped' }}"
+    daemon_reload: true
+
+- name: Set Reliability Governor timer state
+  ansible.builtin.systemd:
+    name: hyrule-reliability-governor.timer
+    enabled: "{{ engineering_loop_governor_timer_enabled | bool }}"
+    state: "{{ 'started' if engineering_loop_governor_timer_enabled | bool else 'stopped' }}"
     daemon_reload: true

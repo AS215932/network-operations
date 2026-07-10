@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: PR-Agent
-        uses: The-PR-Agent/pr-agent@ffe1f89a4dafc7d8e88b9cf010a3233e30b49f43  # v0.36.0
+        uses: The-PR-Agent/pr-agent@8e4d32e5497defd43c023a404f73560c62728961  # v0.39.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # PR-Agent reads the OpenRouter key from openrouter__key; litellm also

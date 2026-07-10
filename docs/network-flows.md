@@ -189,11 +189,12 @@ Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch ac
 
 ### netproxy (`2a0c:b641:b50:2::e0`)
 
-Planned internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud
-network requests. Hyrule Cloud verifies payment; this host only executes
-internal request jobs. It is not live yet; Prometheus scrape targets remain
-disabled until [#214](https://github.com/AS215932/network-operations/issues/214)
-completes the rollout.
+Internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud network
+requests. Hyrule Cloud verifies payment; this host only executes internal
+request jobs. Prometheus scrape targets (node_exporter `:9100` and sidecar
+metrics `:8451`) are enabled and go green once the VM is provisioned and the
+sidecar applied per
+[#214](https://github.com/AS215932/network-operations/issues/214).
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
@@ -211,20 +212,24 @@ SSRF/IP policy.
 Dedicated Engineering Loop operations-lane VM. It consumes human-approved
 `loop:approved` GitHub issues and stops at draft PRs. It is not an infra deploy
 source: no fleet SSH key, no app runtime secrets, no Vault breadth, and no public
-listener beyond node_exporter for mon. A containerized `hyrule-knowledge-mcp`
-service binds to `127.0.0.1:8767` only, exposing streamable HTTP MCP at `/mcp`,
-legacy SSE at `/sse` when configured, and `/health` for local smoke checks.
+listener beyond node_exporter for mon and the Agent-Core collector allowlist.
+A containerized `hyrule-knowledge-mcp` service binds to `127.0.0.1:8767` only,
+exposing streamable HTTP MCP at `/mcp`, legacy SSE at `/sse` when configured,
+and `/health` for local smoke checks. The `agent-core-collector` container binds
+`2a0c:b641:b50:2::f0:8770` and stores traces in local Postgres.
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | mon | TCP | 9100 | node_exporter scrape |
+| loop, noc, mon | TCP | 8770 | Agent-Core trace collector ingest (`/v1/trace`, `/v1/trace/batch`) and mon `/healthz` check |
 | ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
 
 Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
 pushes, draft PRs, and knowledge MCP image source checkouts/build context),
 loop → model provider APIs TCP/443 (through the selected backend/provider auth),
 loop → mon TCP/5665 (Icinga passive check submission), loop → log TCP/6000
-(Vector agent), loop → vault TCP/8200 (Vault Agent render). Docker bridge
+(Vector agent), loop → vault TCP/8200 (Vault Agent render), local loop producers
+→ loop TCP/8770 (Agent-Core trace ingestion). Docker bridge
 containers receive routed GUA addresses from `2a0c:b641:b50:f0::/64`, query
 rtr Unbound over IPv6, and use routed IPv6 egress for container base-image and
 package downloads. loop does **not** SSH to the infra fleet.

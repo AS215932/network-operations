@@ -13,6 +13,12 @@
     email {{ acme_email | default('admin@servify.network') }}
 }
 
+# Canonicalize the DNS-root-dot spelling browsers may preserve from copied FQDNs.
+:443 {
+    @observatory_root_dot host observatory.servify.network.
+    redir @observatory_root_dot https://observatory.servify.network{uri} permanent
+}
+
 # API — cloud.hyrule.host (canonical) and api.hyrule.host (compatibility)
 cloud.hyrule.host, api.hyrule.host {
     tls {
@@ -192,6 +198,42 @@ as215932.net, www.as215932.net {
 
     log {
         output file /var/log/caddy/as215932.log
+    }
+}
+
+# Agentic Observatory — internal operator-only console.
+observatory.servify.network {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key {{ tsig_secret }}
+        }
+        propagation_delay 60s
+    }
+
+    reverse_proxy [{{ peers.loop.ipv6 }}]:8780 {
+        transport http {
+            dial_timeout 3s
+            response_header_timeout 8s
+            read_timeout 30s
+            write_timeout 30s
+            keepalive 30s
+            keepalive_idle_conns 10
+        }
+    }
+
+    header {
+        X-Forwarded-Proto https
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "same-origin"
+    }
+
+    log {
+        output file /var/log/caddy/agentic-observatory.log
     }
 }
 

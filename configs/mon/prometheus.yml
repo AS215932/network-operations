@@ -34,6 +34,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::b0]:9100"   # log
           - "[2a0c:b641:b50:2::c0]:9100"   # vault
           - "[2a0c:b641:b50:2::d0]:9100"   # ci (privileged runner)
+          - "[2a0c:b641:b50:2::e0]:9100"   # netproxy
           - "[2a0c:b641:b50:2::f0]:9100"   # loop (Engineering Loop / Knowledge MCP)
         labels:
           site: ovh1
@@ -243,5 +244,27 @@ scrape_configs:
           site: ovh1
           role: noc
 
-  # netproxy / hyrule-network-proxy is intentionally not live yet. Keep its
-  # node_exporter and sidecar metrics targets disabled until issue #214 closes.
+  - job_name: hyrule-network-proxy
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::e0]:8451"   # hyrule-network-proxy sidecar metrics
+        labels:
+          site: ovh1
+          role: netproxy
+
+  - job_name: hyrule-cloud
+    metrics_path: /metrics
+    # DB-backed payments/VM metrics from the hyrule-cloud app (x402 launch).
+    # 8402 is also the public API port behind Caddy, so the endpoint requires a
+    # bearer token; the operator writes it from Vault kv/hyrule-cloud:metrics_token
+    # (see hyrule-cloud docs/runbooks/x402-launch.md).
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/hyrule-cloud-metrics.token
+    static_configs:
+      - targets:
+          - "[2a0c:b641:b50:2::20]:8402"   # hyrule-cloud API app metrics
+        labels:
+          site: ovh1
+          role: api

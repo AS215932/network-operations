@@ -5,9 +5,20 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: b056383e758fa73c6028c38439e79245518ef852
-hyrule_mcp_version: 05b1245710e6a67ad40ccd62c033755f48ad4958
-noc_knowledge_version: 5a6666cbb9d290868db3fb854ffed39099515b91
+noc_agent_version: a7f0432b01ed525c4529deb78b6a294b05e6e99d
+hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
+
+# Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
+# DeepSeek V4 Flash as fallback; venice:deepseek-v4-flash keeps the chain
+# provider-redundant (issue #393 — a single OpenRouter key cap must not take
+# triage down; Venice does not host Hunyuan). venice: entries require
+# noc-agent >= a7f0432 (venice provider) and venice_api_key in kv/noc-agent.
+noc_agent_model: "openrouter:tencent/hy3"
+noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
+# Pinned to the Knowledge refresh that emits A0 GitHub issue context plus A1
+# routing policy context for loop:knowledge-gap routing (AS215932/knowledge#32,
+# #33).
+noc_knowledge_version: 9baa92c299536901c623952415b9513cd4076b10
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
@@ -21,6 +32,8 @@ noc_case_verification_dry_run: false
 noc_case_auto_resolve_enabled: false
 noc_disk_alert_handoff_enabled: true
 noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
+noc_agent_core_trace_enabled: true
+noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their

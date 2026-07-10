@@ -16,6 +16,13 @@ class ProductionAppVersionPinsTest(unittest.TestCase):
             "ansible/inventory/host_vars/api.yml": ("hyrule_cloud_version",),
             "ansible/inventory/host_vars/web.yml": ("hyrule_web_version",),
             "ansible/inventory/host_vars/netproxy.yml": ("hyrule_network_proxy_version",),
+            "ansible/inventory/host_vars/loop.yml": (
+                "engineering_loop_version",
+                "knowledge_mcp_version",
+                "knowledge_loop_version",
+                "agent_core_collector_version",
+                "agentic_observatory_version",
+            ),
         }
 
         for rel_path, keys in cases.items():

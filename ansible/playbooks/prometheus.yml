@@ -1,0 +1,23 @@
+---
+# prometheus — manage mon-side Prometheus alerting/recording rules under
+# /etc/prometheus/rules.d/ (loaded by configs/mon/prometheus.yml rule_files).
+# Replaces the manual "cp the rule file onto mon + reload" step; rule changes
+# now deploy through app-promotion-deploy → apply.yml like any other host.
+#
+# Scope is rules only. Alertmanager delivery (prometheus.yml → 127.0.0.1:9093 →
+# noc-agent) is tracked separately and NOT provisioned here.
+#
+# Render-only (dry run):
+#   ansible-playbook playbooks/prometheus.yml --tags validate \
+#       --connection=local --skip-tags=snapshot --limit mon
+# Apply (live):
+#   ansible-playbook playbooks/prometheus.yml --tags apply \
+#       -e '{"prometheus_apply":true}' --limit mon
+
+- name: prometheus — validate + apply mon rules
+  hosts: mon
+  gather_facts: true
+  become: true
+  roles:
+    - prometheus
+  tags: [prometheus]

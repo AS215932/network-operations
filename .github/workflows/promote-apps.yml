@@ -55,7 +55,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -150,12 +150,30 @@ jobs:
       - name: Load promotion branch
         env:
           BRANCH: promotion/app-sha-pins
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if git fetch origin "$BRANCH"; then
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-          else
-            git checkout -B "$BRANCH"
+          # Rebuild the branch from origin/main on every run instead of
+          # continuing from the old tip: manually merged deploy PRs move pins
+          # on main directly, and a promotion branch that never rebases wedges
+          # into permanent merge conflict (PR #316). Old-branch pins still
+          # ahead of main are carried forward; superseded ones are dropped.
+          # Explicitly origin/main, not github.sha: a workflow_dispatch from a
+          # feature ref must not publish that ref's commits to the branch.
+          git fetch origin "+refs/heads/main:refs/remotes/origin/main"
+          git checkout -B "$BRANCH" origin/main
+          carry=""
+          if git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"; then
+            carry="$(scripts/ci/pending-app-promotions.py --old-ref "origin/$BRANCH")"
+          fi
+          if [ -n "$carry" ]; then
+            # $carry is a flag list built by pending-app-promotions.py
+            # shellcheck disable=SC2086
+            scripts/ci/promote-app-pins.py $carry --title "Carry forward pending app promotions"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+            git commit -m "Carry forward pending app promotions"
           fi
 
       - name: Update app pins
@@ -168,15 +186,21 @@ jobs:
           HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
           HYRULE_NETWORK_PROXY_SHA: ${{ steps.resolve.outputs.hyrule_network_proxy_sha }}
         run: |
-          scripts/ci/promote-app-pins.py \
-            --title "$PROMOTION_TITLE" \
-            --impact "$PROMOTION_IMPACT" \
-            --noc-agent-sha "$NOC_AGENT_SHA" \
-            --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
-            --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
-            --hyrule-web-sha "$HYRULE_WEB_SHA" \
-            --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA" \
-            --body-file /tmp/promotion-body.md
+          set -euo pipefail
+          # Empty inputs are a valid self-heal run: rebuild + carry-forward
+          # only, no new pins.
+          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
+            echo "No new app SHAs requested; carry-forward/self-heal run only." >> "$GITHUB_STEP_SUMMARY"
+          else
+            scripts/ci/promote-app-pins.py \
+              --title "$PROMOTION_TITLE" \
+              --impact "$PROMOTION_IMPACT" \
+              --noc-agent-sha "$NOC_AGENT_SHA" \
+              --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
+              --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
+              --hyrule-web-sha "$HYRULE_WEB_SHA" \
+              --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA"
+          fi
 
       - name: Validate pins
         run: scripts/ci/iac-static.sh
@@ -187,7 +211,7 @@ jobs:
           set -euo pipefail
           if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No app pin changes requested; promotion PR not needed." >> "$GITHUB_STEP_SUMMARY"
+            echo "No new app pin changes from this run." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -195,7 +219,6 @@ jobs:
       - name: Commit promotion branch
         if: steps.diff.outputs.changed == 'true'
         env:
-          BRANCH: promotion/app-sha-pins
           COMMIT_MESSAGE: ${{ steps.resolve.outputs.title }}
         run: |
           set -euo pipefail
@@ -203,20 +226,74 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
           git commit -m "$COMMIT_MESSAGE"
-          git push --force-with-lease origin "$BRANCH"
+
+      - name: Push promotion branch
+        id: push
+        env:
+          BRANCH: promotion/app-sha-pins
+        run: |
+          set -euo pipefail
+          # pending = the branch carries promotions main does not have (new
+          # pins this run and/or carried-forward ones). Push whenever the
+          # remote branch is missing those, and also when pending is false but
+          # a stale remote branch exists — that push heals it back to main.
+          head="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse refs/remotes/origin/main)"
+          remote="$(git rev-parse -q --verify "refs/remotes/origin/$BRANCH" || true)"
+          pending=false
+          if [ "$head" != "$main_sha" ]; then
+            pending=true
+          fi
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          if [ "$head" = "${remote:-}" ]; then
+            echo "Remote $BRANCH already up to date." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$pending" = "true" ] || [ -n "$remote" ]; then
+            git push --force-with-lease origin "$BRANCH"
+          fi
+
+      - name: Render promotion body
+        if: steps.push.outputs.pending == 'true'
+        env:
+          PROMOTION_TITLE: ${{ steps.resolve.outputs.title }}
+          PROMOTION_IMPACT: ${{ steps.resolve.outputs.impact }}
+        run: |
+          set -euo pipefail
+          # Render from the full branch-vs-main pin delta, not this run's
+          # inputs: the body must also cover carried-forward pins, and its
+          # rollback SHAs must be main's current (deployed) values.
+          scripts/ci/promote-app-pins.py \
+            --body-from-ref origin/main \
+            --title "$PROMOTION_TITLE" \
+            --impact "$PROMOTION_IMPACT" \
+            --body-file /tmp/promotion-body.md
 
       - name: Open or update promotion PR
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.push.outputs.pending == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: promotion/app-sha-pins
           PR_TITLE: ${{ steps.resolve.outputs.title }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          # Use the REST API rather than `gh pr create`/`gh pr edit`: those issue a
+          # GraphQL projectCards query that hard-fails (exit 1) since GitHub's
+          # Projects-classic sunset, which previously blocked every promotion PR.
+          body="$(cat /tmp/promotion-body.md)"
+          existing="$(gh api \
+            "repos/${REPO}/pulls?head=${REPO%%/*}:${BRANCH}&state=open" \
+            --jq '.[0].number // empty')"
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
+            gh api --method PATCH "repos/${REPO}/pulls/${existing}" \
+              -f title="$PR_TITLE" \
+              -f body="$body" >/dev/null
             echo "Updated PR #$existing" >> "$GITHUB_STEP_SUMMARY"
           else
-            gh pr create --base main --head "$BRANCH" --title "$PR_TITLE" --body-file /tmp/promotion-body.md
+            number="$(gh api --method POST "repos/${REPO}/pulls" \
+              -f title="$PR_TITLE" \
+              -f head="$BRANCH" \
+              -f base=main \
+              -f body="$body" \
+              --jq '.number')"
+            echo "Opened PR #$number" >> "$GITHUB_STEP_SUMMARY"
           fi

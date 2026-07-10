@@ -53,6 +53,15 @@ the merged app SHAs into the relevant inputs. Use this when a dispatch failed,
 when a coordinated promotion should pin multiple app repos at once, or when an
 operator intentionally wants to replay a promotion request.
 
+The workflow rebuilds `promotion/app-sha-pins` from `origin/main` on every run
+and carries forward only pins the app repo confirms are still ahead of main,
+so manually merged deploy PRs can no longer wedge the branch into merge
+conflict (PR #316). Running promote-apps with **all SHA inputs empty** is a
+supported self-heal: it rebuilds the branch without promoting anything new.
+If no pending pins remain, the branch resets to match main and no PR is
+opened; pins still ahead of main are carried forward and the promotion PR is
+(re)opened to cover them.
+
 `apply.yml` itself is not a push-triggered workflow. It runs when either:
 
 - an operator manually starts it with `workflow_dispatch`, or

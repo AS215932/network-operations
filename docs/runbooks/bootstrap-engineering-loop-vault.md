@@ -155,13 +155,34 @@ Use the production workflow after the policies and KV entry exist:
 5. Confirm `/etc/engineering-loop/github-app.private-key.pem` exists with
    owner `root`, group `loop`, and mode `0640`.
 6. Confirm `vault-agent-engineering-loop.service` is active.
-7. Run a manual empty-queue or docs-only canary before enabling the timer.
-8. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
-   docs-only draft PR canary pass.
+7. Run a manual empty-queue or docs-only canary before enabling the Engineering
+   daemon timer.
+8. Run and inspect a real Reliability Governor dry run before enabling the
+   Governor timer:
+   `sudo -u loop -H /usr/local/lib/engineering-loop/run-reliability-governor --dry-run`
+   The wrapper loads `/opt/engineering-loop/.env` itself as literal `KEY=value`
+   data, matching the systemd unit's `EnvironmentFile=` source without
+   evaluating secrets as shell syntax.
+9. Keep `hyrule-engineering-loop.timer` disabled until Pi auth and the
+   docs-only draft PR canary pass. Keep `hyrule-reliability-governor.timer`
+   disabled until the Governor dry run shows conservative routing, healthy
+   Knowledge MCP context, and successful NOC LHP fetches.
+
+Repeat applies can run without a fresh SecretID when the Vault Agent service is
+already active, no rendered Vault Agent files changed, and the rendered
+destinations still exist. Any apply that changes the Vault Agent unit,
+configuration, or templates still needs a fresh wrapped SecretID or an existing
+unconsumed SecretID file so the service can restart safely. The token sink is
+Vault Agent output state for clients, not restart bootstrap input.
+No-secret repeat applies preserve the existing response-wrapped AppRole mode in
+the rendered Vault Agent configuration, so omitting `VAULT_*_WRAPPED_SECRET_ID`
+does not rewrite the HCL into direct-SecretID mode.
 
 ## Rollback
 
 ```bash
+systemctl disable --now hyrule-reliability-governor.timer
+systemctl stop hyrule-reliability-governor.service
 systemctl disable --now hyrule-engineering-loop.timer
 systemctl stop hyrule-engineering-loop.service
 systemctl stop vault-agent-engineering-loop.service
