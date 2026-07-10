@@ -3,6 +3,10 @@
   asn: 215932
   ignoreMorespecifics: false
   group: default
+  path:
+    - matchDescription: "path to 2a0c:b641:b50::/44 via unexpected adjacent ASN (expected: 34872, 210233, 58057, 56755)"
+      match: "(^|,)215932$"
+      notMatch: "(^|,)(34872|210233|58057|56755)(,215932)+$"
 
 options:
   monitorASns:

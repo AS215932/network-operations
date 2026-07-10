@@ -122,20 +122,29 @@ def poll_bgp_tools() -> None:
             row = json.loads(line)
             cidr = row.get("CIDR")
             if cidr in wanted:
-                found[cidr] = {"asn": int(row.get("ASN", 0)), "hits": int(row.get("Hits", 0))}
+                # bgp.tools exports one row per origin for the same CIDR in
+                # MOAS/hijack cases — accumulate every origin instead of keeping
+                # only the last row, or a hijacker's origin could mask ours (or
+                # vice versa) in bgp_prefix_origin_visible.
+                entry = found.setdefault(cidr, {"origins": [], "hits": {}})
+                asn = int(row.get("ASN", 0))
+                if asn not in entry["origins"]:
+                    entry["origins"].append(asn)
+                entry["hits"][asn] = int(row.get("Hits", 0))
     with STATE_LOCK:
         # Update *every* wanted prefix, not just the ones present this fetch, so a
         # withdrawn/removed prefix flips to invisible instead of exporting its last
         # visible=True origin forever. Clear stale per-origin hit counters too.
         for prefix in wanted:
-            row = found.get(prefix)
+            entry = found.get(prefix)
             STATE["prefixes"].setdefault(prefix, {})["bgp_tools"] = (
-                {"visible": True, "origins": [row["asn"]]} if row else {"visible": False, "origins": []}
+                {"visible": True, "origins": list(entry["origins"])} if entry else {"visible": False, "origins": []}
             )
             for stale in [k for k in STATE["bgp_tools_hits"] if k[0] == prefix]:
                 del STATE["bgp_tools_hits"][stale]
-            if row:
-                STATE["bgp_tools_hits"][(prefix, str(row["asn"]))] = row["hits"]
+            if entry:
+                for asn, hit_count in entry["hits"].items():
+                    STATE["bgp_tools_hits"][(prefix, str(asn))] = hit_count
     _set_source("bgp_tools", True)
     _bgp_tools_last_fetch = time.time()
 

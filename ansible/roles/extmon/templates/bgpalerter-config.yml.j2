@@ -25,6 +25,15 @@ monitors:
     params:
       thresholdMinPeers: 1
 
+  # Same-AS more-specifics (monitorHijack only covers announcements by *other*
+  # origins) — without this monitor nothing produces the `newprefix` channel
+  # the report below subscribes to.
+  - file: monitorNewPrefix
+    channel: newprefix
+    name: newprefix-detection
+    params:
+      thresholdMinPeers: 3
+
   - file: monitorVisibility
     channel: visibility
     name: withdrawal-detection
