@@ -51,6 +51,19 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn('path.startswith("configs/mon/prometheus-rules/")', workflow_text)
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
 
+    def test_alertmanager_changes_trigger_mon_apply(self):
+        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+
+        # Trigger paths, git-diff scope, and detect logic must all cover the mon
+        # Alertmanager role/template so a delivery-config edit deploys via
+        # apply.yml → mon (the endpoint Prometheus routes alerts to).
+        self.assertIn("configs/mon/alertmanager.yml.j2", workflow_text)
+        self.assertIn("ansible/roles/alertmanager/**", workflow_text)
+        self.assertIn("ansible/roles/alertmanager \\", workflow_text)
+        self.assertIn("ansible/playbooks/alertmanager.yml", workflow_text)
+        self.assertIn('path == "configs/mon/alertmanager.yml.j2"', workflow_text)
+        self.assertIn('add_once("alertmanager", "mon")', workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

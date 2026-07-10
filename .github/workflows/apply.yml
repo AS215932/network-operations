@@ -23,6 +23,7 @@ on:
           - monitoring
           - icinga2
           - prometheus
+          - alertmanager
           - logs
           - cloud
           - cloud_reprovision_vm
