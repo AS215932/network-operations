@@ -15,12 +15,20 @@ soc_agent_group: soc-agent
 soc_agent_install_dir: /opt/soc-agent
 soc_agent_config_dir: /etc/soc-agent
 soc_agent_state_dir: /var/lib/soc-agent
-soc_agent_env_file: "{{ soc_agent_install_dir }}/.env"
+# Non-secret mode/kill-switch env rendered by this role; secrets rendered by
+# Vault Agent into soc_agent_secrets_env_file (optional for shadow mode).
+soc_agent_mode_env_file: "{{ soc_agent_config_dir }}/soc-agent.env"
+soc_agent_secrets_env_file: "{{ soc_agent_install_dir }}/.env"
 
-# Cloned via a per-deploy SSH alias (mirror the noc-agent deploy-key pattern).
-soc_agent_repo: "git@github-soc-agent:AS215932/soc-agent.git"
-# Pin to an exact reviewed SHA before the first apply (promotion-PR discipline).
+# Public repo — https clone, no deploy key/SSH alias needed (engineering-loop
+# pattern).
+soc_agent_repo: "https://github.com/AS215932/soc-agent.git"
+# MUST be an exact reviewed 40-char SHA before the first live apply — the
+# validate step rejects a moving ref when soc_agent_apply=true (promotion-PR
+# discipline; see docs/ci/deploy-runbook.md).
 soc_agent_version: main
+
+soc_agent_uv_path: /usr/local/bin/uv
 
 # The FastAPI app serves the LHP origin endpoints (payload fetch + callbacks).
 soc_agent_listen_host: "::"
@@ -34,6 +42,10 @@ soc_redteam_enabled: false
 soc_redteam_allow_active_probes: false
 soc_lhp_enabled: false
 soc_case_verification_dry_run: true
+
+# Insight stream (agent-core loop decision envelopes) toward the collector.
+soc_agent_core_trace_enabled: false
+soc_agent_core_trace_collector_url: ""
 
 # Posture scan timer (socctl posture run-once). Disabled until the operator
 # flips it in host_vars after the first supervised runs.

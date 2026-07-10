@@ -12,9 +12,16 @@
       # docs/runbooks/soc-mode-promotion.md).
       - soc_mode == 'shadow' or soc_lhp_enabled | bool
       - soc_redteam_allow_active_probes | bool == false
+      # Live applies deploy exact reviewed SHAs, never a moving ref.
+      - >-
+        not (soc_agent_apply | bool)
+        or (soc_agent_version | length == 40
+            and soc_agent_version is match('^[0-9a-f]{40}$'))
     fail_msg: >-
       SOC rollout must climb the SOC_MODE ladder one reviewed rung at a time;
-      active red-team probes stay off in v1 (redteam-safety-policy.md).
+      active red-team probes stay off in v1 (redteam-safety-policy.md); and a
+      live apply requires soc_agent_version pinned to an exact 40-character
+      commit SHA.
   tags: [validate, always]
 
 - name: Apply SOC Agent runtime

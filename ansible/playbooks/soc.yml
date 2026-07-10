@@ -6,8 +6,10 @@
 # gate each rung.
 #
 # No inventory host carries the `soc` group yet — add the target VM (and its
-# host_vars, peers entry, network-flows rows, monitoring registration) in the
-# same PR that first schedules this playbook.
+# host_vars, peers entry, network-flows rows, monitoring registration, plus
+# the vault_agent play wiring for soc-agent.env.ctmpl.j2) in the same PR that
+# first schedules this playbook. soc_agent_version must be an exact reviewed
+# SHA before the first apply (validate enforces this).
 #
 # Validate (no live changes; runs from controller):
 #   ansible-playbook playbooks/soc.yml --tags validate \
@@ -19,5 +21,23 @@
 - name: Deploy SOC Agent
   hosts: soc
   become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
   roles:
     - role: soc_agent
+  post_tasks:
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]

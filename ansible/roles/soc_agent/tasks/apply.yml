@@ -25,12 +25,17 @@
     - "{{ soc_agent_config_dir }}"
     - "{{ soc_agent_state_dir }}"
 
+- name: Install uv (Python package manager)
+  ansible.builtin.shell:
+    cmd: |
+      curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+    creates: "{{ soc_agent_uv_path }}"
+
 - name: Clone SOC Agent at pinned version
   ansible.builtin.git:
     repo: "{{ soc_agent_repo }}"
     dest: "{{ soc_agent_install_dir }}/repo"
     version: "{{ soc_agent_version }}"
-    accept_newhostkey: true
   become_user: "{{ soc_agent_user }}"
   notify:
     - restart soc-posture timer
@@ -38,11 +43,22 @@
 
 - name: Sync SOC Agent dependencies
   ansible.builtin.command:
-    cmd: uv sync --frozen
+    cmd: "{{ soc_agent_uv_path }} sync --frozen"
     chdir: "{{ soc_agent_install_dir }}/repo"
   become_user: "{{ soc_agent_user }}"
   register: soc_agent_uv_sync
   changed_when: "'No changes' not in soc_agent_uv_sync.stderr"
+
+- name: Render SOC mode/kill-switch environment (non-secret)
+  ansible.builtin.template:
+    src: soc-agent-mode.env.j2
+    dest: "{{ soc_agent_mode_env_file }}"
+    owner: root
+    group: "{{ soc_agent_group }}"
+    mode: "0640"
+  notify:
+    - restart soc-posture timer
+    - restart soc-agent service
 
 - name: Install soc-posture service
   ansible.builtin.template:
@@ -64,3 +80,20 @@
     dest: /etc/systemd/system/soc-agent.service
     mode: "0644"
   notify: restart soc-agent service
+
+# Enforce the desired unit states on every apply — a promotion PR that only
+# flips soc_posture_timer_enabled/soc_agent_service_enabled must take effect
+# even when no template changed (handlers alone would never fire).
+- name: Enforce soc-posture timer state
+  ansible.builtin.systemd:
+    name: soc-posture.timer
+    state: "{{ 'started' if soc_posture_timer_enabled | bool else 'stopped' }}"
+    enabled: "{{ soc_posture_timer_enabled | bool }}"
+    daemon_reload: true
+
+- name: Enforce soc-agent service state
+  ansible.builtin.systemd:
+    name: soc-agent.service
+    state: "{{ 'started' if soc_agent_service_enabled | bool else 'stopped' }}"
+    enabled: "{{ soc_agent_service_enabled | bool }}"
+    daemon_reload: true
