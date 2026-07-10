@@ -150,12 +150,27 @@ jobs:
       - name: Load promotion branch
         env:
           BRANCH: promotion/app-sha-pins
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if git fetch origin "$BRANCH"; then
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-          else
-            git checkout -B "$BRANCH"
+          # Rebuild the branch from main on every run instead of continuing
+          # from the old tip: manually merged deploy PRs move pins on main
+          # directly, and a promotion branch that never rebases wedges into
+          # permanent merge conflict (PR #316). Old-branch pins still ahead of
+          # main are carried forward; superseded ones are dropped.
+          carry=""
+          if git fetch origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"; then
+            carry="$(scripts/ci/pending-app-promotions.py --old-ref "origin/$BRANCH")"
+          fi
+          git checkout -B "$BRANCH"
+          if [ -n "$carry" ]; then
+            # $carry is a flag list built by pending-app-promotions.py
+            # shellcheck disable=SC2086
+            scripts/ci/promote-app-pins.py $carry --title "Carry forward pending app promotions"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+            git commit -m "Carry forward pending app promotions"
           fi
 
       - name: Update app pins
@@ -187,7 +202,7 @@ jobs:
           set -euo pipefail
           if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No app pin changes requested; promotion PR not needed." >> "$GITHUB_STEP_SUMMARY"
+            echo "No new app pin changes from this run." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -195,7 +210,6 @@ jobs:
       - name: Commit promotion branch
         if: steps.diff.outputs.changed == 'true'
         env:
-          BRANCH: promotion/app-sha-pins
           COMMIT_MESSAGE: ${{ steps.resolve.outputs.title }}
         run: |
           set -euo pipefail
@@ -203,10 +217,32 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
           git commit -m "$COMMIT_MESSAGE"
-          git push --force-with-lease origin "$BRANCH"
+
+      - name: Push promotion branch
+        id: push
+        env:
+          BRANCH: promotion/app-sha-pins
+        run: |
+          set -euo pipefail
+          # pending = the branch carries promotions main does not have (new
+          # pins this run and/or carried-forward ones). Push whenever the
+          # remote branch is missing those, and also when pending is false but
+          # a stale remote branch exists — that push heals it back to main.
+          head="$(git rev-parse HEAD)"
+          remote="$(git rev-parse -q --verify "refs/remotes/origin/$BRANCH" || true)"
+          pending=false
+          if [ "$head" != "$GITHUB_SHA" ]; then
+            pending=true
+          fi
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          if [ "$head" = "${remote:-}" ]; then
+            echo "Remote $BRANCH already up to date." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$pending" = "true" ] || [ -n "$remote" ]; then
+            git push --force-with-lease origin "$BRANCH"
+          fi
 
       - name: Open or update promotion PR
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.push.outputs.pending == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BRANCH: promotion/app-sha-pins
