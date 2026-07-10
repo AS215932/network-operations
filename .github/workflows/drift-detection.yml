@@ -17,7 +17,7 @@ jobs:
       ANSIBLE_FORCE_COLOR: "true"
       ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Source runner-scoped secrets
         run: |
@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p drift-logs
-          playbooks=(firewall monitoring logs icinga2 ci rtr_routing networkd_resolved)
+          playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved)
           status=0
           for playbook in "${playbooks[@]}"; do
             echo "::group::drift ${playbook}"

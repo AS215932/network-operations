@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -33,6 +34,12 @@ def main() -> int:
     parser.add_argument("--title", default="Promote app SHAs")
     parser.add_argument("--impact", default="Automated app SHA promotion.")
     parser.add_argument("--body-file", default="")
+    parser.add_argument(
+        "--body-from-ref",
+        default="",
+        help="render the body from the pin diff between this git ref and the "
+        "working tree instead of editing pins; covers carried-forward pins",
+    )
     args = parser.parse_args()
 
     requested = {
@@ -43,6 +50,18 @@ def main() -> int:
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
+
+    if args.body_from_ref:
+        if requested:
+            raise SystemExit("--body-from-ref cannot be combined with app SHA inputs")
+        if not args.body_file:
+            raise SystemExit("--body-from-ref requires --body-file")
+        changes = ref_changes(args.body_from_ref)
+        Path(args.body_file).write_text(render_body(args.title, args.impact, changes))
+        for key, _repo, _playbook, old_sha, new_sha in changes:
+            print(f"{key}: {old_sha} -> {new_sha}")
+        return 0
+
     if not requested:
         raise SystemExit("no app SHA inputs provided")
 
@@ -63,6 +82,28 @@ def main() -> int:
     for key, _repo, _playbook, old_sha, new_sha in changes:
         print(f"{key}: {old_sha} -> {new_sha}")
     return 0
+
+
+def find_pin(text: str, key: str) -> str | None:
+    match = re.search(rf"^{re.escape(key)}:\s*([0-9a-fA-F]{{40}})\s*$", text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def ref_changes(ref: str) -> list[tuple[str, str, str, str, str]]:
+    """Pin deltas between a git ref (old) and the working tree (new)."""
+    changes: list[tuple[str, str, str, str, str]] = []
+    for key, (rel_path, repo, playbook) in PIN_TARGETS.items():
+        new_sha = find_pin((REPO / rel_path).read_text(), key)
+        shown = subprocess.run(
+            ["git", "show", f"{ref}:{rel_path}"],
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+        )
+        old_sha = find_pin(shown.stdout, key) if shown.returncode == 0 else None
+        if new_sha and old_sha and new_sha != old_sha:
+            changes.append((key, repo, playbook, old_sha, new_sha))
+    return changes
 
 
 def update_pin(path: Path, key: str, new_sha: str) -> str:

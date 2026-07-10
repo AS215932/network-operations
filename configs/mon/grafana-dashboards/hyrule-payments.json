@@ -1,0 +1,365 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "description": "Prometheus on mon"
+    },
+    {
+      "name": "DS_LOKI",
+      "label": "Loki",
+      "type": "datasource",
+      "pluginId": "loki",
+      "description": "Loki on log"
+    }
+  ],
+  "title": "Hyrule Cloud — x402 Payments",
+  "uid": "hyrule-payments",
+  "tags": ["hyrule-cloud", "x402", "payments"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-7d", "to": "now" },
+  "refresh": "1m",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Revenue (all time)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 5, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(max by (service_group, network) (hyrule_payment_revenue_usd_total))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "none", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Revenue (24h)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 5, "x": 5, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(hyrule_payment_revenue_usd_total[24h]))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "none", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Unique payer wallets",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 10, "y": 0 },
+      "targets": [
+        { "refId": "A", "expr": "max(hyrule_payment_unique_payers)", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": { "colorMode": "none", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Unique payers (24h)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
+      "targets": [
+        { "refId": "A", "expr": "max(hyrule_payment_unique_payers_24h)", "instant": true }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0, "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": { "colorMode": "none", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "402 → settle conversion (24h)",
+      "description": "Settled payments divided by 402 challenges issued. Low is normal (agents browse prices); watch the trend, not the level.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(hyrule_payment_events_total{event_type=\"settled\"}[24h])) / clamp_min(sum(increase(hyrule_payment_events_total{event_type=\"required_402\"}[24h])), 1)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "text" } },
+        "overrides": []
+      },
+      "options": { "colorMode": "none", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Settlements per hour, by service",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_group) (increase(hyrule_payment_events_total{event_type=\"settled\"}[1h]))",
+          "legendFormat": "{{service_group}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "vm" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+          { "matcher": { "id": "byName", "options": "domain" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+          { "matcher": { "id": "byName", "options": "network_intel" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+          { "matcher": { "id": "byName", "options": "network_proxy" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#B05C8B" } }] },
+          { "matcher": { "id": "byName", "options": "other" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#2887BD" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Revenue per hour, by service (USD)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service_group) (increase(hyrule_payment_revenue_usd_total[1h]))",
+          "legendFormat": "{{service_group}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 0,
+            "fillOpacity": 90,
+            "stacking": { "mode": "normal" },
+            "barAlignment": 0
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "vm" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+          { "matcher": { "id": "byName", "options": "domain" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+          { "matcher": { "id": "byName", "options": "network_intel" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+          { "matcher": { "id": "byName", "options": "network_proxy" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#B05C8B" } }] },
+          { "matcher": { "id": "byName", "options": "other" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#2887BD" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Payment funnel per hour, by outcome",
+      "description": "402 challenges issued vs verified/settled vs failures. dev_bypass must stay at zero in production (alert fires otherwise).",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (event_type) (increase(hyrule_payment_events_total[1h]))",
+          "legendFormat": "{{event_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "required_402" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#64748B" } }] },
+          { "matcher": { "id": "byName", "options": "settled" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "verify_failed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "settle_failed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "dev_bypass" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "VM provisioning outcomes per hour",
+      "description": "Refunds are manual: every 'failed' is a paying agent owed money. The >20% failure-ratio alert pages.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 9, "w": 6, "x": 12, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (increase(hyrule_vm_provision_total[1h]))",
+          "legendFormat": "{{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 90,
+            "stacking": { "mode": "normal" }
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ready" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Active VMs by status",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 9, "w": 6, "x": 18, "y": 13 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (status) (hyrule_vms_active)",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ready" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#0072B2" } }] },
+          { "matcher": { "id": "byName", "options": "running" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#009E73" } }] },
+          { "matcher": { "id": "byName", "options": "provisioning" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#2887BD" } }] },
+          { "matcher": { "id": "byName", "options": "suspended" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#C77F00" } }] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Exporter health",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 22 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"hyrule-cloud|hyrule-network-proxy\"}",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "textMode": "name", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 31,
+      "type": "logs",
+      "title": "Payment errors (Loki)",
+      "description": "payment_settlement_failed / payment_verification_failed / payment_ledger_write_failed events from the app's structlog stream.",
+      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 22 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service=\"hyrule-cloud\"} | json | event=~\"payment_(settlement|verification)_failed|payment_ledger_write_failed|dev_bypass_payment\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+---
+# Master apply gate. Mirrors icinga2_apply / monitoring_apply; apply.yml passes
+# `-e prometheus_apply=true` for the `prometheus` playbook, so CI render/validate
+# runs (gate false) never mutate the host.
+prometheus_apply: false
+
+# Where mon's Prometheus loads rules from. configs/mon/prometheus.yml has
+# `rule_files: /etc/prometheus/rules.d/*.yml`.
+prometheus_rules_dir: /etc/prometheus/rules.d
+
+# Staging mirror where the candidate ruleset is promtool-validated before it is
+# published to the live rules_dir. Not read by Prometheus.
+prometheus_rules_staging_dir: /etc/prometheus/.rules.d.staging
+
+# Source of truth in the repo. Read-only — the role copies from here.
+prometheus_rules_repo: "{{ playbook_dir }}/../../configs/mon/prometheus-rules"

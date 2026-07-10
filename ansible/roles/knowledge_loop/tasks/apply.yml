@@ -68,13 +68,32 @@
   become_user: "{{ knowledge_loop_user }}"
   notify: restart knowledge-loop timer
 
+- name: Check existing Knowledge repo workspace checkout
+  ansible.builtin.stat:
+    path: "{{ knowledge_loop_repo_workspace }}/.git"
+  register: knowledge_loop_workspace_git_dir
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+
+- name: Clean untracked Knowledge repo workspace artifacts
+  ansible.builtin.command: git clean -fdx
+  args:
+    chdir: "{{ knowledge_loop_repo_workspace }}"
+  register: knowledge_loop_workspace_clean
+  changed_when: knowledge_loop_workspace_clean.stdout != ''
+  when: knowledge_loop_workspace_git_dir.stat.exists
+  become: true
+  become_user: "{{ knowledge_loop_user }}"
+
 - name: Checkout Knowledge repo workspace for loop runs
   ansible.builtin.git:
     repo: "{{ knowledge_loop_repo }}"
     dest: "{{ knowledge_loop_repo_workspace }}"
     version: "{{ knowledge_loop_base_branch }}"
     update: true
-    force: false
+    # This is the mutable bot workspace. Failed loop runs may leave generated
+    # artifacts behind; deploys should restore it to the reviewed base branch.
+    force: true
   become: true
   become_user: "{{ knowledge_loop_user }}"
   notify: restart knowledge-loop timer
