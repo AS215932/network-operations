@@ -44,7 +44,7 @@ jobs:
       apply_needed: ${{ steps.plan.outputs.apply_needed }}
       plan: ${{ steps.plan.outputs.plan }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
 
       - name: Source runner-scoped secrets
         run: |
@@ -103,7 +103,7 @@ jobs:
 
       - name: Upload drift logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: post-merge-drift-logs
           path: ansible/drift-logs/*.log
@@ -125,7 +125,7 @@ jobs:
       ANSIBLE_FORCE_COLOR: "true"
       ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
 
       - name: Abort if main has moved on
         run: |
@@ -162,6 +162,8 @@ jobs:
           set -euo pipefail
           mkdir -p apply-logs
           echo "$PLAN" | jq -c '.apply[]' > apply-plan.jsonl
+          # </dev/null on everything inside the loop: ansible/ssh reading
+          # stdin would otherwise swallow the remaining plan lines.
           while IFS= read -r item; do
             playbook="$(echo "$item" | jq -r .playbook)"
             limit="$(echo "$item" | jq -r .limit)"
@@ -170,16 +172,16 @@ jobs:
               --tags apply \
               --limit "$limit" \
               -e ansible_user=ci \
-              -e "${playbook}_apply=true" 2>&1 | tee "apply-logs/${playbook}.log"
+              -e "${playbook}_apply=true" </dev/null 2>&1 | tee "apply-logs/${playbook}.log"
             echo "::endgroup::"
             echo "::group::verify ${playbook} → ${limit}"
-            CHECK_DRIFT_LIMIT="$limit" ../scripts/ci/check-drift.sh apply-logs/verify "$playbook"
+            CHECK_DRIFT_LIMIT="$limit" ../scripts/ci/check-drift.sh apply-logs/verify "$playbook" </dev/null
             echo "::endgroup::"
           done < apply-plan.jsonl
 
       - name: Upload apply logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: post-merge-apply-logs
           path: ansible/apply-logs/
