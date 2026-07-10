@@ -41,9 +41,10 @@ reaches Discord directly via outbound TLS — no inbound exposure required.
 `extmon-diag-agent` is loopback-only by default; the intended caller (the
 Hyrule Cloud diagnostics API) reaches it over an SSH port-forward, matching the
 other loopback services. To let a caller reach it directly, bind
-`extmon_diag_agent_listen` to a reachable address and add the caller IP(s) to
-`extmon_diag_agent_allowed_sources` (UFW then opens the port to just those
-sources). Do this only after the agent's input-validation hardening lands —
+`extmon_diag_agent_listen` to a reachable address and add a matching
+`firewall_extra_rules` row in `host_vars/extmon.yml` plus the flow in
+`docs/network-flows.md` — the host firewall is owned by `roles/firewall`
+(nftables), not UFW. Do this only after the agent's input-validation hardening lands —
 tracked in AS215932/network-operations#361 — since it performs active probes.
 
 ## Probes

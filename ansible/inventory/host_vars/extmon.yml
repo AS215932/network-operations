@@ -50,11 +50,6 @@ extmon_ovh_failover_ips:
   - "51.91.236.215"   # mail (SMTP/IMAP failover)
   - "54.38.14.218"    # ns2 (auth DNS secondary)
 
-# Inbound SSH allow-list. Same set as the rest of the fleet — ops workstation
-# + AS215932 VPN clients. Extmon also needs to be reachable from the AS215932
-# overlay so we can SSH in to deploy/debug.
-extmon_ssh_allow_v4:
-  - "{{ ops_prefix_v4 }}"
-extmon_ssh_allow_v6:
-  - "{{ ops_prefix_v6 }}"
-  - "{{ as215932_prefix }}"   # allows SSH from any AS215932 host
+# Inbound SSH allow-list comes from the firewall role's standard set (ops
+# workstation, VPN clients, ci, noc, mon) — UFW and its extmon_ssh_allow_*
+# vars are retired; see roles/extmon/tasks/ufw.yml.
