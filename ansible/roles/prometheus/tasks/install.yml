@@ -12,6 +12,10 @@
   ansible.builtin.set_fact:
     prometheus_desired_rules: "{{ query('ansible.builtin.fileglob', prometheus_rules_repo ~ '/*.yml') | map('basename') | list }}"
 
+# Notify on change: a permissions-only fix must reload prometheus too — an
+# untraversable rules.d makes the rule_files glob silently match nothing, so
+# restoring 0755 without a reload leaves the rules unloaded (2026-07-10:
+# hyrule-payments.yml needed a manual reload after the PR #402 apply).
 - name: Ensure live + staging rule dirs exist
   ansible.builtin.file:
     path: "{{ item }}"
@@ -22,6 +26,7 @@
   loop:
     - "{{ prometheus_rules_dir }}"
     - "{{ prometheus_rules_staging_dir }}"
+  notify: reload prometheus
 
 - name: Stage candidate rule files
   ansible.builtin.copy:
