@@ -17,8 +17,12 @@ permissions:
   pull-requests: write
   issues: write
 
+# Group by event name too: the push-triggered review posts comments, and each
+# comment fires an issue_comment run that would otherwise share this group and
+# cancel the in-flight check run ("higher priority waiting request", #408).
+# Same-event storms (rapid pushes, comment bursts) still dedupe.
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-agent-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
