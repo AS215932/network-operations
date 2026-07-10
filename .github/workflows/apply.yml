@@ -124,6 +124,11 @@ jobs:
       - name: Runner deploy preflight
         run: scripts/ci/deploy-preflight.sh --runner
 
+      # New inventory hosts become reachable without a manual `apply.yml ci`
+      # known_hosts reseed (network-operations#404).
+      - name: Seed missing SSH host keys
+        run: scripts/ci/seed-missing-host-keys.sh
+
       - name: Source Vault-rendered secrets
         run: |
           # Vault Agent on `ci` renders /etc/github-runner/secrets.env. Sourced
