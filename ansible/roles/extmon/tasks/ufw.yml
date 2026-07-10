@@ -8,7 +8,17 @@
 # this task disables UFW, so the nftables ruleset is already enforcing when
 # UFW goes down. Idempotent afterwards (disabled stays disabled).
 
+# Guarded on the actual state: the ufw module reports changed in check mode
+# even when UFW is already disabled, which kept the drift check red.
+- name: ufw — query state
+  command: ufw status
+  register: extmon_ufw_status
+  changed_when: false
+  check_mode: false
+  tags: [apply]
+
 - name: ufw — retired in favour of roles/firewall (nftables)
   ufw:
     state: disabled
+  when: "'Status: active' in extmon_ufw_status.stdout"
   tags: [apply]

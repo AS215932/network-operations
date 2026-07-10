@@ -77,7 +77,10 @@
     - { path: /etc/extmon, mode: "0750" }
     - { path: /opt/bgpalerter, mode: "0755" }
     - { path: /etc/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
-    - { path: /etc/bgpalerter/logs, owner: prometheus, group: prometheus, mode: "0755", recurse: true }
+    # No recurse: BGPalerter (User=prometheus) owns the files it writes here;
+    # recursing over a runtime log dir never converges in check mode and made
+    # the nightly drift run flag this task forever.
+    - { path: /etc/bgpalerter/logs, owner: prometheus, group: prometheus, mode: "0755" }
     - { path: /etc/bgpalerter/alertdata, owner: prometheus, group: prometheus, mode: "0755", recurse: true }
     - { path: /etc/bgpalerter/.cache, owner: prometheus, group: prometheus, mode: "0755", recurse: true }
     - { path: /var/lib/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
@@ -271,10 +274,18 @@
 
 # blackbox_exporter ICMP probes need raw sockets. The Debian package ships
 # without CAP_NET_RAW; grant it via setcap so we don't need to run as root.
+# Guarded command instead of the `capabilities` module: modern libcap's getcap
+# prints `cap_net_raw=ep` while the module compares against `+ep`, so the
+# module reports changed on every run and kept the drift check red.
+- name: Check blackbox_exporter capabilities
+  command: getcap /usr/bin/prometheus-blackbox-exporter
+  register: extmon_blackbox_caps
+  changed_when: false
+  check_mode: false
+  tags: [apply]
+
 - name: Grant CAP_NET_RAW to blackbox_exporter (for ICMP)
-  capabilities:
-    path: /usr/bin/prometheus-blackbox-exporter
-    capability: cap_net_raw+ep
-    state: present
+  command: setcap cap_net_raw+ep /usr/bin/prometheus-blackbox-exporter
+  when: "'cap_net_raw' not in extmon_blackbox_caps.stdout"
   notify: restart blackbox_exporter
   tags: [apply]
