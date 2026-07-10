@@ -91,6 +91,18 @@
   notify: reload nftables
   tags: [apply]
 
+# First-time hosts have nftables.service inactive (never started), and the
+# reload handler's `systemctl reload` fails on inactive units. Starting here
+# loads the config just moved into place; on already-active hosts this is a
+# no-op (started != restarted). Enabling keeps the ruleset across reboots.
+- name: Ensure nftables service is enabled and active
+  systemd:
+    name: nftables
+    enabled: true
+    state: started
+  when: firewall_apply | default(false) | bool
+  tags: [apply]
+
 - name: Flush handlers now (so watchdog cancellation reflects current state)
   meta: flush_handlers
   when: not ansible_check_mode
