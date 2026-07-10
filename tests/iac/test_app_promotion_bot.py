@@ -39,10 +39,19 @@ class AppPromotionBotTest(unittest.TestCase):
         self.assertIn('gh api "repos/${repo}/commits/${sha}" --jq .sha', workflow_text)
         self.assertIn("repository_dispatch payload sha must be a 40-character commit SHA", workflow_text)
 
-    def test_promote_apps_uses_app_token_and_accumulates_branch(self):
+    def test_promote_apps_uses_app_token_and_rebuilds_branch_from_main(self):
         workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()
 
         self.assertIn("actions/create-github-app-token@v2", workflow_text)
         self.assertIn("GH_TOKEN: ${{ steps.app-token.outputs.token }}", workflow_text)
-        self.assertIn('git fetch origin "$BRANCH"', workflow_text)
-        self.assertIn('git checkout -B "$BRANCH" "origin/$BRANCH"', workflow_text)
+        # The branch must be rebuilt from main (github.sha) every run, never
+        # continued from its old tip: once main moves a pin via a manually
+        # merged deploy PR, a never-rebased branch wedges into permanent
+        # merge conflict (PR #316).
+        self.assertIn('git checkout -B "$BRANCH"', workflow_text)
+        self.assertNotIn('git checkout -B "$BRANCH" "origin/$BRANCH"', workflow_text)
+        # Still-pending pins from the old tip are carried forward only when
+        # the app repo confirms they are ahead of main's value.
+        self.assertIn("scripts/ci/pending-app-promotions.py", workflow_text)
+        self.assertIn("Carry forward pending app promotions", workflow_text)
+        self.assertIn('git push --force-with-lease origin "$BRANCH"', workflow_text)
