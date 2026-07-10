@@ -100,6 +100,11 @@ def _open_pinned(url: str, timeout: float):
     hostname = parsed.hostname or ""
     pinned = resolve_public(hostname)[0]  # vetted here, connected below — same IP
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    # Same port policy as the TCP probe — an explicit :port in the URL must not
+    # reach services the TCP path rejects. Checked here so every manually
+    # followed redirect hop is re-vetted too.
+    if port in BLOCKED_PORTS or port not in ALLOWED_PORTS:
+        raise ValueError(f"port {port} is not allowed")
     conn_cls = _PinnedHTTPSConnection if parsed.scheme == "https" else _PinnedHTTPConnection
     conn = conn_cls(hostname, port=port, pinned_ip=pinned, timeout=timeout)
     path = parsed.path or "/"
@@ -158,7 +163,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(404); self.end_headers()
 
     def do_POST(self):
-        if TOKEN and self.headers.get("Authorization") != f"Bearer {TOKEN}":
+        if not TOKEN:
+            # Fail closed: an unset EXTMON_DIAG_AGENT_TOKEN must not disable
+            # auth — refuse probes until a token is configured.
+            body = json.dumps({"ok": False, "error": "EXTMON_DIAG_AGENT_TOKEN not configured"}).encode()
+            self.send_response(503); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if self.headers.get("Authorization") != f"Bearer {TOKEN}":
             self.send_response(403); self.end_headers(); return
         kind = self.path.rsplit("/", 1)[-1]
         length = int(self.headers.get("Content-Length", "0"))

@@ -310,11 +310,21 @@
   changed_when: false
   tags: [apply]
 
+# Gate on the snapshot CLI itself, not pyproject.toml — the checkout can
+# predate the app pin that ships hyrule-mcp-bgp-snapshot, and enabling the
+# timer without the ExecStart binary fails the unit every hour until the
+# promotion catches up.
+- name: Check for the BGP snapshot CLI in the pinned venv
+  stat:
+    path: "{{ hyrule_mcp_install_dir }}/.venv/bin/hyrule-mcp-bgp-snapshot"
+  register: hyrule_mcp_bgp_snapshot_cli
+  tags: [apply]
+
 - name: Enable + start BGP router snapshot timer
   systemd:
     name: bgp-router-snapshot.timer
     state: started
     enabled: true
     daemon_reload: true
-  when: hyrule_mcp_pyproject.stat.exists
+  when: hyrule_mcp_bgp_snapshot_cli.stat.exists
   tags: [apply]
