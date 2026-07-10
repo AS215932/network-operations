@@ -1,0 +1,196 @@
+---
+name: post-merge-apply
+run-name: Post-merge drift check + gated apply for ${{ github.sha }}
+
+# Closes the merge→apply gap (network-operations#404): every push to main
+# runs the same check-mode sweep as nightly drift-detection; if anything
+# drifted, ONE production-gated job applies the drifted playbooks serially
+# (host-limited to what actually drifted) after operator approval.
+#
+# Design notes:
+# - One gated job for all drifted playbooks, not one apply.yml dispatch per
+#   playbook: the production-infra concurrency group keeps only a single
+#   queued run, so fan-out dispatches cancel each other, and each dispatch
+#   would need its own approval.
+# - The `ci` playbook is never auto-applied (applying the runner's own
+#   playbook from the runner can restart the runner service mid-job); it is
+#   listed in the summary for a manual apply.yml dispatch instead.
+# - Review the detect job's summary/artifact (full check-mode diffs) BEFORE
+#   approving: if live is intentionally ahead of main (an unmerged deployed
+#   branch), approving will revert it — merge that branch first.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ansible/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    timeout-minutes: 45
+    # Only the newest main state matters; supersede older detects.
+    concurrency:
+      group: post-merge-apply-detect
+      cancel-in-progress: true
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+    outputs:
+      apply_needed: ${{ steps.plan.outputs.apply_needed }}
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Source runner-scoped secrets
+        run: |
+          set -euo pipefail
+          scripts/ci/deploy-preflight.sh --runner
+          set -a; . /etc/github-runner/secrets.env; set +a
+          while IFS='=' read -r _key _; do
+            case "$_key" in
+              [A-Z_][A-Z0-9_]*)
+                _val="${!_key}"
+                [ -n "$_val" ] && echo "::add-mask::$_val"
+                printf '%s=%s\n' "$_key" "$_val" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /etc/github-runner/secrets.env
+
+      - name: Seed missing SSH host keys
+        run: scripts/ci/seed-missing-host-keys.sh
+
+      - name: Check production drift
+        working-directory: ansible
+        # Drift here is expected (that is the point) — the plan step decides
+        # what to do with it, so don't fail the job on a non-zero sweep.
+        run: ../scripts/ci/check-drift.sh drift-logs || true
+
+      - name: Build apply plan
+        id: plan
+        run: |
+          set -euo pipefail
+          plan="$(scripts/ci/drift-apply-plan.sh ansible/drift-logs)"
+          echo "plan is:"; echo "$plan" | jq .
+          {
+            echo "plan<<PLAN_EOF"
+            echo "$plan"
+            echo "PLAN_EOF"
+            echo "apply_needed=$(echo "$plan" | jq -r '.apply | length > 0')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize drift
+        if: always()
+        working-directory: ansible
+        run: ../scripts/ci/summarize-drift-logs.sh drift-logs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize apply plan
+        if: always()
+        env:
+          PLAN: ${{ steps.plan.outputs.plan }}
+        run: |
+          {
+            echo "## Apply plan"
+            echo
+            echo '```json'
+            echo "$PLAN" | jq .
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-drift-logs
+          path: ansible/drift-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 30
+
+  apply:
+    needs: detect
+    if: needs.detect.outputs.apply_needed == 'true'
+    runs-on: [self-hosted, linux, x64, hyrule-infra]
+    # Same gate + serialization lane as apply.yml — an operator approves, and
+    # this run never overlaps a manual apply.
+    environment: production
+    concurrency:
+      group: production-infra-live-v2
+      cancel-in-progress: false
+    timeout-minutes: 60
+    env:
+      ANSIBLE_FORCE_COLOR: "true"
+      ANSIBLE_PRIVATE_KEY_FILE: /var/lib/github-runner/.ssh/id_ci
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Abort if main has moved on
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin main
+          tip="$(git rev-parse origin/main)"
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "::error::main is now $tip (this run detected drift at $GITHUB_SHA) — a newer post-merge-apply run supersedes this one; approve that one instead"
+            exit 1
+          fi
+
+      - name: Runner deploy preflight
+        run: scripts/ci/deploy-preflight.sh --runner
+
+      - name: Source runner-scoped secrets
+        run: |
+          set -euo pipefail
+          set -a; . /etc/github-runner/secrets.env; set +a
+          while IFS='=' read -r _key _; do
+            case "$_key" in
+              [A-Z_][A-Z0-9_]*)
+                _val="${!_key}"
+                [ -n "$_val" ] && echo "::add-mask::$_val"
+                printf '%s=%s\n' "$_key" "$_val" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /etc/github-runner/secrets.env
+
+      - name: Apply drifted playbooks (serialized, verify each)
+        working-directory: ansible
+        env:
+          PLAN: ${{ needs.detect.outputs.plan }}
+        run: |
+          set -euo pipefail
+          mkdir -p apply-logs
+          echo "$PLAN" | jq -c '.apply[]' > apply-plan.jsonl
+          while IFS= read -r item; do
+            playbook="$(echo "$item" | jq -r .playbook)"
+            limit="$(echo "$item" | jq -r .limit)"
+            echo "::group::apply ${playbook} → ${limit}"
+            ansible-playbook "playbooks/${playbook}.yml" \
+              --tags apply \
+              --limit "$limit" \
+              -e ansible_user=ci \
+              -e "${playbook}_apply=true" 2>&1 | tee "apply-logs/${playbook}.log"
+            echo "::endgroup::"
+            echo "::group::verify ${playbook} → ${limit}"
+            CHECK_DRIFT_LIMIT="$limit" ../scripts/ci/check-drift.sh apply-logs/verify "$playbook"
+            echo "::endgroup::"
+          done < apply-plan.jsonl
+
+      - name: Upload apply logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-apply-logs
+          path: ansible/apply-logs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Alert NOC on apply failure
+        if: failure() && env.DISCORD_WEBHOOK_URL != ''
+        env:
+          DISCORD_WEBHOOK_URL: ${{ env.DISCORD_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n --arg content "AS215932 post-merge apply failed: ${RUN_URL}" '{content: $content}' \
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL"
