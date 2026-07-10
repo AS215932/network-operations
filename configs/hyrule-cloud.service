@@ -31,7 +31,7 @@ SyslogIdentifier=hyrule-cloud
 
 # Security hardening
 ProtectSystem=strict
-ReadWritePaths=/opt/hyrule-cloud
+ReadWritePaths=/opt/hyrule-cloud /var/lib/hyrule-cloud
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

@@ -25,6 +25,51 @@
     - ansible_host == '0.0.0.0'
   tags: [apply]
 
+- name: Apply — install repository bootstrap packages
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - python3-apt
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — install NLnet Labs package signing key
+  get_url:
+    url: "{{ extmon_routinator_repo_key_url }}"
+    dest: "{{ extmon_routinator_repo_keyring }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - extmon_apply | bool
+    - extmon_routinator_repo_enabled | bool
+  tags: [apply]
+
+- name: Apply — enable NLnet Labs repository for Routinator
+  apt_repository:
+    repo: "{{ extmon_routinator_repo }}"
+    filename: nlnetlabs
+    state: present
+    update_cache: true
+  when:
+    - extmon_apply | bool
+    - extmon_routinator_repo_enabled | bool
+  tags: [apply]
+
+- name: Apply — remove unsupported CAIDA BGPStream apt source when disabled
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/caida.list
+    state: absent
+  when:
+    - extmon_apply | bool
+    - not (extmon_install_bgpstream | bool)
+  tags: [apply]
+
 - name: Apply — install packages
   apt:
     name:
@@ -34,11 +79,43 @@
       - prometheus-node-exporter
       - ufw
       - python3-requests        # for the OVH expiry collector
+      - python3-dnspython       # DNS tooling for diagnostics
+      - routinator              # local RPKI validator / HTTP validity API
+      - iputils-ping
+      - traceroute
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
       - jq
     state: present
     update_cache: true
     cache_valid_time: 3600
   when: extmon_apply | bool
+  tags: [apply]
+
+- name: Apply — bootstrap CAIDA BGPStream repositories
+  shell: |
+    set -euo pipefail
+    curl -s "https://pkg.caida.org/os/$(lsb_release -si | awk '{print tolower($0)}')/bootstrap.sh" | bash
+  args:
+    executable: /bin/bash
+    creates: /etc/apt/sources.list.d/caida.list
+  when:
+    - extmon_apply | bool
+    - extmon_install_bgpstream | bool
+  tags: [apply]
+
+- name: Apply — install native BGPStream/PyBGPStream packages
+  apt:
+    name:
+      - bgpstream
+      - python3-pybgpstream
+    state: present
+    update_cache: true
+  when:
+    - extmon_apply | bool
+    - extmon_install_bgpstream | bool
   tags: [apply]
 
 - name: Apply — push configs and binaries

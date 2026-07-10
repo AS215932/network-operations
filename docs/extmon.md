@@ -25,10 +25,26 @@ depends on AS215932 or OVH.
 - `prometheus-alertmanager` — Discord receiver, dedupe, repeat 1 h.
 - `prometheus-node-exporter` — self-scrape + textfile collector for the
   OVH expiry script.
-- All four packages from Debian 13 apt; no out-of-band binaries.
+- `routinator` — local RPKI validator for AS215932 prefix validity.
+- `bgpalerter` — RIPE RIS Live based hijack/withdrawal/RPKI/path alerting.
+- `extmon-bgp-agent` — custom Prometheus exporter for RIPEstat, bgp.tools,
+  Cloudflare Radar, Routinator, and BGPalerter webhooks.
+- `extmon-diag-agent` — token-protected active diagnostics for Hyrule Cloud
+  MX/network checks.
+
+BGPalerter is the one pinned upstream binary; all other core packages come
+from Debian/CAIDA apt repositories.
 
 Loopback-only listeners; SSH from ops-prefix or AS215932 only; Alertmanager
 reaches Discord directly via outbound TLS — no inbound exposure required.
+
+`extmon-diag-agent` is loopback-only by default; the intended caller (the
+Hyrule Cloud diagnostics API) reaches it over an SSH port-forward, matching the
+other loopback services. To let a caller reach it directly, bind
+`extmon_diag_agent_listen` to a reachable address and add the caller IP(s) to
+`extmon_diag_agent_allowed_sources` (UFW then opens the port to just those
+sources). Do this only after the agent's input-validation hardening lands —
+tracked in AS215932/network-operations#361 — since it performs active probes.
 
 ## Probes
 
@@ -54,12 +70,12 @@ warning, <7 d critical.
 
 - [ ] Different cloud account from OVH (different card billing cycle).
 - [ ] Different ASN — Vultr (AS20473) or DigitalOcean (AS14061) recommended.
-- [ ] Different geographic region from OVH FR (eg. NL, DE, UK, US-East).
+- [ ] Different geographic region from OVH FR (Vultr London is the current target).
+- [ ] 4 GB RAM + 2 GB swap. BGPalerter's upstream docs require about 4 GB.
 
 ### One-time VPS bring-up
 
-1. Provision a small Debian-13 VPS (Vultr "Cloud Compute" or DO "Basic Droplet",
-   1 GB RAM is enough). Add the ops public key during creation.
+1. Provision a Debian-13 VPS at Vultr London, 4 GB RAM, 2 GB swap. Add the ops public key during creation.
 2. SSH in as `root` and verify reachability:
    ```bash
    ssh -i ~/.ssh/id_servify root@<extmon-public-v4>
@@ -73,6 +89,10 @@ warning, <7 d critical.
    we have this host. Save it to your shell:
    ```bash
    export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+   export EXTMON_BGP_CLOUDFLARE_API_TOKEN='...optional radar token...'
+   export EXTMON_BGP_INGEST_TOKEN='...same as HYRULE_BGP_INGEST_TOKEN...'
+   export EXTMON_DIAG_AGENT_TOKEN='...random bearer token...'
+   export EXTMON_NOC_ALERTMANAGER_WEBHOOK_URL='http://[2a0c:b641:b50:2::a0]:8000/webhook/alertmanager'
    ```
 5. Render configs locally and review the diff:
    ```bash
@@ -94,10 +114,15 @@ From extmon (`ssh root@<extmon-public-v4>`):
 
 ```bash
 systemctl is-active prometheus prometheus-alertmanager \
-    prometheus-blackbox-exporter prometheus-node-exporter ovh-expiry-collector.timer
+    prometheus-blackbox-exporter prometheus-node-exporter ovh-expiry-collector.timer \
+    routinator bgpalerter extmon-bgp-agent extmon-diag-agent
 curl -s http://127.0.0.1:9090/api/v1/targets | jq '.data.activeTargets[] | {job, instance, health}'
 curl -s 'http://127.0.0.1:9090/api/v1/query?query=probe_success' | jq
 curl -s http://127.0.0.1:9100/metrics | grep ovh_service_expires_seconds
+curl -s http://127.0.0.1:9188/health
+curl -s http://127.0.0.1:9188/metrics | grep bgp_source_up
+curl -s http://127.0.0.1:8011/status
+curl -s 'http://127.0.0.1:8323/validity?asn=AS215932&prefix=2a0c:b641:b50::/44'
 ```
 
 End-to-end smoke test from your workstation:
@@ -125,11 +150,22 @@ ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
   a free synthetic check from BetterStack/UptimeRobot pinging extmon's
   public v4 every minute.
 
+## BGP monitoring scope
+
+AS215932 monitoring is explicit, not inferred from service probes:
+
+- ASN: `AS215932`
+- Prefix: `2a0c:b641:b50::/44`
+- Expected origin: `AS215932`
+- RPKI max length: `/48`
+- Public feeds: RIPEstat/RIS, bgp.tools export, Cloudflare Radar when token is set
+- Local validator: Routinator on loopback
+- Realtime alerting: BGPalerter reportHTTP into `extmon-bgp-agent`
+
+Critical alert path remains direct Discord from extmon. The NOC Agent webhook is
+best-effort enrichment only and must not be the only alert path.
+
 ## Out of scope (for now)
 
-- Looking-glass / BGP-announce checks (RIPEstat API). Worth adding once
-  the rest of extmon is stable; until then, downstream symptoms (probe
-  failures) catch BGP withdrawals indirectly.
-- Federation between extmon's Prometheus and mon's Prometheus. Useful for
-  unified Grafana dashboards but not needed for alerting.
 - Push-Pushover / push-SMS escalation when Discord itself is down.
+- Long-term BGPStream artifact retention beyond the Hyrule Cloud paid job API.

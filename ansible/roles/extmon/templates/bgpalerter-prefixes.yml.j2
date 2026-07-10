@@ -1,0 +1,21 @@
+{% for item in extmon_bgp_prefixes %}
+{{ item.prefix }}:
+  description: {{ item.description | to_json }}
+  asn: {{ item.expected_origin | default(extmon_bgp_asn) }}
+  ignoreMorespecifics: false
+  group: default
+{% if extmon_bgp_expected_adjacent_asns | default([]) | length > 0 %}
+{# monitorPath rules — regexes run against the comma-joined AS path. Alert
+   when a path reaches our origin via an adjacency outside the expected
+   upstream/route-server set; (,origin)+ tolerates origin prepending. #}
+  path:
+    - matchDescription: "path to {{ item.prefix }} via unexpected adjacent ASN (expected: {{ extmon_bgp_expected_adjacent_asns | join(', ') }})"
+      match: "(^|,){{ item.expected_origin | default(extmon_bgp_asn) }}$"
+      notMatch: "(^|,)({{ extmon_bgp_expected_adjacent_asns | join('|') }})(,{{ item.expected_origin | default(extmon_bgp_asn) }})+$"
+{% endif %}
+{% endfor %}
+
+options:
+  monitorASns:
+    {{ extmon_bgp_asn }}:
+      group: default

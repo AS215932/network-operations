@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Token-protected active diagnostic agent for extmon."""
+
+from __future__ import annotations
+
+import http.client
+import ipaddress
+import json
+import os
+import socket
+import subprocess
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+REDIRECT_CODES = {301, 302, 303, 307, 308}
+MAX_REDIRECTS = 5
+
+TOKEN = os.environ.get("EXTMON_DIAG_AGENT_TOKEN", "")
+BLOCKED_PORTS = {0, 135, 137, 138, 139, 445, 3306, 5432, 6379, 11211, 27017}
+ALLOWED_PORTS = {22, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995, 2525, 8080, 8443}
+
+
+def blocked_ip(addr: str) -> bool:
+    ip = ipaddress.ip_address(addr)
+    # `not is_global` is the primary guard: it rejects private, loopback,
+    # link-local, multicast, reserved, unspecified AND shared/CGNAT space
+    # (100.64.0.0/10, IPv6 fc00::/7), which is_private/is_reserved miss. The
+    # explicit terms are kept as defence-in-depth.
+    return (
+        not ip.is_global
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def resolve_public(host: str) -> list[str]:
+    # A literal IP is checked directly; only skip the literal check for
+    # hostnames (where ip_address() would raise), never swallow a real block.
+    if _is_ip_literal(host) and blocked_ip(host):
+        raise ValueError(f"blocked non-public target {host}")
+    infos = socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+    addrs = []
+    for info in infos:
+        addr = info[4][0]
+        if blocked_ip(addr):
+            raise ValueError(f"blocked resolved non-public target {addr}")
+        if addr not in addrs:
+            addrs.append(addr)
+    if not addrs:
+        raise ValueError(f"no public address for {host}")
+    return addrs
+
+
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    """Connect to a pre-vetted IP while keeping the hostname for the Host
+    header, so the address that resolve_public() checked is the address we
+    actually connect to (defeats DNS rebinding between check and connect)."""
+
+    def __init__(self, host, *, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        self.sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host, *, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+        # SNI + cert validation still use the real hostname, not the pinned IP.
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+def _open_pinned(url: str, timeout: float):
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("only http/https allowed")
+    hostname = parsed.hostname or ""
+    pinned = resolve_public(hostname)[0]  # vetted here, connected below — same IP
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    # Same port policy as the TCP probe — an explicit :port in the URL must not
+    # reach services the TCP path rejects. Checked here so every manually
+    # followed redirect hop is re-vetted too.
+    if port in BLOCKED_PORTS or port not in ALLOWED_PORTS:
+        raise ValueError(f"port {port} is not allowed")
+    conn_cls = _PinnedHTTPSConnection if parsed.scheme == "https" else _PinnedHTTPConnection
+    conn = conn_cls(hostname, port=port, pinned_ip=pinned, timeout=timeout)
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    conn.request("GET", path, headers={"User-Agent": "AS215932-extmon-diag/1.0", "Host": hostname})
+    return conn, conn.getresponse()
+
+
+def tcp(host: str, port: int, timeout: float = 10.0):
+    if port in BLOCKED_PORTS or port not in ALLOWED_PORTS:
+        raise ValueError(f"port {port} is not allowed")
+    addr = resolve_public(host)[0]
+    with socket.create_connection((addr, port), timeout=timeout):
+        return {"ok": True, "address": addr, "port": port}
+
+
+def http(url: str, timeout: float = 10.0):
+    if "://" not in url:
+        url = "https://" + url
+    # Follow redirects manually so every hop is re-vetted and re-pinned.
+    for _ in range(MAX_REDIRECTS + 1):
+        conn, resp = _open_pinned(url, timeout)
+        try:
+            location = resp.getheader("Location") if resp.status in REDIRECT_CODES else None
+            if location:
+                url = urllib.parse.urljoin(url, location)
+                continue
+            return {"ok": True, "status": resp.status, "headers": dict(resp.getheaders()), "body_sample": resp.read(2048).decode("utf-8", "replace")}
+        finally:
+            conn.close()
+    raise ValueError("too many redirects")
+
+
+def run_probe(kind: str, payload: dict):
+    if kind == "tcp":
+        return tcp(str(payload["host"]), int(payload["port"]), float(payload.get("timeout", 10)))
+    if kind in {"http", "https"}:
+        return http(str(payload["url"]), float(payload.get("timeout", 10)))
+    if kind in {"ping", "trace"}:
+        host = str(payload["host"])
+        addr = resolve_public(host)[0]
+        cmd = ["ping", "-c", "4", "-W", "2", addr] if kind == "ping" else ["traceroute", "-m", "20", addr]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
+        return {"ok": proc.returncode == 0, "returncode": proc.returncode, "output": (proc.stdout or proc.stderr)[-4096:]}
+    if kind == "smtp":
+        host = str(payload["host"])
+        return tcp(host, int(payload.get("port", 25)), float(payload.get("timeout", 10)))
+    raise ValueError(f"unsupported probe {kind}")
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200); self.end_headers(); self.wfile.write(b"ok\n"); return
+        self.send_response(404); self.end_headers()
+
+    def do_POST(self):
+        if not TOKEN:
+            # Fail closed: an unset EXTMON_DIAG_AGENT_TOKEN must not disable
+            # auth — refuse probes until a token is configured.
+            body = json.dumps({"ok": False, "error": "EXTMON_DIAG_AGENT_TOKEN not configured"}).encode()
+            self.send_response(503); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
+        if self.headers.get("Authorization") != f"Bearer {TOKEN}":
+            self.send_response(403); self.end_headers(); return
+        kind = self.path.rsplit("/", 1)[-1]
+        length = int(self.headers.get("Content-Length", "0"))
+        payload = json.loads(self.rfile.read(length).decode("utf-8") if length else "{}")
+        try:
+            result = run_probe(kind, payload)
+            status = 200
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+            status = 400
+        body = json.dumps(result).encode()
+        self.send_response(status); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        return
+
+
+if __name__ == "__main__":
+    host, port_s = os.environ.get("EXTMON_DIAG_AGENT_LISTEN", "{{ extmon_diag_agent_listen }}").rsplit(":", 1)
+    ThreadingHTTPServer((host, int(port_s)), Handler).serve_forever()

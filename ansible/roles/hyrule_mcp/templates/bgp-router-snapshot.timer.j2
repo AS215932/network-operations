@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly AS215932 router BGP table snapshot collection
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

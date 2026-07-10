@@ -41,8 +41,9 @@ noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trac
 noc_agent_mcp_health_timeout_seconds: 12
 
 firewall_extra_rules:
-  # Webhooks from Alertmanager + Icinga2 on mon.
+  # Webhooks from Alertmanager + Icinga2 on mon; best-effort external BGP alerts from extmon.
   - { proto: tcp, dport: 8000, src: "{{ peers.mon.ipv6 }}", comment: "noc-agent webhook from mon (Alertmanager + Icinga)" }
+  - { proto: tcp, dport: 8000, src: "{{ peers.extmon.ipv6 }}", comment: "noc-agent webhook from extmon Alertmanager" }
 
   # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
   - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }

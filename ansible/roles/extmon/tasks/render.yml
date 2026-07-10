@@ -62,3 +62,26 @@
   connection: local
   become: false
   tags: [validate, diff, apply]
+
+# NOTE: bgp-agent.env / diag-agent.env are deliberately NOT rendered here.
+# They carry EXTMON_BGP_INGEST_TOKEN, the Cloudflare token, and
+# EXTMON_DIAG_AGENT_TOKEN; rendering them into the git-tracked worktree would
+# put bearer tokens one `git add` away from a leak. They are templated straight
+# to /etc/extmon/*.env (mode 0600) by tasks/install.yml instead.
+- name: Render BGP and diagnostic agent configs
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ playbook_dir }}/../generated/extmon/{{ item.dest }}"
+    mode: "{{ item.mode | default('0644') }}"
+  loop:
+    - { src: bgp-agent.py.j2, dest: extmon-bgp-agent.py, mode: "0755" }
+    - { src: diag-agent.py.j2, dest: extmon-diag-agent.py, mode: "0755" }
+    - { src: bgp-agent.service.j2, dest: extmon-bgp-agent.service }
+    - { src: diag-agent.service.j2, dest: extmon-diag-agent.service }
+    - { src: bgpalerter-config.yml.j2, dest: bgpalerter-config.yml }
+    - { src: bgpalerter-prefixes.yml.j2, dest: bgpalerter-prefixes.yml }
+    - { src: bgpalerter.service.j2, dest: bgpalerter.service }
+  delegate_to: localhost
+  connection: local
+  become: false
+  tags: [validate, diff, apply]
