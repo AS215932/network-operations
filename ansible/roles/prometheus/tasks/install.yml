@@ -52,14 +52,18 @@
   changed_when: false
   when: prometheus_desired_rules | length > 0
 
+# Per-file, not a recursive dir copy: copying the staging dir applied
+# mode 0644 to the live directory itself, making it untraversable for the
+# prometheus user — its rules.d/*.yml glob then silently matches nothing.
 - name: Publish validated rules to the live directory
   ansible.builtin.copy:
-    src: "{{ prometheus_rules_staging_dir }}/"
-    dest: "{{ prometheus_rules_dir }}/"
+    src: "{{ prometheus_rules_staging_dir }}/{{ item }}"
+    dest: "{{ prometheus_rules_dir }}/{{ item }}"
     remote_src: true
     owner: root
     group: root
     mode: "0644"
+  loop: "{{ prometheus_desired_rules }}"
   notify: reload prometheus
 
 - name: Find live rule files
