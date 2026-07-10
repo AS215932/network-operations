@@ -8,13 +8,13 @@
 noc_agent_version: a7f0432b01ed525c4529deb78b6a294b05e6e99d
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 
-# Model chain: GLM 5.2 on both OpenRouter and Venice.AI (provider-redundant,
-# issue #393 — a single OpenRouter key cap must not take triage down), with
-# DeepSeek V4 Flash as the cheaper alternative on each provider.
-# venice: entries require noc-agent with the venice provider
-# (AS215932/noc-agent#68) and venice_api_key in Vault kv/noc-agent.
-noc_agent_model: "openrouter:z-ai/glm-5.2"
-noc_agent_fallback_models: "venice:zai-org-glm-5-2,openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
+# Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
+# DeepSeek V4 Flash as fallback; venice:deepseek-v4-flash keeps the chain
+# provider-redundant (issue #393 — a single OpenRouter key cap must not take
+# triage down; Venice does not host Hunyuan). venice: entries require
+# noc-agent >= a7f0432 (venice provider) and venice_api_key in kv/noc-agent.
+noc_agent_model: "openrouter:tencent/hy3"
+noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
 # Pinned to the Knowledge refresh that emits A0 GitHub issue context plus A1
 # routing policy context for loop:knowledge-gap routing (AS215932/knowledge#32,
 # #33).
