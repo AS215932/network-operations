@@ -302,6 +302,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | loop, noc, mon | tcp | 8770 | agent-core collector |
 | proxy, mon | tcp | 8780 | agentic observatory |
+| loop, mon | tcp | 8781 | knowledge read API |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**
