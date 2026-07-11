@@ -11,3 +11,11 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: web
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "nginx + uvicorn (:8080, :8081)"
+  summary: "Serves the hyrule.host landing page (uvicorn :8080) and the as215932.net info site (nginx :8081)."
+network_flows_outbound:
+  - { to: api, proto: tcp, port: 8402, purpose: "hyrule-cloud API backend" }

@@ -34,3 +34,11 @@ monitoring_extra_services:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: irc
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Soju IRC bouncer (fronted by Caddy on proxy)"
+  summary: "Soju IRC bouncer; TLS terminated by Soju itself on :6697, certificate via certbot HTTP-01."
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates (ACME DNS-01, TSIG hyrule-dns)" }
