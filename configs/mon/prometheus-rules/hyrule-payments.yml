@@ -72,9 +72,14 @@ groups:
         labels:
           severity: critical
           source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute"
         annotations:
           summary: "VM provisioning failing for paying customers"
           description: "More than 20% of VM provisioning attempts failed over the last hour. Refunds are manual — every failure is a paying agent holding a refund promise. Check XCP-NG/XO and the orchestrator logs."
+          public_title: "VM provisioning degraded"
+          public_message: "New VM builds are failing more often than normal. Existing VMs are unaffected."
 
       - alert: HyruleCloudMetricsDown
         expr: up{job="hyrule-cloud"} == 0

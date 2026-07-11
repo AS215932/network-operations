@@ -1,0 +1,129 @@
+# Customer-facing service-health alerts consumed by GET cloud.hyrule.host/v1/status.
+#
+# This is an explicit disclosure boundary. Only alerts carrying public_status=true
+# are eligible, and the API reads only the public_* labels/annotations below.
+# Never put hostnames, addresses, provider details, or runbook text in public fields.
+
+groups:
+  - name: hyrule-public-status
+    interval: 30s
+    rules:
+      - alert: HyrulePublicApiUnavailable
+        expr: |
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+            or on()
+          absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: outage
+          public_components: "api_checkout,intelligence,domains_dns,network_proxy"
+        annotations:
+          summary: "cloud.hyrule.host health probe is failing"
+          description: "The public API health endpoint has failed from the monitoring network for two minutes."
+          public_title: "Cloud API unavailable"
+          public_message: "The API and purchase flow are unreachable. New orders, diagnostics, domain management, and proxy requests are unavailable; existing VMs and DNS records are not affected."
+
+      - alert: HyrulePublicComputeControlPlaneUnavailable
+        expr: |
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+            or on()
+          absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute"
+        annotations:
+          summary: "compute control plane unavailable through public API"
+          description: "The API is unavailable, so new VM provisioning and browser management cannot proceed."
+          public_title: "New VM provisioning unavailable"
+          public_message: "New VM provisioning and management are unavailable. Existing VMs may remain online."
+
+      - alert: HyrulePublicPaymentFailureRatio
+        expr: |
+          sum(increase(hyrule_payment_events_total{event_type="settle_failed"}[15m])) >= 3
+            and on()
+          (
+            sum(increase(hyrule_payment_events_total{event_type="settle_failed"}[15m]))
+              / clamp_min(
+                  sum(increase(hyrule_payment_events_total{event_type=~"settled|settle_failed"}[15m])),
+                  1
+                )
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "api_checkout"
+        annotations:
+          summary: "customer payment settlement failure ratio is elevated"
+          description: "At least three settlements failed and failures exceed 20% of settlement attempts over 15 minutes."
+          public_title: "Payments degraded"
+          public_message: "Some payments are failing. New purchases may not complete; a charge is not considered successful until settlement confirms."
+
+      - alert: HyrulePublicComputeHostDegraded
+        expr: up{job="node-hypervisor"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute"
+        annotations:
+          summary: "compute host health monitoring is unavailable"
+          description: "Prometheus has been unable to scrape the compute host for three minutes."
+          public_title: "Compute health degraded"
+          public_message: "Compute host monitoring is failing. New provisioning may be delayed and some VMs may be unreachable."
+
+      - alert: HyrulePublicRoutingDegraded
+        expr: count(frr_bgp_peer_state{state!="Established"} == 1) > 0
+        for: 3m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute,domains_dns,network_proxy"
+        annotations:
+          summary: "one or more monitored BGP sessions are not established"
+          description: "Customer-facing services may have reduced routing redundancy."
+          public_title: "Network routing degraded"
+          public_message: "Network routing is degraded. VM, DNS, or proxy reachability may be intermittent while redundant paths converge."
+
+      - alert: HyrulePublicDNSDegraded
+        expr: sum(probe_success{job="blackbox-dns-hyrule"}) > 0 and sum(probe_success{job="blackbox-dns-hyrule"}) < 2
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "domains_dns"
+        annotations:
+          summary: "one hyrule.host authoritative DNS probe is failing"
+          description: "Exactly one of the two authoritative nameserver probes is succeeding."
+          public_title: "Authoritative DNS degraded"
+          public_message: "One authoritative nameserver is failing checks. DNS remains available through the redundant server."
+
+      - alert: HyrulePublicDNSOutage
+        expr: (sum(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: outage
+          public_components: "domains_dns"
+        annotations:
+          summary: "all hyrule.host authoritative DNS probes are failing"
+          description: "Neither authoritative nameserver is returning the expected hyrule.host answer."
+          public_title: "Authoritative DNS unavailable"
+          public_message: "Authoritative DNS checks are failing. hyrule.host and customer DNS records may not resolve."
