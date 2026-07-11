@@ -97,6 +97,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+expected_apply_var="engineering_loop_apply=true"
 \s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
 \s+;;
+\s+soc\)
+\s+# role gate is soc_agent_apply \(role name != playbook name\)
+\s+apply_var="soc_agent_apply=true"
+\s+expected_apply_var="soc_agent_apply=true"
+\s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
 \s+expected_apply_var="\$\{playbook//-/_\}_apply=true"
