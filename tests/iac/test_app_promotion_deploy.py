@@ -17,6 +17,20 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertEqual(strategy["fail-fast"], False)
         self.assertEqual(strategy["max-parallel"], 1)
 
+    def test_firewalls_gate_dependent_consumer_applies(self):
+        workflow = yaml.safe_load(
+            (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        )
+
+        firewall = workflow["jobs"]["firewall"]
+        apply = workflow["jobs"]["apply"]
+        self.assertEqual(firewall["needs"], "detect")
+        self.assertEqual(firewall["strategy"]["fail-fast"], True)
+        self.assertEqual(firewall["strategy"]["max-parallel"], 1)
+        self.assertEqual(apply["needs"], ["detect", "firewall"])
+        self.assertIn("needs.firewall.result == 'success'", apply["if"])
+        self.assertIn("needs.firewall.result == 'skipped'", apply["if"])
+
     def test_agentic_observatory_changes_trigger_loop_apply(self):
         workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
 
@@ -63,7 +77,7 @@ class AppPromotionDeployTest(unittest.TestCase):
             'mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed',
             workflow_text,
         )
-        firewall = workflow_text.index('add_once("firewall", "mon")')
+        firewall = workflow_text.index('add_firewall_once("mon")')
         engineering_loop = workflow_text.index('add_once("engineering-loop", "loop")')
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
         self.assertLess(firewall, engineering_loop)
@@ -77,7 +91,7 @@ class AppPromotionDeployTest(unittest.TestCase):
             'extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed',
             workflow_text,
         )
-        firewall = workflow_text.index('add_once("firewall", "extmon")')
+        firewall = workflow_text.index('add_firewall_once("extmon")')
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
         self.assertLess(firewall, prometheus)
 

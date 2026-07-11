@@ -9,18 +9,13 @@ groups:
     interval: 30s
     rules:
       - alert: HyrulePublicApiUnavailable
+        # A missing scrape is loss of monitoring visibility, not proof of a
+        # customer outage. Publish outage only when both independent address-
+        # family probes actually measured a failed request.
         expr: |
-          (
-            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
-              or on()
-            absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
-          )
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
             and on()
-          (
-            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
-              or on()
-            absent(probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"})
-          )
+          probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
         for: 2m
         labels:
           severity: critical
@@ -39,18 +34,12 @@ groups:
         # provisioning and browser management, but should degrade only the
         # compute control plane rather than claim existing VMs are offline.
         # Hypervisor and routing signals cover the compute data plane below.
+        # As above, require two measured failures; missing probe telemetry is
+        # never promoted into customer impact.
         expr: |
-          (
-            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
-              or on()
-            absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
-          )
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
             and on()
-          (
-            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
-              or on()
-            absent(probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"})
-          )
+          probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
         for: 2m
         labels:
           severity: warning
@@ -128,7 +117,11 @@ groups:
             or on()
           absent(up{job="frr"})
             or on()
-          absent(frr_bgp_peer_state)
+          count(
+            (up{job="frr"} == 1)
+              unless on(instance)
+            frr_bgp_peer_state
+          ) > 0
         for: 3m
         labels:
           severity: warning

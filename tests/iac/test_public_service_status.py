@@ -98,8 +98,14 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("https://cloud.hyrule.host/health", ipv4_job)
         self.assertIn("2001:19f0:7402:0cd5:5400:06ff:fe40:7112", ipv4_job)
         self.assertIn("http_2xx_v4:", extmon_blackbox)
-        self.assertIn('job="blackbox-http-ipv4"', rules)
-        self.assertIn('job="blackbox-http"', rules)
+        for alert in (
+            "HyrulePublicApiUnavailable",
+            "HyrulePublicComputeControlPlaneUnavailable",
+        ):
+            block = rules.split(f"- alert: {alert}", 1)[1].split("- alert:", 1)[0]
+            self.assertIn('job="blackbox-http-ipv4"', block)
+            self.assertIn('job="blackbox-http"', block)
+            self.assertNotIn("absent(", block)
 
     def test_every_public_alert_has_complete_safe_metadata(self):
         allowed_components = {
@@ -145,11 +151,11 @@ class PublicServiceStatusContracts(unittest.TestCase):
             "HyrulePublicDNSOutage",
         ):
             self.assertIn(f"alert: {alert}", rules)
-        self.assertIn('absent(probe_success{job="blackbox-http"', rules)
+        self.assertNotIn('absent(probe_success{job="blackbox-http"', rules)
         self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
         self.assertIn("frr_bgp_peer_state != 1", rules)
         self.assertIn('up{job="frr"} == 0', rules)
-        self.assertIn("absent(frr_bgp_peer_state)", rules)
+        self.assertIn("unless on(instance)", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
         self.assertIn(
             '(count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2',
@@ -159,6 +165,18 @@ class PublicServiceStatusContracts(unittest.TestCase):
             'count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2',
             rules,
         )
+
+    def test_public_provisioning_ratio_requires_multiple_failures(self):
+        rules = (RULES / "hyrule-payments.yml").read_text()
+        block = rules.split("- alert: HyruleVMProvisionFailureRatio", 1)[1].split(
+            "- alert:", 1
+        )[0]
+
+        self.assertIn(
+            'sum(increase(hyrule_vm_provision_total{result="failed"}[1h])) >= 3',
+            block,
+        )
+        self.assertIn("> 0.2", block)
 
     def test_bgp_alerts_use_frr_exporter_state_values(self):
         public_rules = (RULES / "hyrule-public-status.yml").read_text()

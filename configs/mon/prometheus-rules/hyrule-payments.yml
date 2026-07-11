@@ -66,8 +66,12 @@ groups:
 
       - alert: HyruleVMProvisionFailureRatio
         expr: |
-          sum(increase(hyrule_vm_provision_total{result="failed"}[1h]))
-            / clamp_min(sum(increase(hyrule_vm_provision_total[1h])), 1) > 0.2
+          sum(increase(hyrule_vm_provision_total{result="failed"}[1h])) >= 3
+            and on()
+          (
+            sum(increase(hyrule_vm_provision_total{result="failed"}[1h]))
+              / clamp_min(sum(increase(hyrule_vm_provision_total[1h])), 1) > 0.2
+          )
         for: 10m
         labels:
           severity: critical
@@ -77,7 +81,7 @@ groups:
           public_components: "compute"
         annotations:
           summary: "VM provisioning failing for paying customers"
-          description: "More than 20% of VM provisioning attempts failed over the last hour. Refunds are manual — every failure is a paying agent holding a refund promise. Check XCP-NG/XO and the orchestrator logs."
+          description: "At least three VM provisioning attempts failed and failures exceed 20% over the last hour. Refunds are manual — every failure is a paying agent holding a refund promise. Check XCP-NG/XO and the orchestrator logs."
           public_title: "VM provisioning degraded"
           public_message: "New VM builds are failing more often than normal. Existing VMs are unaffected."
 
