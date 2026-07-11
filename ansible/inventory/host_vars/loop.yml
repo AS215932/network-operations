@@ -192,7 +192,6 @@ monitoring_extra_services:
       http_ipv6: true
       http_timeout: 5
       http_expect_body_regex: '"status":"ok"'
-      http_expect_body_regex: '"status":"ok"'
 
 firewall_extra_rules:
   # node_exporter scrape from mon only.
