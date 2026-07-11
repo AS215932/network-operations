@@ -6,7 +6,9 @@
 # handoff_dry -> handoff_live); promotion criteria live in
 # docs/runbooks/soc-mode-promotion.md and are computed from labeled insight
 # records (`hyrule-knowledge insights metrics --loop soc`). Every rung change
-# is a reviewed promotion PR that edits soc_mode here.
+# is a reviewed promotion PR that edits soc_mode in the TARGET HOST's
+# host_vars — these defaults stay at the ladder floor (shadow) so a new SOC
+# host never starts above it.
 
 soc_agent_apply: false
 

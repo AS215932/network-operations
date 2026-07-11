@@ -1,8 +1,11 @@
 # Deploy path: /etc/systemd/system/soc-agent.service
 [Unit]
 Description=SOC Agent LHP origin endpoints (payload fetch + engineering callbacks)
-After=network-online.target
-Wants=network-online.target
+# Order after the Vault Agent sink that renders the REQUIRED secrets env —
+# without it, boot can start this unit before /opt/soc-agent/.env exists and
+# burn through the restart budget (engineering_loop/observatory precedent).
+After=network-online.target vault-agent-soc-agent.service
+Wants=network-online.target vault-agent-soc-agent.service
 
 [Service]
 User={{ soc_agent_user }}

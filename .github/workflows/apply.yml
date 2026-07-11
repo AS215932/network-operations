@@ -278,7 +278,7 @@ jobs:
           set -euo pipefail
 
           case "$PLAYBOOK" in
-            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|frr|networkd_resolved|mail_openbsd)
+            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|soc|frr|networkd_resolved|mail_openbsd)
               required=true
               ;;
             *)

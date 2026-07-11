@@ -26,8 +26,14 @@
         not (soc_agent_apply | bool)
         or (soc_network_operations_version | length == 40
             and soc_network_operations_version is match('^[0-9a-f]{40}$'))
-      # MCP-backed posture checks need an endpoint; a live apply with posture
-      # enabled but no HYRULE_MCP_URL/CMD would silently degrade every check.
+      # MCP transport is exactly one of URL/CMD: both set would leave the app
+      # to pick a transport by implicit precedence instead of reviewed
+      # host_vars (rejected even in render-only runs)...
+      - >-
+        not (soc_hyrule_mcp_url | length > 0
+             and soc_hyrule_mcp_cmd | length > 0)
+      # ...and a live apply with posture enabled but no endpoint at all would
+      # silently degrade every MCP-backed check.
       - >-
         not (soc_agent_apply | bool and soc_posture_enabled | bool)
         or (soc_hyrule_mcp_url | length > 0 or soc_hyrule_mcp_cmd | length > 0)
