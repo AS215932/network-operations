@@ -100,7 +100,8 @@ groups:
           public_message: "Compute host monitoring is failing. New provisioning may be delayed and some VMs may be unreachable."
 
       - alert: HyrulePublicRoutingDegraded
-        expr: count(frr_bgp_peer_state != 6) > 0
+        # tynany/frr_exporter v1.11.0: 1=Established, 0=down, 2=admin-down.
+        expr: count(frr_bgp_peer_state != 1) > 0
         for: 3m
         labels:
           severity: warning

@@ -26,14 +26,15 @@ groups:
           description: "blackbox_exporter ICMPv6 probe to {{ $labels.instance }} has been failing for 3 minutes."
 
       - alert: BGPSessionDown
-        expr: frr_bgp_peer_state != 6
+        # tynany/frr_exporter v1.11.0: 1=Established, 0=down, 2=admin-down.
+        expr: frr_bgp_peer_state != 1
         for: 2m
         labels:
           severity: critical
           source: prometheus
         annotations:
           summary: "BGP peer {{ $labels.peer }} not established on {{ $labels.instance }}"
-          description: "Peer state is {{ $value }} (6 is Established)."
+          description: "Peer state is {{ $value }} (1 is Established; 2 is administratively down)."
 
       - alert: HyruleNetworkProxyDown
         expr: up{job="hyrule-network-proxy"} == 0

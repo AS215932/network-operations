@@ -106,8 +106,22 @@ class PublicServiceStatusContracts(unittest.TestCase):
             self.assertIn(f"alert: {alert}", rules)
         self.assertIn('absent(probe_success{job="blackbox-http"', rules)
         self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
-        self.assertIn("frr_bgp_peer_state != 6", rules)
+        self.assertIn("frr_bgp_peer_state != 1", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
+
+    def test_bgp_alerts_use_frr_exporter_state_values(self):
+        public_rules = (RULES / "hyrule-public-status.yml").read_text()
+        tripwires = (RULES / "noc-tripwire.yml").read_text()
+        icinga = (
+            REPO / "configs" / "mon" / "icinga2" / "services" / "bgp.conf"
+        ).read_text()
+
+        self.assertIn("count(frr_bgp_peer_state != 1) > 0", public_rules)
+        self.assertIn("expr: frr_bgp_peer_state != 1", tripwires)
+        self.assertIn("count(frr_bgp_peer_state", icinga)
+        self.assertIn("!= 1", icinga)
+        for text in (public_rules, tripwires, icinga):
+            self.assertNotIn("frr_bgp_peer_state != 6", text)
 
     def test_proxy_metrics_failure_is_only_publicly_degraded(self):
         rules = (RULES / "noc-tripwire.yml").read_text()
