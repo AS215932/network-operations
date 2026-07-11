@@ -27,6 +27,10 @@ groups:
           public_message: "The API and purchase flow are unreachable. New orders, diagnostics, domain management, and proxy requests are unavailable; existing VMs and DNS records are not affected."
 
       - alert: HyrulePublicComputeControlPlaneUnavailable
+        # Deliberately follows the public API probe: an API outage blocks new
+        # provisioning and browser management, but should degrade only the
+        # compute control plane rather than claim existing VMs are offline.
+        # Hypervisor and routing signals cover the compute data plane below.
         expr: |
           probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
             or on()
@@ -124,14 +128,20 @@ groups:
         # dedicated exporter in the follow-up issue.
         expr: |
           (
-            sum(probe_success{job="blackbox-dns-hyrule"}) == 1
-              or on()
-            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
+            (
+              sum(probe_success{job="blackbox-dns-hyrule"}) == 1
+                or on()
+              sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
+            )
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule"}) > 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) > 0
           )
-            and on()
-          sum(probe_success{job="blackbox-dns-hyrule"}) > 0
-            and on()
-          sum(probe_success{job="blackbox-dns-hyrule-deploy"}) > 0
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) != 2
         for: 2m
         labels:
           severity: warning
@@ -140,16 +150,24 @@ groups:
           public_state: degraded
           public_components: "domains_dns"
         annotations:
-          summary: "authoritative DNS redundancy is degraded"
-          description: "One authoritative nameserver is failing the apex or delegated customer-zone check."
+          summary: "authoritative DNS redundancy or monitoring is degraded"
+          description: "One nameserver is failing a check, or complete authoritative probe coverage is unavailable."
           public_title: "Authoritative DNS degraded"
-          public_message: "One authoritative nameserver is failing checks. DNS remains available through the redundant server."
+          public_message: "Authoritative DNS redundancy or monitoring is degraded. DNS may remain available while checks recover."
 
       - alert: HyrulePublicDNSOutage
         expr: |
-          (sum(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) == 0
+          (
+            (sum(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule"}) == 2
+          )
             or on()
-          (sum(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) == 0
+          (
+            (sum(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2
+          )
         for: 2m
         labels:
           severity: critical

@@ -125,6 +125,14 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
         self.assertIn("frr_bgp_peer_state != 1", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
+        self.assertIn(
+            '(count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2',
+            rules,
+        )
+        self.assertIn(
+            'count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2',
+            rules,
+        )
 
     def test_bgp_alerts_use_frr_exporter_state_values(self):
         public_rules = (RULES / "hyrule-public-status.yml").read_text()
