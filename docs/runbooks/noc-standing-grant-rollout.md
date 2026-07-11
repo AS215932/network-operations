@@ -2,9 +2,9 @@
 
 Staged relaxation of NOC human gates. Every step is an env promotion PR
 against `ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2` (plus the
-hyrule-mcp env where noted), applied through the standard gated flow with
-Icinga snapshots. Each step has a burn-in and a measured promotion criterion
-before the next.
+hyrule-mcp env where noted), applied through the standard gated flow. Each step
+has a burn-in and a measured promotion criterion before the next; watch live
+Icinga (or the hyrule MCP `icinga_list_problems` tool) across each promotion.
 
 ## Step 0 — insight records on (read-only reporting)
 
@@ -66,7 +66,7 @@ Behavior (enforced in `app/graph/nodes.py`, covered by
 ≥ 25 labeled insights (`hyrule-knowledge insights metrics --loop noc`), with
 the labels accumulated via the Observatory insight inbox.
 
-Rollback for any step: revert the env promotion PR, re-apply, verify via
-Icinga snapshot diff. Kill switches: `NOC_STANDING_GRANT_ACTION_CLASSES=`
+Rollback for any step: revert the env promotion PR, re-apply, verify via live
+Icinga (`icinga_list_problems`). Kill switches: `NOC_STANDING_GRANT_ACTION_CLASSES=`
 (empty) disables grants instantly; `NOC_INSIGHT_RECORDS_ENABLED=0` stops the
 stream.

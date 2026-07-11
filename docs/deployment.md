@@ -195,10 +195,11 @@ scripts/openbsd-offline-resize.sh \
 
 ## Deployment Runbook
 
-Before every live deployment, capture Icinga state from `mon`; capture it again
-after the deployment finishes and compare for new problems. The Ansible
-playbooks include pre/post snapshot plays for this. Do not skip snapshots on a
-real rollout unless it is an explicit emergency.
+Before every live deployment, check the Icinga problem list on `mon` (or the
+hyrule MCP `icinga_list_problems` tool); check it again a few minutes after the
+deployment finishes and compare for new problems. Apply runs also finish with a
+post-deploy Goss suite. There are no in-playbook snapshot plays — watch live
+monitoring instead, since Icinga only re-checks on its own interval.
 
 ### Phase 0: Server Preparation
 
@@ -427,7 +428,7 @@ Render and review:
 ```bash
 cd ansible
 ansible-playbook playbooks/mail_openbsd.yml --tags validate --connection=local
-ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot
+ansible-playbook playbooks/firewall.yml --tags validate --connection=local
 ```
 
 Apply after `MAIL_NOC_PASSWORD_HASH` and `MAIL_DKIM_PRIVATE_KEY` are loaded

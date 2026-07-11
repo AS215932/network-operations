@@ -23,8 +23,9 @@ diffs against the *running daemon*, so a converged daemon is a cheap no-op, whil
 a daemon left stale by a prior run still gets converged. This avoids the trap
 where the on-disk file already matches the repo but the daemon never ingested it.
 
-`serial: 1` and the pre/post Icinga snapshot bracket are on the playbook
-(`playbooks/frr.yml`), matching the `firewall` role.
+`serial: 1` is on the playbook (`playbooks/frr.yml`), matching the `firewall`
+role, so a bad policy change blocks the next router instead of taking the mesh
+down.
 
 ## OS differences (`vars/<os_family>.yml`)
 
@@ -56,9 +57,9 @@ where the on-disk file already matches the repo but the daemon never ingested it
 ```bash
 cd ansible
 # Validate-only (no host connection, no change):
-ansible-playbook playbooks/frr.yml --tags validate --connection=local --skip-tags=snapshot
+ansible-playbook playbooks/frr.yml --tags validate --connection=local
 
-# Apply to one router (Icinga-bracketed, serial:1):
+# Apply to one router (serial:1):
 ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 ```
 

@@ -11,7 +11,7 @@ Workflows match the runner label set `self-hosted, linux, x64, hyrule-infra`.
 | `render-check.yml` | `pull_request` touching `ansible/**`, `configs/**` | render every playbook + deploy preflight + assert `ansible/generated/` is fresh | 0b |
 | `iac-tests.yml` | `pull_request`, `push` to `main`, manual | DNS/inventory/Vault/FRR tests, render idempotency; Batfish/Containerlab run manually or when repo vars enable them | current |
 | `drift-detection.yml` | nightly + manual | `ansible-playbook --check --diff`; alerts NOC, never auto-applies | current |
-| `apply.yml` | `workflow_dispatch` | manual gated apply with runner preflight, snapshots, postflight Goss, diff | 0e |
+| `apply.yml` | `workflow_dispatch` | manual gated apply with runner preflight and postflight Goss validation | 0e |
 
 AI review is handled by the repo's **hosted review service** (configured in
 GitHub repo settings), not a workflow we maintain — there is no `ai-review.yml`.

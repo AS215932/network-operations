@@ -10,8 +10,9 @@ pinning exact app commit SHAs. Safety lives in three layers:
    lint, type, and test checks.
 2. **Render-check** before merge — the diff between `ansible/generated/` and
    what render produces is empty.
-3. **Icinga snapshot bracket** around apply — what was broken before and what
-   is broken after, captured as artifacts on the workflow run.
+3. **Post-deploy Goss validation** after apply — the role's Goss suite runs
+   against the target hosts, and live Icinga / the hyrule MCP surface any
+   regression the change caused.
 
 ## App promotion model
 
@@ -45,8 +46,8 @@ The normal automated path is:
    pin file changed. It calls `apply.yml` for the affected playbook(s).
 7. Approve the GitHub `production` environment gate. This is the intended
    manual deploy step.
-8. Review the workflow summary: app pins, compare links, and Icinga snapshot
-   diff.
+8. Review the workflow summary: app pins, compare links, and the post-deploy
+   Goss result.
 
 Manual fallback: run **Actions -> promote-apps** in this repository and paste
 the merged app SHAs into the relevant inputs. Use this when a dispatch failed,
@@ -100,27 +101,23 @@ gate. Approve in the UI; the run unfreezes.
 1. **Source secrets** — Vault Agent on the `ci` runner has rendered
    `/etc/github-runner/secrets.env` with `DISCORD_WEBHOOK_URL`,
    `ICINGA_API_USER`, etc. The workflow exports them into `GITHUB_ENV`.
-2. **Pre-snapshot** — `ansible-playbook <pb>.yml --tags snapshot -e snapshot_phase=pre`.
-   Captures current Icinga problem set from `mon`.
-3. **Render-only OR apply** — depending on `dry_run`. Apply uses
+2. **Render-only OR apply** — depending on `dry_run`. Apply uses
    `--tags apply -e <pb>_apply=true --limit <limit>`.
-4. **Post-snapshot** — same as step 2 with `snapshot_phase=post`.
-5. **Diff snapshots** — `diff -ruN pre post`. The diff lands in the workflow
-   run summary, on the named PR (if `pr_number`), and as an uploaded artifact
-   (`snapshots-<playbook>-<limit>`).
+3. **Post-deploy Goss validation** — `scripts/ci/goss-validate.sh` runs the
+   role's Goss suite against the target hosts. Regressions from the change
+   surface here and in live Icinga / the hyrule MCP, not a pre/post snapshot
+   bracket.
 
-## How to read the snapshot diff
+## Checking for regressions
 
-- **Empty diff** — clean apply. Ship the next change.
-- **Lines starting with `+`** — checks that *became* problems. Investigate
-  whether your change caused them.
-- **Lines starting with `-`** — checks that resolved. Probably unrelated
-  (recovery during the apply window); note in run summary.
-- **Both `+` and `-` on the same check** — flap. Look at the snapshot's
-  detail JSON for last_hard_state_change.
+Live monitoring is the source of truth for health: check the `mon` Icinga
+problem list (or the hyrule MCP `icinga_list_problems` tool) before and after
+the run. Because Icinga re-checks on its own interval (minutes), watch it for a
+few minutes after the apply rather than expecting an instant signal — a
+post-deploy snapshot taken seconds after the reload would just echo the
+pre-deploy state, which is why the bracket was removed.
 
-If the diff has `+` entries for checks that look related to your change, the
-expected response is:
+If checks related to your change start failing, the expected response is:
 
 1. **If the apply succeeded but new checks fail**: roll forward — fix the
    templates and dispatch another apply. Don't roll back the systemd unit
@@ -148,20 +145,13 @@ local:
 cd ansible
 set -a; source ../secrets.local.sh; set +a
 
-# Pre-snapshot (manual)
-ansible-playbook playbooks/<pb>.yml --tags snapshot -e snapshot_phase=pre
-
 # Apply
 ansible-playbook playbooks/<pb>.yml --tags apply \
   -e '{"<pb>_apply":true}' \
   --limit <limit>
 
-# Post-snapshot
-ansible-playbook playbooks/<pb>.yml --tags snapshot -e snapshot_phase=post
-
-# Diff manually
-ls -1dt ansible/generated/snapshots/*/ | head -2 | \
-  xargs -I{} diff -ruN
+# Then check live Icinga on mon (or the hyrule MCP icinga_list_problems tool)
+# for new problems attributable to the change.
 ```
 
 Record the deploy in the PR description after the fact.
@@ -189,6 +179,4 @@ PR #44 description (`feat/0d-ci-auto-merge`) for the exact `gh api` call.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Workflow stuck "Waiting for self-hosted runner" | `ci` VM offline / runner not registered | Re-run `docs/ci/provision.md` from step 4 |
-| Pre-snapshot fails with "icinga-snapshot not found" | First time apply on a brand-new mon | One-time: SSH to mon and create `/usr/local/bin/icinga-snapshot` (covered separately) |
 | Apply step fails with "Permission denied (publickey)" | `runner` user's SSH key not in target host's authorized_keys | Push key via `playbooks/noc-mcp-key.yml`-style fan-out (filed as follow-up if not done) |
-| `--limit X` skips snapshot plays | You're running pre-fix #16 code | Confirm the snapshot --limit fix (issue #16) is merged |

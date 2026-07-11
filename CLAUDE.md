@@ -166,7 +166,7 @@ adding a service, moving a host), update in this order:
    new external endpoints go in `network_flows.yml :: network_externals`.
 2. **Re-render the flow doc** — `python scripts/render-network-flows.py`
    regenerates `docs/network-flows.md`. Commit the diff (or `--check` fails CI).
-3. **Re-render and review the firewall configs** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
+3. **Re-render and review the firewall configs** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
 
 The same flow applies when adding hosts: define the host in
 `ansible/inventory/hosts.yml` (**use its IPv6 for `ansible_host`** — the ci
@@ -185,13 +185,15 @@ on first-time applies.
 
 ## Deployment safety — always check Icinga before and after
 
-Every live deployment MUST capture Icinga state before and after the change.
-Use the playbook snapshot wrapper or manually run the same check on `mon`
-before touching hosts and again after handlers/reloads finish. The point is to
-compare "already broken" vs "newly broken" and catch regressions from our
-changes immediately. Do not use `--skip-tags snapshot` for real deploys unless
-there is an explicit emergency reason, and record that reason in the rollout
-notes.
+Every live deployment MUST check monitoring before and after the change:
+inspect the `mon` Icinga problem list (or the hyrule MCP `icinga_list_problems`
+tool) before touching hosts and again a few minutes after handlers/reloads
+finish. The point is to compare "already broken" vs "newly broken" and catch
+regressions from our changes. Apply runs also finish with a post-deploy Goss
+suite (`scripts/ci/goss-validate.sh`). There is no in-playbook pre/post
+snapshot bracket — it was removed because a snapshot captured seconds after a
+reload just echoes the pre-deploy state before Icinga re-checks, adding a step
+without adding signal.
 
 ## Commit discipline
 
@@ -289,7 +291,7 @@ What counts as "worth filing":
 - A regression risk or hardening gap discovered during a deploy
   (shadow-mode flips, scope-broadening of a privileged credential, etc.).
 - A workaround for a tooling gap that should be automated
-  (manual `mon`-side snapshot, raw-mode Ansible fallback, etc.).
+  (manual `prometheus.yml` scrape edit, raw-mode Ansible fallback, etc.).
 
 What does NOT need an issue:
 
