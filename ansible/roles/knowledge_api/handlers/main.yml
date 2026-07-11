@@ -1,0 +1,7 @@
+---
+- name: restart knowledge-api
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-api.service
+    state: restarted
+    daemon_reload: true
+  when: knowledge_api_enabled | bool

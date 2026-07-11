@@ -57,6 +57,8 @@
       tags: [knowledge_mcp]
     - role: knowledge_loop
       tags: [knowledge_loop]
+    - role: knowledge_api
+      tags: [knowledge_api]
     - role: vault_agent
       vars:
         vault_agent_name: engineering-loop
