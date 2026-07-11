@@ -4,9 +4,11 @@
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
 
-# Bumped to the build containing Reliability Governor idempotency and
-# production-network human-gating for resolver infrastructure (#35).
-engineering_loop_version: "2575131cf9b106d42de2234beedd733549b75011"
+# Bumped to the insight-stream build (#37): governor/daemon/intake decisions
+# become InsightDecisionRecords, capability success-history CLI for the
+# Tier-2 governor path. Emission stays behind
+# HYRULE_ENGINEERING_INSIGHT_RECORDS (unset).
+engineering_loop_version: "4587b1ca07c0a9ca3e65e527c13b39a3cb238317"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
@@ -16,10 +18,10 @@ engineering_loop_agent_core_trace_enabled: true
 engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
-# deployed as a Docker container and bound to host loopback only. Pinned to the
-# refresh that emits A0 GitHub issue context plus A1 routing policy context for
-# loop:knowledge-gap work (#32, #33).
-knowledge_mcp_version: "9baa92c299536901c623952415b9513cd4076b10"
+# deployed as a Docker container and bound to host loopback only. Pinned to
+# the grounding-aware build (#35): grounding.jsonl/sqlite grounding table in
+# exports, insight metrics CLI; A0 issue + A1 routing context unchanged.
+knowledge_mcp_version: "a68f974e7ed093d8f4195a15dc5b1afc636999f4"
 knowledge_mcp_enabled: true
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
@@ -34,8 +36,10 @@ knowledge_mcp_docker_dns:
   - "{{ peers.rtr.ipv6 }}"
 
 # Collector-backed Agent-Core trace ingestion. The collector binds only to the
-# loop overlay address and stores events in local Postgres.
-agent_core_collector_version: "0765283c2644fcab53ccfb5b8b3ce4184b083adb"
+# loop overlay address and stores events in local Postgres. v0.8.0: insight
+# read API (GET /v1/insights), insight_label ingest with optional bearer
+# token (HYRULE_COLLECTOR_INGEST_TOKEN), 180d insight retention prune.
+agent_core_collector_version: "4329ec96d689d0dc347b3e420f6c4ac4dcdec945"
 agent_core_collector_enabled: true
 agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
@@ -44,17 +48,21 @@ agent_core_collector_port: 8770
 # MCP above). Pinned to the merged Knowledge revision that ships runtime
 # LoopDecisionEnvelope emission, shared decision memory export/query support,
 # A0 GitHub issue context, and A1 routing policy context for knowledge-gap
-# routing (AS215932/knowledge#30, #31, #32, and #33). The canary runs daily,
-# opens at most one reviewed PR/day, and keeps live OpenRouter calls disabled.
-knowledge_loop_version: "9baa92c299536901c623952415b9513cd4076b10"
+# routing (AS215932/knowledge#30–#33) plus the grounding/insight build (#35:
+# grounding exports, IDQ/CGS metrics CLI, insight sync behind
+# insight_sync_enabled=false). The canary runs daily, opens at most one
+# reviewed PR/day, and keeps live OpenRouter calls disabled.
+knowledge_loop_version: "a68f974e7ed093d8f4195a15dc5b1afc636999f4"
 knowledge_loop_timer_enabled: true
 knowledge_loop_agent_core_trace_enabled: true
 knowledge_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 knowledge_loop_max_openrouter_calls_per_day: 0
 knowledge_loop_max_prs_per_day: 1
 
-# Agentic Observatory internal operator console.
-agentic_observatory_version: "2ecdfa07cc62264f45690a81400e86cda6d65921"
+# Agentic Observatory internal operator console. Insight inbox (#9) ships
+# read-only: the label action stays out of OBSERVATORY_ENABLED_ACTIONS until
+# the collector ingest token exists (fails closed without it).
+agentic_observatory_version: "00127b4c6a5482296c6177e7454201e34ebb5894"
 agentic_observatory_user: agentic-observatory
 agentic_observatory_group: agentic-observatory
 agentic_observatory_config_dir: /etc/agentic-observatory
