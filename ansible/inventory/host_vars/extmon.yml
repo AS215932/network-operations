@@ -53,3 +53,22 @@ extmon_ovh_failover_ips:
 # Inbound SSH allow-list comes from the firewall role's standard set (ops
 # workstation, VPN clients, ci, noc, mon) — UFW and its extmon_ssh_allow_*
 # vars are retired; see roles/extmon/tasks/ufw.yml.
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+# extmon lives OUTSIDE AS215932 (off-net, different ASN) so it is not part of the
+# overlay flow map, but it is transcribed here because its host_vars file exists
+# and it appears as a source in noc's inbound rules.
+host_meta:
+  os: "Debian 13"
+  role: "External monitoring host (off-net)"
+  summary: "Off-net external monitor (Vultr London, different ASN) probing AS215932 public services from the outside and posting alerts directly."
+  notes: "Outside AS215932; independent failure domain. Runs its own Prometheus + blackbox + Alertmanager. Inbound SSH comes from the firewall role's standard allow set."
+network_flows_outbound:
+  - { to: noc, proto: tcp, port: 8000, purpose: "best-effort external Alertmanager webhook enrichment" }
+  - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP intelligence ingest (cloud.hyrule.host/v1/internal/bgp)" }
+  - { to: public, proto: tcp, port: 443, purpose: "probe AS215932 public services, Discord webhook, Cloudflare Radar, OVH API" }
+  # blackbox probes of AS215932 public services from off-net (over public IPv6).
+  - { to: dns, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns1 (auth Knot)" }
+  - { to: ns2, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns2 (off-net secondary)" }
+  - { to: mail, proto: tcp, port: [25, 465, 587, 993], purpose: "blackbox SMTP/submission/IMAPS reachability + TLS probes" }
+  - { to: public, proto: icmp6, purpose: "blackbox ICMP v4/v6 reachability probes of AS215932 endpoints" }

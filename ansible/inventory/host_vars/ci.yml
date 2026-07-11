@@ -29,3 +29,16 @@ monitoring_check_vars:
 # Logs — ship journald to log VM.
 logs_register: true
 logs_role: ci
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Self-hosted GitHub Actions runner (privileged)"
+  summary: "Privileged self-hosted GitHub Actions runner for AS215932/network-operations; runs apply jobs against the fleet."
+  notes: "Outbound only — no inbound from the public internet."
+network_flows_outbound:
+  - { to: github, proto: tcp, port: 443, purpose: "poll runner queue, fetch action images" }
+  - { to: anthropic, proto: tcp, port: 443, purpose: "AI review (api.anthropic.com)" }
+  - { to: all-infra, proto: tcp, port: 22, purpose: "apply runs via ansible-playbook --tags apply" }
+  - { to: mon, proto: tcp, port: 9090, purpose: "Prometheus query during render-check" }
+  - { to: log, proto: tcp, port: 6000, purpose: "Vector agent to aggregator" }

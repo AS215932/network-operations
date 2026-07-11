@@ -11,3 +11,12 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: netproxy
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health)"
+  summary: "Internal Hyrule Network Proxy sidecar that executes paid x402-gated Hyrule Cloud network requests."
+  notes: "Prometheus scrape targets go green once the VM is provisioned and the sidecar applied (issue #214)."
+network_flows_outbound:
+  - { to: public, proto: "tcp+udp", purpose: "direct/Tor/I2P/Yggdrasil egress for request modes, subject to sidecar SSRF/IP policy" }

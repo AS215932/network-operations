@@ -78,7 +78,7 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 - `autoinstall/` — OS autoinstall response files (OpenBSD, Debian cloud-init) and QMP tools for headless VM interaction.
 - `scripts/` — Shell scripts for dom0 bootstrap, TSIG key generation, VM template prep, and smoke tests.
 - `ansible/` — Declarative provisioning. Currently scopes the `firewall` role (nftables on Linux, pf on FreeBSD) for every host except dom0. Inventory + role + generated artifacts under `ansible/generated/<host>/`. Future roles (knot, caddy, frr, exporters) drop in here.
-- `docs/` — Deployment runbook, architecture docs, and the canonical traffic-flow inventory at `docs/network-flows.md`. rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`. Reverse DNS / PTR setup is in `docs/reverse-dns.md`.
+- `docs/` — Deployment runbook, architecture docs, and the traffic-flow inventory at `docs/network-flows.md` (**generated** from `ansible/inventory` by `scripts/render-network-flows.py` — edit the inventory, not the doc). rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`. Reverse DNS / PTR setup is in `docs/reverse-dns.md`.
 
 ## Key conventions
 
@@ -146,27 +146,34 @@ From an overlay VM: `ping6 64:ff9b::0101:0101` (embedded 1.1.1.1) should reply. 
 
 Host-level firewalls (nftables on Linux, pf on FreeBSD) are managed by the
 Ansible role at `ansible/roles/firewall/`. The single source of truth for
-"who talks to whom on which port" is `docs/network-flows.md`. Every rule in
-`ansible/inventory/host_vars/*.yml` traces back to a row in that file.
+"who talks to whom on which port" is the **structured inventory**:
+`firewall_extra_rules` (inbound) and `host_meta` / `network_flows_outbound`
+in `ansible/inventory/host_vars/*.yml`, plus `cross_cutting_flows` in
+`ansible/inventory/network_flows.yml`. `docs/network-flows.md` is **generated**
+from that data by `scripts/render-network-flows.py` and enforced by a
+freshness gate (`tests/iac/test_network_flows_render.py` + a `--check` step
+in `render-check.yml`) — never hand-edit it; edit the inventory and re-render.
 
 When changing firewall behaviour (opening/closing a port, adding a peer,
-adding a service, moving a host), update **all three** in this order:
+adding a service, moving a host), update in this order:
 
-1. **`docs/network-flows.md`** — add/remove/edit the relevant row in the
-   per-host inbound table and any cross-cutting flow entry. This is the
-   spec; if it's not in this file, it shouldn't be in a rule.
-2. **`ansible/inventory/host_vars/<host>.yml`** — append/edit the matching
-   `firewall_extra_rules` entry. Reference peers by name
-   (`{{ peers.mon.ipv6 }}`), never literal addresses. New peers go in
-   `ansible/inventory/group_vars/all.yml` under the `peers:` dict first.
-3. **Re-render and review** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
+1. **`ansible/inventory/host_vars/<host>.yml`** — append/edit the matching
+   `firewall_extra_rules` entry (inbound); for outbound or registry data edit
+   `network_flows_outbound` / `host_meta`. Genuinely N-to-M flows go in
+   `ansible/inventory/network_flows.yml :: cross_cutting_flows`. Reference
+   peers by name (`{{ peers.mon.ipv6 }}`), never literal addresses. New peers
+   go in `ansible/inventory/group_vars/all.yml` under the `peers:` dict first;
+   new external endpoints go in `network_flows.yml :: network_externals`.
+2. **Re-render the flow doc** — `python scripts/render-network-flows.py`
+   regenerates `docs/network-flows.md`. Commit the diff (or `--check` fails CI).
+3. **Re-render and review the firewall configs** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
 
 The same flow applies when adding hosts: define the host in
 `ansible/inventory/hosts.yml` (**use its IPv6 for `ansible_host`** — the ci
 runner is IPv6-only and cannot reach a literal IPv4), add it to `peers:`,
-write its `host_vars/<host>.yml`, document its flows in
-`docs/network-flows.md`, re-render. Then bootstrap CI access **from the
-workstation**: `CI_KEY_PATH=<id_ci> ansible-playbook
+write its `host_vars/<host>.yml` (with `host_meta` so it lands in the server
+registry + generated doc), re-render the doc + firewall configs. Then
+bootstrap CI access **from the workstation**: `CI_KEY_PATH=<id_ci> ansible-playbook
 playbooks/ci-runner-key.yml --tags apply --limit <host>` creates the `ci`
 deploy user drift/apply runs connect as (the runner's known_hosts self-seeds
 missing hosts at the start of every drift/apply run — no manual reseed).
@@ -220,8 +227,10 @@ What it does:
 When adding a new host (or service) update **all three** alongside the
 firewall flow:
 
-1. **`docs/network-flows.md`** — open `mon → host:9100` for node_exporter
-   scrape (already implicit in firewall_extra_rules for most hosts).
+1. **Inventory flow data** — open `mon → host:9100` for node_exporter scrape
+   (already implicit in `firewall_extra_rules` for most hosts). Re-render
+   `docs/network-flows.md` with `scripts/render-network-flows.py`; it is a
+   generated artifact, not a hand-edited spec.
 2. **`host_vars/<host>.yml`** — set `monitoring_register: true` (only for
    hosts NOT in the legacy `/etc/icinga2/conf.d/hosts/{infra-vms,routers,
    dom0}.conf` — duplicates fail the icinga2 reload). Add

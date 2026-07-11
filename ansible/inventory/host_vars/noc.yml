@@ -134,3 +134,15 @@ monitoring_extra_services:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: noc
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "noc-agent (FastAPI :8000) + hyrule-mcp"
+  summary: "Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child)."
+network_flows_outbound:
+  - { to: all-infra, proto: tcp, port: 22, purpose: "hyrule-mcp SSH to every infra host" }
+  - { to: mon, proto: tcp, port: 9090, purpose: "Prometheus query API" }
+  - { to: mon, proto: tcp, port: 5665, purpose: "Icinga2 REST API" }
+  - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP snapshot ingest (cloud.hyrule.host)" }
+  - { to: public, proto: tcp, port: 443, purpose: "LLM API, Discord webhook, and npx package install" }

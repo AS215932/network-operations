@@ -188,3 +188,18 @@ firewall_forward_extra_raw_nft: |
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: loop
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Engineering Loop operations-lane VM (draft PR automation, no fleet SSH)"
+  summary: "Engineering Loop operations-lane VM: consumes loop:approved issues and stops at draft PRs; hosts the Agent-Core trace collector and a loopback knowledge MCP."
+  notes: "Not an infra deploy source: no fleet SSH key, no app runtime secrets, no Vault breadth. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6. loop does not SSH to the infra fleet."
+network_flows_outbound:
+  - { to: github, proto: tcp, port: 443, purpose: "issues, checkouts, branch pushes, draft PRs, knowledge MCP build context" }
+  - { to: model-providers, proto: tcp, port: 443, purpose: "selected backend/provider LLM APIs" }
+  - { to: mon, proto: tcp, port: 5665, purpose: "Icinga passive check submission" }
+  - { to: log, proto: tcp, port: 6000, purpose: "Vector agent to aggregator" }
+  - { to: vault, proto: tcp, port: 8200, purpose: "Vault Agent secret render" }
+  - { to: rtr, proto: "tcp+udp", port: 53, purpose: "Docker bridge containers resolve via rtr Unbound (DNS64)" }
+  - { to: public, proto: tcp, port: 443, purpose: "Docker container base-image and package downloads over routed IPv6 egress" }

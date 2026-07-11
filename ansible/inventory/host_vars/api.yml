@@ -15,3 +15,13 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: api
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "hyrule-cloud (FastAPI :8402) + Postgres"
+  summary: "hyrule-cloud VM-lifecycle API on :8402 backed by PostgreSQL, with postgres_exporter for monitoring."
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates (TSIG hyrule-dns)" }
+  - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
+  - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }
