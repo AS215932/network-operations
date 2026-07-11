@@ -1,0 +1,11 @@
+# Deploy path: /etc/systemd/system/soc-posture.timer
+[Unit]
+Description=Run the SOC posture scan on a schedule
+
+[Timer]
+OnCalendar={{ soc_posture_on_calendar }}
+RandomizedDelaySec=120
+Persistent=true
+
+[Install]
+WantedBy=timers.target
