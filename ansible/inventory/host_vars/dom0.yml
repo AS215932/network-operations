@@ -12,5 +12,18 @@
 # vintage) or /usr/libexec/platform-python depending on minor version.
 ansible_python_interpreter: /usr/bin/python
 
+# Registry identity. dom0 is underlay-only and not managed by the firewall /
+# monitoring / logs roles yet (see comment above + issue #24), but it is still
+# the most important server we run — the hypervisor every VM lives on — so it
+# carries host_meta for the server registry / generated network-flows doc.
+host_meta:
+  os: "XCP-NG 8.3"
+  role: "XCP-NG hypervisor (OVH RISE-S dom0)"
+  summary: "Underlay-only Xen host for the whole AS215932 fleet; hypervisor every VM runs on."
+  notes: >-
+    NDP-proxies rtr's OVH underlay address and bridges the mgmt/infra/vm/wan
+    Xen networks. Reached over mgmt IPv4 from xoa and the public IPv4 from
+    outside. Not managed by the firewall/monitoring/logs roles yet (issue #24).
+
 # No firewall, monitoring, or logs role registration here yet — see role
 # defaults dom0_apply: false.

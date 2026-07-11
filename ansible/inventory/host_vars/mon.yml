@@ -36,3 +36,13 @@ noc_mcp_reader_groups:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: mon
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Prometheus + Grafana + Icinga2 + blackbox"
+  summary: "Central monitoring plane: Prometheus scrape, Grafana, Icinga2, and blackbox probes for AS215932."
+  notes: "mon-to-fleet scrape (tcp/9100 and per-host exporter ports) and Icinga by_ssh checks (tcp/22) are captured in the cross-cutting flows table."
+network_flows_outbound:
+  - { to: public, proto: tcp, port: 443, purpose: "blackbox_exporter HTTPS probes of public services" }
+  - { to: public, proto: icmp6, purpose: "blackbox_exporter ICMP reachability probes" }

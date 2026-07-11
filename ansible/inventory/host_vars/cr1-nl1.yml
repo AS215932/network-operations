@@ -37,3 +37,11 @@ monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | defaul
 logs_register: true
 logs_role: router
 logs_use_freebsd_syslogd: true
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "FreeBSD 14.3"
+  role: "core router (Servperso NL transit)"
+  summary: "Core router at Servperso NL: FreeBSD + FRRouting, Servperso NL transit and IXP peering."
+  notes: "pf-template inbound (rendered from pf_bgp_peers/pf_wg_ports, not firewall_extra_rules): external BGP from Servperso NL 2a0c:b640:10::ffff tcp/179; WireGuard UDP 1337/1338/1340/1341; pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to 2a0c:b641:b50::/44. Only the explicit mon scrapes are in firewall_extra_rules."
+network_flows_outbound: []

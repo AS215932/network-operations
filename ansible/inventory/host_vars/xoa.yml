@@ -20,3 +20,10 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: xoa
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Xen Orchestra"
+  summary: "Xen Orchestra appliance: the infra NIC serves the UI (via Caddy on proxy) and the mgmt NIC reaches dom0 XAPI."
+network_flows_outbound: []
