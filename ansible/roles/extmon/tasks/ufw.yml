@@ -1,41 +1,24 @@
 ---
-# Tight ufw on extmon. Only SSH from ops + AS215932 inbound; everything else
-# (Prometheus, Alertmanager, blackbox) listens on loopback only and is
-# reached via SSH port-forward when needed.
+# UFW is retired on extmon: the host firewall is owned by roles/firewall
+# (nftables, rules in host_vars/extmon.yml + docs/network-flows.md) like the
+# rest of the fleet. Two owners fought over the ruleset — the nftables config
+# starts with `flush ruleset`, and a later UFW re-enable would clobber it back.
+#
+# Migration ordering: run `firewall.yml --tags apply --limit extmon` BEFORE
+# this task disables UFW, so the nftables ruleset is already enforcing when
+# UFW goes down. Idempotent afterwards (disabled stays disabled).
 
-- name: ufw — default deny inbound
-  ufw:
-    state: enabled
-    direction: incoming
-    policy: deny
+# Guarded on the actual state: the ufw module reports changed in check mode
+# even when UFW is already disabled, which kept the drift check red.
+- name: ufw — query state
+  command: ufw status
+  register: extmon_ufw_status
+  changed_when: false
+  check_mode: false
   tags: [apply]
 
-- name: ufw — default allow outbound
+- name: ufw — retired in favour of roles/firewall (nftables)
   ufw:
-    direction: outgoing
-    policy: allow
-  tags: [apply]
-
-- name: ufw — allow SSH from ops + AS215932 (v4)
-  ufw:
-    rule: allow
-    port: "22"
-    proto: tcp
-    src: "{{ item }}"
-  loop: "{{ extmon_ssh_allow_v4 }}"
-  tags: [apply]
-
-- name: ufw — allow SSH from ops + AS215932 (v6)
-  ufw:
-    rule: allow
-    port: "22"
-    proto: tcp
-    src: "{{ item }}"
-  loop: "{{ extmon_ssh_allow_v6 }}"
-  tags: [apply]
-
-- name: ufw — allow ICMP echo (so monitoring of extmon itself works)
-  ufw:
-    rule: allow
-    proto: icmpv6
+    state: disabled
+  when: "'Status: active' in extmon_ufw_status.stdout"
   tags: [apply]

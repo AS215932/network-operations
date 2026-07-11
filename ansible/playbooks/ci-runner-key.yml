@@ -9,8 +9,10 @@
 #   set -a; source ../secrets.local.sh; set +a
 #   ansible-playbook playbooks/ci-runner-key.yml --tags apply
 
+# `external` (extmon) included: drift-detection connects as ci to every host
+# in `all:!ci-pr`, so off-net hosts need the deploy user too.
 - name: ci-runner key distribution — all hosts except ci itself
-  hosts: linux:freebsd:openbsd:!ci
+  hosts: linux:freebsd:openbsd:external:!ci
   gather_facts: false
   become: true
   vars:

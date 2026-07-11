@@ -50,3 +50,17 @@
   retries: 10
   delay: 3
   until: hyrule_cloud_http.status == 200
+
+- name: Keep Monero wallet RPC stopped after cloud restart when native rails are disabled
+  ansible.builtin.systemd:
+    name: monero-wallet-rpc.service
+    state: stopped
+    enabled: false
+  when: not (hyrule_cloud_monero_wallet_rpc_enabled | bool)
+  failed_when: false
+
+- name: Clear Monero wallet RPC failed state when native rails are disabled
+  ansible.builtin.command: systemctl reset-failed monero-wallet-rpc.service
+  when: not (hyrule_cloud_monero_wallet_rpc_enabled | bool)
+  changed_when: false
+  failed_when: false

@@ -1,0 +1,47 @@
+---
+# SOC Agent (security governance loop) rollout. The agent is read-only by
+# construction and climbs the SOC_MODE ladder (shadow -> case_only ->
+# handoff_dry -> handoff_live) one reviewed promotion PR at a time; see
+# docs/runbooks/soc-mode-promotion.md for the insight-metrics criteria that
+# gate each rung.
+#
+# No inventory host carries the `soc` group yet — add the target VM (and its
+# host_vars, peers entry, network-flows rows, monitoring registration, plus
+# the vault_agent play wiring for soc-agent.env.ctmpl.j2) in the same PR that
+# first schedules this playbook. soc_agent_version must be an exact reviewed
+# SHA before the first apply (validate enforces this).
+#
+# Validate (no live changes; runs from controller):
+#   ansible-playbook playbooks/soc.yml --tags validate \
+#     --connection=local --limit soc --skip-tags=snapshot
+#
+# Apply (live deploy; timers/services stay disabled unless host vars enable them):
+#   ansible-playbook playbooks/soc.yml --tags apply -e soc_agent_apply=true --limit soc
+
+- name: Deploy SOC Agent
+  hosts: soc
+  become: true
+  pre_tasks:
+    - name: Pre-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: pre
+      run_once: true
+      tags: [snapshot, always]
+  roles:
+    - role: soc_agent
+  post_tasks:
+    # Flush handlers so the post-snapshot reflects the new service state.
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
+    - name: Post-deploy Icinga snapshot
+      include_role:
+        name: firewall
+        tasks_from: snapshot
+      vars:
+        snapshot_phase: post
+      run_once: true
+      tags: [snapshot, always]

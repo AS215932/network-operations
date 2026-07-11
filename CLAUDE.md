@@ -162,9 +162,14 @@ adding a service, moving a host), update **all three** in this order:
 3. **Re-render and review** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
 
 The same flow applies when adding hosts: define the host in
-`ansible/inventory/hosts.yml`, add it to `peers:`, write its
-`host_vars/<host>.yml`, document its flows in `docs/network-flows.md`,
-re-render.
+`ansible/inventory/hosts.yml` (**use its IPv6 for `ansible_host`** — the ci
+runner is IPv6-only and cannot reach a literal IPv4), add it to `peers:`,
+write its `host_vars/<host>.yml`, document its flows in
+`docs/network-flows.md`, re-render. Then bootstrap CI access **from the
+workstation**: `CI_KEY_PATH=<id_ci> ansible-playbook
+playbooks/ci-runner-key.yml --tags apply --limit <host>` creates the `ci`
+deploy user drift/apply runs connect as (the runner's known_hosts self-seeds
+missing hosts at the start of every drift/apply run — no manual reseed).
 
 Apply (vs render) is gated on tag `apply` and the `firewall_apply=true`
 extra-var; see `docs/ansible.md` for the rollout runbook (`serial: 1`,

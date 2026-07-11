@@ -107,6 +107,10 @@ engineering_loop_lhp_callback_enabled: false
 engineering_loop_agent_core_trace_enabled: false
 engineering_loop_agent_core_trace_path: "{{ engineering_loop_state_dir }}/agent-core-trace.jsonl"
 engineering_loop_agent_core_trace_collector_url: ""
+# Emit governor/daemon/intake decisions (incl. deliberate stay_silent) as
+# InsightDecisionRecords to the collector. Self-sufficient opt-in — rides the
+# already-configured trace collector URL. Read-only; default off.
+engineering_loop_insight_records_enabled: false
 
 engineering_loop_git_user_name: "hyrule-engineering-loop[bot]"
 engineering_loop_git_user_email: "engineering-loop@as215932.net"

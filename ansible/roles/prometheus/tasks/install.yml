@@ -1,0 +1,88 @@
+---
+# Validate-then-publish, with reconciliation. The candidate ruleset is assembled
+# in a staging mirror and promtool-checked there; only a valid ruleset is
+# published to the live rules.d. A structurally-valid but broken rule therefore
+# never reaches the live directory, where it would poison a later Prometheus
+# reload/restart. Files removed from the repo are pruned from the live directory
+# (prometheus.yml loads every *.yml), so retired alerts stop evaluating.
+#
+# Tags are inherited from the include in main.yml via `apply:`.
+
+- name: Desired rule filenames (the repo is the source of truth)
+  ansible.builtin.set_fact:
+    prometheus_desired_rules: "{{ query('ansible.builtin.fileglob', prometheus_rules_repo ~ '/*.yml') | map('basename') | list }}"
+
+# Notify on change: a permissions-only fix must reload prometheus too — an
+# untraversable rules.d makes the rule_files glob silently match nothing, so
+# restoring 0755 without a reload leaves the rules unloaded (2026-07-10:
+# hyrule-payments.yml needed a manual reload after the PR #402 apply).
+- name: Ensure live + staging rule dirs exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ prometheus_rules_dir }}"
+    - "{{ prometheus_rules_staging_dir }}"
+  notify: reload prometheus
+
+- name: Stage candidate rule files
+  ansible.builtin.copy:
+    src: "{{ prometheus_rules_repo }}/"
+    dest: "{{ prometheus_rules_staging_dir }}/"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Find staged rule files
+  ansible.builtin.find:
+    paths: "{{ prometheus_rules_staging_dir }}"
+    patterns: "*.yml"
+  register: prometheus_staged_files
+
+- name: Prune staged files no longer in the repo
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ prometheus_staged_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename not in prometheus_desired_rules
+
+- name: Validate the staged ruleset with promtool before touching live
+  ansible.builtin.command:
+    argv: "{{ ['promtool', 'check', 'rules'] + (prometheus_desired_rules | map('regex_replace', '^', prometheus_rules_staging_dir ~ '/') | list) }}"
+  changed_when: false
+  when: prometheus_desired_rules | length > 0
+
+# Per-file, not a recursive dir copy: copying the staging dir applied
+# mode 0644 to the live directory itself, making it untraversable for the
+# prometheus user — its rules.d/*.yml glob then silently matches nothing.
+- name: Publish validated rules to the live directory
+  ansible.builtin.copy:
+    src: "{{ prometheus_rules_staging_dir }}/{{ item }}"
+    dest: "{{ prometheus_rules_dir }}/{{ item }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ prometheus_desired_rules }}"
+  notify: reload prometheus
+
+- name: Find live rule files
+  ansible.builtin.find:
+    paths: "{{ prometheus_rules_dir }}"
+    patterns: "*.yml"
+  register: prometheus_live_files
+
+- name: Prune live files no longer in the repo
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ prometheus_live_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename not in prometheus_desired_rules
+  notify: reload prometheus

@@ -43,12 +43,22 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
                 )
 
     def test_privileged_deploy_workflows_stay_on_ci_runner(self):
-        # apply/drift must keep the privileged runner and must NOT leak onto the
-        # unprivileged ci-pr runner (they carry Vault + id_ci).
-        for name in ("apply.yml", "drift-detection.yml"):
+        # apply/drift/post-merge must keep the privileged runner and must NOT
+        # leak onto the unprivileged ci-pr runner (they carry Vault + id_ci).
+        for name in ("apply.yml", "drift-detection.yml", "post-merge-apply.yml"):
             text = (REPO / ".github/workflows" / name).read_text()
             self.assertIn("hyrule-infra", text, name)
             self.assertNotIn("hyrule-public-pr", text, name)
+
+    def test_post_merge_apply_is_gated_and_serialized(self):
+        # The auto-apply job must pause on the production environment and share
+        # the live-apply concurrency lane with apply.yml — losing either means
+        # unattended or overlapping production applies.
+        spec = yaml.safe_load((REPO / ".github/workflows/post-merge-apply.yml").read_text())
+        apply_job = spec["jobs"]["apply"]
+        self.assertEqual(apply_job.get("environment"), "production")
+        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v2")
+        self.assertFalse(apply_job.get("concurrency", {}).get("cancel-in-progress"))
 
     def test_required_render_check_reports_on_every_pull_request(self):
         workflow = yaml.safe_load((REPO / ".github/workflows/render-check.yml").read_text())
@@ -86,6 +96,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
 \s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+;;
+\s+soc\)
+\s+# role gate is soc_agent_apply \(role name != playbook name\)
+\s+apply_var="soc_agent_apply=true"
+\s+expected_apply_var="soc_agent_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -252,13 +267,17 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertRegex(str(host_vars["agentic_observatory_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agentic_observatory_port"], 8780)
-        # Stage 1 live: writes on, low-risk case actions only. The gated
-        # revision was deployed first (PR #329) before this flip. Expanding the
-        # allowlist beyond feedback,ack must be a deliberate change that also
-        # updates this guardrail.
+        # Stage 1 live: writes on, low-risk case actions only, plus insight_label
+        # (#9) which posts InsightLabels to the collector and fails closed without
+        # the ingest token. The gated revision was deployed first (PR #329) before
+        # this flip. Expanding the allowlist further (suppress, artifact_review,
+        # verification_result) must be a deliberate change that also updates this
+        # guardrail.
         self.assertEqual(host_vars["agentic_observatory_read_only"], False)
         self.assertEqual(host_vars["agentic_observatory_actions_enabled"], True)
-        self.assertEqual(host_vars["agentic_observatory_enabled_actions"], "feedback,ack")
+        self.assertEqual(
+            host_vars["agentic_observatory_enabled_actions"], "feedback,ack,insight_label"
+        )
         runbook = (REPO / "docs/runbooks/bootstrap-agentic-observatory-vault.md").read_text()
         self.assertIn(
             "vault policy write github-runner configs/vault/policies/github-runner.hcl",

@@ -159,7 +159,8 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | any | TCP | 465 | OpenSMTPD SMTPS authenticated submission |
 | any | TCP | 587 | OpenSMTPD STARTTLS authenticated submission |
 | any | TCP | 80 | ACME HTTP-01 challenge via OpenBSD httpd |
-| ops-prefix, vpn-clients, mon, noc | TCP | 993 | Dovecot IMAPS mailbox access, TLS check, and noc-agent polling |
+| any IPv4 | TCP | 993 | Dovecot IMAPS mailbox access from public IPv4 clients |
+| ops-prefix, vpn-clients, mon, noc | TCP | 993 | Dovecot IMAPS over IPv6 for mailbox access, TLS check, and noc-agent polling |
 | ops-prefix, vpn-clients | TCP | 4190 | Dovecot ManageSieve |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients, ci, mon | TCP | 22 | SSH for operator access, runner automation, and monitoring check |
@@ -169,10 +170,11 @@ dom0 is an XCP-NG hypervisor on the underlay only, not in this map.
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
 | mon | TCP | 8000 | noc-agent webhooks (Alertmanager + Icinga2) |
+| extmon | TCP | 8000 | best-effort external Alertmanager webhook enrichment |
 | mon | TCP | 9100 | node_exporter |
 | ops-prefix, vpn-clients | TCP | 22 | SSH (Claude Code MCP via SSH-stdio + interactive ops) |
 
-Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
+Outbound (cross-cutting): noc → every infra host on TCP/22 (hyrule-mcp SSH), noc → mon on TCP/9090 (Prometheus query), noc → mon on TCP/5665 (Icinga2 REST), noc → cloud.hyrule.host TCP/443 (BGP snapshot ingest), noc → public TCP/443 (LLM API + Discord webhook + npx package install).
 
 ### ci (`2a0c:b641:b50:2::d0`)
 
@@ -188,11 +190,12 @@ Outbound (cross-cutting): ci → github.com TCP/443 (poll runner queue, fetch ac
 
 ### netproxy (`2a0c:b641:b50:2::e0`)
 
-Planned internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud
-network requests. Hyrule Cloud verifies payment; this host only executes
-internal request jobs. It is not live yet; Prometheus scrape targets remain
-disabled until [#214](https://github.com/AS215932/network-operations/issues/214)
-completes the rollout.
+Internal Hyrule Network Proxy sidecar for paid x402-gated Hyrule Cloud network
+requests. Hyrule Cloud verifies payment; this host only executes internal
+request jobs. Prometheus scrape targets (node_exporter `:9100` and sidecar
+metrics `:8451`) are enabled and go green once the VM is provisioned and the
+sidecar applied per
+[#214](https://github.com/AS215932/network-operations/issues/214).
 
 | From | Proto | Port | Purpose |
 |------|-------|------|---------|
@@ -367,7 +370,8 @@ exceptions are:
 | irc → dns | out | 53 tcp | RFC 2136 dyn updates (ACME DNS-01) |
 | Public → mail | in | 25/465/587 tcp | SMTP and authenticated submission on dedicated mail IPs |
 | Public → mail | in | 80 tcp | ACME HTTP-01 for mail.as215932.net |
-| ops-prefix, vpn-clients, noc → mail | in | 993 tcp | Private mailbox access and noc-agent polling |
+| Public IPv4 → mail | in | 993 tcp | Dovecot IMAPS mailbox access |
+| ops-prefix, vpn-clients, noc → mail | in | 993 tcp | Private IPv6 mailbox access and noc-agent polling |
 | ops-prefix, vpn-clients → mail | in | 4190 tcp | Private Sieve access |
 | ops-prefix, vpn-clients, ci, noc, mon → all | in | 22 tcp | SSH (ops access, CI apply runs, MCP access, Icinga SSH checks) |
 | all infra → log | out | 6000 tcp | Vector agent → aggregator (Loki ingest path) |

@@ -22,6 +22,8 @@ on:
           - firewall
           - monitoring
           - icinga2
+          - prometheus
+          - alertmanager
           - logs
           - cloud
           - cloud_reprovision_vm
@@ -34,6 +36,7 @@ on:
           - knot
           - extmon
           - engineering-loop
+          - soc
           - frr
           - rtr_routing
           - networkd_resolved
@@ -115,12 +118,17 @@ jobs:
       # target hosts. In apply.yml runs the key already exists on the runner.
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
       - name: Runner deploy preflight
         run: scripts/ci/deploy-preflight.sh --runner
+
+      # New inventory hosts become reachable without a manual `apply.yml ci`
+      # known_hosts reseed (network-operations#404).
+      - name: Seed missing SSH host keys
+        run: scripts/ci/seed-missing-host-keys.sh
 
       - name: Source Vault-rendered secrets
         run: |
@@ -235,6 +243,11 @@ jobs:
               expected_apply_var="engineering_loop_apply=true"
               extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
               ;;
+            soc)
+              # role gate is soc_agent_apply (role name != playbook name)
+              apply_var="soc_agent_apply=true"
+              expected_apply_var="soc_agent_apply=true"
+              ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
               expected_apply_var="${playbook//-/_}_apply=true"
@@ -265,7 +278,7 @@ jobs:
           set -euo pipefail
 
           case "$PLAYBOOK" in
-            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|frr|networkd_resolved|mail_openbsd)
+            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|soc|frr|networkd_resolved|mail_openbsd)
               required=true
               ;;
             *)

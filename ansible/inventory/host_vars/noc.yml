@@ -5,12 +5,25 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: 515381e6c2e93f3307340eeb50a63481c7a678c4
+# Pinned to the merged insight-stream build (AS215932/noc-agent#70): proactive
+# cycles can emit InsightDecisionRecords to the collector and the standing-
+# grant/no-op-guard substrate ships dark. Everything is default-off until the
+# env promotions in docs/runbooks/noc-standing-grant-rollout.md
+# (NOC_INSIGHT_RECORDS_ENABLED first).
+noc_agent_version: fd0cfa5617224e184f9932bb1691a7e2d6afd0d0
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
-# Pinned to the Knowledge refresh that emits A0 GitHub issue context plus A1
-# routing policy context for loop:knowledge-gap routing (AS215932/knowledge#32,
-# #33).
-noc_knowledge_version: 9baa92c299536901c623952415b9513cd4076b10
+
+# Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
+# DeepSeek V4 Flash as fallback; venice:deepseek-v4-flash keeps the chain
+# provider-redundant (issue #393 — a single OpenRouter key cap must not take
+# triage down; Venice does not host Hunyuan). venice: entries require
+# noc-agent >= a7f0432 (venice provider) and venice_api_key in kv/noc-agent.
+noc_agent_model: "openrouter:tencent/hy3"
+noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
+# Pinned to the Knowledge build with grounding-aware exports (AS215932/
+# knowledge#35): grounding.jsonl + sqlite grounding table ride the export the
+# case-context retriever reads; A0 issue + A1 routing context unchanged.
+noc_knowledge_version: a68f974e7ed093d8f4195a15dc5b1afc636999f4
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
@@ -33,8 +46,9 @@ noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trac
 noc_agent_mcp_health_timeout_seconds: 12
 
 firewall_extra_rules:
-  # Webhooks from Alertmanager + Icinga2 on mon.
+  # Webhooks from Alertmanager + Icinga2 on mon; best-effort external BGP alerts from extmon.
   - { proto: tcp, dport: 8000, src: "{{ peers.mon.ipv6 }}", comment: "noc-agent webhook from mon (Alertmanager + Icinga)" }
+  - { proto: tcp, dport: 8000, src: "{{ peers.extmon.ipv6 }}", comment: "noc-agent webhook from extmon Alertmanager" }
 
   # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
   - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }
