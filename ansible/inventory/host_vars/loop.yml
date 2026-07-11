@@ -177,6 +177,7 @@ monitoring_extra_services:
       http_ssl: false
       http_ipv6: true
       http_timeout: 5
+      http_expect_body_regex: '"status":"ok"'
   - name: knowledge-api-health
     check_command: http
     interval: 1m
