@@ -36,10 +36,12 @@ knowledge_mcp_docker_dns:
   - "{{ peers.rtr.ipv6 }}"
 
 # Collector-backed Agent-Core trace ingestion. The collector binds only to the
-# loop overlay address and stores events in local Postgres. v0.8.0: insight
-# read API (GET /v1/insights), insight_label ingest with optional bearer
-# token (HYRULE_COLLECTOR_INGEST_TOKEN), 180d insight retention prune.
-agent_core_collector_version: "4329ec96d689d0dc347b3e420f6c4ac4dcdec945"
+# loop overlay address and stores events in local Postgres. v0.8.1: insight
+# read API (GET /v1/insights), 180d insight retention prune, and the ingest
+# token (HYRULE_COLLECTOR_INGEST_TOKEN) now guards ONLY insight_label writes —
+# trace + insight-record ingest stays open so the token can't 401 producers
+# (network-operations#422). Required before minting the token (#420/#421).
+agent_core_collector_version: "5cf30cbf3729d41874262c49fb70552a311b1b4b"
 agent_core_collector_enabled: true
 agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
