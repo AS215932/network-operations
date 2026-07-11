@@ -267,13 +267,17 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertRegex(str(host_vars["agentic_observatory_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agentic_observatory_port"], 8780)
-        # Stage 1 live: writes on, low-risk case actions only. The gated
-        # revision was deployed first (PR #329) before this flip. Expanding the
-        # allowlist beyond feedback,ack must be a deliberate change that also
-        # updates this guardrail.
+        # Stage 1 live: writes on, low-risk case actions only, plus insight_label
+        # (#9) which posts InsightLabels to the collector and fails closed without
+        # the ingest token. The gated revision was deployed first (PR #329) before
+        # this flip. Expanding the allowlist further (suppress, artifact_review,
+        # verification_result) must be a deliberate change that also updates this
+        # guardrail.
         self.assertEqual(host_vars["agentic_observatory_read_only"], False)
         self.assertEqual(host_vars["agentic_observatory_actions_enabled"], True)
-        self.assertEqual(host_vars["agentic_observatory_enabled_actions"], "feedback,ack")
+        self.assertEqual(
+            host_vars["agentic_observatory_enabled_actions"], "feedback,ack,insight_label"
+        )
         runbook = (REPO / "docs/runbooks/bootstrap-agentic-observatory-vault.md").read_text()
         self.assertIn(
             "vault policy write github-runner configs/vault/policies/github-runner.hcl",
