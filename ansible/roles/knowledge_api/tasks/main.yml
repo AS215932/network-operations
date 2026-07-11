@@ -1,0 +1,25 @@
+---
+- name: Validate Knowledge API deployment inputs
+  ansible.builtin.assert:
+    that:
+      - knowledge_api_user | length > 0
+      - knowledge_api_install_dir.startswith('/')
+      - knowledge_api_port | int > 0
+      # Live applies of an ENABLED API deploy exact reviewed SHAs, never a
+      # moving ref. The role ships disabled (knowledge_api_enabled=false) until
+      # a knowledge revision containing the api module is pinned + enabled.
+      - >-
+        not (knowledge_api_apply | bool and knowledge_api_enabled | bool)
+        or (knowledge_api_version | length == 40
+            and knowledge_api_version is match('^[0-9a-f]{40}$'))
+    fail_msg: >-
+      Enabling the Knowledge API requires knowledge_api_version pinned to an
+      exact 40-character commit SHA that contains the api module (>= #36).
+  tags: [validate, always]
+
+# No-op while disabled: nothing is checked out, synced, or started until an
+# operator flips knowledge_api_enabled=true in a reviewed promotion PR.
+- name: Apply Knowledge API runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: knowledge_api_apply | bool and knowledge_api_enabled | bool
+  tags: [apply]

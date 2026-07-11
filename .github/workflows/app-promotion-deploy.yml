@@ -16,6 +16,7 @@ on:
       - ansible/roles/engineering_loop/**
       - ansible/roles/knowledge_mcp/**
       - ansible/roles/knowledge_loop/**
+      - ansible/roles/knowledge_api/**
       - ansible/roles/agent_core_collector/**
       - ansible/roles/agentic_observatory/**
       - configs/mon/icinga2/**
@@ -70,6 +71,7 @@ jobs:
             ansible/roles/engineering_loop \
             ansible/roles/knowledge_mcp \
             ansible/roles/knowledge_loop \
+            ansible/roles/knowledge_api \
             ansible/roles/agent_core_collector \
             ansible/roles/agentic_observatory \
             configs/mon/icinga2 \
@@ -136,6 +138,7 @@ jobs:
                   "ansible/roles/engineering_loop/",
                   "ansible/roles/knowledge_mcp/",
                   "ansible/roles/knowledge_loop/",
+                  "ansible/roles/knowledge_api/",
                   "ansible/roles/agent_core_collector/",
                   "ansible/roles/agentic_observatory/",
               ))
