@@ -64,6 +64,20 @@ class AppPromotionDeployTest(unittest.TestCase):
             workflow_text,
         )
         firewall = workflow_text.index('add_once("firewall", "mon")')
+        engineering_loop = workflow_text.index('add_once("engineering-loop", "loop")')
+        prometheus = workflow_text.index('add_once("prometheus", "mon")')
+        self.assertLess(firewall, engineering_loop)
+        self.assertLess(firewall, prometheus)
+
+    def test_extmon_firewall_changes_apply_before_prometheus(self):
+        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+
+        self.assertIn("ansible/inventory/host_vars/extmon.yml", workflow_text)
+        self.assertIn(
+            'extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed',
+            workflow_text,
+        )
+        firewall = workflow_text.index('add_once("firewall", "extmon")')
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
         self.assertLess(firewall, prometheus)
 

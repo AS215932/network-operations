@@ -58,6 +58,11 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("Prometheus public-status queries from hyrule-cloud", mon)
         self.assertIn("from: api, to: mon, proto: tcp, port: 9090", flows)
         self.assertIn("from: mon, to: ns2, proto: udp, port: 53", flows)
+        self.assertIn("from: mon, to: extmon, proto: tcp, port: 9115", flows)
+        extmon = (
+            REPO / "ansible" / "inventory" / "host_vars" / "extmon.yml"
+        ).read_text()
+        self.assertIn('dport: 9115, src: "{{ peers.mon.ipv6 }}"', extmon)
 
     def test_probe_and_scrape_configs_activate_before_public_rules(self):
         install = (
@@ -76,6 +81,25 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertLess(flushes[0], scrape)
         self.assertLess(scrape, flushes[1])
         self.assertLess(flushes[1], rules)
+        self.assertIn("--syntax-only", install)
+
+    def test_api_outage_requires_ipv4_and_ipv6_probe_failures(self):
+        prometheus = (REPO / "configs" / "mon" / "prometheus.yml").read_text()
+        extmon_blackbox = (
+            REPO / "ansible" / "roles" / "extmon" / "templates" / "blackbox.yml.j2"
+        ).read_text()
+        rules = (RULES / "hyrule-public-status.yml").read_text()
+
+        self.assertIn("job_name: blackbox-http-ipv4", prometheus)
+        ipv4_job = prometheus.split("job_name: blackbox-http-ipv4", 1)[1].split(
+            "job_name:", 1
+        )[0]
+        self.assertIn("module: [http_2xx_v4]", ipv4_job)
+        self.assertIn("https://cloud.hyrule.host/health", ipv4_job)
+        self.assertIn("2001:19f0:7402:0cd5:5400:06ff:fe40:7112", ipv4_job)
+        self.assertIn("http_2xx_v4:", extmon_blackbox)
+        self.assertIn('job="blackbox-http-ipv4"', rules)
+        self.assertIn('job="blackbox-http"', rules)
 
     def test_every_public_alert_has_complete_safe_metadata(self):
         allowed_components = {
@@ -124,6 +148,8 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn('absent(probe_success{job="blackbox-http"', rules)
         self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
         self.assertIn("frr_bgp_peer_state != 1", rules)
+        self.assertIn('up{job="frr"} == 0', rules)
+        self.assertIn("absent(frr_bgp_peer_state)", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
         self.assertIn(
             '(count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2',

@@ -38,6 +38,7 @@
       - promtool
       - check
       - config
+      - --syntax-only
       - "{{ prometheus_config_staging_dir }}/prometheus.yml"
   changed_when: false
 

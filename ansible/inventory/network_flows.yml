@@ -47,6 +47,7 @@ cross_cutting_flows:
   - { from: mon, to: routers, proto: tcp, port: 9342, purpose: "frr_exporter scrape" }
   - { from: mon, to: dns, proto: udp, port: 53, purpose: "blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA)" }
   - { from: mon, to: ns2, proto: udp, port: 53, purpose: "blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA)" }
+  - { from: mon, to: extmon, proto: tcp, port: 9115, purpose: "delegate public IPv4 API health probe to off-net blackbox_exporter" }
   - { from: api, to: mon, proto: tcp, port: 9090, purpose: "customer-facing service-status query of curated Prometheus alerts" }
 
   # --- Authoritative DNS / dynamic updates / zone transfer ---

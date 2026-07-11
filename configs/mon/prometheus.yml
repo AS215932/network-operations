@@ -227,6 +227,24 @@ scrape_configs:
       - target_label: __address__
         replacement: "[::1]:9115"
 
+  # The mon VM has no public IPv4 route. Ask the dual-stack off-net exporter to
+  # exercise the API's A record so an IPv6-only failure cannot become a false
+  # whole-API outage. extmon:9115 is firewalled to the mon peer only.
+  - job_name: blackbox-http-ipv4
+    metrics_path: /probe
+    params:
+      module: [http_2xx_v4]
+    static_configs:
+      - targets:
+          - "https://cloud.hyrule.host/health"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
+
   # Internal Vault probe — goes direct to the plain-HTTP listener on [::c0]:8200,
   # bypassing Caddy. Pair this with the public probe above to distinguish
   # "Caddy down" (public fails, internal ok) from "Vault down" (both fail).

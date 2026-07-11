@@ -225,7 +225,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Inbound**
 
-_No host-specific inbound rules (SSH-only via the standard allow set)._
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| mon | tcp | 9115 | blackbox IPv4 probes requested by mon |
 
 **Outbound**
 
@@ -553,6 +555,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | mon | api | tcp | 9187 | postgres_exporter scrape |
 | mon | dns | udp | 53 | blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA) |
 | mon | dom0 | tcp (v4) | 9100 | node_exporter scrape over mgmt v4 (10.0.0.1; prometheus node-hypervisor job) |
+| mon | extmon | tcp | 9115 | delegate public IPv4 API health probe to off-net blackbox_exporter |
 | mon | log | tcp | 3100 | Grafana queries Loki HTTP API |
 | mon | log | tcp | 8686 | Vector internal metrics scrape |
 | mon | ns2 | udp | 53 | blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA) |

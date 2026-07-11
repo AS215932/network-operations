@@ -10,9 +10,17 @@ groups:
     rules:
       - alert: HyrulePublicApiUnavailable
         expr: |
-          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
-            or on()
-          absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+              or on()
+            absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+          )
+            and on()
+          (
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+              or on()
+            absent(probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"})
+          )
         for: 2m
         labels:
           severity: critical
@@ -32,9 +40,17 @@ groups:
         # compute control plane rather than claim existing VMs are offline.
         # Hypervisor and routing signals cover the compute data plane below.
         expr: |
-          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
-            or on()
-          absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+              or on()
+            absent(probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"})
+          )
+            and on()
+          (
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+              or on()
+            absent(probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"})
+          )
         for: 2m
         labels:
           severity: warning
@@ -105,7 +121,14 @@ groups:
 
       - alert: HyrulePublicRoutingDegraded
         # tynany/frr_exporter v1.11.0: 1=Established, 0=down, 2=admin-down.
-        expr: count(frr_bgp_peer_state != 1) > 0
+        expr: |
+          count(frr_bgp_peer_state != 1) > 0
+            or on()
+          up{job="frr"} == 0
+            or on()
+          absent(up{job="frr"})
+            or on()
+          absent(frr_bgp_peer_state)
         for: 3m
         labels:
           severity: warning
