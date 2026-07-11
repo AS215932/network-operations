@@ -67,3 +67,8 @@ network_flows_outbound:
   - { to: noc, proto: tcp, port: 8000, purpose: "best-effort external Alertmanager webhook enrichment" }
   - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP intelligence ingest (cloud.hyrule.host/v1/internal/bgp)" }
   - { to: public, proto: tcp, port: 443, purpose: "probe AS215932 public services, Discord webhook, Cloudflare Radar, OVH API" }
+  # blackbox probes of AS215932 public services from off-net (over public IPv6).
+  - { to: dns, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns1 (auth Knot)" }
+  - { to: ns2, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns2 (off-net secondary)" }
+  - { to: mail, proto: tcp, port: [25, 465, 587, 993], purpose: "blackbox SMTP/submission/IMAPS reachability + TLS probes" }
+  - { to: public, proto: icmp6, purpose: "blackbox ICMP v4/v6 reachability probes of AS215932 endpoints" }

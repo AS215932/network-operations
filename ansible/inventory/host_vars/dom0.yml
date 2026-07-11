@@ -19,6 +19,7 @@ ansible_python_interpreter: /usr/bin/python
 host_meta:
   os: "XCP-NG 8.3"
   role: "XCP-NG hypervisor (OVH RISE-S dom0)"
+  ipv4: "193.70.32.138 (public), 10.0.0.1 (mgmt)"
   summary: "Underlay-only Xen host for the whole AS215932 fleet; hypervisor every VM runs on."
   notes: >-
     NDP-proxies rtr's OVH underlay address and bridges the mgmt/infra/vm/wan

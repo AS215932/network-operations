@@ -45,4 +45,4 @@ host_meta:
   notes: "mon-to-fleet scrape (tcp/9100 and per-host exporter ports) and Icinga by_ssh checks (tcp/22) are captured in the cross-cutting flows table."
 network_flows_outbound:
   - { to: public, proto: tcp, port: 443, purpose: "blackbox_exporter HTTPS probes of public services" }
-  - { to: public, proto: icmp6, purpose: "blackbox_exporter ICMP reachability probes" }
+  - { to: public, proto: icmp6, purpose: "blackbox_exporter ICMP reachability probes of public services (internal fleet ICMP sweep is noted in network_flows.yml)" }

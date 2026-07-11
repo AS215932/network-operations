@@ -29,7 +29,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | cr1-de1 | FreeBSD 15.0 | `2a0c:b641:b50::b` (loopback) | — | core router (Servperso DE + Extra-Transit + IXPs) |
 | cr1-nl1 | FreeBSD 14.3 | `2a0c:b641:b50::a` (loopback) | — | core router (Servperso NL transit) |
 | dns | Debian 13 | `2a0c:b641:b50:2::10` | via rtr DNAT (46.105.40.223) | Knot authoritative DNS |
-| dom0 | XCP-NG 8.3 | — | — | XCP-NG hypervisor (OVH RISE-S dom0) |
+| dom0 | XCP-NG 8.3 | — | 193.70.32.138 (public), 10.0.0.1 (mgmt) | XCP-NG hypervisor (OVH RISE-S dom0) |
 | extmon | Debian 13 | `2001:19f0:7402:0cd5:5400:06ff:fe40:7112` | `45.32.179.134` | External monitoring host (off-net) |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0` | `10.0.0.60` (mgmt) | Vector aggregator + Loki (centralized logs) |
@@ -231,9 +231,13 @@ _No host-specific inbound rules (SSH-only via the standard allow set)._
 
 | To | Proto | Port | Purpose |
 |---|---|---|---|
+| mail | tcp | 25, 465, 587, 993 | blackbox SMTP/submission/IMAPS reachability + TLS probes |
+| dns | udp | 53 | blackbox DNS SOA probe of ns1 (auth Knot) |
+| ns2 | udp | 53 | blackbox DNS SOA probe of ns2 (off-net secondary) |
 | hyrule-cloud | tcp | 443 | BGP intelligence ingest (cloud.hyrule.host/v1/internal/bgp) |
 | public | tcp | 443 | probe AS215932 public services, Discord webhook, Cloudflare Radar, OVH API |
 | noc | tcp | 8000 | best-effort external Alertmanager webhook enrichment |
+| public | icmp6 | — | blackbox ICMP v4/v6 reachability probes of AS215932 endpoints |
 
 ### irc — Soju IRC bouncer; TLS terminated by Soju itself on :6697, certificate via certbot HTTP-01.
 
@@ -352,7 +356,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | public | tcp | 443 | blackbox_exporter HTTPS probes of public services |
-| public | icmp6 | — | blackbox_exporter ICMP reachability probes |
+| public | icmp6 | — | blackbox_exporter ICMP reachability probes of public services (internal fleet ICMP sweep is noted in network_flows.yml) |
 
 ### netproxy — Internal Hyrule Network Proxy sidecar that executes paid x402-gated Hyrule Cloud network requests.
 
@@ -451,7 +455,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | To | Proto | Port | Purpose |
 |---|---|---|---|
-| public | tcp+udp | — | NAT64 egress via Jool to the IPv4 internet (source 46.105.40.223) |
+| public | any | — | NAT64 egress via Jool (TCP/UDP/ICMP pool4) to the IPv4 internet (source 46.105.40.223); ICMP is used by the nat64 ping6 health check |
 
 ### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
 
@@ -515,7 +519,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Outbound**
 
-_No noteworthy host-specific outbound beyond the cross-cutting flows._
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| dom0 | tcp (v4) | 80, 443 | XAPI to the hypervisor over the mgmt bridge (10.0.0.1) |
 
 ---
 
@@ -523,9 +529,11 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 N-to-M flows that are not a single host's inbound rule (DNS recursion, monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, and routine host egress).
 
+> `all` in the table below excludes dom0 (firewall-unmanaged; their real flows are modelled explicitly).
+
 | From | To | Proto | Port | Purpose |
 |---|---|---|---|---|
-| all (except extmon, ns2, dom0) | rtr | tcp+udp | 53 | DNS recursion via Unbound (incl. DNS64 synthesis) |
+| all (except extmon, ns2, cr1-nl1, cr1-de1, cr1-ch1) | rtr | tcp+udp | 53 | DNS recursion via Unbound (incl. DNS64 synthesis) |
 | all-infra | log | tcp | 6000 | Vector agent to aggregator (Loki ingest) |
 | all-linux | debian-mirrors | tcp | 80 | apt / unattended-upgrades |
 | all-linux | ntp-pool | udp | 123 | NTP time sync |
@@ -539,8 +547,10 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | loop | vault | tcp | 8200 | vault-agent secret render |
 | mail | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
-| mon | all (except extmon, dom0) | tcp | 9100 | node_exporter scrape |
+| mon | all (except extmon) | tcp | 9100 | node_exporter scrape |
 | mon | api | tcp | 9187 | postgres_exporter scrape |
+| mon | dns | udp | 53 | blackbox_exporter DNS SOA probe (blackbox-dns job) |
+| mon | dom0 | tcp (v4) | 9100 | node_exporter scrape over mgmt v4 (10.0.0.1; prometheus node-hypervisor job) |
 | mon | log | tcp | 3100 | Grafana queries Loki HTTP API |
 | mon | log | tcp | 8686 | Vector internal metrics scrape |
 | mon | routers | tcp | 9342 | frr_exporter scrape |
@@ -551,13 +561,13 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | ns2 | log | tcp | 6000 | off-net Vector agent to aggregator over public IPv6 |
 | ops-prefix | all | tcp | 22 | SSH operator access |
 | proxy | dns | tcp | 53 | RFC 2136 dynamic updates (TSIG hyrule-dns) |
-| public | rtr | tcp+udp | 53 | DNAT to dns |
-| public | rtr | tcp | 80 | DNAT to proxy |
-| public | rtr | tcp | 443 | DNAT to proxy |
-| public | rtr | udp | 51820 | DNAT to vpn |
-| routers | routers | udp | — | WireGuard full mesh between router underlays (UDP 1337-1342) |
+| public | rtr | tcp+udp (v4) | 53 | DNAT to dns |
+| public | rtr | tcp (v4) | 80 | DNAT to proxy |
+| public | rtr | tcp (v4) | 443 | DNAT to proxy |
+| public | rtr | udp (v4) | 51820 | DNAT to vpn |
+| routers | routers | udp | 1337-1342 | WireGuard full mesh between router underlays |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
-| vpn-clients | public | tcp+udp | — | routed IPv6 / NAT64 egress forwarded by vpn via rtr |
+| vpn-clients | public | any | — | routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr |
 | vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
 | web | vault | tcp | 8200 | vault-agent secret render |
 
@@ -591,5 +601,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 
 - SSH is applied to every host from ssh_allow_sources_* in group_vars/all.yml (plus per-host overrides), not from firewall_extra_rules, so it appears only in the cross-cutting flows table, not the per-host inbound tables. mail overrides ssh_allow_sources_v6 to omit noc, hence `noc -> all:22 except [mail]`.
 - Public single-host service ingress (mail SMTP tcp/25,465,587 + ACME tcp/80 + Dovecot IMAPS/ManageSieve tcp/993,4190; irc Soju IRCS tcp/6697) is defined in each host's firewall_extra_rules with the correct address family and source scope, and appears in that host's per-host inbound table — not in this cross-cutting file. Public IMAPS is IPv4-only (family: ip); IPv6 IMAPS is scoped to ops/VPN/mon/noc.
-- FreeBSD core routers (cr1-nl1, cr1-de1, cr1-ch1) forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule and appears in the log per-host inbound table (not repeated in cross-cutting).
+- FreeBSD core routers cr1-nl1 and cr1-de1 forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule (log host_vars) and appears in log's per-host inbound table. cr1-ch1 also sets logs_use_freebsd_syslogd but log.yml has no cr1-ch1 6000/6514 allow yet — tracked in issue #431; it is deliberately NOT claimed here until the rule lands.
 - Prometheus scrape on FreeBSD routers: the live pf rulesets historically relied on 'pass quick on wg all no state' over the WireGuard mesh rather than explicit 9100/9342-from-mon rules. The Ansible-rendered configs now add explicit rules for cr1-nl1/de1/ch1, so a future wg-pass lockdown is already covered.
+- dom0 is firewall-unmanaged (playbook targets all:!dom0) so it is excluded from every `all` expansion via all_excludes; its real flows (mon->dom0:9100 scrape and dom0->log:6000 shipping over mgmt v4, xoa->dom0 XAPI) are modelled explicitly.
+- mon also runs blackbox_exporter ICMPv6 reachability probes against internal targets (all routers, dns/api/web/proxy/vpn/vault, and every WireGuard link endpoint) in addition to the public ICMP probes in mon's outbound table; these internal reachability probes are a monitoring implementation detail not expanded per-host here.

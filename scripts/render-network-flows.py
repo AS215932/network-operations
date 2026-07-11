@@ -81,8 +81,10 @@ FAMILY_SUFFIX = {
     "ip6": "",
     "v6": "",
     "inet6": "",
+    "ipv6": "",
     "ip": " (v4)",
     "inet": " (v4)",
+    "ipv4": " (v4)",
     "both": " (v4+v6)",
 }
 
@@ -337,7 +339,7 @@ def render_outbound_table(resolver, flows) -> list:
     entries = []
     for f in flows:
         to = resolver.validate_endpoint(f["to"])
-        proto = format_proto(f.get("proto"))
+        proto = format_proto(f.get("proto"), f.get("family"))
         port = format_port(f.get("port"))
         purpose = str(f.get("purpose", "")).strip()
         entries.append((port_sort_key(f.get("port")), to, f.get("proto") or "", purpose,
@@ -363,7 +365,7 @@ def render_cross_cutting_table(resolver, flows, valid_hosts=frozenset()) -> list
                 frm += exc_label
             else:
                 to += exc_label
-        proto = format_proto(f.get("proto"))
+        proto = format_proto(f.get("proto"), f.get("family"))
         port = format_port(f.get("port"))
         purpose = str(f.get("purpose", "")).strip()
         entries.append((frm, to, port_sort_key(f.get("port")), f.get("proto") or "",
@@ -477,10 +479,18 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     lines.append("N-to-M flows that are not a single host's inbound rule (DNS recursion, "
                  "monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, "
                  "and routine host egress).")
+    valid_flow_hosts = frozenset(inv_hosts) if inv_hosts else frozenset(hosts)
+    all_excludes = flows.get("all_excludes") or []
+    for tok in all_excludes:
+        if str(tok) not in valid_flow_hosts:
+            raise ValueError(f"all_excludes token {tok!r} is not an inventory host")
+    if all_excludes:
+        lines.append("")
+        lines.append(f"> `all` in the table below excludes {', '.join(str(t) for t in all_excludes)} "
+                     "(firewall-unmanaged; their real flows are modelled explicitly).")
     lines.append("")
     lines.extend(render_cross_cutting_table(
-        resolver, flows.get("cross_cutting_flows", []) or [],
-        valid_hosts=frozenset(inv_hosts) if inv_hosts else frozenset(hosts)))
+        resolver, flows.get("cross_cutting_flows", []) or [], valid_hosts=valid_flow_hosts))
     lines.append("")
     lines.append("---")
     lines.append("")

@@ -26,4 +26,5 @@ host_meta:
   os: "Debian 13"
   role: "Xen Orchestra"
   summary: "Xen Orchestra appliance: the infra NIC serves the UI (via Caddy on proxy) and the mgmt NIC reaches dom0 XAPI."
-network_flows_outbound: []
+network_flows_outbound:
+  - { to: dom0, proto: tcp, port: [80, 443], family: ipv4, purpose: "XAPI to the hypervisor over the mgmt bridge (10.0.0.1)" }
