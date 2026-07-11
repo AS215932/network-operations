@@ -16,6 +16,11 @@ engineering_loop_lhp_callback_enabled: true
 # Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.
 engineering_loop_agent_core_trace_enabled: true
 engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
+# Emit governor/daemon/intake decisions as InsightDecisionRecords to the
+# collector (loop_decision_envelope events, open past the label-scoped ingest
+# guard). Read-only; the second producer after NOC (#419) into the IDQ/CGS
+# stream, and the data source for the Governor Tier-2-with-history gate.
+engineering_loop_insight_records_enabled: true
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only. Pinned to
