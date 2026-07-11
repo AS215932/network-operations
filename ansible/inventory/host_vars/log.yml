@@ -73,3 +73,11 @@ logs_aggregator: true
 # in-process Vector pipeline. Buffer cap on the loki sink instead, sized
 # generously since /var/lib/loki has 50 GB.
 logs_agent_disk_buffer_bytes: 4294967296   # 4 GB (loki sink buffer)
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Vector aggregator + Loki (centralized logs)"
+  summary: "Central log aggregation: Vector aggregator (:6000 native, :6514 syslog) and Loki (:3100), queried by Grafana on mon."
+  notes: "Also carries a mgmt v4 NIC (10.0.0.60) so dom0 can ship logs without overlay routing. Loki is never exposed publicly — Grafana on mon is the only read path."
+network_flows_outbound: []
