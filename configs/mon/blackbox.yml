@@ -41,8 +41,9 @@ modules:
           - ".*2a0c:b641:b50:2::40.*"
 
   # The delegated zone contains dynamic customer VM records. An SOA probe
-  # catches an unloaded/stale delegation even while the hyrule.host apex is
-  # still answering normally.
+  # catches an unloaded/missing delegation (NXDOMAIN/SERVFAIL) even while the
+  # hyrule.host apex is still answering normally. It does NOT detect a stale
+  # serial — blackbox exposes no serial metric; see the SOA-freshness issue.
   dns_hyrule_deploy:
     prober: dns
     timeout: 5s

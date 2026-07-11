@@ -116,17 +116,17 @@ groups:
           public_message: "Network routing is degraded. VM, DNS, or proxy reachability may be intermittent while redundant paths converge."
 
       - alert: HyrulePublicDNSDegraded
+        # A zone is "degraded" when exactly one of its two authoritative
+        # nameservers answers (sum == 1 of 2) while the other zone still has at
+        # least one server up. Serial-freshness detection is deliberately NOT
+        # here: blackbox_exporter exposes no SOA-serial metric, so a cross-NS
+        # serial comparison cannot be expressed with these probes. Tracked for a
+        # dedicated exporter in the follow-up issue.
         expr: |
           (
-            (
-              sum(probe_success{job="blackbox-dns-hyrule"}) == 1
-                or on()
-              sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
-            )
+            sum(probe_success{job="blackbox-dns-hyrule"}) == 1
               or on()
-            max(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})
-              !=
-            min(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})
+            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
           )
             and on()
           sum(probe_success{job="blackbox-dns-hyrule"}) > 0
@@ -140,10 +140,10 @@ groups:
           public_state: degraded
           public_components: "domains_dns"
         annotations:
-          summary: "authoritative DNS redundancy or freshness is degraded"
-          description: "One nameserver is failing a check, or the delegated customer-zone SOA serials differ."
+          summary: "authoritative DNS redundancy is degraded"
+          description: "One authoritative nameserver is failing the apex or delegated customer-zone check."
           public_title: "Authoritative DNS degraded"
-          public_message: "One authoritative nameserver is failing checks or serving stale customer records. DNS remains available through the redundant server."
+          public_message: "One authoritative nameserver is failing checks. DNS remains available through the redundant server."
 
       - alert: HyrulePublicDNSOutage
         expr: |

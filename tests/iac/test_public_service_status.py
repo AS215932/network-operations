@@ -43,12 +43,12 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("module: [dns_hyrule_deploy]", deploy_job)
 
         rules = (RULES / "hyrule-public-status.yml").read_text()
-        self.assertIn(
-            'max(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})', rules
-        )
-        self.assertIn(
-            'min(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})', rules
-        )
+        # The delegated deploy zone is an independent public DNS signal: both the
+        # degraded and outage rules must consume its probe job.
+        self.assertIn('probe_success{job="blackbox-dns-hyrule-deploy"}', rules)
+        # blackbox_exporter exposes no SOA-serial metric, so no rule may depend
+        # on one (a probe_dns_serial reference would silently never fire).
+        self.assertNotIn("probe_dns_serial", rules)
 
     def test_status_query_and_authoritative_probes_have_declared_flows(self):
         mon = (REPO / "ansible" / "inventory" / "host_vars" / "mon.yml").read_text()
