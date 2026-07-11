@@ -10,6 +10,7 @@ on:
       - ansible/inventory/host_vars/web.yml
       - ansible/inventory/host_vars/netproxy.yml
       - ansible/inventory/host_vars/loop.yml
+      - ansible/inventory/host_vars/mon.yml
       - ansible/playbooks/noc.yml
       - ansible/playbooks/engineering-loop.yml
       - ansible/roles/noc_agent/**
@@ -66,6 +67,7 @@ jobs:
             ansible/inventory/host_vars/web.yml \
             ansible/inventory/host_vars/netproxy.yml \
             ansible/inventory/host_vars/loop.yml \
+            ansible/inventory/host_vars/mon.yml \
             ansible/playbooks/noc.yml \
             ansible/playbooks/engineering-loop.yml \
             ansible/roles/noc_agent \
@@ -148,6 +150,8 @@ jobs:
               for path in changed
           )
 
+          mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
+
           # Ordering matters for NOC monitoring changes: install mon-side
           # CheckCommand/script definitions before the monitoring role renders
           # host services that reference them, then deploy noc-side services.
@@ -158,6 +162,10 @@ jobs:
               add_once("noc", "noc")
           if engineering_loop_changed:
               add_once("engineering-loop", "loop")
+          # Open any newly declared mon ingress before deploying consumers or
+          # Prometheus configuration that depends on it.
+          if mon_firewall_changed:
+              add_once("firewall", "mon")
           if prometheus_changed:
               add_once("prometheus", "mon")
           if alertmanager_changed:

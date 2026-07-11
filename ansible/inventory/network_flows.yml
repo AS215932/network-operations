@@ -45,7 +45,9 @@ cross_cutting_flows:
   - { from: mon, to: dom0, proto: tcp, port: 9100, family: ipv4, purpose: "node_exporter scrape over mgmt v4 (10.0.0.1; prometheus node-hypervisor job)" }
   - { from: mon, to: api, proto: tcp, port: 9187, purpose: "postgres_exporter scrape" }
   - { from: mon, to: routers, proto: tcp, port: 9342, purpose: "frr_exporter scrape" }
-  - { from: mon, to: dns, proto: udp, port: 53, purpose: "blackbox_exporter DNS SOA probe (blackbox-dns job)" }
+  - { from: mon, to: dns, proto: udp, port: 53, purpose: "blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA)" }
+  - { from: mon, to: ns2, proto: udp, port: 53, purpose: "blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA)" }
+  - { from: api, to: mon, proto: tcp, port: 9090, purpose: "customer-facing service-status query of curated Prometheus alerts" }
 
   # --- Authoritative DNS / dynamic updates / zone transfer ---
   - { from: api, to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic updates (TSIG hyrule-dns)" }

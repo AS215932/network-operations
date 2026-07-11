@@ -20,6 +20,10 @@ firewall_extra_rules:
   - { proto: tcp, dport: 9090, src: "{{ peers.noc.ipv6 }}", comment: "Prometheus API from noc-agent" }
   - { proto: tcp, dport: 5665, src: "{{ peers.noc.ipv6 }}", comment: "Icinga2 API from noc-agent" }
 
+  # The customer-facing status endpoint reads only the curated public-status
+  # alert labels from Prometheus.
+  - { proto: tcp, dport: 9090, src: "{{ peers.api.ipv6 }}", comment: "Prometheus public-status queries from hyrule-cloud" }
+
   # Engineering Loop submits its own passive run-status check to Icinga.
   - { proto: tcp, dport: 5665, src: "{{ peers.loop.ipv6 }}", comment: "Icinga2 passive check from engineering-loop" }
 

@@ -55,6 +55,18 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn('path == "configs/mon/blackbox.yml"', workflow_text)
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
 
+    def test_mon_firewall_changes_apply_before_prometheus(self):
+        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+
+        self.assertIn("ansible/inventory/host_vars/mon.yml", workflow_text)
+        self.assertIn(
+            'mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed',
+            workflow_text,
+        )
+        firewall = workflow_text.index('add_once("firewall", "mon")')
+        prometheus = workflow_text.index('add_once("prometheus", "mon")')
+        self.assertLess(firewall, prometheus)
+
     def test_alertmanager_changes_trigger_mon_apply(self):
         workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
 

@@ -42,6 +42,23 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("2001:41d0:304:300::7bfb", deploy_job)
         self.assertIn("module: [dns_hyrule_deploy]", deploy_job)
 
+        rules = (RULES / "hyrule-public-status.yml").read_text()
+        self.assertIn(
+            'max(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})', rules
+        )
+        self.assertIn(
+            'min(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})', rules
+        )
+
+    def test_status_query_and_authoritative_probes_have_declared_flows(self):
+        mon = (REPO / "ansible" / "inventory" / "host_vars" / "mon.yml").read_text()
+        flows = (REPO / "ansible" / "inventory" / "network_flows.yml").read_text()
+
+        self.assertIn('dport: 9090, src: "{{ peers.api.ipv6 }}"', mon)
+        self.assertIn("Prometheus public-status queries from hyrule-cloud", mon)
+        self.assertIn("from: api, to: mon, proto: tcp, port: 9090", flows)
+        self.assertIn("from: mon, to: ns2, proto: udp, port: 53", flows)
+
     def test_probe_and_scrape_configs_activate_before_public_rules(self):
         install = (
             REPO / "ansible" / "roles" / "prometheus" / "tasks" / "install.yml"

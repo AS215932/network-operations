@@ -118,9 +118,15 @@ groups:
       - alert: HyrulePublicDNSDegraded
         expr: |
           (
-            sum(probe_success{job="blackbox-dns-hyrule"}) == 1
+            (
+              sum(probe_success{job="blackbox-dns-hyrule"}) == 1
+                or on()
+              sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
+            )
               or on()
-            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
+            max(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})
+              !=
+            min(probe_dns_serial{job="blackbox-dns-hyrule-deploy"})
           )
             and on()
           sum(probe_success{job="blackbox-dns-hyrule"}) > 0
@@ -134,10 +140,10 @@ groups:
           public_state: degraded
           public_components: "domains_dns"
         annotations:
-          summary: "one authoritative DNS probe is failing"
-          description: "One nameserver is failing the hyrule.host apex or delegated customer-zone check."
+          summary: "authoritative DNS redundancy or freshness is degraded"
+          description: "One nameserver is failing a check, or the delegated customer-zone SOA serials differ."
           public_title: "Authoritative DNS degraded"
-          public_message: "One authoritative nameserver is failing checks. DNS remains available through the redundant server."
+          public_message: "One authoritative nameserver is failing checks or serving stale customer records. DNS remains available through the redundant server."
 
       - alert: HyrulePublicDNSOutage
         expr: |
