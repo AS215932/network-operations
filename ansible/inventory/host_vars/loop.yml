@@ -77,7 +77,11 @@ agentic_observatory_actions_enabled: true
 # revision (af4dff6) was installed first (PR #329) so this flip restarts on
 # allowlist-aware code. Expand the allowlist (suppress, artifact_review,
 # verification_result) only in later stages, each as its own change.
-agentic_observatory_enabled_actions: "feedback,ack"
+# insight_label (#9): accept/dismiss/defer/edit an insight -> InsightLabel
+# posted to the collector for IDQ/CGS scoring. Fails closed without the
+# collector ingest token, so this must land AFTER that token is minted +
+# rendered (OBSERVATORY_COLLECTOR_INGEST_TOKEN).
+agentic_observatory_enabled_actions: "feedback,ack,insight_label"
 agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 
