@@ -43,6 +43,10 @@ knowledge_loop_skip_validation: false
 knowledge_loop_icinga_check: loop!knowledge-loop
 knowledge_loop_agent_core_trace_enabled: false
 knowledge_loop_agent_core_trace_collector_url: ""
+# Phase-2 nightly insight sync (collector -> ledger/insights/ on the reviewed
+# PR). Default off; enabled via a reviewed promotion PR.
+knowledge_loop_insight_sync_enabled: false
+knowledge_loop_insight_collector_url: ""
 
 # Daily instead of hourly: ingest currently refreshes timestamps, so hourly would
 # create noisy PRs. Increase cadence only after stable no-op detection lands.
