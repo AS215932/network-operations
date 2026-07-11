@@ -10,6 +10,7 @@ User={{ agent_core_coordinator_user }}
 Group={{ agent_core_coordinator_group }}
 WorkingDirectory={{ agent_core_coordinator_install_dir }}
 EnvironmentFile={{ agent_core_coordinator_env_file }}
+Environment=HYRULE_COORDINATOR_ENVIRONMENT=production
 Environment=HYRULE_COORDINATOR_HOST={{ agent_core_coordinator_bind }}
 Environment=HYRULE_COORDINATOR_PORT={{ agent_core_coordinator_port }}
 Environment=HYRULE_COORDINATOR_COLLECTOR_URL={{ agent_core_coordinator_collector_url }}

@@ -100,6 +100,7 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
             "ExecStart={{ agent_core_coordinator_install_dir }}/.venv/bin/agent-core-coordinator",
             service,
         )
+        self.assertIn("Environment=HYRULE_COORDINATOR_ENVIRONMENT=production", service)
         self.assertIn("ProtectSystem=strict", service)
 
     def test_each_loop_has_a_signed_coordinator_adapter(self):
