@@ -154,7 +154,7 @@ def render_body(title: str, impact: str, changes: list[tuple[str, str, str, str,
             "- [ ] `scripts/ci/iac-static.sh` passes.",
             "- [ ] Promotion PR checks are green.",
             "- [ ] Production environment gate approved after merge.",
-            "- [ ] Icinga pre/post snapshot diff reviewed.",
+            "- [ ] Post-deploy Goss passed and live Icinga (`mon`) checked for new problems.",
         ]
     )
     return "\n".join(lines) + "\n"
