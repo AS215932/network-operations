@@ -40,15 +40,19 @@ class AppPromotionDeployTest(unittest.TestCase):
         )
         self.assertIn('"ansible/roles/knowledge_loop/"', workflow_text)
 
-    def test_prometheus_rules_changes_trigger_mon_apply(self):
+    def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
         workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
 
         # Trigger paths, git-diff scope, and detect logic must all cover the
         # mon Prometheus rules so a rule edit deploys via apply.yml → mon.
         self.assertIn("configs/mon/prometheus-rules/**", workflow_text)
         self.assertIn("configs/mon/prometheus-rules \\", workflow_text)
+        self.assertIn("configs/mon/prometheus.yml", workflow_text)
+        self.assertIn("configs/mon/blackbox.yml", workflow_text)
         self.assertIn("ansible/roles/prometheus/**", workflow_text)
         self.assertIn('path.startswith("configs/mon/prometheus-rules/")', workflow_text)
+        self.assertIn('path == "configs/mon/prometheus.yml"', workflow_text)
+        self.assertIn('path == "configs/mon/blackbox.yml"', workflow_text)
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
 
     def test_alertmanager_changes_trigger_mon_apply(self):

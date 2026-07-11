@@ -4,6 +4,16 @@
 # runs (gate false) never mutate the host.
 prometheus_apply: false
 
+# Core Prometheus + blackbox_exporter configuration. These must deploy before
+# any rules that depend on newly-added scrape jobs or probe modules.
+prometheus_config_repo: "{{ playbook_dir }}/../../configs/mon/prometheus.yml"
+prometheus_config_path: /etc/prometheus/prometheus.yml
+prometheus_blackbox_config_repo: "{{ playbook_dir }}/../../configs/mon/blackbox.yml"
+prometheus_blackbox_config_path: /etc/prometheus/blackbox.yml
+prometheus_config_staging_dir: /etc/prometheus/.config.staging
+prometheus_blackbox_binary: /usr/bin/prometheus-blackbox-exporter
+prometheus_blackbox_service_name: prometheus-blackbox-exporter
+
 # Where mon's Prometheus loads rules from. configs/mon/prometheus.yml has
 # `rule_files: /etc/prometheus/rules.d/*.yml`.
 prometheus_rules_dir: /etc/prometheus/rules.d

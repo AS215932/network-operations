@@ -26,14 +26,14 @@ groups:
           description: "blackbox_exporter ICMPv6 probe to {{ $labels.instance }} has been failing for 3 minutes."
 
       - alert: BGPSessionDown
-        expr: frr_bgp_peer_state{state!="Established"} == 1
+        expr: frr_bgp_peer_state != 6
         for: 2m
         labels:
           severity: critical
           source: prometheus
         annotations:
           summary: "BGP peer {{ $labels.peer }} not established on {{ $labels.instance }}"
-          description: "Peer state is {{ $labels.state }}."
+          description: "Peer state is {{ $value }} (6 is Established)."
 
       - alert: HyruleNetworkProxyDown
         expr: up{job="hyrule-network-proxy"} == 0
@@ -42,13 +42,13 @@ groups:
           severity: critical
           source: prometheus
           public_status: "true"
-          public_state: outage
+          public_state: degraded
           public_components: "network_proxy"
         annotations:
           summary: "Hyrule Network Proxy metrics scrape down"
           description: "Prometheus cannot scrape the internal network proxy sidecar on {{ $labels.instance }}. Paid network requests may fail or be preflight-blocked."
-          public_title: "Network proxy unavailable"
-          public_message: "Network proxy requests are currently unavailable. Compute and other API services are unaffected."
+          public_title: "Network proxy health unconfirmed"
+          public_message: "Live network proxy health checks are unavailable. Requests may still succeed, but some modes could be affected."
 
       - alert: NOCAgentGeminiQuotaLow
         expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 25

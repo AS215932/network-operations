@@ -26,6 +26,8 @@ class PublicServiceStatusContracts(unittest.TestCase):
 
         self.assertIn("dns_hyrule:", blackbox)
         self.assertIn("query_name: hyrule.host", blackbox)
+        self.assertIn("dns_hyrule_deploy:", blackbox)
+        self.assertIn("query_name: deploy.hyrule.host", blackbox)
         self.assertIn("job_name: blackbox-dns-hyrule", prometheus)
         job = prometheus.split("job_name: blackbox-dns-hyrule", 1)[1].split(
             "job_name:", 1
@@ -33,6 +35,30 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("2a0c:b641:b50:2::10", job)
         self.assertIn("2001:41d0:304:300::7bfb", job)
         self.assertIn("module: [dns_hyrule]", job)
+        deploy_job = prometheus.split(
+            "job_name: blackbox-dns-hyrule-deploy", 1
+        )[1].split("job_name:", 1)[0]
+        self.assertIn("2a0c:b641:b50:2::10", deploy_job)
+        self.assertIn("2001:41d0:304:300::7bfb", deploy_job)
+        self.assertIn("module: [dns_hyrule_deploy]", deploy_job)
+
+    def test_probe_and_scrape_configs_activate_before_public_rules(self):
+        install = (
+            REPO / "ansible" / "roles" / "prometheus" / "tasks" / "install.yml"
+        ).read_text()
+
+        blackbox = install.index("Publish validated blackbox_exporter config")
+        scrape = install.index("Publish validated Prometheus core config")
+        rules = install.index("Publish validated rules to the live directory")
+        flushes = [
+            match.start()
+            for match in re.finditer("ansible.builtin.meta: flush_handlers", install)
+        ]
+        self.assertEqual(len(flushes), 2)
+        self.assertLess(blackbox, flushes[0])
+        self.assertLess(flushes[0], scrape)
+        self.assertLess(scrape, flushes[1])
+        self.assertLess(flushes[1], rules)
 
     def test_every_public_alert_has_complete_safe_metadata(self):
         allowed_components = {
@@ -79,7 +105,19 @@ class PublicServiceStatusContracts(unittest.TestCase):
         ):
             self.assertIn(f"alert: {alert}", rules)
         self.assertIn('absent(probe_success{job="blackbox-http"', rules)
-        self.assertIn('or vector(0)) == 0', rules)
+        self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
+        self.assertIn("frr_bgp_peer_state != 6", rules)
+        self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
+
+    def test_proxy_metrics_failure_is_only_publicly_degraded(self):
+        rules = (RULES / "noc-tripwire.yml").read_text()
+        block = rules.split("- alert: HyruleNetworkProxyDown", 1)[1].split(
+            "- alert:", 1
+        )[0]
+
+        self.assertIn("public_state: degraded", block)
+        self.assertIn("health checks are unavailable", block)
+        self.assertNotIn("public_state: outage", block)
 
 
 if __name__ == "__main__":

@@ -190,6 +190,24 @@ scrape_configs:
       - target_label: __address__
         replacement: "[::1]:9115"
 
+  # Query the delegated customer-VM zone independently. The apex can remain
+  # healthy while deploy.hyrule.host is missing or stale on one nameserver.
+  - job_name: blackbox-dns-hyrule-deploy
+    metrics_path: /probe
+    params:
+      module: [dns_hyrule_deploy]
+    static_configs:
+      - targets:
+          - "2a0c:b641:b50:2::10"          # ns1 / Knot DNS
+          - "2001:41d0:304:300::7bfb"     # ns2
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
   - job_name: blackbox-http
     metrics_path: /probe
     params:
