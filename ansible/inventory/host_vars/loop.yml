@@ -6,8 +6,8 @@
 
 # Bumped to the insight-stream build (#37): governor/daemon/intake decisions
 # become InsightDecisionRecords, capability success-history CLI for the
-# Tier-2 governor path. Emission stays behind
-# HYRULE_ENGINEERING_INSIGHT_RECORDS (unset).
+# Tier-2 governor path. Emission is live via
+# engineering_loop_insight_records_enabled below.
 engineering_loop_version: "4587b1ca07c0a9ca3e65e527c13b39a3cb238317"
 engineering_loop_timer_enabled: true
 engineering_loop_governor_timer_enabled: true
