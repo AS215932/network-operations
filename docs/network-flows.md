@@ -123,19 +123,28 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 
 | To | Proto | Port | Purpose |
 |---|---|---|---|
-| rtr | tcp+udp | 53 | Unbound + DNS64 via 2a0c:b641:b51::1 |
+| rtr | tcp+udp | 53 | Unbound + DNS64 via rtr infra address 2a0c:b641:b50:2::1 (the only Unbound listener; not the b51::1 customer gateway) |
 | github | tcp | 443 | runner queue, action images |
 | openrouter | tcp | 443 | PR-Agent LLM |
 | package-registries | tcp | 443 | PyPI/npm/ghcr/Docker Hub toolchain and semgrep image |
 
 ### cr1-ch1 — Core router at Securebit CH: FreeBSD + FRRouting, Securebit transit and SBIX/4IXP route-server peering.
 
-> pf-template inbound (from pf_bgp_peers/pf_wg_ports): external BGP transit from Securebit 2a09:4c0:100:2d88::8bfa, SBIX route servers 2001:7f8:d9:1::1-::4, and 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (pending) tcp/179; WireGuard UDP 1339/1341/1342; pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932. Only the explicit mon scrapes are in firewall_extra_rules.
+> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Securebit transit 2a09:4c0:100:2d88::8bfa (AS58057), SBIX route servers 2001:7f8:d9:1::1-::4 (AS56755), 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (AS35708, pending). pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| 2001:7f8:d0::8b7c:1 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d0::8b7c:2 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d0::8b7c:3 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d9:1::1 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d9:1::2 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d9:1::3 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2001:7f8:d9:1::4 | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2a09:4c0:100:2d88::8bfa | tcp | 179 | External BGP (pf_bgp_peers) |
+| any | udp | 1339, 1341, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -145,12 +154,15 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### cr1-de1 — Core router at Servperso DE: FreeBSD + FRRouting, Servperso DE plus Extra-Transit and IXP peering.
 
-> Listens on four interfaces (vtnet0..3); WG/BGP/transit rules bind to the interface set, SSH/ICMP only on the primary external interface. pf-template inbound (from pf_bgp_peers/pf_wg_ports): external BGP from Servperso DE 2a0c:b640:10::ffff and Extra-Transit 2a0c:b641:870::ffff tcp/179; WireGuard UDP 1337/1338/1342; pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932. Only the explicit mon scrapes are in firewall_extra_rules.
+> Listens on four interfaces (vtnet0..3); WG/BGP/transit rules bind to the interface set, SSH/ICMP only on the primary external interface. Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Servperso DE 2a0c:b640:10::ffff, Extra-Transit 2a0c:b641:870::ffff. pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2a0c:b641:870::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
+| any | udp | 1337, 1338, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -160,12 +172,14 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### cr1-nl1 — Core router at Servperso NL: FreeBSD + FRRouting, Servperso NL transit and IXP peering.
 
-> pf-template inbound (rendered from pf_bgp_peers/pf_wg_ports, not firewall_extra_rules): external BGP from Servperso NL 2a0c:b640:10::ffff tcp/179; WireGuard UDP 1337/1338/1340/1341; pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to 2a0c:b641:b50::/44. Only the explicit mon scrapes are in firewall_extra_rules.
+> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports (the pf template, not firewall_extra_rules); only the mon scrapes come from firewall_extra_rules. BGP peer 2a0c:b640:10::ffff is Servperso NL. pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to 2a0c:b641:b50::/44.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
+| any | udp | 1337, 1338, 1340, 1341 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -511,7 +525,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 
 | From | To | Proto | Port | Purpose |
 |---|---|---|---|---|
-| all | rtr | tcp+udp | 53 | DNS recursion via Unbound (incl. DNS64 synthesis) |
+| all (except extmon, ns2, dom0) | rtr | tcp+udp | 53 | DNS recursion via Unbound (incl. DNS64 synthesis) |
 | all-infra | log | tcp | 6000 | Vector agent to aggregator (Loki ingest) |
 | all-linux | debian-mirrors | tcp | 80 | apt / unattended-upgrades |
 | all-linux | ntp-pool | udp | 123 | NTP time sync |
@@ -525,35 +539,24 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | loop | vault | tcp | 8200 | vault-agent secret render |
 | mail | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
-| mon | all | tcp | 9100 | node_exporter scrape |
+| mon | all (except extmon, dom0) | tcp | 9100 | node_exporter scrape |
 | mon | api | tcp | 9187 | postgres_exporter scrape |
 | mon | log | tcp | 3100 | Grafana queries Loki HTTP API |
 | mon | log | tcp | 8686 | Vector internal metrics scrape |
 | mon | routers | tcp | 9342 | frr_exporter scrape |
 | mon | vault | tcp | 8200 | vault-agent / health check |
-| noc | all | tcp | 22 | SSH for hyrule-mcp |
-| noc | mail | tcp | 993 | noc-agent IMAP polling |
+| noc | all (except mail) | tcp | 22 | SSH for hyrule-mcp (mail's ssh_allow omits noc) |
 | noc | vault | tcp | 8200 | vault-agent / health check |
 | ns2 | dns | tcp | 53 | AXFR pull on NOTIFY (TSIG hyrule-dns) |
 | ns2 | log | tcp | 6000 | off-net Vector agent to aggregator over public IPv6 |
 | ops-prefix | all | tcp | 22 | SSH operator access |
-| ops-prefix | mail | tcp | 993 | Dovecot IMAPS over IPv6 |
-| ops-prefix | mail | tcp | 4190 | Dovecot ManageSieve |
 | proxy | dns | tcp | 53 | RFC 2136 dynamic updates (TSIG hyrule-dns) |
-| public | irc | tcp | 6697 | Soju IRCS (direct v6, no DNAT) |
-| public | mail | tcp | 25 | SMTP inbound |
-| public | mail | tcp | 80 | ACME HTTP-01 for mail.as215932.net |
-| public | mail | tcp | 465 | SMTPS authenticated submission |
-| public | mail | tcp | 587 | submission STARTTLS |
-| public | mail | tcp | 993 | Dovecot IMAPS mailbox access (public IPv4) |
 | public | rtr | tcp+udp | 53 | DNAT to dns |
 | public | rtr | tcp | 80 | DNAT to proxy |
 | public | rtr | tcp | 443 | DNAT to proxy |
 | public | rtr | udp | 51820 | DNAT to vpn |
 | routers | routers | udp | — | WireGuard full mesh between router underlays (UDP 1337-1342) |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
-| vpn-clients | mail | tcp | 993 | Dovecot IMAPS over IPv6 |
-| vpn-clients | mail | tcp | 4190 | Dovecot ManageSieve |
 | vpn-clients | public | tcp+udp | — | routed IPv6 / NAT64 egress forwarded by vpn via rtr |
 | vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
 | web | vault | tcp | 8200 | vault-agent secret render |
@@ -567,11 +570,10 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | every infra host | the infra_vms group: dns, api, web, proxy, mon, vpn, xoa, irc, mail, noc, log, vault, ci, netproxy, loop |
+| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
 | `all-linux` | every Linux host | all Debian VMs (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |
-| `dom0` | dom0 (XCP-NG hypervisor) | underlay-only, ships logs over mgmt v4; not on the AS215932 overlay |
 | `github` | github.com | GitHub API, Actions runner queue, checkouts, PRs, action/image pulls |
 | `hyrule-cloud` | cloud.hyrule.host | Hyrule Cloud public API (BGP snapshot / ingest) |
 | `model-providers` | LLM backend/provider APIs | OpenRouter / Venice and other configured model providers |
@@ -587,6 +589,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 
 ## Notes
 
-- SSH is applied to every host from ssh_allow_sources_* in group_vars/all.yml (plus per-host overrides), not from firewall_extra_rules, so it appears only in the cross-cutting flows table, not the per-host inbound tables.
+- SSH is applied to every host from ssh_allow_sources_* in group_vars/all.yml (plus per-host overrides), not from firewall_extra_rules, so it appears only in the cross-cutting flows table, not the per-host inbound tables. mail overrides ssh_allow_sources_v6 to omit noc, hence `noc -> all:22 except [mail]`.
+- Public single-host service ingress (mail SMTP tcp/25,465,587 + ACME tcp/80 + Dovecot IMAPS/ManageSieve tcp/993,4190; irc Soju IRCS tcp/6697) is defined in each host's firewall_extra_rules with the correct address family and source scope, and appears in that host's per-host inbound table — not in this cross-cutting file. Public IMAPS is IPv4-only (family: ip); IPv6 IMAPS is scoped to ops/VPN/mon/noc.
 - FreeBSD core routers (cr1-nl1, cr1-de1, cr1-ch1) forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule and appears in the log per-host inbound table (not repeated in cross-cutting).
 - Prometheus scrape on FreeBSD routers: the live pf rulesets historically relied on 'pass quick on wg all no state' over the WireGuard mesh rather than explicit 9100/9342-from-mon rules. The Ansible-rendered configs now add explicit rules for cr1-nl1/de1/ch1, so a future wg-pass lockdown is already covered.

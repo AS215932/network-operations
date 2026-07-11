@@ -132,9 +132,12 @@ def inventory_hostnames(hosts_yml: dict) -> set:
 # Resolution helpers
 # --------------------------------------------------------------------------- #
 class Resolver:
-    def __init__(self, group_vars: dict, externals: dict):
+    def __init__(self, group_vars: dict, externals: dict, host_names=None):
         self.peers = group_vars.get("peers", {})
         self.externals = externals or {}
+        # Inventory hosts (host_meta hosts) — flow endpoints that are real hosts
+        # but not in the peers address book (e.g. dom0, underlay-only).
+        self.host_names = set(host_names or [])
         # reverse map: literal constant value -> friendly label (for literal src)
         self.literal_labels = {}
         for key, label in CONSTANT_LABELS.items():
@@ -196,6 +199,8 @@ class Resolver:
             return token
         if self._peer_key(token) is not None:
             return self.peer_display(token)
+        if token in self.host_names:
+            return token
         if token in self.externals:
             return token
         raise ValueError(f"unresolvable flow endpoint token: {token!r}")
@@ -294,6 +299,27 @@ def render_subnets_table(group_vars) -> list:
     return md_table(["CIDR", "Purpose"], rows)
 
 
+def synthesize_router_inbound(hv) -> list:
+    """Inbound rules for FreeBSD/pf routers that live in the pf template, not
+    `firewall_extra_rules`: external BGP (tcp/179 from each `pf_bgp_peers`) and
+    the WireGuard underlay listeners (udp from each `pf_wg_ports`). Rendered as
+    synthetic inbound rows so router BGP/WG paths are queryable like every other
+    host's inbound. Not exhaustive — `pass quick on wg`, ICMP, and transit
+    forwarding are described in the host's notes, not as discrete ports."""
+    synthesized = []
+    for peer in hv.get("pf_bgp_peers") or []:
+        peer = str(peer).strip()
+        if not peer or peer.startswith("[") or "placeholder" in peer.lower():
+            continue  # commented-out / placeholder peer
+        synthesized.append({"proto": "tcp", "dport": 179, "src": peer,
+                            "family": "inet6", "comment": "External BGP (pf_bgp_peers)"})
+    wg_ports = [p for p in (hv.get("pf_wg_ports") or []) if p is not None]
+    if wg_ports:
+        synthesized.append({"proto": "udp", "dport": list(wg_ports), "src": "any",
+                            "comment": "WireGuard underlay tunnels (pf_wg_ports)"})
+    return synthesized
+
+
 def render_inbound_table(resolver, rules) -> list:
     entries = []
     for r in rules:
@@ -320,11 +346,23 @@ def render_outbound_table(resolver, flows) -> list:
     return md_table(["To", "Proto", "Port", "Purpose"], [e[4] for e in entries])
 
 
-def render_cross_cutting_table(resolver, flows) -> list:
+def render_cross_cutting_table(resolver, flows, valid_hosts=frozenset()) -> list:
     entries = []
     for f in flows:
         frm = resolver.validate_endpoint(f["from"])
         to = resolver.validate_endpoint(f["to"])
+        exc = f.get("except") or []
+        if exc:
+            if f["from"] != "all" and f["to"] != "all":
+                raise ValueError(f"`except` is only valid on an `all` flow: {f!r}")
+            for tok in exc:
+                if valid_hosts and str(tok) not in valid_hosts:
+                    raise ValueError(f"`except` token {tok!r} is not an inventory host: {f!r}")
+            exc_label = f" (except {', '.join(str(t) for t in exc)})"
+            if f["from"] == "all":
+                frm += exc_label
+            else:
+                to += exc_label
         proto = format_proto(f.get("proto"))
         port = format_port(f.get("port"))
         purpose = str(f.get("purpose", "")).strip()
@@ -347,10 +385,9 @@ def render_externals_table(externals) -> list:
 # --------------------------------------------------------------------------- #
 def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     externals = flows.get("network_externals", {}) or {}
-    resolver = Resolver(group_vars, externals)
-
     inv_hosts = inventory_hostnames(hosts_yml)
     hosts = sorted(h for h, hv in host_vars.items() if isinstance(hv, dict) and "host_meta" in hv)
+    resolver = Resolver(group_vars, externals, host_names=inv_hosts or set(hosts))
     for host in hosts:
         if inv_hosts and host not in inv_hosts:
             raise ValueError(f"host_vars/{host}.yml has host_meta but is not in hosts.yml")
@@ -414,7 +451,8 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         if meta.get("notes"):
             lines.append(f"> {str(meta['notes']).strip()}")
             lines.append("")
-        rules = host_vars[host].get("firewall_extra_rules") or []
+        rules = synthesize_router_inbound(host_vars[host]) + list(
+            host_vars[host].get("firewall_extra_rules") or [])
         lines.append("**Inbound**")
         lines.append("")
         if rules:
@@ -440,7 +478,9 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
                  "monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, "
                  "and routine host egress).")
     lines.append("")
-    lines.extend(render_cross_cutting_table(resolver, flows.get("cross_cutting_flows", []) or []))
+    lines.extend(render_cross_cutting_table(
+        resolver, flows.get("cross_cutting_flows", []) or [],
+        valid_hosts=frozenset(inv_hosts) if inv_hosts else frozenset(hosts)))
     lines.append("")
     lines.append("---")
     lines.append("")

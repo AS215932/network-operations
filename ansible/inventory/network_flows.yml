@@ -12,13 +12,26 @@
 # the built-in tokens `all` / `public` / `any`, or a key in network_externals
 # below. proto is one of tcp | udp | tcp+udp | icmp | icmp6; port is omitted for
 # any-port egress and icmp.
+#
+# `except: [host, ...]` subtracts hosts from an `all` expansion, for flows whose
+# firewall scope excludes specific hosts (off-net hosts not on the overlay
+# subnets, dom0 which is underlay-only, or a per-host ssh_allow override). Only
+# meaningful when `from` or `to` is `all`; the excepted tokens must be hosts.
+#
+# Public single-host service ingress (mail SMTP/IMAPS, irc IRCS) is NOT modelled
+# here — it lives in each host's `firewall_extra_rules` (family-aware, correctly
+# scoped) and renders in the per-host inbound table. Only genuinely N-to-M or
+# non-firewall_extra_rules flows (SSH from ssh_allow_sources_*, rtr v4 DNAT,
+# scrapes, DNS recursion) belong in this file.
 
 cross_cutting_flows:
-  # --- DNS recursion ---
-  - { from: all, to: rtr, proto: "tcp+udp", port: 53, purpose: "DNS recursion via Unbound (incl. DNS64 synthesis)" }
+  # --- DNS recursion (rtr Unbound; scoped to the overlay subnets, so off-net
+  #     extmon/ns2 and underlay-only dom0 are excluded) ---
+  - { from: all, to: rtr, proto: "tcp+udp", port: 53, except: [extmon, ns2, dom0], purpose: "DNS recursion via Unbound (incl. DNS64 synthesis)" }
 
-  # --- Monitoring scrapes ---
-  - { from: mon, to: all, proto: tcp, port: 9100, purpose: "node_exporter scrape" }
+  # --- Monitoring scrapes (extmon self-scrapes; dom0 has no node_exporter yet,
+  #     issue #24) ---
+  - { from: mon, to: all, proto: tcp, port: 9100, except: [extmon, dom0], purpose: "node_exporter scrape" }
   - { from: mon, to: api, proto: tcp, port: 9187, purpose: "postgres_exporter scrape" }
   - { from: mon, to: routers, proto: tcp, port: 9342, purpose: "frr_exporter scrape" }
 
@@ -36,30 +49,19 @@ cross_cutting_flows:
   # --- WireGuard mesh (bidirectional) ---
   - { from: routers, to: routers, proto: udp, purpose: "WireGuard full mesh between router underlays (UDP 1337-1342)" }
 
-  # --- Public ingress (v4 DNAT on rtr + direct v6) ---
+  # --- Public v4 DNAT ingress on rtr (no per-host firewall_extra_rules form;
+  #     direct-v6 public services like mail SMTP/IMAPS + irc IRCS live in their
+  #     own firewall_extra_rules and render in the per-host inbound tables) ---
   - { from: public, to: rtr, proto: "tcp+udp", port: 53, purpose: "DNAT to dns" }
   - { from: public, to: rtr, proto: tcp, port: 80, purpose: "DNAT to proxy" }
   - { from: public, to: rtr, proto: tcp, port: 443, purpose: "DNAT to proxy" }
   - { from: public, to: rtr, proto: udp, port: 51820, purpose: "DNAT to vpn" }
-  - { from: public, to: irc, proto: tcp, port: 6697, purpose: "Soju IRCS (direct v6, no DNAT)" }
-  - { from: public, to: mail, proto: tcp, port: 25, purpose: "SMTP inbound" }
-  - { from: public, to: mail, proto: tcp, port: 465, purpose: "SMTPS authenticated submission" }
-  - { from: public, to: mail, proto: tcp, port: 587, purpose: "submission STARTTLS" }
-  - { from: public, to: mail, proto: tcp, port: 80, purpose: "ACME HTTP-01 for mail.as215932.net" }
-  - { from: public, to: mail, proto: tcp, port: 993, purpose: "Dovecot IMAPS mailbox access (public IPv4)" }
-
-  # --- Private mailbox access ---
-  - { from: ops-prefix, to: mail, proto: tcp, port: 993, purpose: "Dovecot IMAPS over IPv6" }
-  - { from: vpn-clients, to: mail, proto: tcp, port: 993, purpose: "Dovecot IMAPS over IPv6" }
-  - { from: noc, to: mail, proto: tcp, port: 993, purpose: "noc-agent IMAP polling" }
-  - { from: ops-prefix, to: mail, proto: tcp, port: 4190, purpose: "Dovecot ManageSieve" }
-  - { from: vpn-clients, to: mail, proto: tcp, port: 4190, purpose: "Dovecot ManageSieve" }
 
   # --- SSH (from ssh_allow_sources_*, not firewall_extra_rules) ---
   - { from: ops-prefix, to: all, proto: tcp, port: 22, purpose: "SSH operator access" }
   - { from: vpn-clients, to: all, proto: tcp, port: 22, purpose: "SSH via VPN" }
   - { from: ci, to: all, proto: tcp, port: 22, purpose: "SSH for CI apply runs" }
-  - { from: noc, to: all, proto: tcp, port: 22, purpose: "SSH for hyrule-mcp" }
+  - { from: noc, to: all, proto: tcp, port: 22, except: [mail], purpose: "SSH for hyrule-mcp (mail's ssh_allow omits noc)" }
   - { from: mon, to: all, proto: tcp, port: 22, purpose: "SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas)" }
 
   # --- Centralized logging ---
@@ -97,13 +99,13 @@ network_externals:
   package-registries: { name: "PyPI / npm / ghcr.io / Docker Hub", note: "toolchain and container image pulls" }
   ops-prefix: { name: "ops workstation prefix (KPN home)", note: "2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow" }
   vpn-clients: { name: "VPN clients", note: "2a0c:b641:b50:3::/64, routed via the vpn VM" }
-  all-infra: { name: "every infra host", note: "the infra_vms group: dns, api, web, proxy, mon, vpn, xoa, irc, mail, noc, log, vault, ci, netproxy, loop" }
+  all-infra: { name: "log-shipping infra hosts", note: "infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator)." }
   all-linux: { name: "every Linux host", note: "all Debian VMs (routine apt / NTP egress)" }
   routers: { name: "AS215932 routers", note: "rtr, cr1-nl1, cr1-de1, cr1-ch1" }
-  dom0: { name: "dom0 (XCP-NG hypervisor)", note: "underlay-only, ships logs over mgmt v4; not on the AS215932 overlay" }
 
 # Doc-level notes preserved from the previously hand-written network-flows.md.
 notes:
-  - "SSH is applied to every host from ssh_allow_sources_* in group_vars/all.yml (plus per-host overrides), not from firewall_extra_rules, so it appears only in the cross-cutting flows table, not the per-host inbound tables."
+  - "SSH is applied to every host from ssh_allow_sources_* in group_vars/all.yml (plus per-host overrides), not from firewall_extra_rules, so it appears only in the cross-cutting flows table, not the per-host inbound tables. mail overrides ssh_allow_sources_v6 to omit noc, hence `noc -> all:22 except [mail]`."
+  - "Public single-host service ingress (mail SMTP tcp/25,465,587 + ACME tcp/80 + Dovecot IMAPS/ManageSieve tcp/993,4190; irc Soju IRCS tcp/6697) is defined in each host's firewall_extra_rules with the correct address family and source scope, and appears in that host's per-host inbound table — not in this cross-cutting file. Public IMAPS is IPv4-only (family: ip); IPv6 IMAPS is scoped to ops/VPN/mon/noc."
   - "FreeBSD core routers (cr1-nl1, cr1-de1, cr1-ch1) forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule and appears in the log per-host inbound table (not repeated in cross-cutting)."
   - "Prometheus scrape on FreeBSD routers: the live pf rulesets historically relied on 'pass quick on wg all no state' over the WireGuard mesh rather than explicit 9100/9342-from-mon rules. The Ansible-rendered configs now add explicit rules for cr1-nl1/de1/ch1, so a future wg-pass lockdown is already covered."

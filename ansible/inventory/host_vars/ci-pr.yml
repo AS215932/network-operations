@@ -77,4 +77,4 @@ network_flows_outbound:
   - { to: github, proto: tcp, port: 443, purpose: "runner queue, action images" }
   - { to: openrouter, proto: tcp, port: 443, purpose: "PR-Agent LLM" }
   - { to: package-registries, proto: tcp, port: 443, purpose: "PyPI/npm/ghcr/Docker Hub toolchain and semgrep image" }
-  - { to: rtr, proto: "tcp+udp", port: 53, purpose: "Unbound + DNS64 via 2a0c:b641:b51::1" }
+  - { to: rtr, proto: "tcp+udp", port: 53, purpose: "Unbound + DNS64 via rtr infra address 2a0c:b641:b50:2::1 (the only Unbound listener; not the b51::1 customer gateway)" }

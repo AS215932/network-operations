@@ -46,5 +46,5 @@ host_meta:
   os: "FreeBSD 15.0"
   role: "core router (Servperso DE + Extra-Transit + IXPs)"
   summary: "Core router at Servperso DE: FreeBSD + FRRouting, Servperso DE plus Extra-Transit and IXP peering."
-  notes: "Listens on four interfaces (vtnet0..3); WG/BGP/transit rules bind to the interface set, SSH/ICMP only on the primary external interface. pf-template inbound (from pf_bgp_peers/pf_wg_ports): external BGP from Servperso DE 2a0c:b640:10::ffff and Extra-Transit 2a0c:b641:870::ffff tcp/179; WireGuard UDP 1337/1338/1342; pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932. Only the explicit mon scrapes are in firewall_extra_rules."
+  notes: "Listens on four interfaces (vtnet0..3); WG/BGP/transit rules bind to the interface set, SSH/ICMP only on the primary external interface. Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Servperso DE 2a0c:b640:10::ffff, Extra-Transit 2a0c:b641:870::ffff. pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932."
 network_flows_outbound: []
