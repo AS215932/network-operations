@@ -110,6 +110,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Prometheus rule syntax
+        run: >-
+          docker run --rm
+          --entrypoint /bin/promtool
+          --volume "$PWD:/workspace:ro"
+          --workdir /workspace
+          prom/prometheus@sha256:2d390eb0dcbb4518231dbd2d7b1aac7725a4bfb9205eb14c38ddebf88284f37f
+          check rules configs/mon/prometheus-rules/*.yml
+
       - name: Static IaC contract tests
         run: scripts/ci/iac-static.sh
 

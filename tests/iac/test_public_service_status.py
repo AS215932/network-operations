@@ -8,6 +8,18 @@ RULES = REPO / "configs" / "mon" / "prometheus-rules"
 
 
 class PublicServiceStatusContracts(unittest.TestCase):
+    def test_required_iac_job_runs_production_version_promtool(self):
+        workflow = (REPO / ".github" / "workflows" / "iac-tests.yml").read_text()
+
+        self.assertIn("name: Prometheus rule syntax", workflow)
+        self.assertIn("--entrypoint /bin/promtool", workflow)
+        self.assertIn("check rules configs/mon/prometheus-rules/*.yml", workflow)
+        self.assertIn(
+            "prom/prometheus@sha256:"
+            "2d390eb0dcbb4518231dbd2d7b1aac7725a4bfb9205eb14c38ddebf88284f37f",
+            workflow,
+        )
+
     def test_hyrule_dns_probe_checks_both_authoritative_servers(self):
         blackbox = (REPO / "configs" / "mon" / "blackbox.yml").read_text()
         prometheus = (REPO / "configs" / "mon" / "prometheus.yml").read_text()
