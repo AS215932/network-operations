@@ -1,83 +1,96 @@
 ---
-- name: Ensure Knowledge API packages are installed
-  ansible.builtin.apt:
-    name: "{{ knowledge_api_packages }}"
-    state: present
-    update_cache: true
-    cache_valid_time: 3600
+# Full deploy runs only while the API is enabled. The service-state
+# enforcement below stays reachable when disabled so a rollback can stop it.
+- name: Deploy Knowledge API runtime
+  when: knowledge_api_enabled | bool
+  block:
+    - name: Ensure Knowledge API packages are installed
+      ansible.builtin.apt:
+        name: "{{ knowledge_api_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
 
-- name: Install uv for Knowledge API
-  ansible.builtin.shell: |
-    set -o pipefail
-    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
-  args:
-    executable: /bin/bash
-    creates: "{{ knowledge_api_uv_path }}"
+    - name: Install uv for Knowledge API
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+      args:
+        executable: /bin/bash
+        creates: "{{ knowledge_api_uv_path }}"
 
-- name: Ensure Knowledge API group exists
-  ansible.builtin.group:
-    name: "{{ knowledge_api_group }}"
-    system: true
+    - name: Ensure Knowledge API group exists
+      ansible.builtin.group:
+        name: "{{ knowledge_api_group }}"
+        system: true
 
-- name: Ensure Knowledge API user exists
-  ansible.builtin.user:
-    name: "{{ knowledge_api_user }}"
-    group: "{{ knowledge_api_group }}"
-    system: true
-    shell: /usr/sbin/nologin
-    home: "{{ knowledge_api_state_dir }}"
-    create_home: false
+    - name: Ensure Knowledge API user exists
+      ansible.builtin.user:
+        name: "{{ knowledge_api_user }}"
+        group: "{{ knowledge_api_group }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: "{{ knowledge_api_state_dir }}"
+        create_home: false
 
-- name: Ensure Knowledge API directories exist
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ knowledge_api_user }}"
-    group: "{{ knowledge_api_group }}"
-    mode: "0750"
-  loop:
-    - "{{ knowledge_api_install_dir }}"
-    - "{{ knowledge_api_config_dir }}"
-    - "{{ knowledge_api_state_dir }}"
+    - name: Ensure Knowledge API directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ knowledge_api_user }}"
+        group: "{{ knowledge_api_group }}"
+        mode: "0750"
+      loop:
+        - "{{ knowledge_api_install_dir }}"
+        - "{{ knowledge_api_config_dir }}"
+        - "{{ knowledge_api_state_dir }}"
 
-- name: Checkout Knowledge API runtime at pinned version
-  ansible.builtin.git:
-    repo: "{{ knowledge_api_repo }}"
-    dest: "{{ knowledge_api_install_dir }}"
-    version: "{{ knowledge_api_version }}"
-  become: true
-  become_user: "{{ knowledge_api_user }}"
-  notify: restart knowledge-api
+    - name: Checkout Knowledge API runtime at pinned version
+      ansible.builtin.git:
+        repo: "{{ knowledge_api_repo }}"
+        dest: "{{ knowledge_api_install_dir }}"
+        version: "{{ knowledge_api_version }}"
+      become: true
+      become_user: "{{ knowledge_api_user }}"
+      notify: restart knowledge-api
 
-- name: Sync Knowledge API runtime dependencies (api extra)
-  ansible.builtin.command: "{{ knowledge_api_uv_path }} sync --extra api --frozen"
-  args:
-    chdir: "{{ knowledge_api_install_dir }}"
-  environment:
-    HOME: "{{ knowledge_api_state_dir }}"
-  become: true
-  become_user: "{{ knowledge_api_user }}"
-  register: knowledge_api_uv_sync
-  changed_when: "'No changes' not in knowledge_api_uv_sync.stderr"
-  notify: restart knowledge-api
+    - name: Sync Knowledge API runtime dependencies (api extra)
+      ansible.builtin.command: "{{ knowledge_api_uv_path }} sync --extra api --frozen"
+      args:
+        chdir: "{{ knowledge_api_install_dir }}"
+      environment:
+        HOME: "{{ knowledge_api_state_dir }}"
+      become: true
+      become_user: "{{ knowledge_api_user }}"
+      register: knowledge_api_uv_sync
+      changed_when: "'No changes' not in knowledge_api_uv_sync.stderr"
+      notify: restart knowledge-api
 
-- name: Render Knowledge API environment
-  ansible.builtin.template:
-    src: knowledge-api.env.j2
-    dest: "{{ knowledge_api_env_file }}"
-    owner: root
-    group: "{{ knowledge_api_group }}"
-    mode: "0640"
-  notify: restart knowledge-api
+    - name: Render Knowledge API environment
+      ansible.builtin.template:
+        src: knowledge-api.env.j2
+        dest: "{{ knowledge_api_env_file }}"
+        owner: root
+        group: "{{ knowledge_api_group }}"
+        mode: "0640"
+      notify: restart knowledge-api
 
-- name: Install Knowledge API service unit
-  ansible.builtin.template:
-    src: hyrule-knowledge-api.service.j2
-    dest: /etc/systemd/system/hyrule-knowledge-api.service
-    mode: "0644"
-  notify:
-    - reload systemd
-    - restart knowledge-api
+    - name: Install Knowledge API service unit
+      ansible.builtin.template:
+        src: hyrule-knowledge-api.service.j2
+        dest: /etc/systemd/system/hyrule-knowledge-api.service
+        mode: "0644"
+      notify:
+        - reload systemd
+        - restart knowledge-api
+
+# Reachable while disabled: detect a previously installed unit so a rollback
+# (knowledge_api_enabled=false) can still stop/disable it, without erroring on a
+# host where the API was never deployed.
+- name: Check whether the Knowledge API unit is installed
+  ansible.builtin.stat:
+    path: /etc/systemd/system/hyrule-knowledge-api.service
+  register: knowledge_api_unit
 
 - name: Enforce Knowledge API service state
   ansible.builtin.systemd:
@@ -85,3 +98,4 @@
     state: "{{ 'started' if knowledge_api_enabled | bool else 'stopped' }}"
     enabled: "{{ knowledge_api_enabled | bool }}"
     daemon_reload: true
+  when: knowledge_api_enabled | bool or knowledge_api_unit.stat.exists
