@@ -30,6 +30,22 @@ soc_agent_version: main
 
 soc_agent_uv_path: /usr/local/bin/uv
 
+# Desired-state checkout the posture scanner audits against
+# (SOC_NETWORK_OPERATIONS_DIR). Without it the scanner has no infra repo to
+# compare live state to. Same pin discipline as soc_agent_version: exact
+# 40-char SHA required on live applies; the SHA is also exported as
+# SOC_NETWORK_OPERATIONS_PIN_SHA so the app can verify the checkout.
+soc_network_operations_repo: "https://github.com/AS215932/network-operations.git"
+soc_network_operations_dir: "{{ soc_agent_install_dir }}/network-operations"
+soc_network_operations_version: main
+
+# MCP endpoint for live-state queries (hyrule-mcp on noc). The app requires
+# HYRULE_MCP_URL or HYRULE_MCP_CMD — leaving both empty degrades every
+# MCP-backed posture check, so validate rejects an apply with posture enabled
+# and neither set. Set exactly one in host_vars.
+soc_hyrule_mcp_url: ""
+soc_hyrule_mcp_cmd: ""
+
 # The FastAPI app serves the LHP origin endpoints (payload fetch + callbacks).
 soc_agent_listen_host: "::"
 soc_agent_listen_port: 8600
@@ -42,6 +58,9 @@ soc_redteam_enabled: false
 soc_redteam_allow_active_probes: false
 soc_lhp_enabled: false
 soc_case_verification_dry_run: true
+# Posture->engineering handoff emission. Only meaningful on the handoff_*
+# rungs; validate rejects it below them (SOC_MODE stays the outer gate).
+soc_posture_handoff_enabled: false
 
 # Insight stream (agent-core loop decision envelopes) toward the collector.
 soc_agent_core_trace_enabled: false

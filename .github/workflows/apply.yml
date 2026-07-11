@@ -36,6 +36,7 @@ on:
           - knot
           - extmon
           - engineering-loop
+          - soc
           - frr
           - rtr_routing
           - networkd_resolved
@@ -241,6 +242,11 @@ jobs:
               apply_var="engineering_loop_apply=true"
               expected_apply_var="engineering_loop_apply=true"
               extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+              ;;
+            soc)
+              # role gate is soc_agent_apply (role name != playbook name)
+              apply_var="soc_agent_apply=true"
+              expected_apply_var="soc_agent_apply=true"
               ;;
             *)
               apply_var="${playbook//-/_}_apply=true"

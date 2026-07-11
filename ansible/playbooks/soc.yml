@@ -33,6 +33,10 @@
   roles:
     - role: soc_agent
   post_tasks:
+    # Flush handlers so the post-snapshot reflects the new service state.
+    - name: Flush handlers before post-deploy snapshot
+      ansible.builtin.meta: flush_handlers
+      tags: [apply, always]
     - name: Post-deploy Icinga snapshot
       include_role:
         name: firewall

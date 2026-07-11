@@ -13,7 +13,7 @@
     home: "{{ soc_agent_state_dir }}"
     create_home: false
 
-- name: Create SOC Agent directories
+- name: Create SOC Agent runtime directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -22,8 +22,27 @@
     mode: "0750"
   loop:
     - "{{ soc_agent_install_dir }}"
-    - "{{ soc_agent_config_dir }}"
     - "{{ soc_agent_state_dir }}"
+
+# Root-owned: the mode env here carries SOC_MODE and the hard kill switches,
+# so the service account must not be able to replace it (or its parent).
+- name: Create SOC Agent config directory (root-owned)
+  ansible.builtin.file:
+    path: "{{ soc_agent_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ soc_agent_group }}"
+    mode: "0750"
+
+- name: Install SOC bootstrap packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - curl
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
 
 - name: Install uv (Python package manager)
   ansible.builtin.shell:
@@ -41,6 +60,17 @@
   notify:
     - restart soc-posture timer
     - restart soc-agent service
+
+# Desired-state repo the posture scanner audits live infrastructure against
+# (SOC_NETWORK_OPERATIONS_DIR) — distinct from the app checkout above.
+- name: Clone network-operations desired-state checkout
+  ansible.builtin.git:
+    repo: "{{ soc_network_operations_repo }}"
+    dest: "{{ soc_network_operations_dir }}"
+    version: "{{ soc_network_operations_version }}"
+  become: true
+  become_user: "{{ soc_agent_user }}"
+  notify: restart soc-posture timer
 
 - name: Sync SOC Agent dependencies
   ansible.builtin.command:

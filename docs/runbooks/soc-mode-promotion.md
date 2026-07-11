@@ -41,7 +41,9 @@ threshold, demote one rung in a fast-follow PR and note why.
    friends adjusted per `docs/soc-agent/rollout.md` in the soc-agent repo.
 3. Re-render + validate: `ansible-playbook playbooks/soc.yml --tags validate
    --connection=local --limit soc --skip-tags=snapshot`.
-4. Apply per the standard gated flow (`--tags apply -e soc_agent_apply=true`),
-   Icinga snapshot before/after.
+4. Apply per the standard gated flow: Actions → `apply` workflow →
+   `playbook=soc` (the workflow resolves the `soc_agent_apply=true` gate), or
+   from the workstation `--tags apply -e soc_agent_apply=true`. Icinga
+   snapshot before/after either way.
 5. Hard rails that never relax in v1: `SOC_REDTEAM_ALLOW_ACTIVE_PROBES=0`;
    SOC never sets `HYRULE_MCP_ENABLE_ACTIONS`, never applies `loop:approved`.
