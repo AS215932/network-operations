@@ -5,7 +5,12 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: a7f0432b01ed525c4529deb78b6a294b05e6e99d
+# Pinned to the merged insight-stream build (AS215932/noc-agent#70): proactive
+# cycles can emit InsightDecisionRecords to the collector and the standing-
+# grant/no-op-guard substrate ships dark. Everything is default-off until the
+# env promotions in docs/runbooks/noc-standing-grant-rollout.md
+# (NOC_INSIGHT_RECORDS_ENABLED first).
+noc_agent_version: fd0cfa5617224e184f9932bb1691a7e2d6afd0d0
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 
 # Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
@@ -15,10 +20,10 @@ hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 # noc-agent >= a7f0432 (venice provider) and venice_api_key in kv/noc-agent.
 noc_agent_model: "openrouter:tencent/hy3"
 noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
-# Pinned to the Knowledge refresh that emits A0 GitHub issue context plus A1
-# routing policy context for loop:knowledge-gap routing (AS215932/knowledge#32,
-# #33).
-noc_knowledge_version: 9baa92c299536901c623952415b9513cd4076b10
+# Pinned to the Knowledge build with grounding-aware exports (AS215932/
+# knowledge#35): grounding.jsonl + sqlite grounding table ride the export the
+# case-context retriever reads; A0 issue + A1 routing context unchanged.
+noc_knowledge_version: a68f974e7ed093d8f4195a15dc5b1afc636999f4
 
 # LHP-v1 rollout: coordinate the current proactive disk condition through
 # CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
