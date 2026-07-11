@@ -21,18 +21,6 @@
 #     -e github_runner_registration_token="$GH_RUNNER_TOKEN" \
 #     --limit ci-pr
 
-- name: ci-pr — pre-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-  tags: [snapshot, always]
-
 - name: ci-pr — apply unprivileged self-hosted runner
   hosts: ci-pr
   serial: 1
@@ -41,15 +29,3 @@
   roles:
     - github_runner
   tags: [ci_pr]
-
-- name: ci-pr — post-deploy snapshot
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-  tags: [snapshot, always]

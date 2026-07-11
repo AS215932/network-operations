@@ -8,24 +8,6 @@
   # runs don't require connectivity to the hosts.
   gather_facts: false
   become: true
-  pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   roles:
     - frr
-  post_tasks:
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   tags: [frr]

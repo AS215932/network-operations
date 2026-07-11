@@ -136,7 +136,7 @@ wg_ports:
 
 # --- SSH source set used by every host's input chain ---
 # Permits the ops workstation directly, any client connected to the VPN, and
-# the ci runner (apply.yml SSHes to the fleet for snapshots + --tags apply).
+# the ci runner (apply.yml SSHes to the fleet for --tags apply).
 ssh_allow_sources_v6:
   - "{{ ops_prefix_v6 }}"
   - "{{ vpn_clients_subnet }}"

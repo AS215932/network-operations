@@ -6,7 +6,7 @@
 # Apply: ansible-playbook playbooks/cloud.yml --tags apply \
 #          -e hyrule_cloud_apply=true -e hyrule_cloud_version=<sha>
 # Validate (no-op): ansible-playbook playbooks/cloud.yml --tags validate \
-#          --connection=local --limit api --skip-tags=snapshot
+#          --connection=local --limit api
 
 hyrule_cloud_apply: false
 

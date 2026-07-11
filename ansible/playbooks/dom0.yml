@@ -13,24 +13,6 @@
   hosts: dom0
   gather_facts: true
   become: false
-  pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   roles:
     - dom0
-  post_tasks:
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   tags: [dom0]

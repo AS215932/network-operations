@@ -5,7 +5,7 @@
 #
 # Validate (no live changes; runs from controller):
 #   ansible-playbook playbooks/engineering-loop.yml --tags validate \
-#     --connection=local --limit loop --skip-tags=snapshot
+#     --connection=local --limit loop
 #
 # Apply (live deploy, timers remain disabled unless host vars enable them):
 #   ansible-playbook playbooks/engineering-loop.yml --tags apply \
@@ -24,14 +24,6 @@
   gather_facts: true
   become: true
   pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      ansible.builtin.include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
     - name: Ensure Agentic Observatory group exists before Vault Agent
       ansible.builtin.group:
         name: "{{ agentic_observatory_group }}"
@@ -207,16 +199,4 @@
       tags: [agentic_observatory]
     - role: agent_core_collector
       tags: [agent_core_collector]
-  post_tasks:
-    - name: Flush handlers before post-deploy snapshot
-      ansible.builtin.meta: flush_handlers
-      tags: [apply, always]
-    - name: Post-deploy Icinga snapshot
-      ansible.builtin.include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   tags: [engineering_loop]

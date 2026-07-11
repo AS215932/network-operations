@@ -9,7 +9,7 @@
 #
 # Render-only (dry run):
 #   ansible-playbook playbooks/prometheus.yml --tags validate \
-#       --connection=local --skip-tags=snapshot --limit mon
+#       --connection=local --limit mon
 # Apply (live):
 #   ansible-playbook playbooks/prometheus.yml --tags apply \
 #       -e '{"prometheus_apply":true}' --limit mon
