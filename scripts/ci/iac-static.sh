@@ -107,7 +107,6 @@ else
   echo "::warning::nft not installed; skipping nftables validation"
 fi
 
-run scripts/ci/test-snapshot-bracket.sh
 run scripts/ci/deploy-preflight.sh --repo-only
 
 if [[ "$fail" -ne 0 ]]; then

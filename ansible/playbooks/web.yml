@@ -3,7 +3,7 @@
 #
 # Validate (no live changes; runs from controller):
 #   ansible-playbook playbooks/web.yml --tags validate \
-#     --connection=local --limit web --skip-tags=snapshot
+#     --connection=local --limit web
 #
 # Apply (live deploy):
 #   ansible-playbook playbooks/web.yml --tags apply \
@@ -18,29 +18,7 @@
   serial: 1
   gather_facts: false
   become: true
-  pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      ansible.builtin.include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   roles:
     - role: hyrule_web
       tags: [hyrule_web]
-  post_tasks:
-    # Flush handlers so the post-snapshot reflects the new service state.
-    - name: Flush handlers before post-deploy snapshot
-      ansible.builtin.meta: flush_handlers
-      tags: [apply, always]
-    - name: Post-deploy Icinga snapshot
-      ansible.builtin.include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   tags: [hyrule_web]

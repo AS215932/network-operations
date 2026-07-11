@@ -90,8 +90,8 @@ github_runner_secrets_env: /etc/github-runner/secrets.env
 # restart would kill in-flight CI jobs). Keep this a no-op.
 github_runner_vault_reload_command: /bin/true
 
-# SSH identity for the runner. apply.yml jobs SSH to the infra fleet (pre/post
-# Icinga snapshots, --tags apply runs); the runner user needs its own key.
+# SSH identity for the runner. apply.yml jobs SSH to the infra fleet for
+# --tags apply runs; the runner user needs its own key.
 # The private half is copied from the controller path CI_KEY_PATH when set; the
 # public half is distributed fleet-wide by playbooks/ci-runner-key.yml.
 # known_hosts is always seeded so ansible.cfg's host_key_checking=True still

@@ -7,9 +7,9 @@ run-name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inp
 #
 # The first invocation each session must be approved via the `production`
 # environment protection rule (set up once: settings → environments).
-# A required reviewer (the user) approves; the workflow then runs the
-# pre-snapshot → render/apply → post-snapshot → diff sequence and posts
-# the diff to the run summary + as a comment on the named PR (if any).
+# A required reviewer (the user) approves; the workflow then renders/applies
+# the playbook and runs post-deploy Goss validation. Regressions surface
+# through live Icinga / the hyrule MCP, not a pre/post snapshot bracket.
 
 on:
   workflow_dispatch:
@@ -53,11 +53,6 @@ on:
         type: boolean
         required: true
         default: true
-      pr_number:
-        description: PR number to post the diff to (optional)
-        type: string
-        required: false
-        default: ""
       bootstrap_ci_runner_key:
         description: Connect as inventory users for first-time ci-runner-key bootstrap
         type: boolean
@@ -77,11 +72,6 @@ on:
         description: Dry-run only (render + check, no apply)
         type: boolean
         required: true
-      pr_number:
-        description: PR number to post the diff to (optional)
-        type: string
-        required: false
-        default: ""
       bootstrap_ci_runner_key:
         description: Connect as inventory users for first-time ci-runner-key bootstrap
         type: boolean
@@ -90,7 +80,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
   # Live applies remain strictly serialized. Dry-runs are render/check only and
@@ -268,30 +257,6 @@ jobs:
             if [ -n "$extra_apply_vars" ]; then
               echo "\`${extra_apply_vars}\`"
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Resolve snapshot requirement
-        id: snapshot
-        env:
-          PLAYBOOK: ${{ inputs.playbook }}
-        run: |
-          set -euo pipefail
-
-          case "$PLAYBOOK" in
-            firewall|monitoring|icinga2|logs|cloud|web|noc|network-proxy|vault|ci|knot|engineering-loop|soc|frr|networkd_resolved|mail_openbsd)
-              required=true
-              ;;
-            *)
-              required=false
-              ;;
-          esac
-
-          printf 'required=%s\n' "$required" >> "$GITHUB_OUTPUT"
-          printf 'SNAPSHOT_REQUIRED=%s\n' "$required" >> "$GITHUB_ENV"
-          {
-            echo "## Snapshot requirement"
-            echo
-            echo "\`${required}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Mint hyrule-cloud Vault bootstrap
@@ -489,22 +454,6 @@ jobs:
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
-      # user on every host (created + NOPASSWD-root by the ci_runner_key role)
-      # and escalates with sudo — never root, never the operator's svag. An
-      # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
-      - name: Pre-deploy Icinga snapshot
-        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
-        working-directory: ansible
-        env:
-          PLAYBOOK: ${{ inputs.playbook }}
-        run: |
-          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
-            --tags snapshot \
-            -e ansible_user=ci \
-            -e snapshot_required=true \
-            -e snapshot_phase=pre
-
       - name: Render-only (dry run)
         if: ${{ inputs.dry_run }}
         working-directory: ansible
@@ -519,9 +468,12 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags validate \
             --connection=local \
-            --skip-tags=snapshot \
             "${limit_args[@]}"
 
+      # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
+      # user on every host (created + NOPASSWD-root by the ci_runner_key role)
+      # and escalates with sudo — never root, never the operator's svag. An
+      # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Apply
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
@@ -550,75 +502,9 @@ jobs:
             "${extra_var_args[@]}" \
             "${limit_args[@]}"
 
-      - name: Post-deploy Icinga snapshot
-        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
-        working-directory: ansible
-        env:
-          PLAYBOOK: ${{ inputs.playbook }}
-        run: |
-          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
-            --tags snapshot \
-            -e ansible_user=ci \
-            -e snapshot_required=true \
-            -e snapshot_phase=post
-
       - name: Post-deploy Goss validation
         if: ${{ !inputs.dry_run }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
           LIMIT: ${{ inputs.limit }}
         run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
-
-      - name: Capture snapshot diff
-        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
-        id: diff
-        run: |
-          set -e
-          shopt -s nullglob
-          snapshots_root=ansible/generated/snapshots
-          if [ ! -d "$snapshots_root" ]; then
-            echo "::error::no snapshots directory found at $snapshots_root"
-            exit 1
-          fi
-          # Two most recent snapshot dirs are pre/post.
-          mapfile -t dirs < <(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -2)
-          if [ "${#dirs[@]}" -lt 2 ]; then
-            echo "::error::need 2 snapshot dirs, found ${#dirs[@]}"
-            exit 1
-          fi
-          {
-            echo "## Icinga snapshot diff"
-            echo
-            echo '```diff'
-            diff -ruN "${dirs[1]}" "${dirs[0]}" || true
-            echo '```'
-          } > /tmp/diff.md
-          {
-            echo "diff<<EOF"
-            cat /tmp/diff.md
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Post diff to workflow summary
-        if: ${{ !inputs.dry_run && steps.diff.outputs.diff != '' }}
-        run: cat /tmp/diff.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Post diff as PR comment
-        if: ${{ !inputs.dry_run && inputs.pr_number != '' && steps.diff.outputs.diff != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "$REPOSITORY" \
-            --body-file /tmp/diff.md
-
-      - name: Upload snapshots as artifact
-        if: ${{ !inputs.dry_run && steps.snapshot.outputs.required == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}
-          path: ansible/generated/snapshots/
-          if-no-files-found: error
-          retention-days: 30

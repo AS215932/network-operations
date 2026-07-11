@@ -14,7 +14,7 @@ hand. After the promotion PR merges, **app-promotion-deploy** automatically
 calls `apply.yml` for the affected playbooks and waits at the GitHub
 `production` environment approval gate. The human operator's normal job is to
 review the promotion PR, merge it, approve the production gate, and review the
-Icinga snapshot diff.
+post-deploy Goss result plus live Icinga.
 
 Full runbook: [docs/ci/deploy-runbook.md](docs/ci/deploy-runbook.md).
 

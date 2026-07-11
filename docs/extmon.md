@@ -99,7 +99,7 @@ warning, <7 d critical.
    ```bash
    cd ansible
    ansible-playbook playbooks/extmon.yml --tags validate \
-       --connection=local --skip-tags=snapshot --limit extmon
+       --connection=local --limit extmon
    git diff generated/extmon/
    ```
 6. Apply:

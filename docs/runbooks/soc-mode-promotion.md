@@ -40,10 +40,10 @@ threshold, demote one rung in a fast-follow PR and note why.
 2. `soc_mode` bumped exactly one rung in host_vars; `soc_lhp_enabled` and
    friends adjusted per `docs/soc-agent/rollout.md` in the soc-agent repo.
 3. Re-render + validate: `ansible-playbook playbooks/soc.yml --tags validate
-   --connection=local --limit soc --skip-tags=snapshot`.
+   --connection=local --limit soc`.
 4. Apply per the standard gated flow: Actions → `apply` workflow →
    `playbook=soc` (the workflow resolves the `soc_agent_apply=true` gate), or
-   from the workstation `--tags apply -e soc_agent_apply=true`. Icinga
-   snapshot before/after either way.
+   from the workstation `--tags apply -e soc_agent_apply=true`. Confirm live
+   Icinga / the hyrule MCP is clean before and after either way.
 5. Hard rails that never relax in v1: `SOC_REDTEAM_ALLOW_ACTIVE_PROBES=0`;
    SOC never sets `HYRULE_MCP_ENABLE_ACTIONS`, never applies `loop:approved`.

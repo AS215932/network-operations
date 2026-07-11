@@ -13,7 +13,7 @@
 #
 # Validate (no live changes; runs from controller):
 #   ansible-playbook playbooks/soc.yml --tags validate \
-#     --connection=local --limit soc --skip-tags=snapshot
+#     --connection=local --limit soc
 #
 # Apply (live deploy; timers/services stay disabled unless host vars enable them):
 #   ansible-playbook playbooks/soc.yml --tags apply -e soc_agent_apply=true --limit soc
@@ -21,27 +21,5 @@
 - name: Deploy SOC Agent
   hosts: soc
   become: true
-  pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   roles:
     - role: soc_agent
-  post_tasks:
-    # Flush handlers so the post-snapshot reflects the new service state.
-    - name: Flush handlers before post-deploy snapshot
-      ansible.builtin.meta: flush_handlers
-      tags: [apply, always]
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]

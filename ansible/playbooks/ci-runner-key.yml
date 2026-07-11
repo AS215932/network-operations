@@ -2,8 +2,8 @@
 # Distribute id_ci.pub to all AS215932 hosts. Restricted with from="<ci-ipv6>"
 # so a leaked key only works when the connection originates from the ci VM.
 #
-# Run before the ci runner needs to SSH out for apply.yml jobs (pre/post Icinga
-# snapshots and --tags apply runs against the fleet).
+# Run before the ci runner needs to SSH out for apply.yml jobs (--tags apply
+# runs against the fleet).
 #
 # Apply:
 #   set -a; source ../secrets.local.sh; set +a

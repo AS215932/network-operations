@@ -5,7 +5,7 @@
 # Apply: ansible-playbook playbooks/web.yml --tags apply \
 #          -e hyrule_web_apply=true -e hyrule_web_version=<sha>
 # Validate (no-op): ansible-playbook playbooks/web.yml --tags validate \
-#          --connection=local --limit web --skip-tags=snapshot
+#          --connection=local --limit web
 
 hyrule_web_apply: false
 

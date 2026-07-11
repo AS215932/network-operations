@@ -21,8 +21,7 @@ system_updates) drop into the same layout.
 cd ansible
 ansible-playbook playbooks/firewall.yml \
   --tags validate \
-  --connection=local \
-  --skip-tags=snapshot
+  --connection=local
 ```
 
 This:
@@ -54,16 +53,14 @@ ansible-playbook playbooks/firewall.yml \
   -e firewall_apply=true
 ```
 
-For every live deployment, keep the Icinga snapshot plays enabled. The
-pre-deploy snapshot captures known problems before we touch hosts; the
-post-deploy snapshot lets us spot new alerts caused by the rollout. Only use
-`--skip-tags snapshot` for render-only validation or an explicit emergency.
-
-Snapshot plays now live as `pre_tasks` / `post_tasks` on each playbook's
-main play with `run_once: true`, so they fire correctly even when
-`--limit <subset>` is passed (issue #16). No more "remember to run the
-mon-side snapshot manually if you used `--limit`" caveat — the playbook
-enforces the bracket.
+For every live deployment, check monitoring before and after the change:
+inspect the `mon` Icinga problem list (or the hyrule MCP `icinga_list_problems`
+tool) so you can tell "already broken" from "newly broken by this rollout".
+Apply runs also finish with a post-deploy Goss suite
+(`scripts/ci/goss-validate.sh`). There is no in-playbook pre/post snapshot
+bracket — a snapshot taken seconds after the reload just echoes the pre-deploy
+state before Icinga re-checks, so it was removed in favour of watching live
+monitoring for a few minutes after the apply.
 
 This:
 1. SSHes to the host (no `--connection=local`).
@@ -107,7 +104,7 @@ in `host_vars/rtr.yml` and re-apply.
 
 1. Edit [docs/network-flows.md](network-flows.md) — add a row to the relevant table. *This is the source of truth.*
 2. Edit `inventory/host_vars/<host>.yml` and append to `firewall_extra_rules`. Reference peers by name (`{{ peers.mon.ipv6 }}`), never literal addresses.
-3. Re-render: `ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`.
+3. Re-render: `ansible-playbook playbooks/firewall.yml --tags validate --connection=local`.
 4. Inspect `ansible/generated/<host>/` diff in your PR.
 
 Rule shape:
@@ -136,16 +133,16 @@ The apply path mirrors the firewall role: stage `<conf>.new` → `vtysh -C -f`
 syntax check → backup → schedule an `at(1)` rollback watchdog
 (`frr_watchdog_minutes`, default 5) → swap into place → handler chain
 **validate → reload → soft-clear BGP in/out** → cancel the watchdog.
-`serial: 1` and the pre/post Icinga snapshot bracket are on the play, so a bad
-policy change blocks the next router instead of taking the mesh down.
+`serial: 1` is on the play, so a bad policy change blocks the next router
+instead of taking the mesh down.
 
 ```bash
 cd ansible
 # Validate-only (no connection, no change) — confirms each targeted host has a
 # committed configs/<host>/frr.conf to deploy:
-ansible-playbook playbooks/frr.yml --tags validate --connection=local --skip-tags=snapshot
+ansible-playbook playbooks/frr.yml --tags validate --connection=local
 
-# Apply to one router (Icinga-bracketed):
+# Apply to one router:
 ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 ```
 

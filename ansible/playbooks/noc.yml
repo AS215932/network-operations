@@ -38,14 +38,6 @@
       no_log: true
       tags: [validate, apply]
 
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   post_tasks:
     - name: Verify noc-agent CaseService health
       tags: [validate, apply]
@@ -93,14 +85,6 @@
           fail:
             msg: noc-agent /health/cases did not become healthy after deploy
 
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   vars:
     gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') | default('', true) }}"
     openrouter_api_key: "{{ lookup('env', 'OPENROUTER_API_KEY') | default('', true) }}"
