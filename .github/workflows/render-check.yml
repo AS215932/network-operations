@@ -29,6 +29,9 @@ jobs:
       - name: Render every playbook (validate-only, no apply)
         run: scripts/ci/render-all.sh
 
+      - name: Assert docs/network-flows.md matches the inventory
+        run: python3 scripts/render-network-flows.py --check
+
       - name: Repo deploy preflight
         run: scripts/ci/deploy-preflight.sh --repo-only
 

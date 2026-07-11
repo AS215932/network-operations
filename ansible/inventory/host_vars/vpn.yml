@@ -16,3 +16,12 @@ firewall_forward_extra_raw_nft: |
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: vpn
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "WireGuard server"
+  summary: "WireGuard server for client tunnels; forwards client traffic (wg0 to enX0) toward rtr for DNS64/NAT64 egress."
+  ipv4: "via rtr DNAT (46.105.40.223)"
+  notes: "The vpn-clients-to-rtr/internet transit is captured in the cross-cutting flows table."
+network_flows_outbound: []

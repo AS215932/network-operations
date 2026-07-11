@@ -73,3 +73,12 @@ mail_role_addresses:
   - peering
   - dh
   - support
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "OpenBSD 7.8"
+  role: "OpenSMTPD + Rspamd + Dovecot mail server"
+  summary: "Mail server for as215932.net and hyrule.host: OpenSMTPD, Rspamd, and Dovecot IMAPS, public over a dedicated failover IPv4."
+  ipv4: "51.91.236.215"
+  notes: "SSH allow set omits noc (ops-prefix, vpn-clients, ci, mon only). Syslog forward to log:6514 is captured in the cross-cutting flows table."
+network_flows_outbound: []

@@ -12,3 +12,14 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: proxy
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Caddy TLS reverse proxy"
+  summary: "Terminates public TLS and reverse-proxies to web, api, and other backends; ACME DNS-01 via RFC 2136 to dns."
+  ipv4: "via rtr DNAT (46.105.40.223)"
+  notes: "Most proxy outbound is the mirror of a backend's inbound rule (web :8080/:8081, api :8402, mon :3000, xoa :80/:443, irc :6697, noc :8000, vault :8200, loop :8780); only the noteworthy external/DNS flows are listed below."
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates for ACME DNS-01 (TSIG hyrule-dns)" }
+  - { to: acme-providers, proto: tcp, port: 443, purpose: "ACME certificate issuance (Let's Encrypt / ZeroSSL)" }
