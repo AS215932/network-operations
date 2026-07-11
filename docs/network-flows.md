@@ -223,6 +223,7 @@ and `/health` for local smoke checks. The `agent-core-collector` container binds
 |------|-------|------|---------|
 | mon | TCP | 9100 | node_exporter scrape |
 | loop, noc, mon | TCP | 8770 | Agent-Core trace collector ingest (`/v1/trace`, `/v1/trace/batch`) and mon `/healthz` check |
+| loop, mon | TCP | 8781 | Knowledge read API (insight metrics + concepts) for the Observatory metrics page, and mon `/healthz` check |
 | ops-prefix, vpn-clients, ci, noc, mon | TCP | 22 | SSH (standard infra-host access set for operator/bootstrap, CI apply, and diagnostics) |
 
 Outbound (cross-cutting): loop → github.com TCP/443 (issues, checkouts, branch
