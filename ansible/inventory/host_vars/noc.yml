@@ -39,6 +39,9 @@ noc_disk_alert_handoff_enabled: true
 noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
 noc_agent_core_trace_enabled: true
 noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
+noc_coordinator_worker_enabled: false
+noc_coordinator_url: "http://[{{ peers.loop.ipv6 }}]:8771"
+noc_coordinator_key_id: v1
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their
@@ -144,5 +147,7 @@ network_flows_outbound:
   - { to: all-infra, proto: tcp, port: 22, purpose: "hyrule-mcp SSH to every infra host" }
   - { to: mon, proto: tcp, port: 9090, purpose: "Prometheus query API" }
   - { to: mon, proto: tcp, port: 5665, purpose: "Icinga2 REST API" }
+  - { to: loop, proto: tcp, port: 8770, purpose: "agent-core trace and insight emission" }
+  - { to: loop, proto: tcp, port: 8771, purpose: "signed LHP-v2 coordination" }
   - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP snapshot ingest (cloud.hyrule.host)" }
   - { to: public, proto: tcp, port: 443, purpose: "LLM API, Discord webhook, and npx package install" }

@@ -77,6 +77,10 @@ datasource:
 
 Debian NIC naming on Xen: `enX0`, `enX1`, etc. Use `match: name: "en*"` in network-config.
 
+Checked-in NoCloud renderings exist for `noc` and the dedicated `soc` VM.
+The SOC seed uses `2a0c:b641:b50:2::100/64`; replace
+`__SUBSTITUTE_SOC_ROOT_PASSWORD__` from the operator secret source before use.
+
 ## QMP Tools
 
 For interacting with VMs that have no network yet (e.g. during OS install):

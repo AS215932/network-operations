@@ -1,0 +1,15 @@
+# NoCloud network-config for the dedicated SOC VM (IPv6-only infra subnet).
+version: 2
+ethernets:
+  primary:
+    match:
+      name: "en*"
+    addresses:
+      - 2a0c:b641:b50:2::100/64
+    routes:
+      - to: "::/0"
+        via: 2a0c:b641:b50:2::1
+    nameservers:
+      search: [as215932.net]
+      addresses:
+        - 2a0c:b641:b50:2::10

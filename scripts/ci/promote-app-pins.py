@@ -12,10 +12,71 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 PIN_TARGETS = {
-    "noc_agent_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/noc-agent", "noc"),
-    "hyrule_mcp_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/hyrule-mcp", "noc"),
-    "hyrule_cloud_version": ("ansible/inventory/host_vars/api.yml", "AS215932/hyrule-cloud", "cloud"),
-    "hyrule_web_version": ("ansible/inventory/host_vars/web.yml", "AS215932/hyrule-web", "web"),
+    "noc_agent_version": (
+        "ansible/inventory/host_vars/noc.yml",
+        "AS215932/noc-agent",
+        "noc",
+    ),
+    "hyrule_mcp_version": (
+        "ansible/inventory/host_vars/noc.yml",
+        "AS215932/hyrule-mcp",
+        "noc",
+    ),
+    "engineering_loop_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/engineering-loop",
+        "engineering-loop",
+    ),
+    "knowledge_mcp_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/knowledge",
+        "engineering-loop",
+    ),
+    "knowledge_loop_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/knowledge",
+        "engineering-loop",
+    ),
+    "knowledge_api_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/knowledge",
+        "engineering-loop",
+    ),
+    "agent_core_collector_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/agent-core",
+        "engineering-loop",
+    ),
+    "agent_core_coordinator_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/agent-core",
+        "engineering-loop",
+    ),
+    "agentic_observatory_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/agentic-observatory",
+        "engineering-loop",
+    ),
+    "soc_agent_version": (
+        "ansible/inventory/host_vars/soc.yml",
+        "AS215932/soc-agent",
+        "soc",
+    ),
+    "soc_network_operations_version": (
+        "ansible/inventory/host_vars/soc.yml",
+        "AS215932/network-operations",
+        "soc",
+    ),
+    "hyrule_cloud_version": (
+        "ansible/inventory/host_vars/api.yml",
+        "AS215932/hyrule-cloud",
+        "cloud",
+    ),
+    "hyrule_web_version": (
+        "ansible/inventory/host_vars/web.yml",
+        "AS215932/hyrule-web",
+        "web",
+    ),
     "hyrule_network_proxy_version": (
         "ansible/inventory/host_vars/netproxy.yml",
         "AS215932/hyrule-network-proxy",
@@ -23,11 +84,37 @@ PIN_TARGETS = {
     ),
 }
 
+# Multiple runtime entry points are released from one repository and must move
+# together. pending-app-promotions.py imports this map when it carries a
+# still-open promotion branch forward.
+PROMOTION_FLAGS = {
+    "noc_agent_version": "--noc-agent-sha",
+    "hyrule_mcp_version": "--hyrule-mcp-sha",
+    "engineering_loop_version": "--engineering-loop-sha",
+    "knowledge_mcp_version": "--knowledge-sha",
+    "knowledge_loop_version": "--knowledge-sha",
+    "knowledge_api_version": "--knowledge-sha",
+    "agent_core_collector_version": "--agent-core-sha",
+    "agent_core_coordinator_version": "--agent-core-sha",
+    "agentic_observatory_version": "--agentic-observatory-sha",
+    "soc_agent_version": "--soc-agent-sha",
+    "soc_network_operations_version": "--network-operations-sha",
+    "hyrule_cloud_version": "--hyrule-cloud-sha",
+    "hyrule_web_version": "--hyrule-web-sha",
+    "hyrule_network_proxy_version": "--hyrule-network-proxy-sha",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--noc-agent-sha", default="")
     parser.add_argument("--hyrule-mcp-sha", default="")
+    parser.add_argument("--engineering-loop-sha", default="")
+    parser.add_argument("--knowledge-sha", default="")
+    parser.add_argument("--agent-core-sha", default="")
+    parser.add_argument("--agentic-observatory-sha", default="")
+    parser.add_argument("--soc-agent-sha", default="")
+    parser.add_argument("--network-operations-sha", default="")
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
     parser.add_argument("--hyrule-network-proxy-sha", default="")
@@ -45,6 +132,15 @@ def main() -> int:
     requested = {
         "noc_agent_version": args.noc_agent_sha.strip(),
         "hyrule_mcp_version": args.hyrule_mcp_sha.strip(),
+        "engineering_loop_version": args.engineering_loop_sha.strip(),
+        "knowledge_mcp_version": args.knowledge_sha.strip(),
+        "knowledge_loop_version": args.knowledge_sha.strip(),
+        "knowledge_api_version": args.knowledge_sha.strip(),
+        "agent_core_collector_version": args.agent_core_sha.strip(),
+        "agent_core_coordinator_version": args.agent_core_sha.strip(),
+        "agentic_observatory_version": args.agentic_observatory_sha.strip(),
+        "soc_agent_version": args.soc_agent_sha.strip(),
+        "soc_network_operations_version": args.network_operations_sha.strip(),
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
@@ -85,7 +181,11 @@ def main() -> int:
 
 
 def find_pin(text: str, key: str) -> str | None:
-    match = re.search(rf"^{re.escape(key)}:\s*([0-9a-fA-F]{{40}})\s*$", text, re.MULTILINE)
+    match = re.search(
+        rf"^{re.escape(key)}:\s*[\"']?([0-9a-fA-F]{{40}}|main)[\"']?\s*$",
+        text,
+        re.MULTILINE,
+    )
     return match.group(1) if match else None
 
 
@@ -108,17 +208,26 @@ def ref_changes(ref: str) -> list[tuple[str, str, str, str, str]]:
 
 def update_pin(path: Path, key: str, new_sha: str) -> str:
     text = path.read_text()
-    pattern = re.compile(rf"^({re.escape(key)}:\s*)([0-9a-fA-F]{{40}})(\s*)$", re.MULTILINE)
+    pattern = re.compile(
+        rf"^({re.escape(key)}:\s*)[\"']?([0-9a-fA-F]{{40}}|main)[\"']?(\s*)$",
+        re.MULTILINE,
+    )
     match = pattern.search(text)
     if not match:
-        raise SystemExit(f"{path.relative_to(REPO)} does not contain {key} with a SHA value")
+        raise SystemExit(
+            f"{path.relative_to(REPO)} does not contain {key} with a SHA value"
+        )
     old_sha = match.group(2)
     path.write_text(pattern.sub(rf"\g<1>{new_sha}\g<3>", text, count=1))
     return old_sha
 
 
-def render_body(title: str, impact: str, changes: list[tuple[str, str, str, str, str]]) -> str:
-    affected = sorted({playbook for _key, _repo, playbook, old, new in changes if old != new})
+def render_body(
+    title: str, impact: str, changes: list[tuple[str, str, str, str, str]]
+) -> str:
+    affected = sorted(
+        {playbook for _key, _repo, playbook, old, new in changes if old != new}
+    )
     lines = [
         "## Promotion",
         "",
@@ -130,8 +239,14 @@ def render_body(title: str, impact: str, changes: list[tuple[str, str, str, str,
         "Pinned versions:",
     ]
     for key, repo, _playbook, old_sha, new_sha in changes:
-        compare = f"https://github.com/{repo}/compare/{old_sha}...{new_sha}"
-        lines.append(f"- `{key}`: `{new_sha}` ({compare})")
+        if SHA_RE.match(old_sha):
+            link = f"https://github.com/{repo}/compare/{old_sha}...{new_sha}"
+        else:
+            # First promotion of a dark scaffold replaces `main` with the
+            # reviewed exact SHA. A compare against a moving ref would be
+            # misleading, so link directly to the immutable commit.
+            link = f"https://github.com/{repo}/commit/{new_sha}"
+        lines.append(f"- `{key}`: `{new_sha}` ({link})")
 
     lines.extend(
         [
@@ -145,6 +260,11 @@ def render_body(title: str, impact: str, changes: list[tuple[str, str, str, str,
     )
     for key, _repo, _playbook, old_sha, _new_sha in changes:
         lines.append(f"- Previous `{key}`: `{old_sha}`")
+
+    if any(old_sha == "main" for _key, _repo, _playbook, old_sha, _new_sha in changes):
+        lines.append(
+            "- First-promotion rollback: disable the affected service before restoring a moving `main` scaffold."
+        )
 
     lines.extend(
         [

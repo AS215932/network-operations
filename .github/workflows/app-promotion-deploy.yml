@@ -10,15 +10,19 @@ on:
       - ansible/inventory/host_vars/web.yml
       - ansible/inventory/host_vars/netproxy.yml
       - ansible/inventory/host_vars/loop.yml
+      - ansible/inventory/host_vars/soc.yml
       - ansible/playbooks/noc.yml
       - ansible/playbooks/engineering-loop.yml
+      - ansible/playbooks/soc.yml
       - ansible/roles/noc_agent/**
       - ansible/roles/engineering_loop/**
       - ansible/roles/knowledge_mcp/**
       - ansible/roles/knowledge_loop/**
       - ansible/roles/knowledge_api/**
       - ansible/roles/agent_core_collector/**
+      - ansible/roles/agent_core_coordinator/**
       - ansible/roles/agentic_observatory/**
+      - ansible/roles/soc_agent/**
       - configs/mon/icinga2/**
       - configs/mon/prometheus-rules/**
       - ansible/roles/prometheus/**
@@ -35,7 +39,9 @@ on:
       - ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2
       - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -65,15 +71,19 @@ jobs:
             ansible/inventory/host_vars/web.yml \
             ansible/inventory/host_vars/netproxy.yml \
             ansible/inventory/host_vars/loop.yml \
+            ansible/inventory/host_vars/soc.yml \
             ansible/playbooks/noc.yml \
             ansible/playbooks/engineering-loop.yml \
+            ansible/playbooks/soc.yml \
             ansible/roles/noc_agent \
             ansible/roles/engineering_loop \
             ansible/roles/knowledge_mcp \
             ansible/roles/knowledge_loop \
             ansible/roles/knowledge_api \
             ansible/roles/agent_core_collector \
+            ansible/roles/agent_core_coordinator \
             ansible/roles/agentic_observatory \
+            ansible/roles/soc_agent \
             configs/mon/icinga2 \
             configs/mon/prometheus-rules \
             ansible/roles/prometheus \
@@ -90,10 +100,14 @@ jobs:
             ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2 \
             ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2)"
+            ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import re
           import sys
+          from pathlib import Path
 
           changed = set(sys.argv[1].splitlines())
           matrix = []
@@ -132,6 +146,7 @@ jobs:
               "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2",
+              "ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
           }) or any(
               path.startswith((
@@ -140,9 +155,24 @@ jobs:
                   "ansible/roles/knowledge_loop/",
                   "ansible/roles/knowledge_api/",
                   "ansible/roles/agent_core_collector/",
+                  "ansible/roles/agent_core_coordinator/",
                   "ansible/roles/agentic_observatory/",
               ))
               for path in changed
+          )
+          soc_changed = any(path in changed for path in {
+              "ansible/inventory/host_vars/soc.yml",
+              "ansible/playbooks/soc.yml",
+              "ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2",
+          }) or any(path.startswith("ansible/roles/soc_agent/") for path in changed)
+
+          # The infrastructure PR intentionally ships SOC on moving refs with
+          # every service disabled. Do not attempt a production apply until a
+          # post-merge promotion PR has replaced both refs with immutable SHAs.
+          soc_vars = Path("ansible/inventory/host_vars/soc.yml").read_text()
+          soc_ready = all(
+              re.search(rf"^{key}:\s*[\"']?[0-9a-f]{{40}}[\"']?\s*$", soc_vars, re.MULTILINE)
+              for key in ("soc_agent_version", "soc_network_operations_version")
           )
 
           # Ordering matters for NOC monitoring changes: install mon-side
@@ -155,6 +185,11 @@ jobs:
               add_once("noc", "noc")
           if engineering_loop_changed:
               add_once("engineering-loop", "loop")
+          if soc_changed and soc_ready:
+              # Destination allowlists must land before the first SOC Vault,
+              # log, collector, or coordinator connection can succeed.
+              add_once("firewall", "vault,log,loop,soc")
+              add_once("soc", "soc")
           if prometheus_changed:
               add_once("prometheus", "mon")
           if alertmanager_changed:

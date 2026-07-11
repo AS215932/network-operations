@@ -1,0 +1,8 @@
+---
+galaxy_info:
+  role_name: agent_core_coordinator
+  author: AS215932
+  description: Central signed LHP-v2 coordinator for AS215932 agent loops
+  license: MIT
+  min_ansible_version: "2.15"
+dependencies: []

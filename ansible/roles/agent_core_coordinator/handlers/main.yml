@@ -1,0 +1,11 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart agent-core coordinator
+  ansible.builtin.systemd:
+    name: "{{ agent_core_coordinator_service_name }}"
+    enabled: "{{ agent_core_coordinator_enabled | bool }}"
+    state: "{{ 'restarted' if agent_core_coordinator_enabled | bool else 'stopped' }}"
+    daemon_reload: true

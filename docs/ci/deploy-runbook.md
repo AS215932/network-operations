@@ -16,15 +16,29 @@ pinning exact app commit SHAs. Safety lives in three layers:
 
 ## App promotion model
 
-`hyrule-noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web` do not own
-normal production applies. Their repositories produce reviewed commits with
-green CI. `network-operations` owns production by pinning those commits in
-inventory:
+Application repositories do not own normal production applies. They produce
+reviewed commits with green CI; `network-operations` owns production by
+pinning those commits in inventory:
 
 - `ansible/inventory/host_vars/noc.yml`: `noc_agent_version`,
   `hyrule_mcp_version`
+- `ansible/inventory/host_vars/loop.yml`: `engineering_loop_version`,
+  `knowledge_mcp_version`, `knowledge_loop_version`, `knowledge_api_version`,
+  `agent_core_collector_version`, `agent_core_coordinator_version`, and
+  `agentic_observatory_version`
+- `ansible/inventory/host_vars/soc.yml`: `soc_agent_version` and the immutable
+  `soc_network_operations_version` desired-state baseline
 - `ansible/inventory/host_vars/api.yml`: `hyrule_cloud_version`
 - `ansible/inventory/host_vars/web.yml`: `hyrule_web_version`
+- `ansible/inventory/host_vars/netproxy.yml`:
+  `hyrule_network_proxy_version`
+
+The coordinator and dedicated SOC VM first land as dark scaffolds on `main`:
+their app versions may remain the moving ref `main` only while their apply and
+service gates are false. Their first promotion replaces those refs with exact
+merged SHAs. `app-promotion-deploy` refuses to schedule the SOC play until both
+SOC pins are immutable; the coordinator role likewise refuses a live apply on
+a moving ref.
 
 Use the promotion PR template for coordinated deploys. Merge app PRs first,
 then let the app repo request or manually update a promotion PR with the exact
@@ -50,9 +64,13 @@ The normal automated path is:
    Goss result.
 
 Manual fallback: run **Actions -> promote-apps** in this repository and paste
-the merged app SHAs into the relevant inputs. Use this when a dispatch failed,
-when a coordinated promotion should pin multiple app repos at once, or when an
-operator intentionally wants to replay a promotion request.
+the merged app SHAs into the relevant inputs. A Knowledge promotion updates its
+MCP, loop, and API entry points together; an Agent Core promotion updates its
+collector and coordinator entry points together; a SOC promotion also pins the
+current reviewed `network-operations/main` commit as the posture desired-state
+baseline. Use this when a dispatch failed, when a coordinated promotion should
+pin multiple app repos at once, or when an operator intentionally wants to
+replay a promotion request.
 
 The workflow rebuilds `promotion/app-sha-pins` from `origin/main` on every run
 and carries forward only pins the app repo confirms are still ahead of main,

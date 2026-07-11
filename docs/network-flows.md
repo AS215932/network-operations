@@ -41,6 +41,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
+| soc | Debian 13 | `2a0c:b641:b50:2::100` | — | Dedicated SOC Agent security-governance VM |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane |
 | vpn | Debian 13 | `2a0c:b641:b50:2::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
 | web | Debian 13 | `2a0c:b641:b50:2::30` | — | nginx + uvicorn (:8080, :8081) |
@@ -279,6 +280,7 @@ _No host-specific inbound rules (SSH-only via the standard allow set)._
 | proxy | tcp | 6000 | Vector ingest from proxy |
 | rtr | tcp | 6000 | Vector ingest from rtr |
 | rtr underlay | tcp | 6000 | Vector ingest from rtr underlay |
+| soc | tcp | 6000 | Vector ingest from soc |
 | vpn | tcp | 6000 | Vector ingest from vpn |
 | web | tcp | 6000 | Vector ingest from web |
 | xoa | tcp | 6000 | Vector ingest from xoa |
@@ -301,6 +303,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | loop, noc, mon | tcp | 8770 | agent-core collector |
+| loop, noc, soc, mon | tcp | 8771 | agent-core coordinator |
 | proxy, mon | tcp | 8780 | agentic observatory |
 | loop, mon | tcp | 8781 | knowledge read API |
 | mon | tcp | 9100 | node_exporter scrape |
@@ -397,6 +400,8 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | hyrule-cloud | tcp | 443 | BGP snapshot ingest (cloud.hyrule.host) |
 | public | tcp | 443 | LLM API, Discord webhook, and npx package install |
 | mon | tcp | 5665 | Icinga2 REST API |
+| loop | tcp | 8770 | agent-core trace and insight emission |
+| loop | tcp | 8771 | signed LHP-v2 coordination |
 | mon | tcp | 9090 | Prometheus query API |
 
 ### ns2 — Off-net authoritative secondary nameserver (different ASN and site) providing DNS resilience for AS215932 zones.
@@ -458,15 +463,38 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | public | any | — | NAT64 egress via Jool (TCP/UDP/ICMP pool4) to the IPv4 internet (source 46.105.40.223); ICMP is used by the nat64 ping6 health check |
 
-### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
+### soc — Runs desired-state security posture, coordinator handoff, verification, and individually senior-approved bounded RT-2 probe cycles.
 
-> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
+> No production-remediation credentials. SOC reads operations through the NOC coordinator adapter, writes only its local case database/state, and can execute only the bounded probe contract after an exact-scope senior approval.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| noc, mon, api, web, ci, loop | tcp | 8200 | Vault API from internal agents/checks |
+| proxy, mon | tcp | 8600 | SOC authenticated control/health |
+| mon | tcp | 9100 | node_exporter scrape |
+
+**Outbound**
+
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| rtr | tcp+udp | 53 | DNS resolution and approved DNS-consistency probes |
+| github | tcp | 443 | pinned public source and desired-state checkouts |
+| owned-public-assets | tcp | 443 | senior-approved bounded RT-2 TLS/HTTP probes only |
+| log | tcp | 6000 | Vector agent to aggregator |
+| vault | tcp | 8200 | Vault Agent secret render |
+| loop | tcp | 8770 | agent-core trace and insight emission |
+| loop | tcp | 8771 | signed LHP-v2 coordination |
+
+### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
+
+> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, soc, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
+
+**Inbound**
+
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| noc, mon, api, web, ci, loop, soc | tcp | 8200 | Vault API from internal agents/checks |
 | ops-prefix | tcp | 8200 | Vault API from ops prefix |
 | proxy | tcp | 8200 | Vault API from Caddy proxy |
 | vpn-clients | tcp | 8200 | Vault API from VPN operators |
@@ -567,6 +595,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | public | rtr | tcp (v4) | 443 | DNAT to proxy |
 | public | rtr | udp (v4) | 51820 | DNAT to vpn |
 | routers | routers | udp | 1337-1342 | WireGuard full mesh between router underlays |
+| soc | vault | tcp | 8200 | vault-agent secret render |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
 | vpn-clients | public | any | — | routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr |
 | vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
@@ -581,7 +610,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
+| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop, soc. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
 | `all-linux` | every Linux host | all Debian VMs (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |
@@ -592,6 +621,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | `openprovider` | api.openprovider.eu | Openprovider domain registration API |
 | `openrouter` | openrouter.ai | OpenRouter LLM API (PR-Agent) |
 | `ops-prefix` | ops workstation prefix (KPN home) | 2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow |
+| `owned-public-assets` | AS215932-owned public assets | Explicitly cited assets eligible for bounded senior-approved SOC RT-2 probes |
 | `package-registries` | PyPI / npm / ghcr.io / Docker Hub | toolchain and container image pulls |
 | `routers` | AS215932 routers | rtr, cr1-nl1, cr1-de1, cr1-ch1 |
 | `vpn-clients` | VPN clients | 2a0c:b641:b50:3::/64, routed via the vpn VM |

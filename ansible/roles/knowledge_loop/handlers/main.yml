@@ -18,3 +18,10 @@
     - knowledge_loop_timer_enabled | bool
     - knowledge_loop_secret_files is defined
     - knowledge_loop_secret_files.results | map(attribute='stat.exists') | min
+
+- name: restart knowledge coordinator
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-coordinator.service
+    state: "{{ 'restarted' if knowledge_loop_coordinator_enabled | bool else 'stopped' }}"
+    enabled: "{{ knowledge_loop_coordinator_enabled | bool }}"
+    daemon_reload: true

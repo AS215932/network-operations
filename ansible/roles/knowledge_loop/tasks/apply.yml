@@ -42,6 +42,7 @@
     - { path: "{{ knowledge_loop_state_dir }}", mode: "0750" }
     - { path: "{{ knowledge_loop_daemon_state_dir }}", mode: "0750" }
     - { path: "{{ knowledge_loop_workspace_dir }}", mode: "0750" }
+    - { path: "{{ knowledge_loop_coordinator_proposal_dir }}", mode: "0750" }
     - { path: "{{ knowledge_loop_lib_dir }}", owner: root, mode: "0750" }
 
 - name: Checkout Knowledge Loop runtime
@@ -160,6 +161,17 @@
     - reload systemd
     - restart knowledge-loop timer
 
+- name: Install Knowledge coordinator intake service
+  ansible.builtin.template:
+    src: hyrule-knowledge-coordinator.service.j2
+    dest: /etc/systemd/system/hyrule-knowledge-coordinator.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart knowledge coordinator
+
 - name: Check Knowledge Loop runtime secrets are rendered
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -183,6 +195,19 @@
         'started'
         if (knowledge_loop_timer_enabled | bool
             and knowledge_loop_secret_files.results | map(attribute='stat.exists') | min)
+        else 'stopped'
+      }}
+    daemon_reload: true
+
+- name: Set Knowledge coordinator intake service state
+  ansible.builtin.systemd:
+    name: hyrule-knowledge-coordinator.service
+    enabled: "{{ knowledge_loop_coordinator_enabled | bool }}"
+    state: >-
+      {{
+        'started'
+        if (knowledge_loop_coordinator_enabled | bool
+            and knowledge_loop_secret_files.results.0.stat.exists)
         else 'stopped'
       }}
     daemon_reload: true

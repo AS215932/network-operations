@@ -142,7 +142,7 @@ jobs:
           fi
 
       - name: Summarize app version pins
-        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy"]'), inputs.playbook) }}
+        if: ${{ contains(fromJSON('["noc","engineering-loop","soc","cloud","web","network-proxy"]'), inputs.playbook) }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
         run: |
@@ -155,7 +155,11 @@ jobs:
               ;;
             engineering-loop)
               host_vars="ansible/inventory/host_vars/loop.yml"
-              entries="engineering_loop_version|AS215932/engineering-loop knowledge_mcp_version|AS215932/knowledge knowledge_loop_version|AS215932/knowledge agentic_observatory_version|AS215932/agentic-observatory"
+              entries="engineering_loop_version|AS215932/engineering-loop knowledge_mcp_version|AS215932/knowledge knowledge_loop_version|AS215932/knowledge agentic_observatory_version|AS215932/agentic-observatory agent_core_coordinator_version|AS215932/agent-core"
+              ;;
+            soc)
+              host_vars="ansible/inventory/host_vars/soc.yml"
+              entries="soc_agent_version|AS215932/soc-agent soc_network_operations_version|AS215932/network-operations"
               ;;
             cloud)
               host_vars="ansible/inventory/host_vars/api.yml"
@@ -231,6 +235,10 @@ jobs:
               apply_var="engineering_loop_apply=true"
               expected_apply_var="engineering_loop_apply=true"
               extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+              coordinator_version="$(sed -nE 's/^agent_core_coordinator_version:[[:space:]]*["'"']?([0-9a-f]{40})["'"']?[[:space:]]*$/\1/p' ansible/inventory/host_vars/loop.yml | head -1)"
+              if [ -n "$coordinator_version" ]; then
+                extra_apply_vars="$extra_apply_vars agent_core_coordinator_apply=true"
+              fi
               ;;
             soc)
               # role gate is soc_agent_apply (role name != playbook name)
@@ -415,6 +423,51 @@ jobs:
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Mint agent-core-coordinator Vault bootstrap
+        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
+        run: |
+          set -euo pipefail
+
+          coordinator_version="$(sed -nE 's/^agent_core_coordinator_version:[[:space:]]*["'"']?([0-9a-f]{40})["'"']?[[:space:]]*$/\1/p' ansible/inventory/host_vars/loop.yml | head -1)"
+          if [ -z "$coordinator_version" ]; then
+            echo "agent-core-coordinator is not pinned to an exact SHA; skipping its dark scaffold bootstrap"
+            exit 0
+          fi
+
+          if [ -n "${VAULT_AGENT_CORE_COORDINATOR_ROLE_ID:-}" ] && { [ -n "${VAULT_AGENT_CORE_COORDINATOR_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_AGENT_CORE_COORDINATOR_SECRET_ID:-}" ]; }; then
+            echo "agent-core-coordinator Vault bootstrap already provided by environment"
+            exit 0
+          fi
+
+          token_file="/run/vault-agent/github-runner.token"
+          if [ ! -r "$token_file" ]; then
+            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
+            exit 1
+          fi
+          vault_token="$(cat "$token_file")"
+
+          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
+          export VAULT_TOKEN="$vault_token"
+
+          role_id="$(vault read -field=role_id auth/approle/role/agent-core-coordinator/role-id)"
+          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/agent-core-coordinator/secret-id)"
+
+          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
+            echo "::error::failed to mint agent-core-coordinator Vault bootstrap credentials"
+            exit 1
+          fi
+
+          echo "::add-mask::$role_id"
+          echo "::add-mask::$wrapped_secret_id"
+          printf 'VAULT_AGENT_CORE_COORDINATOR_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
+          printf 'VAULT_AGENT_CORE_COORDINATOR_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
+
+          {
+            echo "## agent-core-coordinator Vault bootstrap"
+            echo
+            echo "Minted response-wrapped AppRole SecretID for this apply run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Mint agentic-observatory Vault bootstrap
         if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
         run: |
@@ -450,6 +503,45 @@ jobs:
 
           {
             echo "## agentic-observatory Vault bootstrap"
+            echo
+            echo "Minted response-wrapped AppRole SecretID for this apply run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mint SOC Agent Vault bootstrap
+        if: ${{ !inputs.dry_run && inputs.playbook == 'soc' }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${VAULT_SOC_AGENT_ROLE_ID:-}" ] && { [ -n "${VAULT_SOC_AGENT_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_SOC_AGENT_SECRET_ID:-}" ]; }; then
+            echo "SOC Agent Vault bootstrap already provided by environment"
+            exit 0
+          fi
+
+          token_file="/run/vault-agent/github-runner.token"
+          if [ ! -r "$token_file" ]; then
+            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
+            exit 1
+          fi
+          vault_token="$(cat "$token_file")"
+
+          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
+          export VAULT_TOKEN="$vault_token"
+
+          role_id="$(vault read -field=role_id auth/approle/role/soc-agent/role-id)"
+          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/soc-agent/secret-id)"
+
+          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
+            echo "::error::failed to mint SOC Agent Vault bootstrap credentials"
+            exit 1
+          fi
+
+          echo "::add-mask::$role_id"
+          echo "::add-mask::$wrapped_secret_id"
+          printf 'VAULT_SOC_AGENT_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
+          printf 'VAULT_SOC_AGENT_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
+
+          {
+            echo "## SOC Agent Vault bootstrap"
             echo
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"

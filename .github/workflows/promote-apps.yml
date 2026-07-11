@@ -21,6 +21,31 @@ on:
         type: string
         required: false
         default: ""
+      engineering_loop_sha:
+        description: Optional AS215932/engineering-loop commit SHA
+        type: string
+        required: false
+        default: ""
+      knowledge_sha:
+        description: Optional AS215932/knowledge commit SHA
+        type: string
+        required: false
+        default: ""
+      agent_core_sha:
+        description: Optional AS215932/agent-core commit SHA
+        type: string
+        required: false
+        default: ""
+      agentic_observatory_sha:
+        description: Optional AS215932/agentic-observatory commit SHA
+        type: string
+        required: false
+        default: ""
+      soc_agent_sha:
+        description: Optional AS215932/soc-agent commit SHA
+        type: string
+        required: false
+        default: ""
       hyrule_cloud_sha:
         description: Optional AS215932/hyrule-cloud commit SHA
         type: string
@@ -80,6 +105,11 @@ jobs:
           INPUT_IMPACT: ${{ inputs.impact }}
           INPUT_NOC_AGENT_SHA: ${{ inputs.noc_agent_sha }}
           INPUT_HYRULE_MCP_SHA: ${{ inputs.hyrule_mcp_sha }}
+          INPUT_ENGINEERING_LOOP_SHA: ${{ inputs.engineering_loop_sha }}
+          INPUT_KNOWLEDGE_SHA: ${{ inputs.knowledge_sha }}
+          INPUT_AGENT_CORE_SHA: ${{ inputs.agent_core_sha }}
+          INPUT_AGENTIC_OBSERVATORY_SHA: ${{ inputs.agentic_observatory_sha }}
+          INPUT_SOC_AGENT_SHA: ${{ inputs.soc_agent_sha }}
           INPUT_HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
           INPUT_HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
           INPUT_HYRULE_NETWORK_PROXY_SHA: ${{ inputs.hyrule_network_proxy_sha }}
@@ -91,6 +121,11 @@ jobs:
           impact="${INPUT_IMPACT:-Automated app SHA promotion.}"
           noc_agent_sha="${INPUT_NOC_AGENT_SHA:-}"
           hyrule_mcp_sha="${INPUT_HYRULE_MCP_SHA:-}"
+          engineering_loop_sha="${INPUT_ENGINEERING_LOOP_SHA:-}"
+          knowledge_sha="${INPUT_KNOWLEDGE_SHA:-}"
+          agent_core_sha="${INPUT_AGENT_CORE_SHA:-}"
+          agentic_observatory_sha="${INPUT_AGENTIC_OBSERVATORY_SHA:-}"
+          soc_agent_sha="${INPUT_SOC_AGENT_SHA:-}"
           hyrule_cloud_sha="${INPUT_HYRULE_CLOUD_SHA:-}"
           hyrule_web_sha="${INPUT_HYRULE_WEB_SHA:-}"
           hyrule_network_proxy_sha="${INPUT_HYRULE_NETWORK_PROXY_SHA:-}"
@@ -111,6 +146,21 @@ jobs:
                 ;;
               AS215932/hyrule-mcp)
                 hyrule_mcp_sha="$sha"
+                ;;
+              AS215932/engineering-loop)
+                engineering_loop_sha="$sha"
+                ;;
+              AS215932/knowledge)
+                knowledge_sha="$sha"
+                ;;
+              AS215932/agent-core)
+                agent_core_sha="$sha"
+                ;;
+              AS215932/agentic-observatory)
+                agentic_observatory_sha="$sha"
+                ;;
+              AS215932/soc-agent)
+                soc_agent_sha="$sha"
                 ;;
               AS215932/hyrule-cloud)
                 hyrule_cloud_sha="$sha"
@@ -142,6 +192,11 @@ jobs:
             printf 'impact=%s\n' "$impact"
             printf 'noc_agent_sha=%s\n' "$noc_agent_sha"
             printf 'hyrule_mcp_sha=%s\n' "$hyrule_mcp_sha"
+            printf 'engineering_loop_sha=%s\n' "$engineering_loop_sha"
+            printf 'knowledge_sha=%s\n' "$knowledge_sha"
+            printf 'agent_core_sha=%s\n' "$agent_core_sha"
+            printf 'agentic_observatory_sha=%s\n' "$agentic_observatory_sha"
+            printf 'soc_agent_sha=%s\n' "$soc_agent_sha"
             printf 'hyrule_cloud_sha=%s\n' "$hyrule_cloud_sha"
             printf 'hyrule_web_sha=%s\n' "$hyrule_web_sha"
             printf 'hyrule_network_proxy_sha=%s\n' "$hyrule_network_proxy_sha"
@@ -172,7 +227,7 @@ jobs:
             scripts/ci/promote-app-pins.py $carry --title "Carry forward pending app promotions"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/loop.yml ansible/inventory/host_vars/soc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
             git commit -m "Carry forward pending app promotions"
           fi
 
@@ -182,6 +237,11 @@ jobs:
           PROMOTION_IMPACT: ${{ steps.resolve.outputs.impact }}
           NOC_AGENT_SHA: ${{ steps.resolve.outputs.noc_agent_sha }}
           HYRULE_MCP_SHA: ${{ steps.resolve.outputs.hyrule_mcp_sha }}
+          ENGINEERING_LOOP_SHA: ${{ steps.resolve.outputs.engineering_loop_sha }}
+          KNOWLEDGE_SHA: ${{ steps.resolve.outputs.knowledge_sha }}
+          AGENT_CORE_SHA: ${{ steps.resolve.outputs.agent_core_sha }}
+          AGENTIC_OBSERVATORY_SHA: ${{ steps.resolve.outputs.agentic_observatory_sha }}
+          SOC_AGENT_SHA: ${{ steps.resolve.outputs.soc_agent_sha }}
           HYRULE_CLOUD_SHA: ${{ steps.resolve.outputs.hyrule_cloud_sha }}
           HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
           HYRULE_NETWORK_PROXY_SHA: ${{ steps.resolve.outputs.hyrule_network_proxy_sha }}
@@ -189,14 +249,27 @@ jobs:
           set -euo pipefail
           # Empty inputs are a valid self-heal run: rebuild + carry-forward
           # only, no new pins.
-          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
+          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${ENGINEERING_LOOP_SHA}${KNOWLEDGE_SHA}${AGENT_CORE_SHA}${AGENTIC_OBSERVATORY_SHA}${SOC_AGENT_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
             echo "No new app SHAs requested; carry-forward/self-heal run only." >> "$GITHUB_STEP_SUMMARY"
           else
+            network_operations_sha=""
+            if [ -n "$SOC_AGENT_SHA" ]; then
+              # SOC validates its desired-state checkout against an immutable
+              # network-operations revision. The promotion branch is based on
+              # this exact main commit, so pin that same reviewed baseline.
+              network_operations_sha="$(git rev-parse origin/main)"
+            fi
             scripts/ci/promote-app-pins.py \
               --title "$PROMOTION_TITLE" \
               --impact "$PROMOTION_IMPACT" \
               --noc-agent-sha "$NOC_AGENT_SHA" \
               --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
+              --engineering-loop-sha "$ENGINEERING_LOOP_SHA" \
+              --knowledge-sha "$KNOWLEDGE_SHA" \
+              --agent-core-sha "$AGENT_CORE_SHA" \
+              --agentic-observatory-sha "$AGENTIC_OBSERVATORY_SHA" \
+              --soc-agent-sha "$SOC_AGENT_SHA" \
+              --network-operations-sha "$network_operations_sha" \
               --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
               --hyrule-web-sha "$HYRULE_WEB_SHA" \
               --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA"
@@ -209,7 +282,7 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
+          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/loop.yml ansible/inventory/host_vars/soc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No new app pin changes from this run." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -224,7 +297,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/loop.yml ansible/inventory/host_vars/soc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
           git commit -m "$COMMIT_MESSAGE"
 
       - name: Push promotion branch

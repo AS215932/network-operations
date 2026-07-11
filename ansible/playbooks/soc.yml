@@ -1,25 +1,69 @@
 ---
-# SOC Agent (security governance loop) rollout. The agent is read-only by
-# construction and climbs the SOC_MODE ladder (shadow -> case_only ->
-# handoff_dry -> handoff_live) one reviewed promotion PR at a time; see
-# docs/runbooks/soc-mode-promotion.md for the insight-metrics criteria that
-# gate each rung.
-#
-# No inventory host carries the `soc` group yet — add the target VM (and its
-# host_vars, peers entry, network-flows rows, monitoring registration, plus
-# the vault_agent play wiring for soc-agent.env.ctmpl.j2) in the same PR that
-# first schedules this playbook. soc_agent_version must be an exact reviewed
-# SHA before the first apply (validate enforces this).
-#
-# Validate (no live changes; runs from controller):
-#   ansible-playbook playbooks/soc.yml --tags validate \
-#     --connection=local --limit soc
-#
-# Apply (live deploy; timers/services stay disabled unless host vars enable them):
-#   ansible-playbook playbooks/soc.yml --tags apply -e soc_agent_apply=true --limit soc
+# Dedicated SOC Agent rollout. Infrastructure and runtime ship dark; promotion
+# follows docs/runbooks/agentic-coordination-shadow-cutover.md.
 
-- name: Deploy SOC Agent
+- name: Deploy dedicated SOC Agent security-governance VM
   hosts: soc
+  serial: 1
+  gather_facts: true
   become: true
+  pre_tasks:
+    - name: Ensure SOC service group exists before Vault Agent
+      ansible.builtin.group:
+        name: "{{ soc_agent_group }}"
+        state: present
+        system: true
+      tags: [apply, vault_agent, soc_agent]
   roles:
+    - role: firewall
+      vars:
+        firewall_apply: "{{ soc_agent_apply | default(false) }}"
+      tags: [firewall]
+    - role: monitoring
+      vars:
+        monitoring_apply: "{{ soc_agent_apply | default(false) }}"
+      tags: [monitoring]
+    - role: logs
+      vars:
+        logs_apply: "{{ soc_agent_apply | default(false) }}"
+      tags: [logs]
+    - role: vault_agent
+      vars:
+        vault_agent_name: soc-agent
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_SOC_AGENT_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_SOC_AGENT_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_SOC_AGENT_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/soc-agent/secret-id'
+            if (lookup('env', 'VAULT_SOC_AGENT_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ soc_agent_secrets_env_file }}"
+        vault_agent_reload_command: >-
+          (/bin/systemctl try-restart soc-agent.service || /bin/true) &&
+          (/bin/systemctl try-restart soc-posture.timer || /bin/true) &&
+          (/bin/systemctl try-restart soc-handoffs.timer || /bin/true) &&
+          (/bin/systemctl try-restart soc-probes.timer || /bin/true)
+        vault_agent_env_reload_command: "{{ vault_agent_reload_command }}"
+        vault_agent_templates:
+          - src: soc-agent.env.ctmpl.j2
+            name: soc-agent.env.ctmpl
+            destination: "{{ soc_agent_secrets_env_file }}"
+            group: "{{ soc_agent_group }}"
+            mode: "0640"
+            reload_command: "{{ vault_agent_reload_command }}"
+        vault_agent_extra_dirs:
+          - path: "{{ soc_agent_install_dir }}"
+            group: "{{ soc_agent_group }}"
+            mode: "0750"
+          - path: "{{ soc_agent_config_dir }}"
+            group: "{{ soc_agent_group }}"
+            mode: "0750"
+      tags: [vault_agent, soc_agent]
     - role: soc_agent
+      tags: [soc_agent]
+  tags: [soc]

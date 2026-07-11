@@ -1,0 +1,28 @@
+# Managed by ansible/roles/noc_agent. Signed LHP-v2 adapter.
+[Unit]
+Description=AS215932 NOC LHP-v2 coordinator worker
+After=network-online.target postgresql.service noc-agent.service vault-agent-noc-agent.service
+Wants=network-online.target postgresql.service vault-agent-noc-agent.service
+ConditionPathIsReadable={{ noc_agent_install_dir }}/.env
+
+[Service]
+Type=exec
+User={{ noc_agent_user }}
+Group={{ noc_agent_group }}
+WorkingDirectory={{ noc_agent_install_dir }}
+EnvironmentFile={{ noc_agent_install_dir }}/.env
+Environment=PYTHONPATH={{ noc_agent_install_dir }}
+ExecStart={{ noc_agent_install_dir }}/.venv/bin/noc-coordinator-worker
+Restart=always
+RestartSec=5
+ProtectSystem=strict
+ReadWritePaths={{ noc_agent_state_dir }}
+ReadOnlyPaths=/etc/hyrule-mcp /var/lib/hyrule-mcp
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

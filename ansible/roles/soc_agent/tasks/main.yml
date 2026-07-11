@@ -5,17 +5,27 @@
       - soc_agent_user | length > 0
       - soc_agent_install_dir.startswith('/')
       - soc_agent_state_dir.startswith('/')
-      - soc_mode in ['shadow', 'case_only', 'handoff_dry', 'handoff_live']
+      - soc_mode in ['shadow', 'case_only', 'handoff_dry', 'handoff_live', 'probe_dry', 'probe_live']
       # Ladder discipline: anything above shadow needs LHP wiring decisions
       # recorded in host_vars, and handoff_live additionally needs the
       # promotion-criteria evidence linked in the PR (see
       # docs/runbooks/soc-mode-promotion.md).
       - soc_mode == 'shadow' or soc_lhp_enabled | bool
-      # Handoff emission is only meaningful on the handoff_* rungs.
+      # Handoff construction starts at handoff_dry and remains cumulative on
+      # both probe rungs; only shadow/case_only must keep it disabled.
       - >-
         not (soc_posture_handoff_enabled | bool)
-        or soc_mode in ['handoff_dry', 'handoff_live']
-      - soc_redteam_allow_active_probes | bool == false
+        or soc_mode in ['handoff_dry', 'handoff_live', 'probe_dry', 'probe_live']
+      - >-
+        (soc_mode not in ['probe_dry', 'probe_live']
+         and not (soc_redteam_allow_active_probes | bool)
+         and soc_redteam_max_tier | int <= 1)
+        or (soc_mode in ['probe_dry', 'probe_live']
+            and soc_redteam_enabled | bool
+            and soc_redteam_allow_active_probes | bool
+            and soc_redteam_max_tier | int == 2)
+      - not (soc_probe_timer_enabled | bool) or soc_mode in ['probe_dry', 'probe_live']
+      - not (soc_handoff_timer_enabled | bool) or soc_coordinator_enabled | bool
       # Live applies deploy exact reviewed SHAs, never a moving ref — the app
       # checkout and the desired-state checkout alike.
       - >-
@@ -36,11 +46,15 @@
       # silently degrade every MCP-backed check.
       - >-
         not (soc_agent_apply | bool and soc_posture_enabled | bool)
-        or (soc_hyrule_mcp_url | length > 0 or soc_hyrule_mcp_cmd | length > 0)
+        or (soc_hyrule_mcp_url | length > 0
+            or soc_hyrule_mcp_cmd | length > 0
+            or soc_coordinator_enabled | bool)
+      - not (soc_coordinator_enabled | bool) or soc_coordinator_url | length > 0
     fail_msg: >-
       SOC rollout must climb the SOC_MODE ladder one reviewed rung at a time
-      (handoff emission only on handoff_* rungs); active red-team probes stay
-      off in v1 (redteam-safety-policy.md); a live apply requires
+      (handoff emission starts at handoff_dry); active red-team probes stay
+      off below probe_dry and remain exact-scope senior-approved at the probe
+      rungs (redteam-safety-policy.md); a live apply requires
       soc_agent_version AND soc_network_operations_version pinned to exact
       40-character commit SHAs, plus soc_hyrule_mcp_url or soc_hyrule_mcp_cmd
       set when posture scanning is enabled.

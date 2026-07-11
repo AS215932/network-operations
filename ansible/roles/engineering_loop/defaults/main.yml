@@ -100,6 +100,9 @@ engineering_loop_knowledge_context_timeout: 20
 engineering_loop_knowledge_learning_dir: ""
 engineering_loop_noc_lhp_base_url: ""
 engineering_loop_lhp_callback_enabled: false
+engineering_loop_coordinator_enabled: false
+engineering_loop_coordinator_url: ""
+engineering_loop_coordinator_key_id: v1
 
 # agent-core observability emission (additive; default off). When enabled, each loop
 # cycle also writes agent-core TraceEvent/CostUsage JSON lines to the sink path

@@ -74,3 +74,23 @@ path "auth/approle/role/agentic-observatory/role-id" {
 path "auth/approle/role/agentic-observatory/secret-id" {
   capabilities = ["update"]
 }
+
+# Bootstrap-only authority for the central coordinator Vault Agent. The runner
+# cannot read coordinator loop keys or database credentials.
+path "auth/approle/role/agent-core-coordinator/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/agent-core-coordinator/secret-id" {
+  capabilities = ["update"]
+}
+
+# Bootstrap-only authority for the dedicated SOC Vault Agent. The runner
+# cannot read SOC runtime, database, model, or coordinator credentials.
+path "auth/approle/role/soc-agent/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/soc-agent/secret-id" {
+  capabilities = ["update"]
+}

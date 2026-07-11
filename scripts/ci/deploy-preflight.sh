@@ -27,8 +27,12 @@ require_file() {
 check_repo_contracts() {
   require_file "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
   require_file "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2"
+  require_file "ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2"
+  require_file "ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2"
   require_file "configs/vault/policies/hyrule-cloud.hcl"
   require_file "configs/vault/policies/knowledge-loop.hcl"
+  require_file "configs/vault/policies/agent-core-coordinator.hcl"
+  require_file "configs/vault/policies/soc-agent.hcl"
   require_file "ansible/roles/hyrule_cloud/tasks/vault.yml"
 
   if grep -RInE "lookup\\('env', *'XO_TOKEN'\\)|lookup\\(\"env\", *\"XO_TOKEN\"\\)|xo_token" \

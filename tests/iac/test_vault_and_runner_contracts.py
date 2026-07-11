@@ -96,6 +96,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
 \s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+coordinator_version=.*
+\s+if \[ -n "\$coordinator_version" \]; then
+\s+extra_apply_vars="\$extra_apply_vars agent_core_coordinator_apply=true"
+\s+fi
 \s+;;
 \s+soc\)
 \s+# role gate is soc_agent_apply \(role name != playbook name\)

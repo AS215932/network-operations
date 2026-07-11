@@ -36,6 +36,7 @@ scrape_configs:
           - "[2a0c:b641:b50:2::d0]:9100"   # ci (privileged runner)
           - "[2a0c:b641:b50:2::e0]:9100"   # netproxy
           - "[2a0c:b641:b50:2::f0]:9100"   # loop (Engineering Loop / Knowledge MCP)
+          - "[2a0c:b641:b50:2::100]:9100"  # soc (dedicated SOC Agent)
         labels:
           site: ovh1
           role: infra
