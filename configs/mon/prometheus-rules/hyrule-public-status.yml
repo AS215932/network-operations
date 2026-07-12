@@ -184,6 +184,18 @@ groups:
             or on()
           (count(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) != 2
             or on()
+          (
+            sum(probe_success{job="blackbox-dns-hyrule"}) == 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) > 0
+          )
+            or on()
+          (
+            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) > 0
+          )
+            or on()
           sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 2
             or on()
           (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 2

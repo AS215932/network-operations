@@ -214,6 +214,8 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("count(frr_bgp_peer_state != 1) > 0", public_rules)
         deploy = (REPO / "scripts" / "deploy-exporters.sh").read_text()
         self.assertGreaterEqual(deploy.count("--collector.bgp6"), 2)
+        self.assertIn("systemctl restart frr-exporter", deploy)
+        self.assertIn("service frr_exporter restart", deploy)
         self.assertIn("expr: frr_bgp_peer_state != 1", tripwires)
         self.assertIn("count(frr_bgp_peer_state", icinga)
         self.assertIn("!= 1", icinga)

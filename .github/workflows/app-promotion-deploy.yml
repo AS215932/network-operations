@@ -26,8 +26,6 @@ on:
       - configs/mon/blackbox.yml
       - ansible/roles/prometheus/**
       - ansible/playbooks/prometheus.yml
-      - ansible/roles/extmon/**
-      - ansible/playbooks/extmon.yml
       - configs/mon/alertmanager.yml.j2
       - ansible/roles/alertmanager/**
       - ansible/playbooks/alertmanager.yml
@@ -58,7 +56,6 @@ jobs:
       has_changes: ${{ steps.detect.outputs.has_changes }}
       firewall_matrix: ${{ steps.detect.outputs.firewall_matrix }}
       has_firewalls: ${{ steps.detect.outputs.has_firewalls }}
-      has_extmon: ${{ steps.detect.outputs.has_extmon }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -89,8 +86,6 @@ jobs:
             configs/mon/blackbox.yml \
             ansible/roles/prometheus \
             ansible/playbooks/prometheus.yml \
-            ansible/roles/extmon \
-            ansible/playbooks/extmon.yml \
             configs/mon/alertmanager.yml.j2 \
             ansible/roles/alertmanager \
             ansible/playbooks/alertmanager.yml \
@@ -167,11 +162,6 @@ jobs:
 
           mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
           extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed
-          extmon_changed = extmon_firewall_changed or any(
-              path.startswith("ansible/roles/extmon/")
-              or path == "ansible/playbooks/extmon.yml"
-              for path in changed
-          )
 
           # Firewalls run in a dedicated prerequisite job. Consumer applies do
           # not start unless every same-promotion firewall succeeds.
@@ -203,7 +193,6 @@ jobs:
           print(f"has_changes={'true' if matrix else 'false'}")
           print(f"firewall_matrix={json.dumps({'include': firewall_matrix})}")
           print(f"has_firewalls={'true' if firewall_matrix else 'false'}")
-          print(f"has_extmon={'true' if extmon_changed else 'false'}")
           PY
 
   firewall:
@@ -220,29 +209,13 @@ jobs:
       dry_run: false
       pr_number: ""
 
-  extmon:
+  apply:
     needs: [detect, firewall]
     if: >-
       ${{
         always() &&
-        needs.detect.outputs.has_extmon == 'true' &&
-        (needs.firewall.result == 'success' || needs.firewall.result == 'skipped')
-      }}
-    uses: ./.github/workflows/apply.yml
-    with:
-      playbook: extmon
-      limit: extmon
-      dry_run: false
-      pr_number: ""
-
-  apply:
-    needs: [detect, firewall, extmon]
-    if: >-
-      ${{
-        always() &&
         needs.detect.outputs.has_changes == 'true' &&
-        (needs.firewall.result == 'success' || needs.firewall.result == 'skipped') &&
-        (needs.extmon.result == 'success' || needs.extmon.result == 'skipped')
+        (needs.firewall.result == 'success' || needs.firewall.result == 'skipped')
       }}
     strategy:
       fail-fast: false

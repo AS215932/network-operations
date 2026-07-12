@@ -122,6 +122,7 @@ EOF
 
   systemctl daemon-reload
   systemctl enable --now frr-exporter
+  systemctl restart frr-exporter
 REMOTE
 echo "rtr: node_exporter + frr_exporter deployed"
 
@@ -184,7 +185,7 @@ run_rc_command "$1"
 RCEOF
     doas chmod +x /usr/local/etc/rc.d/frr_exporter
     doas sysrc frr_exporter_enable=YES
-    doas service frr_exporter start 2>/dev/null || doas service frr_exporter restart
+    doas service frr_exporter restart
 REMOTE
   echo "$HOST: node_exporter + frr_exporter deployed"
 done

@@ -13,6 +13,10 @@ prometheus_blackbox_config_path: /etc/prometheus/blackbox.yml
 prometheus_config_staging_dir: /etc/prometheus/.config.staging
 prometheus_blackbox_binary: /usr/bin/prometheus-blackbox-exporter
 prometheus_blackbox_service_name: prometheus-blackbox-exporter
+# The off-net module is deployed manually because extmon apply consumes secrets
+# that are intentionally not present on the CI runner. Refuse to publish scrape
+# jobs which depend on it until that prerequisite is live.
+prometheus_extmon_strict_probe_check_url: "http://[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115/probe?module=http_200_v4&target=https%3A%2F%2Fcloud.hyrule.host%2Fhealth"
 
 # Where mon's Prometheus loads rules from. configs/mon/prometheus.yml has
 # `rule_files: /etc/prometheus/rules.d/*.yml`.

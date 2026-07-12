@@ -50,6 +50,14 @@
       - --config.check
   changed_when: false
 
+- name: Verify required off-net blackbox module is deployed
+  ansible.builtin.uri:
+    url: "{{ prometheus_extmon_strict_probe_check_url }}"
+    method: GET
+    status_code: 200
+    return_content: false
+  changed_when: false
+
 - name: Publish validated blackbox_exporter config
   ansible.builtin.copy:
     src: "{{ prometheus_config_staging_dir }}/blackbox.yml"

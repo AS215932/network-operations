@@ -23,18 +23,14 @@ class AppPromotionDeployTest(unittest.TestCase):
         )
 
         firewall = workflow["jobs"]["firewall"]
-        extmon = workflow["jobs"]["extmon"]
         apply = workflow["jobs"]["apply"]
         self.assertEqual(firewall["needs"], "detect")
         self.assertEqual(firewall["strategy"]["fail-fast"], True)
         self.assertEqual(firewall["strategy"]["max-parallel"], 1)
-        self.assertEqual(extmon["needs"], ["detect", "firewall"])
-        self.assertIn("needs.firewall.result == 'success'", extmon["if"])
-        self.assertEqual(apply["needs"], ["detect", "firewall", "extmon"])
+        self.assertNotIn("extmon", workflow["jobs"])
+        self.assertEqual(apply["needs"], ["detect", "firewall"])
         self.assertIn("needs.firewall.result == 'success'", apply["if"])
         self.assertIn("needs.firewall.result == 'skipped'", apply["if"])
-        self.assertIn("needs.extmon.result == 'success'", apply["if"])
-        self.assertIn("needs.extmon.result == 'skipped'", apply["if"])
 
     def test_agentic_observatory_changes_trigger_loop_apply(self):
         workflow_text = (
@@ -113,20 +109,22 @@ class AppPromotionDeployTest(unittest.TestCase):
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
         self.assertLess(firewall, prometheus)
 
-    def test_extmon_module_changes_deploy_before_prometheus(self):
+    def test_extmon_module_is_rendered_but_not_auto_applied_without_secrets(self):
         workflow_text = (
             REPO / ".github/workflows/app-promotion-deploy.yml"
         ).read_text()
 
-        self.assertIn("ansible/roles/extmon/**", workflow_text)
-        self.assertIn("ansible/roles/extmon \\", workflow_text)
-        self.assertIn("ansible/playbooks/extmon.yml", workflow_text)
-        self.assertIn('path.startswith("ansible/roles/extmon/")', workflow_text)
-        self.assertIn("needs: [detect, firewall, extmon]", workflow_text)
-        self.assertIn("needs.extmon.result == 'success'", workflow_text)
+        self.assertNotIn("ansible/roles/extmon/**", workflow_text)
+        self.assertNotIn("needs: [detect, firewall, extmon]", workflow_text)
 
         render_script = (REPO / "scripts/ci/render-all.sh").read_text()
         self.assertIn("prometheus alertmanager ci extmon", render_script)
+
+        install = (
+            REPO / "ansible" / "roles" / "prometheus" / "tasks" / "install.yml"
+        ).read_text()
+        self.assertIn("Verify required off-net blackbox module is deployed", install)
+        self.assertIn("prometheus_extmon_strict_probe_check_url", install)
 
     def test_alertmanager_changes_trigger_mon_apply(self):
         workflow_text = (
