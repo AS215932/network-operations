@@ -86,12 +86,11 @@ any active freezes).
 gh workflow run apply.yml \
   -F playbook=noc \
   -F limit=noc \
-  -F dry_run=false \
-  -F pr_number=42         # optional — auto-comments the diff onto the PR
+  -F dry_run=false
 ```
 
 Or via the GitHub UI: **Actions → apply → Run workflow → pick playbook /
-limit / dry-run / PR**.
+limit / dry-run**.
 
 The workflow pauses immediately at the **`production` environment review**
 gate. Approve in the UI; the run unfreezes.
