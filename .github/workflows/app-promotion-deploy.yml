@@ -11,6 +11,8 @@ on:
       - ansible/inventory/host_vars/netproxy.yml
       - ansible/inventory/host_vars/loop.yml
       - ansible/inventory/host_vars/soc.yml
+      - ansible/inventory/host_vars/mon.yml
+      - ansible/inventory/host_vars/extmon.yml
       - ansible/playbooks/noc.yml
       - ansible/playbooks/engineering-loop.yml
       - ansible/playbooks/soc.yml
@@ -26,6 +28,7 @@ on:
       - configs/mon/icinga2/**
       - configs/mon/prometheus.yml
       - configs/mon/prometheus-rules/**
+      - configs/mon/blackbox.yml
       - ansible/roles/prometheus/**
       - ansible/playbooks/prometheus.yml
       - configs/mon/alertmanager.yml.j2
@@ -61,6 +64,8 @@ jobs:
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has_changes: ${{ steps.detect.outputs.has_changes }}
+      firewall_matrix: ${{ steps.detect.outputs.firewall_matrix }}
+      has_firewalls: ${{ steps.detect.outputs.has_firewalls }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,6 +81,8 @@ jobs:
             ansible/inventory/host_vars/netproxy.yml \
             ansible/inventory/host_vars/loop.yml \
             ansible/inventory/host_vars/soc.yml \
+            ansible/inventory/host_vars/mon.yml \
+            ansible/inventory/host_vars/extmon.yml \
             ansible/playbooks/noc.yml \
             ansible/playbooks/engineering-loop.yml \
             ansible/playbooks/soc.yml \
@@ -91,6 +98,7 @@ jobs:
             configs/mon/icinga2 \
             configs/mon/prometheus.yml \
             configs/mon/prometheus-rules \
+            configs/mon/blackbox.yml \
             ansible/roles/prometheus \
             ansible/playbooks/prometheus.yml \
             configs/mon/alertmanager.yml.j2 \
@@ -119,16 +127,23 @@ jobs:
 
           changed = set(sys.argv[1].splitlines())
           matrix = []
+          firewall_matrix = []
 
           def add_once(playbook: str, limit: str) -> None:
               entry = {"playbook": playbook, "limit": limit}
               if entry not in matrix:
                   matrix.append(entry)
 
+          def add_firewall_once(limit: str) -> None:
+              entry = {"playbook": "firewall", "limit": limit}
+              if entry not in firewall_matrix:
+                  firewall_matrix.append(entry)
+
           mon_icinga_changed = any(path.startswith("configs/mon/icinga2/") for path in changed)
           prometheus_changed = any(
-              path == "configs/mon/prometheus.yml"
-              or path.startswith("configs/mon/prometheus-rules/")
+              path.startswith("configs/mon/prometheus-rules/")
+              or path == "configs/mon/prometheus.yml"
+              or path == "configs/mon/blackbox.yml"
               or path.startswith("ansible/roles/prometheus/")
               or path == "ansible/playbooks/prometheus.yml"
               for path in changed
@@ -195,8 +210,17 @@ jobs:
               )
           )
 
-          # Ordering matters for NOC monitoring changes: install mon-side
-          # CheckCommand/script definitions before the monitoring role renders
+          mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
+          extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed
+
+          # Firewalls run in a dedicated prerequisite job. Consumer applies do
+          # not start unless every same-promotion firewall succeeds.
+          if mon_firewall_changed:
+              add_firewall_once("mon")
+          if extmon_firewall_changed:
+              add_firewall_once("extmon")
+          # Ordering within the consumer matrix matters for NOC monitoring:
+          # install mon-side CheckCommand/script definitions before rendering
           # host services that reference them, then deploy noc-side services.
           if mon_icinga_changed or noc_changed:
               add_once("icinga2", "mon")
@@ -212,7 +236,7 @@ jobs:
           if soc_changed and soc_ready:
               # Destination allowlists must land before the first SOC Vault,
               # log, collector, or coordinator connection can succeed.
-              add_once("firewall", "vault,log,loop,soc")
+              add_firewall_once("vault,log,loop,soc")
               add_once("soc", "soc")
           if prometheus_changed or (soc_changed and soc_ready):
               # The first SOC promotion also reconciles its scrape target after
@@ -228,11 +252,31 @@ jobs:
               add_once("network-proxy", "netproxy")
           print(f"matrix={json.dumps({'include': matrix})}")
           print(f"has_changes={'true' if matrix else 'false'}")
+          print(f"firewall_matrix={json.dumps({'include': firewall_matrix})}")
+          print(f"has_firewalls={'true' if firewall_matrix else 'false'}")
           PY
 
-  apply:
+  firewall:
     needs: detect
-    if: ${{ needs.detect.outputs.has_changes == 'true' }}
+    if: ${{ needs.detect.outputs.has_firewalls == 'true' }}
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.detect.outputs.firewall_matrix) }}
+    uses: ./.github/workflows/apply.yml
+    with:
+      playbook: ${{ matrix.playbook }}
+      limit: ${{ matrix.limit }}
+      dry_run: false
+
+  apply:
+    needs: [detect, firewall]
+    if: >-
+      ${{
+        always() &&
+        needs.detect.outputs.has_changes == 'true' &&
+        (needs.firewall.result == 'success' || needs.firewall.result == 'skipped')
+      }}
     strategy:
       fail-fast: false
       max-parallel: 1

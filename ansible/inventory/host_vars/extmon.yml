@@ -50,6 +50,12 @@ extmon_ovh_failover_ips:
   - "51.91.236.215"   # mail (SMTP/IMAP failover)
   - "54.38.14.218"    # ns2 (auth DNS secondary)
 
+# Mon delegates the public IPv4 API health probe to extmon's dual-stack
+# blackbox_exporter. The service listens on :9115 by package default; expose it
+# only to the mon peer.
+firewall_extra_rules:
+  - { proto: tcp, dport: 9115, src: "{{ peers.mon.ipv6 }}", comment: "blackbox IPv4 probes requested by mon" }
+
 # Inbound SSH allow-list comes from the firewall role's standard set (ops
 # workstation, VPN clients, ci, noc, mon) — UFW and its extmon_ssh_allow_*
 # vars are retired; see roles/extmon/tasks/ufw.yml.

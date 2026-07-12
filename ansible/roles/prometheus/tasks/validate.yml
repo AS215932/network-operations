@@ -1,18 +1,28 @@
 ---
-# Controller-side sanity checks so the dry-run lane
-# (`--tags validate --connection=local`) catches malformed configuration
-# without touching mon. Authoritative promtool validation runs on mon before
-# either the main config or rules are published.
-- name: Sanity-check the main Prometheus configuration document
+# Controller-side sanity check so the dry-run lane
+# (`--tags validate --connection=local`) catches a malformed rule file without
+# touching mon. The authoritative `promtool check rules` runs on mon in the
+# reload handler, where promtool ships with the prometheus package.
+- name: Sanity-check Prometheus core config
   vars:
-    _config: "{{ lookup('file', prometheus_config_repo) | from_yaml }}"
+    _prometheus_doc: "{{ lookup('file', prometheus_config_repo) | from_yaml }}"
   ansible.builtin.assert:
     that:
-      - _config.global is defined
-      - (_config.scrape_configs | default([]) | type_debug) == "list"
-      - (_config.rule_files | default([]) | type_debug) == "list"
-    fail_msg: "prometheus.yml needs global, scrape_configs, and rule_files sections"
-    success_msg: "prometheus.yml ok"
+      - _prometheus_doc.scrape_configs is defined
+      - (_prometheus_doc.scrape_configs | type_debug) == "list"
+    fail_msg: "prometheus.yml needs a top-level scrape_configs list"
+    quiet: true
+  delegate_to: localhost
+  run_once: true
+
+- name: Sanity-check blackbox_exporter config
+  vars:
+    _blackbox_doc: "{{ lookup('file', prometheus_blackbox_config_repo) | from_yaml }}"
+  ansible.builtin.assert:
+    that:
+      - _blackbox_doc.modules is defined
+      - (_blackbox_doc.modules | type_debug) == "dict"
+    fail_msg: "blackbox.yml needs a top-level modules mapping"
     quiet: true
   delegate_to: localhost
   run_once: true

@@ -23,6 +23,41 @@ modules:
         fail_if_none_matches_regexp:
           - ".*2a0c:b641:b50:2::40.*"
 
+  # Customer-facing authoritative answer used by the public service-status
+  # contract. Keep this separate from dns_servify so a routing/infrastructure
+  # zone problem cannot be mistaken for a hyrule.host product incident.
+  dns_hyrule:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+      query_name: hyrule.host
+      query_type: AAAA
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_none_matches_regexp:
+          - ".*2a0c:b641:b50:2::40.*"
+
+  # The delegated zone contains dynamic customer VM records. An SOA probe
+  # catches an unloaded/missing delegation (NXDOMAIN/SERVFAIL) even while the
+  # hyrule.host apex is still answering normally. It does NOT detect a stale
+  # serial — blackbox exposes no serial metric; see the SOA-freshness issue.
+  dns_hyrule_deploy:
+    prober: dns
+    timeout: 5s
+    dns:
+      preferred_ip_protocol: ip6
+      ip_protocol_fallback: false
+      query_name: deploy.hyrule.host
+      query_type: SOA
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - ".*ns1.servify.network\\..*"
+
   http_2xx:
     prober: http
     timeout: 10s

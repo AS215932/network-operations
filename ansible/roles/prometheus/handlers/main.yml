@@ -6,3 +6,9 @@
     name: prometheus
     state: reloaded
   listen: reload prometheus
+
+- name: Restart blackbox exporter
+  ansible.builtin.systemd:
+    name: "{{ prometheus_blackbox_service_name }}"
+    state: restarted
+  listen: restart blackbox exporter

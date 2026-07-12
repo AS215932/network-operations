@@ -1,8 +1,8 @@
 ---
-# prometheus role — manages mon-side prometheus.yml plus alerting/recording
-# rules under /etc/prometheus/rules.d/. The main config is atomically validated
-# with promtool; rules use the staged, reconciling publish path below. Both now
-# go through the normal production-gated apply pipeline instead of manual cp.
+# prometheus role — manages mon-side Prometheus + blackbox_exporter config and
+# alerting/recording rules. Core configs are validated and activated before the
+# dependent ruleset, preventing an absent scrape job from becoming a false
+# customer-facing outage during rollout.
 #
 # `apply:` propagates the include's tags onto every task in the included file —
 # tags on a dynamic include_tasks otherwise cover only the include itself, so

@@ -186,7 +186,14 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
         )
         self.assertIn("soc_changed and soc_ready", deployment)
         self.assertIn("[0-9a-fA-F]{40}", deployment)
-        self.assertIn('add_once("firewall", "vault,log,loop,soc")', deployment)
+        self.assertIn(
+            'add_firewall_once("vault,log,loop,soc")',
+            deployment,
+        )
+        self.assertNotIn(
+            'add_once("firewall", "vault,log,loop,soc")',
+            deployment,
+        )
         self.assertIn("agent_core_coordinator", deployment)
 
     def test_soc_destination_firewalls_and_scrape_target_are_declared(self):

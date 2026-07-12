@@ -8,6 +8,82 @@
 #
 # Tags are inherited from the include in main.yml via `apply:`.
 
+- name: Ensure core-config staging directory exists
+  ansible.builtin.file:
+    path: "{{ prometheus_config_staging_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Stage Prometheus core config
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_repo }}"
+    dest: "{{ prometheus_config_staging_dir }}/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Stage blackbox_exporter config
+  ansible.builtin.copy:
+    src: "{{ prometheus_blackbox_config_repo }}"
+    dest: "{{ prometheus_config_staging_dir }}/blackbox.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate staged Prometheus config
+  ansible.builtin.command:
+    argv:
+      - promtool
+      - check
+      - config
+      - --syntax-only
+      - "{{ prometheus_config_staging_dir }}/prometheus.yml"
+  changed_when: false
+
+- name: Validate staged blackbox_exporter config
+  ansible.builtin.command:
+    argv:
+      - "{{ prometheus_blackbox_binary }}"
+      - "--config.file={{ prometheus_config_staging_dir }}/blackbox.yml"
+      - --config.check
+  changed_when: false
+
+- name: Verify required off-net blackbox module is deployed
+  ansible.builtin.uri:
+    url: "{{ prometheus_extmon_strict_probe_check_url }}"
+    method: GET
+    status_code: 200
+    return_content: false
+  changed_when: false
+
+- name: Publish validated blackbox_exporter config
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_staging_dir }}/blackbox.yml"
+    dest: "{{ prometheus_blackbox_config_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart blackbox exporter
+
+- name: Activate probe modules before dependent scrape jobs
+  ansible.builtin.meta: flush_handlers
+
+- name: Publish validated Prometheus core config
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_staging_dir }}/prometheus.yml"
+    dest: "{{ prometheus_config_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload prometheus
+
+- name: Activate scrape jobs before dependent alert rules
+  ansible.builtin.meta: flush_handlers
+
 - name: Desired rule filenames (the repo is the source of truth)
   ansible.builtin.set_fact:
     prometheus_desired_rules: "{{ query('ansible.builtin.fileglob', prometheus_rules_repo ~ '/*.yml') | map('basename') | list }}"
@@ -26,16 +102,6 @@
   loop:
     - "{{ prometheus_rules_dir }}"
     - "{{ prometheus_rules_staging_dir }}"
-  notify: reload prometheus
-
-- name: Publish validated Prometheus configuration
-  ansible.builtin.copy:
-    src: "{{ prometheus_config_repo }}"
-    dest: "{{ prometheus_config_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-    validate: "{{ prometheus_promtool_path }} check config %s"
   notify: reload prometheus
 
 - name: Stage candidate rule files
