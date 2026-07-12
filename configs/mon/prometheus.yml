@@ -208,6 +208,40 @@ scrape_configs:
       - target_label: __address__
         replacement: "[::1]:9115"
 
+  # Exercise both authoritative nameservers over IPv4 from the dual-stack
+  # off-net exporter. The mon VM itself has no public IPv4 route.
+  - job_name: blackbox-dns-hyrule-ipv4
+    metrics_path: /probe
+    params:
+      module: [dns_soa_hyrule_host]
+    static_configs:
+      - targets:
+          - "46.105.40.223:53"             # ns1 IPv4 / DNAT to Knot DNS
+          - "54.38.14.218:53"              # ns2 IPv4
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
+
+  - job_name: blackbox-dns-hyrule-deploy-ipv4
+    metrics_path: /probe
+    params:
+      module: [dns_soa_deploy_hyrule_host]
+    static_configs:
+      - targets:
+          - "46.105.40.223:53"             # ns1 IPv4 / DNAT to Knot DNS
+          - "54.38.14.218:53"              # ns2 IPv4
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
+
   - job_name: blackbox-http
     metrics_path: /probe
     params:

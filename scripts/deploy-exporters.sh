@@ -112,7 +112,7 @@ Description=FRR Exporter for Prometheus
 After=frr.service
 
 [Service]
-ExecStart=/usr/local/bin/frr_exporter --web.listen-address=[::]:9342
+ExecStart=/usr/local/bin/frr_exporter --web.listen-address=[::]:9342 --collector.bgp6
 Restart=always
 RestartSec=5
 
@@ -169,7 +169,7 @@ for HOST in "${FREEBSD_ROUTERS[@]}"; do
 name="frr_exporter"
 rcvar="frr_exporter_enable"
 command="/usr/local/bin/frr_exporter"
-command_args="--web.listen-address=[::]:9342"
+command_args="--web.listen-address=[::]:9342 --collector.bgp6"
 pidfile="/var/run/${name}.pid"
 
 start_cmd="frr_exporter_start"

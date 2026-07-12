@@ -44,6 +44,18 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("2a0c:b641:b50:2::10", deploy_job)
         self.assertIn("2001:41d0:304:300::7bfb", deploy_job)
         self.assertIn("module: [dns_hyrule_deploy]", deploy_job)
+        ipv4_job = prometheus.split("job_name: blackbox-dns-hyrule-ipv4", 1)[
+            1
+        ].split("job_name:", 1)[0]
+        self.assertIn("46.105.40.223:53", ipv4_job)
+        self.assertIn("54.38.14.218:53", ipv4_job)
+        self.assertIn("module: [dns_soa_hyrule_host]", ipv4_job)
+        deploy_ipv4_job = prometheus.split(
+            "job_name: blackbox-dns-hyrule-deploy-ipv4", 1
+        )[1].split("job_name:", 1)[0]
+        self.assertIn("46.105.40.223:53", deploy_ipv4_job)
+        self.assertIn("54.38.14.218:53", deploy_ipv4_job)
+        self.assertIn("module: [dns_soa_deploy_hyrule_host]", deploy_ipv4_job)
 
         rules = (RULES / "hyrule-public-status.yml").read_text()
         # The delegated deploy zone is an independent public DNS signal: both the
@@ -108,6 +120,7 @@ class PublicServiceStatusContracts(unittest.TestCase):
         for alert in (
             "HyrulePublicApiUnavailable",
             "HyrulePublicComputeControlPlaneUnavailable",
+            "HyrulePublicApiAddressFamilyDegraded",
         ):
             block = rules.split(f"- alert: {alert}", 1)[1].split("- alert:", 1)[0]
             self.assertIn('job="blackbox-http-ipv4"', block)
@@ -153,6 +166,7 @@ class PublicServiceStatusContracts(unittest.TestCase):
         rules = (RULES / "hyrule-public-status.yml").read_text()
         for alert in (
             "HyrulePublicApiUnavailable",
+            "HyrulePublicApiAddressFamilyDegraded",
             "HyrulePublicPaymentFailureRatio",
             "HyrulePublicComputeHostDegraded",
             "HyrulePublicRoutingDegraded",
@@ -165,7 +179,7 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("frr_bgp_peer_state != 1", rules)
         self.assertIn('absent(up{job="node-hypervisor"})', rules)
         self.assertIn('up{job="frr"} == 0', rules)
-        self.assertIn("unless on(instance)", rules)
+        self.assertNotIn("unless on(instance)", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
         self.assertIn(
             '(count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2',
@@ -175,6 +189,8 @@ class PublicServiceStatusContracts(unittest.TestCase):
             'count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2',
             rules,
         )
+        self.assertIn('job="blackbox-dns-hyrule-ipv4"', rules)
+        self.assertIn('job="blackbox-dns-hyrule-deploy-ipv4"', rules)
 
     def test_public_provisioning_ratio_requires_multiple_failures(self):
         rules = (RULES / "hyrule-payments.yml").read_text()
@@ -196,6 +212,8 @@ class PublicServiceStatusContracts(unittest.TestCase):
         ).read_text()
 
         self.assertIn("count(frr_bgp_peer_state != 1) > 0", public_rules)
+        deploy = (REPO / "scripts" / "deploy-exporters.sh").read_text()
+        self.assertGreaterEqual(deploy.count("--collector.bgp6"), 2)
         self.assertIn("expr: frr_bgp_peer_state != 1", tripwires)
         self.assertIn("count(frr_bgp_peer_state", icinga)
         self.assertIn("!= 1", icinga)

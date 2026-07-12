@@ -53,6 +53,34 @@ groups:
           public_title: "New VM provisioning unavailable"
           public_message: "New VM provisioning and management are unavailable. Existing VMs may remain online."
 
+      - alert: HyrulePublicApiAddressFamilyDegraded
+        # One measured failure with the other address family still succeeding
+        # is partial customer impact, not a whole-API outage.
+        expr: |
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+              and on()
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 1
+          )
+            or on()
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 1
+              and on()
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+          )
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "api_checkout,compute,intelligence,domains_dns,network_proxy"
+        annotations:
+          summary: "cloud.hyrule.host is unavailable over one address family"
+          description: "The public API health check succeeds over only one of IPv4 and IPv6."
+          public_title: "Cloud API partially reachable"
+          public_message: "The API and purchase flow are unreachable from some networks. Existing services may remain available while connectivity recovers."
+
       - alert: HyrulePublicPaymentFailureRatio
         expr: |
           (
@@ -119,12 +147,6 @@ groups:
           up{job="frr"} == 0
             or on()
           absent(up{job="frr"})
-            or on()
-          count(
-            (up{job="frr"} == 1)
-              unless on(instance)
-            frr_bgp_peer_state
-          ) > 0
         for: 3m
         labels:
           severity: warning
@@ -161,6 +183,14 @@ groups:
           (count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2
             or on()
           (count(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) != 2
+            or on()
+          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 2
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 2
+            or on()
+          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 2
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 2
         for: 2m
         labels:
           severity: warning
@@ -180,12 +210,20 @@ groups:
             (sum(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) == 0
               and on()
             count(probe_success{job="blackbox-dns-hyrule"}) == 2
+              and on()
+            (sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 2
           )
             or on()
           (
             (sum(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) == 0
               and on()
             count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2
+              and on()
+            (sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 2
           )
         for: 2m
         labels:
