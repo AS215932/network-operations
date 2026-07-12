@@ -44,6 +44,7 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
 
     def test_soc_rollout_is_pinned_cumulative_and_senior_approved(self):
         validation = (REPO / "ansible/roles/soc_agent/tasks/main.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/soc.yml").read_text()
         mode_env = (
             REPO / "ansible/roles/soc_agent/templates/soc-agent-mode.env.j2"
         ).read_text()
@@ -74,6 +75,9 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
         self.assertIn("SOC_REDTEAM_MAX_TIER", mode_env)
         self.assertIn("socctl probes run-once", probe_service)
         self.assertNotIn("remediat", probe_service.lower())
+        self.assertIn('systemctl cat "$unit"', playbook)
+        self.assertIn('try-restart "$unit" || exit 1', playbook)
+        self.assertNotIn("|| /bin/true", playbook)
 
     def test_central_coordinator_is_overlay_only_pinned_and_dark(self):
         defaults = load_yaml("ansible/roles/agent_core_coordinator/defaults/main.yml")
@@ -153,6 +157,7 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
         ).read_text()
         promotion = (REPO / ".github/workflows/promote-apps.yml").read_text()
         deployment = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        apply_workflow = (REPO / ".github/workflows/apply.yml").read_text()
 
         for setting in (
             "OBSERVATORY_GITHUB_OAUTH_CLIENT_ID",
@@ -174,11 +179,13 @@ class AgenticCoordinationContractsTest(unittest.TestCase):
             "AS215932/agentic-observatory)",
         ):
             self.assertIn(repo, promotion)
+        self.assertNotIn("--network-operations-sha", promotion)
         self.assertIn(
-            "soc_network_operations_version",
-            (REPO / "scripts/ci/promote-app-pins.py").read_text(),
+            'extra_apply_vars="soc_network_operations_version=${GITHUB_SHA,,}"',
+            apply_workflow,
         )
         self.assertIn("soc_changed and soc_ready", deployment)
+        self.assertIn("[0-9a-fA-F]{40}", deployment)
         self.assertIn('add_once("firewall", "vault,log,loop,soc")', deployment)
         self.assertIn("agent_core_coordinator", deployment)
 

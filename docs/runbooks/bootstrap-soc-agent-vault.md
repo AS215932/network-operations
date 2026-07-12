@@ -5,6 +5,7 @@ The SOC VM is `2a0c:b641:b50:2::100`. Its AppRole reads only
 wallet, XO, or NOC action-signing credentials.
 
 ```bash
+vault policy write github-runner configs/vault/policies/github-runner.hcl
 vault policy write soc-agent configs/vault/policies/soc-agent.hcl
 vault write auth/approle/role/soc-agent \
   token_policies="soc-agent" \
@@ -19,6 +20,10 @@ vault kv put kv/soc-agent \
   openrouter_api_key='' \
   discord_webhook_url=''
 ```
+
+Refresh `github-runner` before creating or applying the workload AppRole so
+`apply.yml` can mint its single-use wrapped SecretID. That runner policy does
+not grant access to `kv/soc-agent`.
 
 The CI apply workflow mints a single-use response-wrapped SecretID. Before the
 first apply, provision the NoCloud seed under `autoinstall/generated/soc/`,

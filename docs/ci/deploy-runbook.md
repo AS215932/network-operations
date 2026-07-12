@@ -26,8 +26,9 @@ pinning those commits in inventory:
   `knowledge_mcp_version`, `knowledge_loop_version`, `knowledge_api_version`,
   `agent_core_collector_version`, `agent_core_coordinator_version`, and
   `agentic_observatory_version`
-- `ansible/inventory/host_vars/soc.yml`: `soc_agent_version` and the immutable
-  `soc_network_operations_version` desired-state baseline
+- `ansible/inventory/host_vars/soc.yml`: `soc_agent_version`; live SOC applies
+  bind `soc_network_operations_version` to the workflow's exact deployment
+  `GITHUB_SHA` rather than trying to store a commit's own SHA inside itself
 - `ansible/inventory/host_vars/api.yml`: `hyrule_cloud_version`
 - `ansible/inventory/host_vars/web.yml`: `hyrule_web_version`
 - `ansible/inventory/host_vars/netproxy.yml`:
@@ -35,10 +36,11 @@ pinning those commits in inventory:
 
 The coordinator and dedicated SOC VM first land as dark scaffolds on `main`:
 their app versions may remain the moving ref `main` only while their apply and
-service gates are false. Their first promotion replaces those refs with exact
-merged SHAs. `app-promotion-deploy` refuses to schedule the SOC play until both
-SOC pins are immutable; the coordinator role likewise refuses a live apply on
-a moving ref.
+service gates are false. Their first promotion replaces the app refs with exact
+merged SHAs. `app-promotion-deploy` refuses to schedule the SOC play until its
+app pin is immutable; `apply.yml` then supplies the exact reviewed
+network-operations deployment SHA for the posture checkout. The coordinator
+role likewise refuses a live apply on a moving app ref.
 
 Use the promotion PR template for coordinated deploys. Merge app PRs first,
 then let the app repo request or manually update a promotion PR with the exact
@@ -66,11 +68,11 @@ The normal automated path is:
 Manual fallback: run **Actions -> promote-apps** in this repository and paste
 the merged app SHAs into the relevant inputs. A Knowledge promotion updates its
 MCP, loop, and API entry points together; an Agent Core promotion updates its
-collector and coordinator entry points together; a SOC promotion also pins the
-current reviewed `network-operations/main` commit as the posture desired-state
-baseline. Use this when a dispatch failed, when a coordinated promotion should
-pin multiple app repos at once, or when an operator intentionally wants to
-replay a promotion request.
+collector and coordinator entry points together. A SOC deployment binds its
+posture desired-state checkout to the exact network-operations commit running
+the gated apply. Use this when a dispatch failed, when a coordinated promotion
+should pin multiple app repos at once, or when an operator intentionally wants
+to replay a promotion request.
 
 The workflow rebuilds `promotion/app-sha-pins` from `origin/main` on every run
 and carries forward only pins the app repo confirms are still ahead of main,

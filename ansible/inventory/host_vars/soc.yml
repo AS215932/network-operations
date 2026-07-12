@@ -3,6 +3,9 @@
 # moving app refs and all timers/services prevent an accidental pre-promotion
 # deployment. The shadow-cutover runbook pins merged SHAs before first apply.
 soc_agent_version: main
+# Dark-scaffold sentinel only. Every live `apply.yml` SOC run overrides this
+# with that workflow's exact network-operations GITHUB_SHA, so the posture
+# checkout always matches the reviewed desired state being deployed.
 soc_network_operations_version: main
 soc_enabled: false
 soc_mode: shadow

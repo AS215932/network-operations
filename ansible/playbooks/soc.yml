@@ -44,10 +44,11 @@
           }}
         vault_agent_env_destination: "{{ soc_agent_secrets_env_file }}"
         vault_agent_reload_command: >-
-          (/bin/systemctl try-restart soc-agent.service || /bin/true) &&
-          (/bin/systemctl try-restart soc-posture.timer || /bin/true) &&
-          (/bin/systemctl try-restart soc-handoffs.timer || /bin/true) &&
-          (/bin/systemctl try-restart soc-probes.timer || /bin/true)
+          for unit in soc-agent.service soc-posture.timer soc-handoffs.timer soc-probes.timer; do
+            if /bin/systemctl cat "$unit" >/dev/null 2>&1; then
+              /bin/systemctl try-restart "$unit" || exit 1;
+            fi;
+          done
         vault_agent_env_reload_command: "{{ vault_agent_reload_command }}"
         vault_agent_templates:
           - src: soc-agent.env.ctmpl.j2

@@ -28,6 +28,16 @@
     - "{{ prometheus_rules_staging_dir }}"
   notify: reload prometheus
 
+- name: Publish validated Prometheus configuration
+  ansible.builtin.copy:
+    src: "{{ prometheus_config_repo }}"
+    dest: "{{ prometheus_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "{{ prometheus_promtool_path }} check config %s"
+  notify: reload prometheus
+
 - name: Stage candidate rule files
   ansible.builtin.copy:
     src: "{{ prometheus_rules_repo }}/"

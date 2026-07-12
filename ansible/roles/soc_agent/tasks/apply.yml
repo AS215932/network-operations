@@ -92,44 +92,58 @@
     timeout: 60
   when: soc_database_enabled | bool or soc_coordinator_enabled | bool
 
-- name: Configure SOC PostgreSQL role from Vault-rendered password
-  ansible.builtin.shell: |
-    set -euo pipefail
-    db_password="$(python3 - {{ soc_agent_secrets_env_file | quote }} <<'PY'
-    import pathlib
-    import sys
-    prefix = "SOC_DB_PASSWORD="
-    for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
-        if line.startswith(prefix):
-            print(line[len(prefix):])
-            break
-    else:
-        raise SystemExit("SOC_DB_PASSWORD missing")
-    PY
-    )"
-    test -n "$db_password"
-    export SOC_DB_PASSWORD="$db_password"
-    sql_file="$(mktemp /tmp/soc-agent-pg.XXXXXX.sql)"
-    trap 'rm -f "$sql_file"' EXIT
-    chmod 0600 "$sql_file"
-    python3 - <<'PY' > "$sql_file"
-    import os
+- name: Read SOC Vault-rendered environment
+  ansible.builtin.slurp:
+    src: "{{ soc_agent_secrets_env_file }}"
+  register: soc_agent_secrets_env_blob
+  no_log: true
+  when: soc_database_enabled | bool
 
-    password = os.environ["SOC_DB_PASSWORD"].replace("'", "''")
-    print("""DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ soc_database_role }}') THEN
-        CREATE ROLE {{ soc_database_role }} LOGIN PASSWORD '%s';
-      ELSE
-        ALTER ROLE {{ soc_database_role }} WITH LOGIN PASSWORD '%s';
-      END IF;
-    END
-    $$;""" % (password, password))
-    PY
-    chown postgres:postgres "$sql_file"
-    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -f "$sql_file"
-  args:
-    executable: /bin/bash
+- name: Resolve SOC PostgreSQL password in memory
+  ansible.builtin.set_fact:
+    soc_agent_db_password: >-
+      {{
+        (
+          (soc_agent_secrets_env_blob.content | b64decode).splitlines()
+          | select('match', '^SOC_DB_PASSWORD=')
+          | list
+          | first
+          | default('')
+        )
+        | regex_replace('^SOC_DB_PASSWORD=', '')
+      }}
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Assert SOC PostgreSQL password is present
+  ansible.builtin.assert:
+    that: soc_agent_db_password | length > 0
+    fail_msg: SOC_DB_PASSWORD missing from the Vault-rendered environment
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Configure SOC PostgreSQL role over stdin
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+    stdin: |
+      DO $role$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ soc_database_role | replace("'", "''") }}') THEN
+          CREATE ROLE "{{ soc_database_role | replace('"', '""') }}"
+            LOGIN
+            PASSWORD '{{ soc_agent_db_password | replace("'", "''") }}';
+        ELSE
+          ALTER ROLE "{{ soc_database_role | replace('"', '""') }}"
+            WITH LOGIN
+            PASSWORD '{{ soc_agent_db_password | replace("'", "''") }}';
+        END IF;
+      END
+      $role$;
+  become: true
+  become_user: postgres
   changed_when: false
   no_log: true
   when: soc_database_enabled | bool

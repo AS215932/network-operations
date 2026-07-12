@@ -1,8 +1,22 @@
 ---
-# Controller-side sanity check so the dry-run lane
-# (`--tags validate --connection=local`) catches a malformed rule file without
-# touching mon. The authoritative `promtool check rules` runs on mon in the
-# reload handler, where promtool ships with the prometheus package.
+# Controller-side sanity checks so the dry-run lane
+# (`--tags validate --connection=local`) catches malformed configuration
+# without touching mon. Authoritative promtool validation runs on mon before
+# either the main config or rules are published.
+- name: Sanity-check the main Prometheus configuration document
+  vars:
+    _config: "{{ lookup('file', prometheus_config_repo) | from_yaml }}"
+  ansible.builtin.assert:
+    that:
+      - _config.global is defined
+      - (_config.scrape_configs | default([]) | type_debug) == "list"
+      - (_config.rule_files | default([]) | type_debug) == "list"
+    fail_msg: "prometheus.yml needs global, scrape_configs, and rule_files sections"
+    success_msg: "prometheus.yml ok"
+    quiet: true
+  delegate_to: localhost
+  run_once: true
+
 - name: Sanity-check each rule file is a Prometheus rule-group document
   vars:
     _doc: "{{ lookup('file', item) | from_yaml }}"

@@ -62,11 +62,6 @@ PIN_TARGETS = {
         "AS215932/soc-agent",
         "soc",
     ),
-    "soc_network_operations_version": (
-        "ansible/inventory/host_vars/soc.yml",
-        "AS215932/network-operations",
-        "soc",
-    ),
     "hyrule_cloud_version": (
         "ansible/inventory/host_vars/api.yml",
         "AS215932/hyrule-cloud",
@@ -98,7 +93,6 @@ PROMOTION_FLAGS = {
     "agent_core_coordinator_version": "--agent-core-sha",
     "agentic_observatory_version": "--agentic-observatory-sha",
     "soc_agent_version": "--soc-agent-sha",
-    "soc_network_operations_version": "--network-operations-sha",
     "hyrule_cloud_version": "--hyrule-cloud-sha",
     "hyrule_web_version": "--hyrule-web-sha",
     "hyrule_network_proxy_version": "--hyrule-network-proxy-sha",
@@ -114,7 +108,6 @@ def main() -> int:
     parser.add_argument("--agent-core-sha", default="")
     parser.add_argument("--agentic-observatory-sha", default="")
     parser.add_argument("--soc-agent-sha", default="")
-    parser.add_argument("--network-operations-sha", default="")
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
     parser.add_argument("--hyrule-network-proxy-sha", default="")
@@ -140,7 +133,6 @@ def main() -> int:
         "agent_core_coordinator_version": args.agent_core_sha.strip(),
         "agentic_observatory_version": args.agentic_observatory_sha.strip(),
         "soc_agent_version": args.soc_agent_sha.strip(),
-        "soc_network_operations_version": args.network_operations_sha.strip(),
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),

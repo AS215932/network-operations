@@ -14,3 +14,9 @@ prometheus_rules_staging_dir: /etc/prometheus/.rules.d.staging
 
 # Source of truth in the repo. Read-only — the role copies from here.
 prometheus_rules_repo: "{{ playbook_dir }}/../../configs/mon/prometheus-rules"
+
+# Main scrape/routing configuration. This must travel through the same gated
+# apply path as rules so newly declared targets do not remain repository-only.
+prometheus_config_repo: "{{ playbook_dir }}/../../configs/mon/prometheus.yml"
+prometheus_config_path: /etc/prometheus/prometheus.yml
+prometheus_promtool_path: /usr/bin/promtool

@@ -29,6 +29,10 @@ class AppPromotionPinsTest(unittest.TestCase):
         self.assertEqual(flags["knowledge_api_version"], "--knowledge-sha")
         self.assertEqual(flags["agent_core_collector_version"], "--agent-core-sha")
         self.assertEqual(flags["agent_core_coordinator_version"], "--agent-core-sha")
+        self.assertNotIn("soc_network_operations_version", flags)
+
+    def test_sha_validation_accepts_uppercase_hex(self):
+        self.assertIsNotNone(self.promote.SHA_RE.fullmatch("A" * 40))
 
     def test_first_promotion_replaces_a_quoted_moving_scaffold(self):
         sha = "a" * 40

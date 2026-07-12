@@ -24,12 +24,16 @@ on:
       - ansible/roles/agentic_observatory/**
       - ansible/roles/soc_agent/**
       - configs/mon/icinga2/**
+      - configs/mon/prometheus.yml
       - configs/mon/prometheus-rules/**
       - ansible/roles/prometheus/**
       - ansible/playbooks/prometheus.yml
       - configs/mon/alertmanager.yml.j2
       - ansible/roles/alertmanager/**
       - ansible/playbooks/alertmanager.yml
+      - configs/*.zone
+      - ansible/roles/knot/**
+      - ansible/playbooks/knot.yml
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
       - configs/noc-agent.service
@@ -85,12 +89,16 @@ jobs:
             ansible/roles/agentic_observatory \
             ansible/roles/soc_agent \
             configs/mon/icinga2 \
+            configs/mon/prometheus.yml \
             configs/mon/prometheus-rules \
             ansible/roles/prometheus \
             ansible/playbooks/prometheus.yml \
             configs/mon/alertmanager.yml.j2 \
             ansible/roles/alertmanager \
             ansible/playbooks/alertmanager.yml \
+            'configs/*.zone' \
+            ansible/roles/knot \
+            ansible/playbooks/knot.yml \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
             configs/noc-agent.service \
@@ -119,7 +127,8 @@ jobs:
 
           mon_icinga_changed = any(path.startswith("configs/mon/icinga2/") for path in changed)
           prometheus_changed = any(
-              path.startswith("configs/mon/prometheus-rules/")
+              path == "configs/mon/prometheus.yml"
+              or path.startswith("configs/mon/prometheus-rules/")
               or path.startswith("ansible/roles/prometheus/")
               or path == "ansible/playbooks/prometheus.yml"
               for path in changed
@@ -128,6 +137,12 @@ jobs:
               path == "configs/mon/alertmanager.yml.j2"
               or path.startswith("ansible/roles/alertmanager/")
               or path == "ansible/playbooks/alertmanager.yml"
+              for path in changed
+          )
+          dns_changed = any(
+              (path.startswith("configs/") and path.endswith(".zone"))
+              or path.startswith("ansible/roles/knot/")
+              or path == "ansible/playbooks/knot.yml"
               for path in changed
           )
           noc_changed = any(path in changed for path in {
@@ -166,13 +181,18 @@ jobs:
               "ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2",
           }) or any(path.startswith("ansible/roles/soc_agent/") for path in changed)
 
-          # The infrastructure PR intentionally ships SOC on moving refs with
-          # every service disabled. Do not attempt a production apply until a
-          # post-merge promotion PR has replaced both refs with immutable SHAs.
+          # The infrastructure PR intentionally ships SOC on a moving app ref
+          # with every service disabled. Do not attempt a production apply
+          # until a promotion PR replaces the app ref with an immutable SHA.
+          # apply.yml supplies the exact network-operations deployment SHA as
+          # an extra var, avoiding an impossible self-referential commit pin.
           soc_vars = Path("ansible/inventory/host_vars/soc.yml").read_text()
-          soc_ready = all(
-              re.search(rf"^{key}:\s*[\"']?[0-9a-f]{{40}}[\"']?\s*$", soc_vars, re.MULTILINE)
-              for key in ("soc_agent_version", "soc_network_operations_version")
+          soc_ready = bool(
+              re.search(
+                  r"^soc_agent_version:\s*[\"']?[0-9a-fA-F]{40}[\"']?\s*$",
+                  soc_vars,
+                  re.MULTILINE,
+              )
           )
 
           # Ordering matters for NOC monitoring changes: install mon-side
@@ -185,12 +205,18 @@ jobs:
               add_once("noc", "noc")
           if engineering_loop_changed:
               add_once("engineering-loop", "loop")
+          if dns_changed or (soc_changed and soc_ready):
+              # Re-apply authoritative zones on the first SOC promotion too,
+              # so its forward/PTR records cannot depend on an earlier gate.
+              add_once("knot", "nameservers")
           if soc_changed and soc_ready:
               # Destination allowlists must land before the first SOC Vault,
               # log, collector, or coordinator connection can succeed.
               add_once("firewall", "vault,log,loop,soc")
               add_once("soc", "soc")
-          if prometheus_changed:
+          if prometheus_changed or (soc_changed and soc_ready):
+              # The first SOC promotion also reconciles its scrape target after
+              # node_exporter has been installed by the SOC playbook.
               add_once("prometheus", "mon")
           if alertmanager_changed:
               add_once("alertmanager", "mon")

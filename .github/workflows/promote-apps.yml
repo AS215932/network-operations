@@ -252,13 +252,6 @@ jobs:
           if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${ENGINEERING_LOOP_SHA}${KNOWLEDGE_SHA}${AGENT_CORE_SHA}${AGENTIC_OBSERVATORY_SHA}${SOC_AGENT_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
             echo "No new app SHAs requested; carry-forward/self-heal run only." >> "$GITHUB_STEP_SUMMARY"
           else
-            network_operations_sha=""
-            if [ -n "$SOC_AGENT_SHA" ]; then
-              # SOC validates its desired-state checkout against an immutable
-              # network-operations revision. The promotion branch is based on
-              # this exact main commit, so pin that same reviewed baseline.
-              network_operations_sha="$(git rev-parse origin/main)"
-            fi
             scripts/ci/promote-app-pins.py \
               --title "$PROMOTION_TITLE" \
               --impact "$PROMOTION_IMPACT" \
@@ -269,7 +262,6 @@ jobs:
               --agent-core-sha "$AGENT_CORE_SHA" \
               --agentic-observatory-sha "$AGENTIC_OBSERVATORY_SHA" \
               --soc-agent-sha "$SOC_AGENT_SHA" \
-              --network-operations-sha "$network_operations_sha" \
               --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
               --hyrule-web-sha "$HYRULE_WEB_SHA" \
               --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA"

@@ -5,12 +5,17 @@ collector, and reads only `kv/agent-core-coordinator`. Its database password
 and per-identity HMAC keys never enter inventory.
 
 ```bash
+vault policy write github-runner configs/vault/policies/github-runner.hcl
 vault policy write agent-core-coordinator configs/vault/policies/agent-core-coordinator.hcl
 vault write auth/approle/role/agent-core-coordinator \
   token_policies="agent-core-coordinator" \
   token_ttl=1h token_max_ttl=4h \
   secret_id_ttl=24h secret_id_num_uses=1
 ```
+
+Refresh `github-runner` before creating or applying the workload AppRole. The
+runner policy grants only the role-id/SecretID minting capabilities needed by
+`apply.yml`; it still cannot read the coordinator KV scope.
 
 Generate independent 32-byte-or-longer secrets for `soc`, `noc`,
 `engineering`, `knowledge`, and `observatory`. Store the compact JSON object
@@ -27,9 +32,9 @@ Copy only the matching secret to each workload's existing KV scope as
 `coordinator_secret`. A loop must never receive another loop's key. The
 Observatory key is read/control-plane only and cannot claim loop work.
 
-The trusted runner can mint a response-wrapped coordinator AppRole SecretID,
-but its policy cannot read the key JSON. Apply only after `agent-core` is
-merged and `agent_core_coordinator_version` is promoted to that exact SHA.
+The trusted runner can then mint a response-wrapped coordinator AppRole
+SecretID, but its policy cannot read the key JSON. Apply only after `agent-core`
+is merged and `agent_core_coordinator_version` is promoted to that exact SHA.
 
 ```bash
 vault read -field=role_id auth/approle/role/agent-core-coordinator/role-id

@@ -40,16 +40,35 @@ class AppPromotionDeployTest(unittest.TestCase):
         )
         self.assertIn('"ansible/roles/knowledge_loop/"', workflow_text)
 
-    def test_prometheus_rules_changes_trigger_mon_apply(self):
+    def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
         workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
 
-        # Trigger paths, git-diff scope, and detect logic must all cover the
-        # mon Prometheus rules so a rule edit deploys via apply.yml → mon.
+        # Trigger paths, git-diff scope, and detect logic must cover both the
+        # main scrape config and rules so neither remains repository-only.
+        self.assertIn("configs/mon/prometheus.yml", workflow_text)
+        self.assertIn("configs/mon/prometheus.yml \\", workflow_text)
         self.assertIn("configs/mon/prometheus-rules/**", workflow_text)
         self.assertIn("configs/mon/prometheus-rules \\", workflow_text)
         self.assertIn("ansible/roles/prometheus/**", workflow_text)
+        self.assertIn('path == "configs/mon/prometheus.yml"', workflow_text)
         self.assertIn('path.startswith("configs/mon/prometheus-rules/")', workflow_text)
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
+
+        install = (REPO / "ansible/roles/prometheus/tasks/install.yml").read_text()
+        defaults = (REPO / "ansible/roles/prometheus/defaults/main.yml").read_text()
+        self.assertIn("Publish validated Prometheus configuration", install)
+        self.assertIn("prometheus_config_repo", defaults)
+        self.assertIn("check config %s", install)
+
+    def test_zone_changes_trigger_serialized_knot_apply(self):
+        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+
+        self.assertIn("configs/*.zone", workflow_text)
+        self.assertIn("'configs/*.zone' \\", workflow_text)
+        self.assertIn("ansible/roles/knot/**", workflow_text)
+        self.assertIn("ansible/roles/knot \\", workflow_text)
+        self.assertIn('path.endswith(".zone")', workflow_text)
+        self.assertIn('add_once("knot", "nameservers")', workflow_text)
 
     def test_alertmanager_changes_trigger_mon_apply(self):
         workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
