@@ -196,13 +196,13 @@ groups:
             sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) > 0
           )
             or on()
-          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 2
+          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 1
             or on()
-          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 2
+          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 1
             or on()
-          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 2
+          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 1
             or on()
-          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 2
+          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 1
         for: 2m
         labels:
           severity: warning
@@ -225,7 +225,7 @@ groups:
               and on()
             (sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) == 0
               and on()
-            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 2
+            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 1
           )
             or on()
           (
@@ -235,7 +235,7 @@ groups:
               and on()
             (sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) == 0
               and on()
-            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 2
+            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 1
           )
         for: 2m
         labels:

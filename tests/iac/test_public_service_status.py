@@ -47,13 +47,16 @@ class PublicServiceStatusContracts(unittest.TestCase):
         ipv4_job = prometheus.split("job_name: blackbox-dns-hyrule-ipv4", 1)[
             1
         ].split("job_name:", 1)[0]
-        self.assertIn("46.105.40.223:53", ipv4_job)
+        # ns1 has no public IPv4 DNS — 46.105.40.223 is the web/proxy IP (HTTP,
+        # not :53), so probing it would sit at probe_success=0 and permanently
+        # degrade DNS. IPv4 DNS is ns2 only.
+        self.assertNotIn("46.105.40.223", ipv4_job)
         self.assertIn("54.38.14.218:53", ipv4_job)
         self.assertIn("module: [dns_soa_hyrule_host]", ipv4_job)
         deploy_ipv4_job = prometheus.split(
             "job_name: blackbox-dns-hyrule-deploy-ipv4", 1
         )[1].split("job_name:", 1)[0]
-        self.assertIn("46.105.40.223:53", deploy_ipv4_job)
+        self.assertNotIn("46.105.40.223", deploy_ipv4_job)
         self.assertIn("54.38.14.218:53", deploy_ipv4_job)
         self.assertIn("module: [dns_soa_deploy_hyrule_host]", deploy_ipv4_job)
 
