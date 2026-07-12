@@ -210,7 +210,6 @@ jobs:
       playbook: ${{ matrix.playbook }}
       limit: ${{ matrix.limit }}
       dry_run: false
-      pr_number: ""
 
   apply:
     needs: [detect, firewall]
