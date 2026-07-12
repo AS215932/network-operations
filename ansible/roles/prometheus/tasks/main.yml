@@ -1,14 +1,8 @@
 ---
-# prometheus role — manages mon-side Prometheus alerting/recording rules under
-# /etc/prometheus/rules.d/. Ships the static rule files from
-# configs/mon/prometheus-rules/ with a staged, promtool-validated, reconciling
-# deploy, so rule changes go through the normal apply pipeline instead of a
-# manual cp.
-#
-# Scope is rules only. prometheus.yml itself and Alertmanager delivery
-# (127.0.0.1:9093 → noc-agent) are NOT managed here — see the alerting-delivery
-# gap tracked separately; without Alertmanager running, these rules fire but are
-# not delivered.
+# prometheus role — manages mon-side Prometheus + blackbox_exporter config and
+# alerting/recording rules. Core configs are validated and activated before the
+# dependent ruleset, preventing an absent scrape job from becoming a false
+# customer-facing outage during rollout.
 #
 # `apply:` propagates the include's tags onto every task in the included file —
 # tags on a dynamic include_tasks otherwise cover only the include itself, so

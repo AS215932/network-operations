@@ -1,11 +1,7 @@
 ---
-# prometheus — manage mon-side Prometheus alerting/recording rules under
-# /etc/prometheus/rules.d/ (loaded by configs/mon/prometheus.yml rule_files).
-# Replaces the manual "cp the rule file onto mon + reload" step; rule changes
-# now deploy through app-promotion-deploy → apply.yml like any other host.
-#
-# Scope is rules only. Alertmanager delivery (prometheus.yml → 127.0.0.1:9093 →
-# noc-agent) is tracked separately and NOT provisioned here.
+# prometheus — manage mon-side Prometheus, blackbox_exporter, and rule configs.
+# Core probe/scrape configuration activates before dependent rules, so a merge
+# cannot publish an absent-series outage during a monitoring rollout.
 #
 # Render-only (dry run):
 #   ansible-playbook playbooks/prometheus.yml --tags validate \
@@ -14,7 +10,7 @@
 #   ansible-playbook playbooks/prometheus.yml --tags apply \
 #       -e '{"prometheus_apply":true}' --limit mon
 
-- name: prometheus — validate + apply mon rules
+- name: prometheus — validate + apply mon configs and rules
   hosts: mon
   gather_facts: true
   become: true

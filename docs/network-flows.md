@@ -225,7 +225,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Inbound**
 
-_No host-specific inbound rules (SSH-only via the standard allow set)._
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| mon | tcp | 9115 | blackbox IPv4 probes requested by mon |
 
 **Outbound**
 
@@ -349,6 +351,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | proxy | tcp | 3000 | Grafana from proxy |
 | loop | tcp | 5665 | Icinga2 passive check from engineering-loop |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
+| api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
 | noc | tcp | 9090 | Prometheus API from noc-agent |
 | mon | tcp | 9100 | node_exporter self-scrape |
 
@@ -539,6 +542,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | all-linux | debian-mirrors | tcp | 80 | apt / unattended-upgrades |
 | all-linux | ntp-pool | udp | 123 | NTP time sync |
 | api | dns | tcp | 53 | RFC 2136 dynamic updates (TSIG hyrule-dns) |
+| api | mon | tcp | 9090 | customer-facing service-status query of curated Prometheus alerts |
 | api | vault | tcp | 8200 | vault-agent secret render |
 | ci | all | tcp | 22 | SSH for CI apply runs |
 | ci | vault | tcp | 8200 | vault-agent secret render |
@@ -550,10 +554,12 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
 | mon | all (except extmon) | tcp | 9100 | node_exporter scrape |
 | mon | api | tcp | 9187 | postgres_exporter scrape |
-| mon | dns | udp | 53 | blackbox_exporter DNS SOA probe (blackbox-dns job) |
+| mon | dns | udp | 53 | blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA) |
 | mon | dom0 | tcp (v4) | 9100 | node_exporter scrape over mgmt v4 (10.0.0.1; prometheus node-hypervisor job) |
+| mon | extmon | tcp | 9115 | delegate public IPv4 API health probe to off-net blackbox_exporter |
 | mon | log | tcp | 3100 | Grafana queries Loki HTTP API |
 | mon | log | tcp | 8686 | Vector internal metrics scrape |
+| mon | ns2 | udp | 53 | blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA) |
 | mon | routers | tcp | 9342 | frr_exporter scrape |
 | mon | vault | tcp | 8200 | vault-agent / health check |
 | noc | all (except mail) | tcp | 22 | SSH for hyrule-mcp (mail's ssh_allow omits noc) |

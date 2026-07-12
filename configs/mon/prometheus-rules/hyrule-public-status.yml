@@ -1,0 +1,251 @@
+# Customer-facing service-health alerts consumed by GET cloud.hyrule.host/v1/status.
+#
+# This is an explicit disclosure boundary. Only alerts carrying public_status=true
+# are eligible, and the API reads only the public_* labels/annotations below.
+# Never put hostnames, addresses, provider details, or runbook text in public fields.
+
+groups:
+  - name: hyrule-public-status
+    interval: 30s
+    rules:
+      - alert: HyrulePublicApiUnavailable
+        # A missing scrape is loss of monitoring visibility, not proof of a
+        # customer outage. Publish outage only when both independent address-
+        # family probes actually measured a failed request.
+        expr: |
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+            and on()
+          probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: outage
+          public_components: "api_checkout,intelligence,domains_dns,network_proxy"
+        annotations:
+          summary: "cloud.hyrule.host health probe is failing"
+          description: "The public API health endpoint has failed from the monitoring network for two minutes."
+          public_title: "Cloud API unavailable"
+          public_message: "The API and purchase flow are unreachable. New orders, diagnostics, domain management, and proxy requests are unavailable; existing VMs and DNS records are not affected."
+
+      - alert: HyrulePublicComputeControlPlaneUnavailable
+        # Deliberately follows the public API probe: an API outage blocks new
+        # provisioning and browser management, but should degrade only the
+        # compute control plane rather than claim existing VMs are offline.
+        # Hypervisor and routing signals cover the compute data plane below.
+        # As above, require two measured failures; missing probe telemetry is
+        # never promoted into customer impact.
+        expr: |
+          probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+            and on()
+          probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute"
+        annotations:
+          summary: "compute control plane unavailable through public API"
+          description: "The API is unavailable, so new VM provisioning and browser management cannot proceed."
+          public_title: "New VM provisioning unavailable"
+          public_message: "New VM provisioning and management are unavailable. Existing VMs may remain online."
+
+      - alert: HyrulePublicApiAddressFamilyDegraded
+        # One measured failure with the other address family still succeeding
+        # is partial customer impact, not a whole-API outage.
+        expr: |
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 0
+              and on()
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 1
+          )
+            or on()
+          (
+            probe_success{job="blackbox-http",instance="https://cloud.hyrule.host/health"} == 1
+              and on()
+            probe_success{job="blackbox-http-ipv4",instance="https://cloud.hyrule.host/health"} == 0
+          )
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "api_checkout,compute,intelligence,domains_dns,network_proxy"
+        annotations:
+          summary: "cloud.hyrule.host is unavailable over one address family"
+          description: "The public API health check succeeds over only one of IPv4 and IPv6."
+          public_title: "Cloud API partially reachable"
+          public_message: "The API and purchase flow are unreachable from some networks. Existing services may remain available while connectivity recovers."
+
+      - alert: HyrulePublicPaymentFailureRatio
+        expr: |
+          (
+            (sum(hyrule_payment_events_total{event_type="settle_failed"}) or vector(0))
+              - (sum(hyrule_payment_events_total{event_type="settle_failed"} offset 15m) or vector(0))
+          ) >= 3
+            and on()
+          (
+            (
+              (sum(hyrule_payment_events_total{event_type="settle_failed"}) or vector(0))
+                - (sum(hyrule_payment_events_total{event_type="settle_failed"} offset 15m) or vector(0))
+            )
+              / clamp_min(
+                  (
+                    (sum(hyrule_payment_events_total{event_type="settle_failed"}) or vector(0))
+                      - (sum(hyrule_payment_events_total{event_type="settle_failed"} offset 15m) or vector(0))
+                  )
+                    +
+                  (
+                    (sum(hyrule_payment_events_total{event_type="settled"}) or vector(0))
+                      - (sum(hyrule_payment_events_total{event_type="settled"} offset 15m) or vector(0))
+                  ),
+                  1
+                )
+          ) > 0.2
+            and on()
+          (max(up{job="hyrule-cloud"} offset 15m) == 1)
+        for: 5m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "api_checkout"
+        annotations:
+          summary: "customer payment settlement failure ratio is elevated"
+          description: "At least three settlements failed and failures exceed 20% of settlement attempts over 15 minutes."
+          public_title: "Payments degraded"
+          public_message: "Some payments are failing. New purchases may not complete; a charge is not considered successful until settlement confirms."
+
+      - alert: HyrulePublicComputeHostDegraded
+        expr: |
+          up{job="node-hypervisor"} == 0
+            or on()
+          absent(up{job="node-hypervisor"})
+        for: 3m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute"
+        annotations:
+          summary: "compute host health monitoring is unavailable"
+          description: "Prometheus has been unable to scrape the compute host for three minutes."
+          public_title: "Compute health degraded"
+          public_message: "Compute host monitoring is failing. New provisioning may be delayed and some VMs may be unreachable."
+
+      - alert: HyrulePublicRoutingDegraded
+        # tynany/frr_exporter v1.11.0: 1=Established, 0=down, 2=admin-down.
+        expr: |
+          count(frr_bgp_peer_state != 1) > 0
+            or on()
+          up{job="frr"} == 0
+            or on()
+          absent(up{job="frr"})
+        for: 3m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "compute,domains_dns,network_proxy"
+        annotations:
+          summary: "one or more monitored BGP sessions are not established"
+          description: "Customer-facing services may have reduced routing redundancy."
+          public_title: "Network routing degraded"
+          public_message: "Network routing is degraded. VM, DNS, or proxy reachability may be intermittent while redundant paths converge."
+
+      - alert: HyrulePublicDNSDegraded
+        # A zone is "degraded" when exactly one of its two authoritative
+        # nameservers answers (sum == 1 of 2) while the other zone still has at
+        # least one server up. Serial-freshness detection is deliberately NOT
+        # here: blackbox_exporter exposes no SOA-serial metric, so a cross-NS
+        # serial comparison cannot be expressed with these probes. Tracked for a
+        # dedicated exporter in the follow-up issue.
+        expr: |
+          (
+            (
+              sum(probe_success{job="blackbox-dns-hyrule"}) == 1
+                or on()
+              sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 1
+            )
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule"}) > 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) > 0
+          )
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) != 2
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) != 2
+            or on()
+          (
+            sum(probe_success{job="blackbox-dns-hyrule"}) == 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) > 0
+          )
+            or on()
+          (
+            sum(probe_success{job="blackbox-dns-hyrule-deploy"}) == 0
+              and on()
+            sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) > 0
+          )
+            or on()
+          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 1
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 1
+            or on()
+          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 1
+            or on()
+          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 1
+        for: 2m
+        labels:
+          severity: warning
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "domains_dns"
+        annotations:
+          summary: "authoritative DNS redundancy or monitoring is degraded"
+          description: "One nameserver is failing a check, or complete authoritative probe coverage is unavailable."
+          public_title: "Authoritative DNS degraded"
+          public_message: "Authoritative DNS redundancy or monitoring is degraded. DNS may remain available while checks recover."
+
+      - alert: HyrulePublicDNSOutage
+        expr: |
+          (
+            (sum(probe_success{job="blackbox-dns-hyrule"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule"}) == 2
+              and on()
+            (sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 1
+          )
+            or on()
+          (
+            (sum(probe_success{job="blackbox-dns-hyrule-deploy"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-deploy"}) == 2
+              and on()
+            (sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) == 0
+              and on()
+            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 1
+          )
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: outage
+          public_components: "domains_dns"
+        annotations:
+          summary: "an authoritative Hyrule DNS zone is unavailable"
+          description: "Neither nameserver is returning the expected apex or delegated customer-zone answer."
+          public_title: "Authoritative DNS unavailable"
+          public_message: "Authoritative DNS checks are failing. hyrule.host or customer VM records may not resolve."

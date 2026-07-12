@@ -171,6 +171,78 @@ scrape_configs:
       - target_label: __address__
         replacement: "[::1]:9115"
 
+  # Query the customer-facing hyrule.host zone directly against both
+  # authoritative nameservers. The paired public alerts distinguish a single
+  # nameserver degradation from complete authoritative-DNS failure.
+  - job_name: blackbox-dns-hyrule
+    metrics_path: /probe
+    params:
+      module: [dns_hyrule]
+    static_configs:
+      - targets:
+          - "2a0c:b641:b50:2::10"          # ns1 / Knot DNS
+          - "2001:41d0:304:300::7bfb"     # ns2
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
+  # Query the delegated customer-VM zone independently. The apex can remain
+  # healthy while deploy.hyrule.host is missing or stale on one nameserver.
+  - job_name: blackbox-dns-hyrule-deploy
+    metrics_path: /probe
+    params:
+      module: [dns_hyrule_deploy]
+    static_configs:
+      - targets:
+          - "2a0c:b641:b50:2::10"          # ns1 / Knot DNS
+          - "2001:41d0:304:300::7bfb"     # ns2
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[::1]:9115"
+
+  # Exercise IPv4 DNS reachability from the dual-stack off-net exporter (the mon
+  # VM has no public IPv4 route). Only ns2 is probed: ns1 (internal Knot) has no
+  # public IPv4 DNS endpoint — ns1.servify.network's A record is the web/proxy IP
+  # (46.105.40.223, HTTP only), which does not answer on :53. See the follow-up
+  # issue on ns1's IPv4 glue.
+  - job_name: blackbox-dns-hyrule-ipv4
+    metrics_path: /probe
+    params:
+      module: [dns_soa_hyrule_host]
+    static_configs:
+      - targets:
+          - "54.38.14.218:53"              # ns2 IPv4 (sole IPv4-reachable authoritative NS)
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
+
+  - job_name: blackbox-dns-hyrule-deploy-ipv4
+    metrics_path: /probe
+    params:
+      module: [dns_soa_deploy_hyrule_host]
+    static_configs:
+      - targets:
+          - "54.38.14.218:53"              # ns2 IPv4 (sole IPv4-reachable authoritative NS)
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
+
   - job_name: blackbox-http
     metrics_path: /probe
     params:
@@ -189,6 +261,24 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: "[::1]:9115"
+
+  # The mon VM has no public IPv4 route. Ask the dual-stack off-net exporter to
+  # exercise the API's A record so an IPv6-only failure cannot become a false
+  # whole-API outage. extmon:9115 is firewalled to the mon peer only.
+  - job_name: blackbox-http-ipv4
+    metrics_path: /probe
+    params:
+      module: [http_200_v4]
+    static_configs:
+      - targets:
+          - "https://cloud.hyrule.host/health"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "[2001:19f0:7402:0cd5:5400:06ff:fe40:7112]:9115"
 
   # Internal Vault probe — goes direct to the plain-HTTP listener on [::c0]:8200,
   # bypassing Caddy. Pair this with the public probe above to distinguish
