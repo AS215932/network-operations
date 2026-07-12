@@ -94,7 +94,10 @@ groups:
           public_message: "Some payments are failing. New purchases may not complete; a charge is not considered successful until settlement confirms."
 
       - alert: HyrulePublicComputeHostDegraded
-        expr: up{job="node-hypervisor"} == 0
+        expr: |
+          up{job="node-hypervisor"} == 0
+            or on()
+          absent(up{job="node-hypervisor"})
         for: 3m
         labels:
           severity: critical

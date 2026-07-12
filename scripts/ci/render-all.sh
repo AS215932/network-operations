@@ -46,7 +46,7 @@ else
   # Default set — playbooks that have a render-only `--tags validate` path.
   # Skip ones whose role is apply-only (vault, knot, networkd_resolved, etc.)
   # to keep the workflow tight.
-  for p in firewall monitoring logs icinga2 prometheus alertmanager ci; do
+  for p in firewall monitoring logs icinga2 prometheus alertmanager ci extmon; do
     [ -f "playbooks/${p}.yml" ] || continue
     playbooks+=("playbooks/${p}.yml")
   done

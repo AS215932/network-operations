@@ -23,16 +23,23 @@ class AppPromotionDeployTest(unittest.TestCase):
         )
 
         firewall = workflow["jobs"]["firewall"]
+        extmon = workflow["jobs"]["extmon"]
         apply = workflow["jobs"]["apply"]
         self.assertEqual(firewall["needs"], "detect")
         self.assertEqual(firewall["strategy"]["fail-fast"], True)
         self.assertEqual(firewall["strategy"]["max-parallel"], 1)
-        self.assertEqual(apply["needs"], ["detect", "firewall"])
+        self.assertEqual(extmon["needs"], ["detect", "firewall"])
+        self.assertIn("needs.firewall.result == 'success'", extmon["if"])
+        self.assertEqual(apply["needs"], ["detect", "firewall", "extmon"])
         self.assertIn("needs.firewall.result == 'success'", apply["if"])
         self.assertIn("needs.firewall.result == 'skipped'", apply["if"])
+        self.assertIn("needs.extmon.result == 'success'", apply["if"])
+        self.assertIn("needs.extmon.result == 'skipped'", apply["if"])
 
     def test_agentic_observatory_changes_trigger_loop_apply(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         self.assertIn("ansible/roles/agentic_observatory/**", workflow_text)
         self.assertIn("ansible/roles/agentic_observatory \\", workflow_text)
@@ -43,11 +50,16 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn('"ansible/roles/agentic_observatory/"', workflow_text)
 
     def test_knowledge_loop_role_changes_trigger_loop_apply(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         self.assertIn("ansible/roles/knowledge_loop/**", workflow_text)
         self.assertIn("ansible/roles/knowledge_loop \\", workflow_text)
-        self.assertIn("ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2", workflow_text)
+        self.assertIn(
+            "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2",
+            workflow_text,
+        )
         self.assertIn(
             "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
             workflow_text,
@@ -55,7 +67,9 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn('"ansible/roles/knowledge_loop/"', workflow_text)
 
     def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         # Trigger paths, git-diff scope, and detect logic must all cover the
         # mon Prometheus rules so a rule edit deploys via apply.yml → mon.
@@ -70,7 +84,9 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
 
     def test_mon_firewall_changes_apply_before_prometheus(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         self.assertIn("ansible/inventory/host_vars/mon.yml", workflow_text)
         self.assertIn(
@@ -84,7 +100,9 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertLess(firewall, prometheus)
 
     def test_extmon_firewall_changes_apply_before_prometheus(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         self.assertIn("ansible/inventory/host_vars/extmon.yml", workflow_text)
         self.assertIn(
@@ -95,8 +113,25 @@ class AppPromotionDeployTest(unittest.TestCase):
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
         self.assertLess(firewall, prometheus)
 
+    def test_extmon_module_changes_deploy_before_prometheus(self):
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
+
+        self.assertIn("ansible/roles/extmon/**", workflow_text)
+        self.assertIn("ansible/roles/extmon \\", workflow_text)
+        self.assertIn("ansible/playbooks/extmon.yml", workflow_text)
+        self.assertIn('path.startswith("ansible/roles/extmon/")', workflow_text)
+        self.assertIn("needs: [detect, firewall, extmon]", workflow_text)
+        self.assertIn("needs.extmon.result == 'success'", workflow_text)
+
+        render_script = (REPO / "scripts/ci/render-all.sh").read_text()
+        self.assertIn("prometheus alertmanager ci extmon", render_script)
+
     def test_alertmanager_changes_trigger_mon_apply(self):
-        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
 
         # Trigger paths, git-diff scope, and detect logic must all cover the mon
         # Alertmanager role/template so a delivery-config edit deploys via

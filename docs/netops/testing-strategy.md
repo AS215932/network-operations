@@ -25,6 +25,13 @@ dependency-light: a stdlib `unittest` discovery over `tests/iac/` plus external
 validators (`named-checkzone`, `systemd-analyze`, `caddy adapt`,
 `unbound-checkconf`, `nft -c`) when the tool is present on the runner.
 
+The unittest contracts also parse every managed Prometheus scrape/rule file and
+both rendered blackbox-exporter module sets, validate their required structure,
+and resolve each `/probe` job to a module on the exporter it actually targets.
+Production's `promtool` and blackbox `--config.check` remain the authoritative
+validate-before-publish gates in the Prometheus apply role; Tier 0 deliberately
+does not require Docker or an image pull.
+
 The `unittest` suite includes the **source-of-truth schema gate**
 (`tests/iac/test_inventory_schema.py`): it validates the structure and internal
 consistency of `ansible/inventory/{hosts.yml,group_vars/all.yml}` before

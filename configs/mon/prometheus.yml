@@ -233,7 +233,7 @@ scrape_configs:
   - job_name: blackbox-http-ipv4
     metrics_path: /probe
     params:
-      module: [http_2xx_v4]
+      module: [http_200_v4]
     static_configs:
       - targets:
           - "https://cloud.hyrule.host/health"

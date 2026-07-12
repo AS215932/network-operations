@@ -8,17 +8,20 @@ RULES = REPO / "configs" / "mon" / "prometheus-rules"
 
 
 class PublicServiceStatusContracts(unittest.TestCase):
-    def test_required_iac_job_runs_production_version_promtool(self):
+    def test_required_iac_job_stays_dependency_light(self):
         workflow = (REPO / ".github" / "workflows" / "iac-tests.yml").read_text()
+        tier_zero = workflow.split("static-iac:", 1)[1].split(
+            "ansible-idempotency:", 1
+        )[0]
 
-        self.assertIn("name: Prometheus rule syntax", workflow)
-        self.assertIn("--entrypoint /bin/promtool", workflow)
-        self.assertIn("check rules configs/mon/prometheus-rules/*.yml", workflow)
-        self.assertIn(
-            "prom/prometheus@sha256:"
-            "2d390eb0dcbb4518231dbd2d7b1aac7725a4bfb9205eb14c38ddebf88284f37f",
-            workflow,
-        )
+        self.assertIn("scripts/ci/iac-static.sh", tier_zero)
+        self.assertNotIn("docker", tier_zero.lower())
+
+        install = (
+            REPO / "ansible" / "roles" / "prometheus" / "tasks" / "install.yml"
+        ).read_text()
+        self.assertIn("promtool", install)
+        self.assertIn("--config.check", install)
 
     def test_hyrule_dns_probe_checks_both_authoritative_servers(self):
         blackbox = (REPO / "configs" / "mon" / "blackbox.yml").read_text()
@@ -35,9 +38,9 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertIn("2a0c:b641:b50:2::10", job)
         self.assertIn("2001:41d0:304:300::7bfb", job)
         self.assertIn("module: [dns_hyrule]", job)
-        deploy_job = prometheus.split(
-            "job_name: blackbox-dns-hyrule-deploy", 1
-        )[1].split("job_name:", 1)[0]
+        deploy_job = prometheus.split("job_name: blackbox-dns-hyrule-deploy", 1)[
+            1
+        ].split("job_name:", 1)[0]
         self.assertIn("2a0c:b641:b50:2::10", deploy_job)
         self.assertIn("2001:41d0:304:300::7bfb", deploy_job)
         self.assertIn("module: [dns_hyrule_deploy]", deploy_job)
@@ -94,10 +97,14 @@ class PublicServiceStatusContracts(unittest.TestCase):
         ipv4_job = prometheus.split("job_name: blackbox-http-ipv4", 1)[1].split(
             "job_name:", 1
         )[0]
-        self.assertIn("module: [http_2xx_v4]", ipv4_job)
+        self.assertIn("module: [http_200_v4]", ipv4_job)
         self.assertIn("https://cloud.hyrule.host/health", ipv4_job)
         self.assertIn("2001:19f0:7402:0cd5:5400:06ff:fe40:7112", ipv4_job)
-        self.assertIn("http_2xx_v4:", extmon_blackbox)
+        self.assertIn("http_200_v4:", extmon_blackbox)
+        strict_module = extmon_blackbox.split("http_200_v4:", 1)[1].split("\n\n  ", 1)[
+            0
+        ]
+        self.assertIn("valid_status_codes: [200]", strict_module)
         for alert in (
             "HyrulePublicApiUnavailable",
             "HyrulePublicComputeControlPlaneUnavailable",
@@ -119,7 +126,9 @@ class PublicServiceStatusContracts(unittest.TestCase):
         for path in RULES.glob("*.yml"):
             text = path.read_text()
             blocks = re.split(r"(?=^\s{6}- alert: )", text, flags=re.MULTILINE)
-            public_blocks.extend(block for block in blocks if 'public_status: "true"' in block)
+            public_blocks.extend(
+                block for block in blocks if 'public_status: "true"' in block
+            )
 
         self.assertGreaterEqual(len(public_blocks), 9)
         for block in public_blocks:
@@ -154,6 +163,7 @@ class PublicServiceStatusContracts(unittest.TestCase):
         self.assertNotIn('absent(probe_success{job="blackbox-http"', rules)
         self.assertIn('job="blackbox-dns-hyrule-deploy"', rules)
         self.assertIn("frr_bgp_peer_state != 1", rules)
+        self.assertIn('absent(up{job="node-hypervisor"})', rules)
         self.assertIn('up{job="frr"} == 0', rules)
         self.assertIn("unless on(instance)", rules)
         self.assertIn('max(up{job="hyrule-cloud"} offset 15m) == 1', rules)
