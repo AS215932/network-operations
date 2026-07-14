@@ -65,7 +65,7 @@ detail="primary=$primary status=$status readiness=$readiness runtime=$runtime qu
 
 case "$code" in
     200)
-        if [ "$status" = "ok" ]; then
+        if [ "$status" = "ok" ] && [ "$readiness" = "ok" ] && [ "$runtime" = "ok" ]; then
             echo "OK - $detail"; exit 0
         fi
         echo "WARNING - $detail"; exit 1

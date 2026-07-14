@@ -33,7 +33,9 @@ import os
 import sys
 import urllib.request
 
-notification_route = os.environ.get("NOTIFICATION_ROUTE") or os.environ.get("HOST_NOTIFICATION_ROUTE") or "network"
+notification_route = (
+    os.environ.get("NOTIFICATION_ROUTE") or os.environ.get("HOST_NOTIFICATION_ROUTE") or "network"
+).strip()
 if notification_route not in {"network", "ai", "ci"}:
     notification_route = "network"
 

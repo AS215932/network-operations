@@ -32,7 +32,13 @@ class NotificationRoutingTest(unittest.TestCase):
         script = (REPO / "configs/mon/icinga2/scripts/check_noc_agent_model_health.sh").read_text()
         self.assertIn("WARNING - $detail", script)
         self.assertIn("readiness=$readiness", script)
+        self.assertIn('[ "$runtime" = "ok" ]', script)
         self.assertIn("503) echo \"CRITICAL", script)
+
+    def test_icinga_route_value_is_trimmed_and_allowlisted(self):
+        script = (REPO / "configs/mon/icinga2/scripts/notify-noc-agent.sh").read_text()
+        self.assertIn(").strip()", script)
+        self.assertIn('{"network", "ai", "ci"}', script)
 
     def test_extmon_keeps_independent_critical_fallback_only(self):
         config = (REPO / "ansible/roles/extmon/templates/alertmanager.yml.j2").read_text()
