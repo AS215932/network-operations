@@ -1,7 +1,7 @@
 ---
-# Render the review artifact to ansible/generated/mon/alertmanager.yml with the
-# Discord secret redacted (matches the icinga2 render pattern). The committed
-# artifact gives the render/idempotency check a stable file to diff.
+# Render the review artifact to ansible/generated/mon/alertmanager.yml. The
+# config contains no Discord secret: NOC Agent owns route-specific delivery.
+# The committed artifact gives the render/idempotency check a stable file.
 - name: Ensure generated dir exists
   ansible.builtin.file:
     path: "{{ playbook_dir }}/../generated/mon"
@@ -12,23 +12,11 @@
   become: false
   run_once: true
 
-- name: Render alertmanager.yml (review — Discord webhook redacted)
+- name: Render alertmanager.yml for review
   ansible.builtin.template:
     src: "{{ alertmanager_config_template }}"
     dest: "{{ playbook_dir }}/../generated/mon/alertmanager.yml"
     mode: "0640"
-  vars:
-    mon_discord_webhook_url: "__REDACTED_DISCORD_WEBHOOK_URL__"
   delegate_to: localhost
   connection: local
   become: false
-
-- name: Pre-flight — fail if the Discord webhook is empty for apply
-  ansible.builtin.fail:
-    msg: |
-      mon_discord_webhook_url is empty. Set MON_DISCORD_WEBHOOK_URL or
-      DISCORD_WEBHOOK_URL (Vault-rendered on the runner / secrets.local.sh)
-      before running --tags apply.
-  when:
-    - alertmanager_apply | bool
-    - mon_discord_webhook_url == ""

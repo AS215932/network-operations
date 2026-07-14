@@ -90,6 +90,8 @@
     openrouter_api_key: "{{ lookup('env', 'OPENROUTER_API_KEY') | default('', true) }}"
     openrouter_management_api_key: "{{ lookup('env', 'OPENROUTER_MANAGEMENT_API_KEY') | default('', true) }}"
     noc_discord_webhook: "{{ lookup('env', 'NOC_DISCORD_WEBHOOK') }}"
+    noc_ai_discord_webhook: "{{ lookup('env', 'NOC_AI_DISCORD_WEBHOOK') | default('', true) }}"
+    noc_ci_discord_webhook: "{{ lookup('env', 'NOC_CI_DISCORD_WEBHOOK') | default('', true) }}"
     icinga_api_user: "{{ lookup('env', 'ICINGA_API_USER') }}"
     icinga_api_password: "{{ lookup('env', 'ICINGA_API_PASSWORD') }}"
     xo_token: "{{ lookup('env', 'XO_TOKEN') }}"

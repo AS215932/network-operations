@@ -126,6 +126,7 @@ monitoring_register: true
 monitoring_role: loop
 monitoring_check_vars:
   engineering_loop: true
+  notification_route: ai
 
 monitoring_disks:
   "disk /": { mountpoint: "/" }

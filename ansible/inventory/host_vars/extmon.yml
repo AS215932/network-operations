@@ -20,8 +20,8 @@ ansible_distribution: Debian
 # install packages or restart services. Mirrors the other roles' apply gates.
 extmon_apply: false
 
-# Discord webhook for Alertmanager. Will move to Vault in Phase C/L4 — for
-# now sourced from secrets.local.sh on the operator's workstation:
+# Direct Discord webhook for the critical external-monitoring fallback. Normal
+# alerts use the NOC Agent case path below. Both are required for a live apply.
 #   export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
 # Use discord.com (v4 + v6) instead of discordapp.com (v4-only) so future
 # redeploys to v6-preferred providers stay clean.

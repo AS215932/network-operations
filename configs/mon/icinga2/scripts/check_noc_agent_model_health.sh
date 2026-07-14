@@ -14,8 +14,9 @@
 # Usage: check_noc_agent_model_health.sh <ipv6> <port>
 #
 # Exit codes:
-#   0 OK            — HTTP 200, status=ok
-#   2 CRITICAL      — HTTP 503 (or unreachable)
+#   0 OK            — model chain ready and runtime/provider health OK
+#   1 WARNING       — fallback ready but runtime/provider health degraded
+#   2 CRITICAL      — no viable model (HTTP 503), or endpoint unreachable
 #   3 UNKNOWN       — non-200/503 response, or jq parse failure
 
 set -u
@@ -48,6 +49,8 @@ field() {
 }
 
 status=$(field '.status')
+readiness=$(field '.readiness.status')
+runtime=$(field '.runtime_reliability.status')
 quota=$(field '.quota_monitoring')
 primary=$(field '.primary_model')
 err=$(jq -r '.error // ""' "$body" 2>/dev/null || true)
@@ -56,12 +59,17 @@ err=$(jq -r '.error // ""' "$body" 2>/dev/null || true)
 # `Cannot iterate over null` that `.missing | join(",")` raises.
 missing=$(jq -r '(.missing // []) | join(",")' "$body" 2>/dev/null || true)
 
-detail="primary=$primary status=$status quota=$quota"
+detail="primary=$primary status=$status readiness=$readiness runtime=$runtime quota=$quota"
 [ -n "$missing" ] && detail="$detail missing=$missing"
 [ -n "$err" ]     && detail="$detail err=$err"
 
 case "$code" in
-    200) echo "OK - $detail"; exit 0 ;;
+    200)
+        if [ "$status" = "ok" ]; then
+            echo "OK - $detail"; exit 0
+        fi
+        echo "WARNING - $detail"; exit 1
+        ;;
     503) echo "CRITICAL - $detail"; exit 2 ;;
     *)   echo "UNKNOWN - http=$code $detail"; exit 3 ;;
 esac

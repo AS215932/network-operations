@@ -11,6 +11,7 @@ groups:
         labels:
           severity: critical
           source: prometheus
+          notification_route: network
         annotations:
           summary: "node_exporter down on {{ $labels.instance }}"
           description: "Prometheus has been unable to scrape {{ $labels.job }} target {{ $labels.instance }} for 2 minutes."
@@ -21,6 +22,7 @@ groups:
         labels:
           severity: warning
           source: prometheus
+          notification_route: network
         annotations:
           summary: "ICMP probe failing for {{ $labels.instance }}"
           description: "blackbox_exporter ICMPv6 probe to {{ $labels.instance }} has been failing for 3 minutes."
@@ -32,6 +34,7 @@ groups:
         labels:
           severity: critical
           source: prometheus
+          notification_route: network
         annotations:
           summary: "BGP peer {{ $labels.peer }} not established on {{ $labels.instance }}"
           description: "Peer state is {{ $value }} (1 is Established; 2 is administratively down)."
@@ -42,6 +45,7 @@ groups:
         labels:
           severity: critical
           source: prometheus
+          notification_route: network
           public_status: "true"
           public_state: degraded
           public_components: "network_proxy"
@@ -51,52 +55,24 @@ groups:
           public_title: "Network proxy health unconfirmed"
           public_message: "Live network proxy health checks are unavailable. Requests may still succeed, but some modes could be affected."
 
-      - alert: NOCAgentGeminiQuotaLow
-        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 25
+      - alert: NOCAgentModelFallbackActive
+        expr: increase(noc_agent_model_fallback_attempts_total[10m]) > 0
         for: 5m
         labels:
           severity: warning
           source: prometheus
-        annotations:
-          summary: "NOC Agent Gemini quota is low"
-          description: "Gemini quota remaining estimate is {{ $value }} requests. Verify fallback model credentials before the primary quota is exhausted."
-
-      - alert: NOCAgentGeminiQuotaEmpty
-        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 0
-        for: 2m
-        labels:
-          severity: critical
-          source: prometheus
-        annotations:
-          summary: "NOC Agent Gemini quota is exhausted"
-          description: "Gemini quota remaining estimate is {{ $value }}. The NOC Agent must rely on fallback models or human triage."
-
-      - alert: NOCAgentGeminiQuotaProbeFailed
-        expr: noc_agent_gemini_quota_configured == 1 and noc_agent_gemini_quota_probe_ok == 0
-        for: 10m
-        labels:
-          severity: warning
-          source: prometheus
-        annotations:
-          summary: "NOC Agent Gemini quota probe failed"
-          description: "The NOC Agent is configured for Gemini quota monitoring but the Cloud Monitoring probe has failed for 10 minutes."
-
-      - alert: NOCAgentModelFallbackActive
-        expr: increase(noc_agent_model_fallback_attempts_total[10m]) > 0
-        for: 0m
-        labels:
-          severity: warning
-          source: prometheus
+          notification_route: ai
         annotations:
           summary: "NOC Agent used model fallback"
           description: "The NOC Agent attempted model fallback in the last 10 minutes. Check provider quota/rate-limit metrics and fallback success counters."
 
       - alert: NOCAgentAllModelsFailing
         expr: increase(noc_agent_model_run_failures_total[10m]) > 0 and increase(noc_agent_model_run_successes_total[10m]) == 0
-        for: 5m
+        for: 10m
         labels:
           severity: critical
           source: prometheus
+          notification_route: ai
         annotations:
           summary: "NOC Agent model access is failing"
           description: "The NOC Agent has model failures and no successful model runs in the last 10 minutes. Check /health/model and provider credentials/quotas."

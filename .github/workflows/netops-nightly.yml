@@ -7,7 +7,7 @@ name: netops-nightly
 # runner (Docker + lab infra), so they run here on a schedule and on manual
 # dispatch — never automatically on an untrusted PR. Live check-mode drift is
 # owned by drift-detection.yml; render validation by render-check.yml; this
-# workflow does not duplicate either. Failures alert the NOC via Discord.
+# workflow does not duplicate either. Failures alert #ci via Discord.
 
 on:
   schedule:
@@ -85,11 +85,11 @@ jobs:
             esac
           done < /etc/github-runner/secrets.env
 
-      - name: Alert NOC on nightly NetOps failure
-        if: env.DISCORD_WEBHOOK_URL != ''
+      - name: Alert CI on nightly NetOps failure
+        if: env.CI_DISCORD_WEBHOOK_URL != ''
         env:
-          DISCORD_WEBHOOK_URL: ${{ env.DISCORD_WEBHOOK_URL }}
+          CI_DISCORD_WEBHOOK_URL: ${{ env.CI_DISCORD_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           jq -n --arg content "AS215932 nightly NetOps labs failed: ${RUN_URL}" '{content: $content}' \
-            | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL"
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$CI_DISCORD_WEBHOOK_URL"

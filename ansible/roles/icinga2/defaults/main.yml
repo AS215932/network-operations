@@ -14,10 +14,11 @@ icinga2_noc_agent_url: "http://[2a0c:b641:b50:2::a0]:8000/webhook/icinga"
 # Icinga Web URL embedded in Discord notifications.
 icinga2_web_url: "https://mon.servify.network/icingaweb2"
 
-# Repeat interval for unresolved problems. 0 = single-shot (was the prior
-# behaviour, which masked the 2026-05-07 outage when the first notify
-# failed to deliver). 1h is the recommended minimum.
-icinga2_notification_interval: "1h"
+# Normal notifications are single-shot through CaseService. The independent
+# monitoring-plane fallback repeats only NOC/monitoring-plane failures every
+# six hours; Icinga stops those repeats after acknowledgement.
+icinga2_notification_interval: "0"
+icinga2_fallback_notification_interval: "6h"
 
 # Path on mon where the canonical configs live.
 icinga2_conf_dir: /etc/icinga2/conf.d

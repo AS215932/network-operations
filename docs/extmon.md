@@ -22,7 +22,8 @@ depends on AS215932 or OVH.
 
 - `prometheus-blackbox-exporter` — probes (HTTP, TCP, ICMP, DNS, TLS cert).
 - `prometheus` — scrapes blackbox every 30 s, evaluates alert rules.
-- `prometheus-alertmanager` — Discord receiver, dedupe, repeat 1 h.
+- `prometheus-alertmanager` — NOC case delivery, critical direct-Discord
+  fallback, dedupe, transport reassertion every 24 h.
 - `prometheus-node-exporter` — self-scrape + textfile collector for the
   OVH expiry script.
 - `routinator` — local RPKI validator for AS215932 prefix validity.
@@ -35,8 +36,9 @@ depends on AS215932 or OVH.
 BGPalerter is the one pinned upstream binary; all other core packages come
 from Debian/CAIDA apt repositories.
 
-Loopback-only listeners; SSH from ops-prefix or AS215932 only; Alertmanager
-reaches Discord directly via outbound TLS — no inbound exposure required.
+Loopback-only listeners; SSH from ops-prefix or AS215932 only. Alertmanager
+delivers all alerts to NOC Agent, while critical alerts also reach Discord
+directly over outbound TLS — no inbound exposure required.
 
 `extmon-diag-agent` is loopback-only by default; the intended caller (the
 Hyrule Cloud diagnostics API) reaches it over an SSH port-forward, matching the
@@ -126,12 +128,24 @@ curl -s http://127.0.0.1:8011/status
 curl -s 'http://127.0.0.1:8323/validity?asn=AS215932&prefix=2a0c:b641:b50::/44'
 ```
 
-End-to-end smoke test from your workstation:
+End-to-end smoke tests from your workstation:
 
 ```bash
-# Should produce a real Discord message:
+# Warning: one persistent case card in #noc, with no direct duplicate.
 ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
-    alertname=ExtmonSmokeTest severity=info'
+    alertname=ExtmonWarningSmokeTest severity=warning notification_route=network'
+
+# Critical: one persistent #noc case card plus the independent fallback post.
+ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
+    alertname=ExtmonCriticalSmokeTest severity=critical notification_route=network'
+
+# Resolve both test alerts and verify the same case cards update in place.
+ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
+    alertname=ExtmonWarningSmokeTest severity=warning notification_route=network \
+    --end="$(date --iso-8601=seconds)"'
+ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
+    alertname=ExtmonCriticalSmokeTest severity=critical notification_route=network \
+    --end="$(date --iso-8601=seconds)"'
 ```
 
 ## Operating
@@ -144,8 +158,9 @@ ssh root@<extmon> 'amtool --alertmanager.url=http://127.0.0.1:9093 alert add \
 - Add new probe targets by editing
   [`roles/extmon/defaults/main.yml`](../ansible/roles/extmon/defaults/main.yml)
   and re-running the apply playbook.
-- Webhook rotation: change `EXTMON_DISCORD_WEBHOOK_URL` and re-apply; the
-  `alertmanager.yml` template + handler reload covers it.
+- Webhook rotation: change `EXTMON_DISCORD_WEBHOOK_URL` or
+  `EXTMON_NOC_ALERTMANAGER_WEBHOOK_URL` and re-apply; the `alertmanager.yml`
+  template + handler reload covers both.
 - Billing: keep extmon's bill paid. There is no second-order monitor for
   extmon itself in this design — if you want one, the cheapest option is
   a free synthetic check from BetterStack/UptimeRobot pinging extmon's
@@ -163,8 +178,9 @@ AS215932 monitoring is explicit, not inferred from service probes:
 - Local validator: Routinator on loopback
 - Realtime alerting: BGPalerter reportHTTP into `extmon-bgp-agent`
 
-Critical alert path remains direct Discord from extmon. The NOC Agent webhook is
-best-effort enrichment only and must not be the only alert path.
+Critical alerts retain direct Discord delivery from extmon as an independent
+fallback. The NOC Agent webhook owns persistent case cards for both warning and
+critical alerts; neither path is allowed to replace the other for criticals.
 
 ## Out of scope (for now)
 

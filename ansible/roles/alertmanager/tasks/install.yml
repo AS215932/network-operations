@@ -36,7 +36,7 @@
     owner: root
     group: prometheus
     mode: "0640"
-  no_log: true  # renders the real Discord webhook — keep it out of --diff output
+  no_log: true  # keep future receiver credentials out of --diff output
 
 - name: Validate staged config with amtool before publishing to live
   ansible.builtin.command:
@@ -51,7 +51,7 @@
     owner: root
     group: prometheus
     mode: "0640"
-  no_log: true  # remote_src copy can surface the webhook in --diff output
+  no_log: true  # remote_src copy may surface future receiver credentials
   notify: reload alertmanager
 
 - name: Enable + start alertmanager
