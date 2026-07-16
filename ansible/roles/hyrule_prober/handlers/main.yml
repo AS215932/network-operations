@@ -1,0 +1,6 @@
+---
+- name: restart hyrule-prober
+  ansible.builtin.systemd:
+    name: "{{ hyrule_prober_service_name }}"
+    state: restarted
+    daemon_reload: true

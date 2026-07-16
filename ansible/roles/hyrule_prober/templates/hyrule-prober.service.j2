@@ -1,0 +1,39 @@
+# /etc/systemd/system/hyrule-prober.service
+# Managed by Ansible.
+
+[Unit]
+Description=Hyrule Prober (AS215932 looking-glass)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User={{ hyrule_prober_user }}
+Group={{ hyrule_prober_group }}
+WorkingDirectory={{ hyrule_prober_install_dir }}
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile={{ hyrule_prober_env_file }}
+ExecStart={{ hyrule_prober_venv_dir }}/bin/uvicorn hyrule_prober.app:app \
+    --host {{ hyrule_prober_host }} \
+    --port {{ hyrule_prober_port }} \
+    --log-level info
+Restart=always
+RestartSec=5
+
+# ping/traceroute need a raw ICMP socket; grant only CAP_NET_RAW to an
+# otherwise-unprivileged user.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ReadWritePaths={{ hyrule_prober_state_dir }}
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-prober
+
+[Install]
+WantedBy=multi-user.target

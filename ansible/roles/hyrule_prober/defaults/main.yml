@@ -1,0 +1,67 @@
+---
+# hyrule-prober — internal Python probe sidecar on noc for x402-gated
+# /v1/path/* (ping/traceroute) from AS215932 vantage points. Hyrule Cloud
+# (api VM) verifies/settles x402 and calls this over the internal overlay; the
+# prober is never Internet-reachable.
+#
+# Apply: ansible-playbook playbooks/prober.yml --tags apply \
+#          -e hyrule_prober_apply=true -e hyrule_prober_version=<sha> --limit noc
+# Validate (no-op): ansible-playbook playbooks/prober.yml --tags validate \
+#          --connection=local --limit noc
+
+hyrule_prober_apply: false
+
+hyrule_prober_user: hyrule-prober
+hyrule_prober_group: hyrule-prober
+
+hyrule_prober_repo: https://github.com/AS215932/hyrule-prober.git
+# Override per-deploy via host_vars (SHA-pinned in production).
+hyrule_prober_version: main
+
+hyrule_prober_install_dir: /opt/hyrule-prober
+hyrule_prober_src_dir: /opt/hyrule-prober/src
+hyrule_prober_venv_dir: /opt/hyrule-prober/.venv
+hyrule_prober_etc_dir: /etc/hyrule-prober
+hyrule_prober_state_dir: /var/lib/hyrule-prober
+hyrule_prober_env_file: "{{ hyrule_prober_etc_dir }}/env"
+hyrule_prober_service_name: hyrule-prober
+
+# Bind noc's internal overlay address only — never a wildcard.
+hyrule_prober_host: "{{ peers.noc.ipv6 }}"
+hyrule_prober_port: 8460
+hyrule_prober_listen_addr: "[{{ hyrule_prober_host }}]:{{ hyrule_prober_port }}"
+
+# Bearer token required on every /v1/* verb (fail-closed if empty). Same value
+# as kv/hyrule-cloud prober_token so the api VM authenticates.
+hyrule_prober_auth_token: "{{ lookup('env', 'HYRULE_PROBER_TOKEN') | default('', true) }}"
+
+# Vantages the prober advertises. Names MUST match Hyrule Cloud's
+# DiagnosticVantage values (as215932, extmon) or Hyrule Cloud's requested
+# vantages never resolve. Go-live is a single LOCAL vantage on noc (an AS215932
+# host) — no SSH keys required; remote vantages can be added later with
+# address/user/key.
+hyrule_prober_vantages:
+  - name: as215932
+    address: local
+    os: linux
+    tools: [ping, traceroute, dig]
+
+hyrule_prober_command_timeout_s: 20
+hyrule_prober_rate_limit_per_target_per_minute: 6
+hyrule_prober_rate_limit_global_per_minute: 60
+hyrule_prober_health_interval_s: 60
+
+# Unauthenticated liveness for the health-wait + Icinga (no token, no vantage
+# detail); the authenticated /v1/health stays bearer-gated.
+hyrule_prober_health_url: "http://[{{ hyrule_prober_host }}]:{{ hyrule_prober_port }}/healthz"
+
+hyrule_prober_packages:
+  - python3
+  - python3-venv
+  - python3-dev
+  - git
+  - ca-certificates
+  - curl
+  - iputils-ping
+  - traceroute
+  - dnsutils
