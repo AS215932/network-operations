@@ -340,7 +340,6 @@ class ZoneStore:
                 "zone-purge",
                 zone,
                 "+orphan",
-                "+zonefile",
                 "+journal",
                 "+timers",
                 "+kaspdb",

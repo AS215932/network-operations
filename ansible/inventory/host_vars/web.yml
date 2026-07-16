@@ -1,12 +1,12 @@
 ---
 # web — hyrule-web (uvicorn :8080 hyrule.host) + nginx (:8081 as215932.net).
 
-hyrule_web_version: 9228867a638185be6a5d1c99502c4c3af547bc53
+hyrule_web_version: 588c7e3bb25ca9770ec3f3b7052cb9d97d5f1bdc
 
 firewall_extra_rules:
   - { proto: tcp, dport: 8080, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "hyrule-web upstream from proxy/mon" }
   - { proto: tcp, dport: 8081, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "as215932.net upstream from proxy/mon" }
-  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}",   comment: "node_exporter scrape" }
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true

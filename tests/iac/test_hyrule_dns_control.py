@@ -156,6 +156,13 @@ class DNSControlTest(unittest.TestCase):
                 dns_control.parse_content_length(value)
             self.assertEqual(caught.exception.status, 400)
 
+    def test_customer_zone_include_follows_member_template_definition(self) -> None:
+        template = (REPO / "ansible/roles/knot/templates/knot.conf.j2").read_text()
+        member_template = "  - id: {{ knot_customer_member_template }}"
+        customer_include = 'include: "{{ knot_customer_zones_config }}"'
+
+        self.assertLess(template.index(member_template), template.index(customer_include))
+
     def test_pending_create_is_replayed_after_restart(self) -> None:
         interrupted = FakeRunner(("zone-sign", "example.dev"))
         store = dns_control.ZoneStore(self.settings, interrupted)
@@ -207,7 +214,6 @@ class DNSControlTest(unittest.TestCase):
                 "zone-purge",
                 "example.dev",
                 "+orphan",
-                "+zonefile",
                 "+journal",
                 "+timers",
                 "+kaspdb",
@@ -219,7 +225,6 @@ class DNSControlTest(unittest.TestCase):
                 "zone-purge",
                 "example.dev",
                 "+orphan",
-                "+zonefile",
                 "+journal",
                 "+timers",
                 "+kaspdb",
