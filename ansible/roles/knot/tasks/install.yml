@@ -4,6 +4,8 @@
     name:
       - "{{ knot_pkg }}"
       - "{{ knot_dnssecutils_pkg }}"
+      - "{{ knot_dnstap_module_pkg }}"
+      - "{{ knot_dnstap_cli_pkg }}"
     state: present
     update_cache: true
     cache_valid_time: 3600

@@ -5,7 +5,7 @@ $ORIGIN hyrule.host.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026071501 ; serial (YYYYMMDDNN)
+                  2026071601 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -38,6 +38,14 @@ cloud   IN  AAAA  2a0c:b641:b50:2::40
 api     IN  A     46.105.40.223
 api     IN  AAAA  2a0c:b641:b50:2::40
 
+; Network-observation plane. The family-specific HTTPS names deliberately
+; publish exactly one address family so an agent can test each path without a
+; browser. STUN is a binding-only listener on the proxy host.
+v4.check IN  A     46.105.40.223
+v6.check IN  AAAA  2a0c:b641:b50:2::40
+stun    IN  A     46.105.40.223
+stun    IN  AAAA  2a0c:b641:b50:2::40
+
 ; Branded registrar glue/host records for managed customer zones. The
 ; hyrule.host zone itself deliberately remains delegated to servify.network.
 ns1     IN  A     46.105.40.223
@@ -48,3 +56,8 @@ ns2     IN  AAAA  2001:41d0:304:300::7bfb
 ; Delegate customer VM records to the deploy.hyrule.host zone served by Knot.
 deploy  IN  NS    ns1.servify.network.
 deploy  IN  NS    ns2.servify.network.
+
+; DNS-leak probes use a dedicated zone so dnstap never captures queries for
+; the customer-facing or infrastructure zones.
+dns.check IN  NS  ns1.servify.network.
+dns.check IN  NS  ns2.servify.network.

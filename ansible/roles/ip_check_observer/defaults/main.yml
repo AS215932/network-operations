@@ -1,0 +1,15 @@
+---
+ip_check_observer_apply: false
+ip_check_observer_package: coturn
+ip_check_observer_service: coturn
+ip_check_observer_config: /etc/turnserver.conf
+ip_check_observer_listening_port: 3478
+ip_check_observer_listening_ipv4: 10.0.2.40
+ip_check_observer_listening_ipv6: "{{ peers.proxy.ipv6 }}"
+ip_check_observer_realm: stun.hyrule.host
+ip_check_observer_generated_dir: "{{ playbook_dir }}/../generated/proxy"
+ip_check_observer_caddy_binary: /usr/local/bin/caddy
+ip_check_observer_caddy_config: /etc/caddy/Caddyfile
+ip_check_observer_caddy_template: "{{ playbook_dir }}/../../configs/Caddyfile.j2"
+ip_check_observer_acme_email: admin@servify.network
+ip_check_observer_tsig_secret: "{{ lookup('env', 'TSIG_SECRET') }}"

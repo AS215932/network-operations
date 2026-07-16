@@ -52,6 +52,72 @@ cloud.hyrule.host, api.hyrule.host {
     }
 }
 
+# Family-specific network observation endpoints. DNS publishes only A for v4
+# and only AAAA for v6. The route surface is intentionally limited to one
+# session-bound POST; all browser evidence remains optional.
+v4.check.hyrule.host, v6.check.hyrule.host {
+    tls {
+        dns rfc2136 {
+            server [2a0c:b641:b50:2::10]:53
+            key_name hyrule-dns.
+            key_alg hmac-sha256
+            key {{ tsig_secret }}
+        }
+        propagation_delay 60s
+    }
+
+    @probe_preflight {
+        method OPTIONS
+        path_regexp probe_preflight_path ^/v1/ip-check/sessions/[^/]+/observe/http$
+    }
+    handle @probe_preflight {
+        header {
+            Access-Control-Allow-Origin "https://hyrule.host"
+            Access-Control-Allow-Methods "POST, OPTIONS"
+            Access-Control-Allow-Headers "Authorization, Content-Type"
+            Access-Control-Max-Age "600"
+            +Vary "Origin"
+            Cache-Control "no-store"
+        }
+        respond "" 204
+    }
+
+    @probe_post {
+        method POST
+        path_regexp probe_post_path ^/v1/ip-check/sessions/[^/]+/observe/http$
+    }
+    handle @probe_post {
+        header {
+            Access-Control-Allow-Origin "https://hyrule.host"
+            Access-Control-Allow-Methods "POST, OPTIONS"
+            Access-Control-Allow-Headers "Authorization, Content-Type"
+            +Vary "Origin"
+            Cache-Control "no-store"
+            Strict-Transport-Security "max-age=31536000; includeSubDomains"
+            X-Content-Type-Options "nosniff"
+            Referrer-Policy "no-referrer"
+            -Server
+        }
+        reverse_proxy [{{ peers.api.ipv6 }}]:8402 {
+            # Never trust an inbound forwarding chain: this address is the
+            # evidence, and Uvicorn explicitly trusts Caddy's replacement.
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto https
+            header_up Host {host}
+            transport http {
+                dial_timeout 3s
+                response_header_timeout 8s
+                read_timeout 15s
+                write_timeout 15s
+            }
+        }
+    }
+
+    handle {
+        respond "Not found" 404
+    }
+}
+
 # Web frontend — hyrule.host (+ www redirect to apex).
 # Both subjects share one site block so the TLS/proxy/header config isn't
 # duplicated. Caddy issues per-subject certs (not a SAN). Matches the

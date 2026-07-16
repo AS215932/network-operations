@@ -1,0 +1,72 @@
+---
+- name: Install coturn
+  apt:
+    name: "{{ ip_check_observer_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable coturn in Debian defaults
+  copy:
+    dest: /etc/default/coturn
+    content: "TURNSERVER_ENABLED=1\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart coturn
+
+- name: Install reviewed STUN-only configuration
+  template:
+    src: turnserver.conf.j2
+    dest: "{{ ip_check_observer_config }}"
+    owner: root
+    group: turnserver
+    mode: "0640"
+  notify: restart coturn
+
+- name: Enable and start coturn
+  systemd:
+    name: "{{ ip_check_observer_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Render candidate Caddy configuration
+  template:
+    src: "{{ ip_check_observer_caddy_template }}"
+    dest: "{{ ip_check_observer_caddy_config }}.ip-check.new"
+    owner: root
+    group: caddy
+    mode: "0640"
+  vars:
+    acme_email: "{{ ip_check_observer_acme_email }}"
+    tsig_secret: "{{ ip_check_observer_tsig_secret }}"
+  no_log: true
+
+- name: Validate candidate Caddy configuration
+  command:
+    argv:
+      - "{{ ip_check_observer_caddy_binary }}"
+      - validate
+      - --config
+      - "{{ ip_check_observer_caddy_config }}.ip-check.new"
+      - --adapter
+      - caddyfile
+  changed_when: false
+
+- name: Promote validated Caddy configuration
+  copy:
+    src: "{{ ip_check_observer_caddy_config }}.ip-check.new"
+    dest: "{{ ip_check_observer_caddy_config }}"
+    remote_src: true
+    owner: root
+    group: caddy
+    mode: "0640"
+    backup: true
+  no_log: true
+  notify: reload caddy
+
+- name: Remove candidate Caddy configuration
+  file:
+    path: "{{ ip_check_observer_caddy_config }}.ip-check.new"
+    state: absent

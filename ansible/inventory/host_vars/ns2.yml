@@ -65,4 +65,5 @@ host_meta:
   notes: "Off-net: not on the AS215932 overlay. NOTIFY from dns and outbound AXFR pull are TSIG-authenticated at the Knot ACL layer, not IP-restricted at the firewall."
 network_flows_outbound:
   - { to: dns, proto: tcp, port: 53, purpose: "AXFR pull from the primary on NOTIFY (TSIG hyrule-dns)" }
+  - { to: proxy, proto: tcp, port: 443, purpose: "HMAC-signed dns.check.hyrule.host observations over HTTPS" }
   - { to: log, proto: tcp, port: 6000, purpose: "off-net Vector agent to aggregator over public IPv6" }

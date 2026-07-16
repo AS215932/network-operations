@@ -8,11 +8,17 @@ knot_tsig_key_name: hyrule-dns
 # before running the playbook.
 knot_tsig_secret: "{{ lookup('env', 'TSIG_SECRET') }}"
 
+# The observer only consumes dnstap events from dns.check.hyrule.host and
+# forwards the resolver address to hyrule-cloud over a signed internal API.
+knot_ip_check_observer_enabled: true
+knot_ip_check_observer_secret: "{{ lookup('env', 'HYRULE_IP_CHECK_DNS_OBSERVER_SECRET') }}"
+
 # Zones served by every nameserver in this group. The primary (dns) loads
 # from /var/lib/knot/zones/<name>.zone; the secondary (ns2) AXFR-pulls.
 knot_zones:
   - name: servify.network
   - name: hyrule.host
   - name: deploy.hyrule.host
+  - name: dns.check.hyrule.host
   - name: as215932.net
   - name: 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa   # /48 = 12 nibbles of 2a0c:b641:0b50

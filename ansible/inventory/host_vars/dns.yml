@@ -46,3 +46,4 @@ host_meta:
   ipv4: "via rtr DNAT (46.105.40.223)"
 network_flows_outbound:
   - { to: ns2, proto: "tcp+udp", port: 53, purpose: "NOTIFY plus serve AXFR pull to the off-net secondary (TSIG hyrule-dns)" }
+  - { to: proxy, proto: tcp, port: 443, purpose: "HMAC-signed dns.check.hyrule.host observations over HTTPS" }

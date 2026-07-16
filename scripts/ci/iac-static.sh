@@ -42,6 +42,7 @@ if command -v named-checkzone >/dev/null 2>&1; then
   run named-checkzone servify.network configs/servify.network.zone
   run named-checkzone hyrule.host configs/hyrule.host.zone
   run named-checkzone deploy.hyrule.host configs/deploy.hyrule.host.zone
+  run named-checkzone dns.check.hyrule.host configs/dns.check.hyrule.host.zone
 else
   echo "::warning::named-checkzone not installed; skipping DNS zone parser checks"
 fi

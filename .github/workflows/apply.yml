@@ -34,6 +34,7 @@ on:
           - ci
           - ci-runner-key
           - knot
+          - ip-check-observer
           - extmon
           - engineering-loop
           - soc
