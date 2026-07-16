@@ -8,6 +8,7 @@ used as a DNS host.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import hmac
 import ipaddress
@@ -19,11 +20,11 @@ import subprocess
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import unquote, urlsplit
 
 
@@ -146,12 +147,25 @@ class ZoneStore:
         self.settings.zones_dir.mkdir(parents=True, exist_ok=True)
         self.settings.state_file.parent.mkdir(parents=True, exist_ok=True)
         self.settings.generated_config.parent.mkdir(parents=True, exist_ok=True)
-        self._state = self._load_state()
-        self._write_generated_config(self._state)
-        if self._state["pending"]:
-            # A state transition is journaled before Knot is mutated. Replaying
-            # it here makes every crash point converge on the intended zone.
-            self._recover_pending()
+        with self._mutation_guard():
+            self._state = self._load_state()
+            self._write_generated_config(self._state)
+            if self._state["pending"]:
+                # A state transition is journaled before Knot is mutated. Replaying
+                # it here makes every crash point converge on the intended zone.
+                self._recover_pending()
+
+    @contextmanager
+    def _mutation_guard(self) -> Iterator[None]:
+        """Serialize mutations with other threads and the online backup process."""
+        with self.lock:
+            lock_path = self.settings.state_file.parent / "mutation.lock"
+            with lock_path.open("a", encoding="utf-8") as handle:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def _load_state(self) -> dict[str, Any]:
         if not self.settings.state_file.exists():
@@ -236,7 +250,7 @@ class ZoneStore:
     def apply(self, zone: str, payload: dict[str, Any]) -> dict[str, Any]:
         zone = validate_zone(zone)
         normalized = validate_payload(payload, self.settings)
-        with self.lock:
+        with self._mutation_guard():
             self._recover_pending()
             current = self._state["zones"].get(zone)
             revision = normalized["revision"]
@@ -355,7 +369,7 @@ class ZoneStore:
 
     def delete(self, zone: str) -> dict[str, Any]:
         zone = validate_zone(zone)
-        with self.lock:
+        with self._mutation_guard():
             self._recover_pending()
             if zone not in self._state["zones"]:
                 return {"zone": zone, "deleted": False}
@@ -371,7 +385,7 @@ class ZoneStore:
 
     def dnskeys(self, zone: str) -> dict[str, Any]:
         zone = validate_zone(zone)
-        with self.lock:
+        with self._mutation_guard():
             self._recover_pending()
             if zone not in self._state["zones"]:
                 raise APIError(404, "zone_not_found", "The managed zone does not exist.")
@@ -402,7 +416,7 @@ class ZoneStore:
 
     def health(self) -> dict[str, Any]:
         try:
-            with self.lock:
+            with self._mutation_guard():
                 self._recover_pending()
             self.runner.knot("status")
         except CommandError as exc:

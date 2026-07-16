@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import hmac
 import importlib.util
 import json
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -156,12 +158,55 @@ class DNSControlTest(unittest.TestCase):
                 dns_control.parse_content_length(value)
             self.assertEqual(caught.exception.status, 400)
 
-    def test_customer_zone_include_follows_member_template_definition(self) -> None:
+    def test_customer_zone_include_follows_template_and_catalog_definition(self) -> None:
         template = (REPO / "ansible/roles/knot/templates/knot.conf.j2").read_text()
         member_template = "  - id: {{ knot_customer_member_template }}"
+        catalog_zone = "  - domain: {{ knot_customer_catalog_zone }}"
         customer_include = 'include: "{{ knot_customer_zones_config }}"'
 
         self.assertLess(template.index(member_template), template.index(customer_include))
+        self.assertLess(template.index(catalog_zone), template.index(customer_include))
+
+    def test_online_backup_holds_dns_mutation_lock_through_control_state_copy(self) -> None:
+        helper = (REPO / "ansible/roles/knot/templates/knot-online-backup.j2").read_text()
+        service = (
+            REPO / "ansible/roles/knot/templates/knot-online-backup.service.j2"
+        ).read_text()
+
+        lock = "/usr/bin/flock --exclusive 9"
+        snapshot = "zone-backup"
+        state_copy = 'cp {{ knot_dns_control_state_dir }}/state.json'
+        include_copy = 'cp {{ knot_customer_zones_config }}'
+        unlock = "/usr/bin/flock --unlock 9"
+        self.assertLess(helper.index(lock), helper.index(snapshot))
+        self.assertLess(helper.index(snapshot), helper.index(state_copy))
+        self.assertLess(helper.index(state_copy), helper.index(include_copy))
+        self.assertLess(helper.index(include_copy), helper.index(unlock))
+        self.assertIn("{{ knot_dns_control_state_dir }}", service)
+
+    def test_control_store_uses_backup_lock_for_mutations_and_recovery(self) -> None:
+        lock_path = self.settings.state_file.parent / "mutation.lock"
+        completed = threading.Event()
+        errors: list[BaseException] = []
+
+        def mutate() -> None:
+            try:
+                self.store.apply("example.dev", payload(1))
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                completed.set()
+
+        self.assertTrue(lock_path.exists())
+        with lock_path.open("a", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            worker = threading.Thread(target=mutate)
+            worker.start()
+            self.assertFalse(completed.wait(0.05))
+
+        self.assertTrue(completed.wait(2))
+        worker.join()
+        self.assertEqual(errors, [])
 
     def test_pending_create_is_replayed_after_restart(self) -> None:
         interrupted = FakeRunner(("zone-sign", "example.dev"))
