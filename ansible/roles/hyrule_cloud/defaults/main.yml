@@ -36,6 +36,11 @@ hyrule_cloud_worker_service_name: hyrule-cloud-worker
 # /health is the lightweight readiness probe (no DB hit). Bound to :: in
 # the unit; loopback works.
 hyrule_cloud_listen_url: http://[::1]:8402/health
+hyrule_cloud_payment_catalog_url: http://[::1]:8402/v1/payments/networks
+hyrule_cloud_required_x402_networks:
+  - solana
+hyrule_cloud_required_native_assets:
+  - BTC
 
 # Runtime secrets are rendered on the target VM by Vault Agent. CI should pass
 # a short-lived response-wrapped SecretID as VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID
@@ -77,10 +82,17 @@ hyrule_cloud_required_env_keys:
   - DOMAIN_AUTHCODE_FERNET_KEY
   - DOMAIN_OPENPROVIDER_WEBHOOK_SECRET
   - PAYMENT_RECEIVER_ADDRESS
+  - PAYMENT_RECEIVER_ADDRESSES
+  - PAYMENT_PAYMENT_NETWORKS
   - PAYMENT_FACILITATOR_URL
+  - CDP_API_KEY_ID
+  - CDP_API_KEY_SECRET
   - PAYMENT_REQUIRE_NATIVE
+  - PAYMENT_BTC_XPUB
   - PAYMENT_XMR_VIEWKEY
   - PAYMENT_XMR_RPC_URL
+  - PAYMENT_NATIVE_ASSETS_ENABLED
+  - PAYMENT_WORKER_HEARTBEAT_MAX_AGE_SECONDS
   - HYRULE_DNS_TSIG_KEY
   - HYRULE_DATABASE_URL
   - HYRULE_IP_PREFIX_PEPPER

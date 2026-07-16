@@ -71,6 +71,39 @@
   delay: 3
   until: hyrule_cloud_http.status == 200
 
+- name: Wait for production payment rails to become ready
+  ansible.builtin.uri:
+    url: "{{ hyrule_cloud_payment_catalog_url }}"
+    status_code: 200
+    return_content: true
+    timeout: 10
+  register: hyrule_cloud_payment_catalog
+  retries: 20
+  delay: 3
+  until:
+    - hyrule_cloud_payment_catalog.status == 200
+    - hyrule_cloud_payment_catalog.json.native_worker.ready | default(false) | bool
+    - >-
+      (hyrule_cloud_required_native_assets
+       | difference(hyrule_cloud_payment_catalog.json.native | default([]))
+       | length) == 0
+    - >-
+      (hyrule_cloud_required_x402_networks
+       | difference(hyrule_cloud_payment_catalog.json.networks
+                    | default([])
+                    | map(attribute='key')
+                    | list)
+       | length) == 0
+
+- name: Report payment rail deploy-gate evidence
+  ansible.builtin.debug:
+    msg:
+      x402_networks: >-
+        {{ hyrule_cloud_payment_catalog.json.networks
+           | map(attribute='key') | list }}
+      native_assets: "{{ hyrule_cloud_payment_catalog.json.native }}"
+      native_worker: "{{ hyrule_cloud_payment_catalog.json.native_worker }}"
+
 - name: Keep Monero wallet RPC stopped after cloud restart when native rails are disabled
   ansible.builtin.systemd:
     name: monero-wallet-rpc.service

@@ -48,7 +48,9 @@ check_repo_contracts() {
     openprovider_username openprovider_password \
     openprovider_owner_handle openprovider_admin_handle \
     openprovider_tech_handle openprovider_billing_handle \
-    payment_wallet tsig_secret db_password network_proxy_token; do
+    payment_wallet payment_receiver_addresses payment_networks \
+    cdp_api_key_id cdp_api_key_secret btc_xpub payment_native_assets_enabled \
+    tsig_secret db_password network_proxy_token; do
     if ! grep -q "\.Data\.data\.${key}" "$repo_root/ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"; then
       error "hyrule-cloud Vault template does not reference kv/data/hyrule-cloud key: ${key}"
     fi

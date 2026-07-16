@@ -15,6 +15,8 @@ AS/routing = `as215932.net`.
   running cloud app — i.e. `hyrule_cloud_version` in `ansible/inventory/host_vars/`
   has been **promoted** to a SHA that includes #29 and applied (see Promotion below).
 - A controlled **test order** and **test wallet / payment path** for the paid leg.
+- Payment-rail promotion has passed
+  [`payment-rails-canary.md`](./payment-rails-canary.md) for the selected rail.
 - Default is controlled simulation; real XCP-NG/Openprovider/DNS are opt-in on the
   cloud side via `HCP_LAUNCH_PROOF_REAL_XCPNG=1`.
 
