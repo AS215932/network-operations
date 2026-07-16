@@ -576,6 +576,18 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(command["chdir"], "{{ hyrule_cloud_install_dir }}")
         self.assertEqual(migration_task["environment"]["PYTHONPATH"], "{{ hyrule_cloud_install_dir }}")
 
+    def test_hyrule_cloud_worker_runs_source_module_from_virtual_project(self):
+        unit = (REPO / "configs/hyrule-cloud-worker.service").read_text()
+
+        self.assertIn(
+            "ExecStart=/opt/hyrule-cloud/.venv/bin/python -m hyrule_cloud.worker",
+            unit,
+        )
+        self.assertNotIn(
+            "ExecStart=/opt/hyrule-cloud/.venv/bin/hyrule-cloud-worker",
+            unit,
+        )
+
     def test_noc_action_signing_secret_has_no_empty_fallback(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
         noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
