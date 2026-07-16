@@ -474,6 +474,35 @@ def _normalize_txt_rdata(value: str) -> str:
     return f'"{escaped}"'
 
 
+def _validate_non_txt_rdata(value: str) -> str:
+    """Reject master-file syntax that could change the stored RDATA.
+
+    Whitespace and quoted strings are part of valid structured RDATA such as
+    MX, CAA, SRV, and HTTPS, so rejecting metacharacters wholesale would block
+    legitimate records. Track quotes and escapes instead: an unquoted
+    semicolon starts a comment, while parentheses alter master-file grouping.
+    """
+    quoted = False
+    escaped = False
+    for character in value:
+        if escaped:
+            escaped = False
+            continue
+        if character == "\\":
+            escaped = True
+        elif character == '"':
+            quoted = not quoted
+        elif not quoted and character in ";()":
+            raise APIError(
+                422,
+                "invalid_record",
+                "DNS values cannot contain unquoted zone-file metacharacters.",
+            )
+    if quoted or escaped:
+        raise APIError(422, "invalid_record", "A DNS value has invalid quoting.")
+    return value
+
+
 def validate_payload(payload: dict[str, Any], settings: Settings) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise APIError(400, "invalid_json", "The request body must be a JSON object.")
@@ -548,6 +577,8 @@ def validate_payload(payload: dict[str, Any], settings: Settings) -> dict[str, A
                 # TXT presentation format canonically so rendering and knotc
                 # transactions cannot silently truncate customer data.
                 value = _normalize_txt_rdata(value)
+            else:
+                value = _validate_non_txt_rdata(value)
             if value not in normalized_values:
                 normalized_values.append(value)
         normalized_records.append(

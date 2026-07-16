@@ -150,6 +150,46 @@ class DNSControlTest(unittest.TestCase):
             ['"v=DMARC1; p=none"'],
         )
 
+    def test_non_txt_zonefile_metacharacters_are_rejected_before_state_changes(self) -> None:
+        desired = payload(1)
+        desired["records"] = [
+            {
+                "name": "www",
+                "type": "CNAME",
+                "ttl": 300,
+                "values": ["target.example. ; stale"],
+            }
+        ]
+
+        with self.assertRaises(dns_control.APIError) as caught:
+            self.store.apply("example.dev", desired)
+
+        self.assertEqual(caught.exception.status, 422)
+        self.assertEqual(caught.exception.code, "invalid_record")
+        self.assertEqual(self.store._state["zones"], {})
+        self.assertEqual(self.store._state["pending"], {})
+        self.assertFalse((self.settings.zones_dir / "example.dev.zone").exists())
+        self.assertNotIn("domain: example.dev", self.settings.generated_config.read_text())
+
+    def test_quoted_non_txt_metacharacters_remain_valid_rdata(self) -> None:
+        desired = payload(1)
+        desired["records"] = [
+            {
+                "name": "@",
+                "type": "CAA",
+                "ttl": 300,
+                "values": ['0 issue "letsencrypt.org; validationmethods=dns-01"'],
+            }
+        ]
+
+        self.store.apply("example.dev", desired)
+
+        zonefile = (self.settings.zones_dir / "example.dev.zone").read_text()
+        self.assertIn(
+            '@ 300 IN CAA 0 issue "letsencrypt.org; validationmethods=dns-01"',
+            zonefile,
+        )
+
     def test_content_length_validation_rejects_malformed_values(self) -> None:
         self.assertEqual(dns_control.parse_content_length(None), 0)
         self.assertEqual(dns_control.parse_content_length("12"), 12)
