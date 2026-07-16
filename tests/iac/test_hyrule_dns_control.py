@@ -1,0 +1,190 @@
+from __future__ import annotations
+
+import hashlib
+import hmac
+import importlib.util
+import json
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+
+REPO = Path(__file__).resolve().parents[2]
+MODULE_PATH = REPO / "ansible/roles/knot/files/hyrule_dns_control.py"
+SPEC = importlib.util.spec_from_file_location("hyrule_dns_control", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
+dns_control = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = dns_control
+SPEC.loader.exec_module(dns_control)
+
+
+class FakeRunner:
+    def __init__(self, fail_once: tuple[str, ...] | None = None) -> None:
+        self.commands: list[tuple[str, ...]] = []
+        self.checked: list[tuple[str, Path]] = []
+        self.fail_once = fail_once
+        self.failed = False
+
+    def knot(self, *args: str, **_kwargs: object) -> str:
+        self.commands.append(args)
+        if args == self.fail_once and not self.failed:
+            self.failed = True
+            raise dns_control.CommandError("simulated Knot interruption")
+        if args[:3] == ("zone-read", "example.dev", "@"):
+            return "example.dev. 3600 DNSKEY 257 3 13 AABBCC==\n"
+        return ""
+
+    def check_zonefile(self, zone: str, path: Path) -> None:
+        self.checked.append((zone, path))
+
+
+def payload(revision: int, address: str = "192.0.2.10") -> dict[str, object]:
+    return {
+        "revision": revision,
+        "nameservers": ["ns1.hyrule.host", "ns2.hyrule.host"],
+        "soa_mname": "ns1.hyrule.host",
+        "soa_rname": "hostmaster.hyrule.host",
+        "dnssec": True,
+        "records": [{"name": "www", "type": "A", "ttl": 300, "values": [address]}],
+    }
+
+
+class DNSControlTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        root = Path(self.temporary.name)
+        self.settings = dns_control.Settings(
+            secret="s" * 32,
+            state_file=root / "state/state.json",
+            generated_config=root / "customer-zones.conf",
+            zones_dir=root / "zones",
+            knot_config=root / "knot.conf",
+        )
+        self.runner = FakeRunner()
+        self.store = dns_control.ZoneStore(self.settings, self.runner)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_create_update_dnskey_and_delete(self) -> None:
+        created = self.store.apply("EXAMPLE.DEV.", payload(1))
+        self.assertTrue(created["created"])
+        self.assertIn("domain: example.dev", self.settings.generated_config.read_text())
+        zonefile = (self.settings.zones_dir / "example.dev.zone").read_text()
+        self.assertIn("NS ns1.hyrule.host.", zonefile)
+        self.assertIn("NS ns2.hyrule.host.", zonefile)
+        self.assertIn(("reload",), self.runner.commands)
+        self.assertIn(("zone-sign", "example.dev"), self.runner.commands)
+
+        # Same revision and state is idempotent; a newer one is a Knot zone
+        # transaction and does not rewrite catalog membership.
+        self.assertFalse(self.store.apply("example.dev", payload(1))["created"])
+        self.store.apply("example.dev", payload(2, "192.0.2.20"))
+        self.assertIn(("zone-begin", "example.dev", "+benevolent"), self.runner.commands)
+        self.assertIn(("zone-unset", "example.dev", "www", "A"), self.runner.commands)
+        self.assertIn(
+            ("zone-set", "example.dev", "www", "300", "A", "192.0.2.20"),
+            self.runner.commands,
+        )
+        self.assertIn(("zone-commit", "example.dev"), self.runner.commands)
+
+        keys = self.store.dnskeys("example.dev")["dnskey"]
+        self.assertEqual(keys[0]["flags"], 257)
+        self.assertEqual(keys[0]["algorithm"], 13)
+        self.assertEqual(keys[0]["pub_key"], "AABBCC==")
+
+        self.assertTrue(self.store.delete("example.dev")["deleted"])
+        self.assertNotIn("domain: example.dev", self.settings.generated_config.read_text())
+
+    def test_revision_and_zone_validation_fail_closed(self) -> None:
+        self.store.apply("example.dev", payload(2))
+        with self.assertRaisesRegex(dns_control.APIError, "stale"):
+            self.store.apply("example.dev", payload(1))
+        changed = payload(2, "192.0.2.99")
+        with self.assertRaisesRegex(dns_control.APIError, "reused"):
+            self.store.apply("example.dev", changed)
+        with self.assertRaises(dns_control.APIError):
+            self.store.apply("nested.example.dev", payload(1))
+
+    def test_hmac_binds_timestamp_method_path_and_body(self) -> None:
+        body = b'{"revision":1}'
+        timestamp = str(int(time.time()))
+        path = "/v1/zones/example.dev"
+        digest = hashlib.sha256(body).hexdigest()
+        signing_input = "\n".join([timestamp, "PUT", path, digest]).encode()
+        signature = hmac.new(
+            self.settings.secret.encode(), signing_input, hashlib.sha256
+        ).hexdigest()
+        dns_control.verify_signature(
+            self.settings, timestamp, f"sha256={signature}", "PUT", path, body
+        )
+        with self.assertRaises(dns_control.APIError):
+            dns_control.verify_signature(
+                self.settings, timestamp, f"sha256={signature}", "DELETE", path, body
+            )
+
+    def test_pending_create_is_replayed_after_restart(self) -> None:
+        interrupted = FakeRunner(("zone-sign", "example.dev"))
+        store = dns_control.ZoneStore(self.settings, interrupted)
+        with self.assertRaisesRegex(dns_control.CommandError, "interruption"):
+            store.apply("example.dev", payload(1))
+
+        state = json.loads(self.settings.state_file.read_text())
+        self.assertEqual(state["zones"], {})
+        self.assertEqual(state["pending"]["example.dev"]["action"], "upsert")
+
+        recovered_runner = FakeRunner()
+        recovered = dns_control.ZoneStore(self.settings, recovered_runner)
+        state = json.loads(self.settings.state_file.read_text())
+        self.assertEqual(state["pending"], {})
+        self.assertEqual(state["zones"]["example.dev"]["revision"], 1)
+        self.assertIn(("reload",), recovered_runner.commands)
+        self.assertIn(("zone-sign", "example.dev"), recovered_runner.commands)
+        self.assertFalse(recovered.apply("example.dev", payload(1))["created"])
+
+    def test_pending_update_and_delete_are_convergent(self) -> None:
+        self.store.apply("example.dev", payload(1))
+        self.runner.fail_once = ("zone-sign", "example.dev")
+        with self.assertRaisesRegex(dns_control.CommandError, "interruption"):
+            self.store.apply("example.dev", payload(2, "192.0.2.20"))
+
+        update_runner = FakeRunner()
+        recovered = dns_control.ZoneStore(self.settings, update_runner)
+        state = json.loads(self.settings.state_file.read_text())
+        self.assertEqual(state["zones"]["example.dev"]["revision"], 2)
+        self.assertEqual(state["pending"], {})
+        self.assertIn(
+            ("zone-set", "example.dev", "www", "300", "A", "192.0.2.20"),
+            update_runner.commands,
+        )
+
+        update_runner.fail_once = ("reload",)
+        with self.assertRaisesRegex(dns_control.CommandError, "interruption"):
+            recovered.delete("example.dev")
+        self.assertNotIn("domain: example.dev", self.settings.generated_config.read_text())
+
+        delete_runner = FakeRunner()
+        dns_control.ZoneStore(self.settings, delete_runner)
+        state = json.loads(self.settings.state_file.read_text())
+        self.assertNotIn("example.dev", state["zones"])
+        self.assertEqual(state["pending"], {})
+        self.assertIn(("reload",), delete_runner.commands)
+        self.assertIn(
+            (
+                "zone-purge",
+                "example.dev",
+                "+orphan",
+                "+zonefile",
+                "+journal",
+                "+timers",
+                "+keys",
+                "+kaspdb",
+            ),
+            delete_runner.commands,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -26,6 +26,10 @@ firewall_extra_rules:
   # RFC 2136 dynamic updates from api (TSIG), proxy (ACME DNS-01), irc (ACME DNS-01).
   - { proto: tcp, dport: 53, src: ["{{ peers.api.ipv6 }}", "{{ peers.proxy.ipv6 }}", "{{ peers.irc.ipv6 }}"], comment: "RFC 2136 dyn updates from api/proxy/irc" }
 
+  # Desired-state customer-zone control. HMAC-authenticated by the service and
+  # reachable only from the hyrule-cloud API host.
+  - { proto: tcp, dport: 8453, src: "{{ peers.api.ipv6 }}", family: ip6, comment: "Hyrule managed DNS control from api" }
+
   # Monitoring.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 

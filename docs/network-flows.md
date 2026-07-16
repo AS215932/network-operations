@@ -88,6 +88,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
 | openprovider | tcp | 443 | domain registration API |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
+| dns | tcp | 8453 | HMAC-authenticated managed customer DNS control |
 
 ### ci — Privileged self-hosted GitHub Actions runner for AS215932/network-operations; runs apply jobs against the fleet.
 
@@ -199,6 +200,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | ops-prefix | tcp | 53 | AXFR from ops-prefix (v6) |
 | ops-prefix (v4) | tcp (v4) | 53 | AXFR from ops-prefix (v4) |
 | any | tcp+udp (v4+v6) | 53 | auth DNS from world |
+| api | tcp | 8453 | Hyrule managed DNS control from api |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**

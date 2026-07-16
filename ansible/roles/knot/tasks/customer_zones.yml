@@ -1,0 +1,87 @@
+---
+- name: Install Hyrule DNS control service program
+  copy:
+    src: hyrule_dns_control.py
+    dest: /usr/local/libexec/hyrule-dns-control.py
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - knot_role == "primary"
+    - knot_dns_control_enabled | bool
+  notify: restart hyrule-dns-control
+
+- name: Render Hyrule DNS control environment
+  template:
+    src: hyrule-dns-control.env.j2
+    dest: "{{ knot_dns_control_env_file }}"
+    owner: root
+    group: knot
+    mode: "0640"
+  when:
+    - knot_role == "primary"
+    - knot_dns_control_enabled | bool
+  notify: restart hyrule-dns-control
+
+- name: Install Hyrule DNS control systemd unit
+  template:
+    src: hyrule-dns-control.service.j2
+    dest: /etc/systemd/system/hyrule-dns-control.service
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - knot_role == "primary"
+    - knot_dns_control_enabled | bool
+  notify:
+    - reload systemd
+    - restart hyrule-dns-control
+
+- name: Enable and start Hyrule DNS control
+  systemd:
+    name: hyrule-dns-control.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - knot_role == "primary"
+    - knot_dns_control_enabled | bool
+
+- name: Ensure Knot online-backup directory exists
+  file:
+    path: "{{ knot_backup_dir }}"
+    state: directory
+    owner: knot
+    group: knot
+    mode: "0700"
+  when: knot_backup_enabled | bool
+
+- name: Install Knot online-backup helper
+  template:
+    src: knot-online-backup.j2
+    dest: /usr/local/sbin/knot-online-backup
+    owner: root
+    group: root
+    mode: "0755"
+  when: knot_backup_enabled | bool
+
+- name: Install Knot online-backup systemd units
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - knot-online-backup.service
+    - knot-online-backup.timer
+  when: knot_backup_enabled | bool
+  notify: reload systemd
+
+- name: Enable Knot online-backup timer
+  systemd:
+    name: knot-online-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: knot_backup_enabled | bool

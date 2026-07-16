@@ -1,0 +1,29 @@
+[Unit]
+Description=Hyrule managed DNS control plane
+After=network-online.target {{ knot_service }}.service
+Requires={{ knot_service }}.service
+
+[Service]
+Type=exec
+User=knot
+Group=knot
+EnvironmentFile={{ knot_dns_control_env_file }}
+ExecStart=/usr/bin/python3 /usr/local/libexec/hyrule-dns-control.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths={{ knot_customer_zones_dir }} {{ knot_dns_control_state_dir }} {{ knot_customer_zones_config }} /var/lib/knot
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-dns-control
+
+[Install]
+WantedBy=multi-user.target

@@ -50,6 +50,16 @@
   notify:
     - reload systemd
 
+- name: Install /etc/systemd/system/hyrule-cloud-worker.service
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/hyrule-cloud-worker.service"
+    dest: /etc/systemd/system/hyrule-cloud-worker.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+
 - name: Ensure Monero wallet RPC directory exists
   ansible.builtin.file:
     path: "{{ hyrule_cloud_monero_wallet_dir }}"

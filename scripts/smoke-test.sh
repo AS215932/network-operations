@@ -86,8 +86,9 @@ check_shell "GET /v1/os/list returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_D
 check_shell "GET /v1/payments/networks returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/payments/networks' | python3 -m json.tool"
 check_shell "GET /v1/payments/networks advertises BTC/XMR" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/payments/networks' | python3 -c 'import json,sys; native=json.load(sys.stdin).get(\"native\", []); raise SystemExit(0 if {\"BTC\",\"XMR\"}.issubset(set(native)) else 1)'"
 check_shell "x402 manifest at /.well-known/x402.json" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -m json.tool"
-check_shell "x402 manifest advertises VM/domain/network resources" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -c 'import json,sys; paths={r.get(\"path\") for r in json.load(sys.stdin).get(\"resources\", [])}; raise SystemExit(0 if {\"/v1/vm/create\",\"/v1/domain/register\",\"/v1/network/request\"}.issubset(paths) else 1)'"
-check_shell "GET /v1/domain/check returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/domain/check?domain=example.com' | python3 -m json.tool"
+check_shell "x402 manifest advertises VM/network resources" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/.well-known/x402.json' | python3 -c 'import json,sys; paths={r.get(\"path\") for r in json.load(sys.stdin).get(\"resources\", [])}; raise SystemExit(0 if {\"/v1/vm/create\",\"/v1/network/request\"}.issubset(paths) else 1)'"
+check_shell "GET /v1/domains/check returns JSON" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/domains/check?domain=example.com' | python3 -m json.tool"
+check_shell "managed-domain OpenAPI document is published" "curl -6 -sf 'https://$CUSTOMER_API_DOMAIN/v1/domains/openapi.json' | python3 -m json.tool"
 check_shell "POST /v1/network/request requires payment" "test \"\$(curl -6 -s -o /dev/null -w '%{http_code}' -X POST 'https://$CUSTOMER_API_DOMAIN/v1/network/request' -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com\",\"proxy_mode\":\"direct\"}')\" = '402'"
 
 # --- Web Frontend ---
