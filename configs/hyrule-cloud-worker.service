@@ -15,7 +15,11 @@ Group=hyrule
 WorkingDirectory=/opt/hyrule-cloud
 EnvironmentFile=/opt/hyrule-cloud/.env
 Environment=PYTHONPATH=/opt/hyrule-cloud
-ExecStart=/opt/hyrule-cloud/.venv/bin/hyrule-cloud-worker
+# uv treats hyrule-cloud as a virtual project because it has no explicit
+# build-system, so project console scripts are not installed by `uv sync`.
+# Launch the checked-out module through the venv interpreter, matching the
+# PYTHONPATH-based API service contract above.
+ExecStart=/opt/hyrule-cloud/.venv/bin/python -m hyrule_cloud.worker
 Restart=always
 RestartSec=5
 StandardOutput=journal
