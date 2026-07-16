@@ -1,7 +1,9 @@
 ---
 - name: Install Knot DNS
   apt:
-    name: "{{ knot_pkg }}"
+    name:
+      - "{{ knot_pkg }}"
+      - "{{ knot_dnssecutils_pkg }}"
     state: present
     update_cache: true
     cache_valid_time: 3600

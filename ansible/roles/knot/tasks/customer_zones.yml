@@ -15,9 +15,9 @@
   template:
     src: hyrule-dns-control.env.j2
     dest: "{{ knot_dns_control_env_file }}"
-    owner: root
+    owner: knot
     group: knot
-    mode: "0640"
+    mode: "0600"
   when:
     - knot_role == "primary"
     - knot_dns_control_enabled | bool

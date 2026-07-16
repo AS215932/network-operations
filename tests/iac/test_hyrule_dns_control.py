@@ -23,12 +23,14 @@ SPEC.loader.exec_module(dns_control)
 class FakeRunner:
     def __init__(self, fail_once: tuple[str, ...] | None = None) -> None:
         self.commands: list[tuple[str, ...]] = []
+        self.options: list[dict[str, object]] = []
         self.checked: list[tuple[str, Path]] = []
         self.fail_once = fail_once
         self.failed = False
 
-    def knot(self, *args: str, **_kwargs: object) -> str:
+    def knot(self, *args: str, **kwargs: object) -> str:
         self.commands.append(args)
+        self.options.append(kwargs)
         if args == self.fail_once and not self.failed:
             self.failed = True
             raise dns_control.CommandError("simulated Knot interruption")
@@ -125,6 +127,35 @@ class DNSControlTest(unittest.TestCase):
                 self.settings, timestamp, f"sha256={signature}", "DELETE", path, body
             )
 
+    def test_txt_values_are_quoted_before_zonefile_rendering(self) -> None:
+        desired = payload(1)
+        desired["records"] = [
+            {
+                "name": "_dmarc",
+                "type": "TXT",
+                "ttl": 300,
+                "values": ["v=DMARC1; p=none"],
+            }
+        ]
+
+        self.store.apply("example.dev", desired)
+
+        zonefile = (self.settings.zones_dir / "example.dev.zone").read_text()
+        self.assertIn('_dmarc 300 IN TXT "v=DMARC1; p=none"', zonefile)
+        state = json.loads(self.settings.state_file.read_text())
+        self.assertEqual(
+            state["zones"]["example.dev"]["records"][0]["values"],
+            ['"v=DMARC1; p=none"'],
+        )
+
+    def test_content_length_validation_rejects_malformed_values(self) -> None:
+        self.assertEqual(dns_control.parse_content_length(None), 0)
+        self.assertEqual(dns_control.parse_content_length("12"), 12)
+        for value in ("not-a-number", "-1"):
+            with self.subTest(value=value), self.assertRaises(dns_control.APIError) as caught:
+                dns_control.parse_content_length(value)
+            self.assertEqual(caught.exception.status, 400)
+
     def test_pending_create_is_replayed_after_restart(self) -> None:
         interrupted = FakeRunner(("zone-sign", "example.dev"))
         store = dns_control.ZoneStore(self.settings, interrupted)
@@ -179,10 +210,24 @@ class DNSControlTest(unittest.TestCase):
                 "+zonefile",
                 "+journal",
                 "+timers",
-                "+keys",
                 "+kaspdb",
             ),
             delete_runner.commands,
+        )
+        purge_index = delete_runner.commands.index(
+            (
+                "zone-purge",
+                "example.dev",
+                "+orphan",
+                "+zonefile",
+                "+journal",
+                "+timers",
+                "+kaspdb",
+            )
+        )
+        self.assertEqual(
+            delete_runner.options[purge_index],
+            {"blocking": True, "force": True},
         )
 
 

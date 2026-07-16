@@ -100,10 +100,18 @@ class KnotRunner:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def knot(self, *args: str, blocking: bool = False, check: bool = True) -> str:
+    def knot(
+        self,
+        *args: str,
+        blocking: bool = False,
+        force: bool = False,
+        check: bool = True,
+    ) -> str:
         command = [self.settings.knotc, "-c", str(self.settings.knot_config)]
         if blocking:
             command.append("-b")
+        if force:
+            command.append("-f")
         command.extend(args)
         completed = subprocess.run(
             command,
@@ -335,10 +343,9 @@ class ZoneStore:
                 "+zonefile",
                 "+journal",
                 "+timers",
-                "+keys",
                 "+kaspdb",
                 blocking=True,
-                check=False,
+                force=True,
             )
             (self.settings.zones_dir / f"{zone}.zone").unlink(missing_ok=True)
             committed = json.loads(json.dumps(self._state))
@@ -443,6 +450,17 @@ def _validate_owner(value: Any) -> str:
     return owner
 
 
+QUOTED_TXT_RE = re.compile(r'(?:"(?:\\.|[^"\\])*"(?:\s+|$))+')
+
+
+def _normalize_txt_rdata(value: str) -> str:
+    """Keep valid quoted TXT chunks or safely quote plain-text input."""
+    if QUOTED_TXT_RE.fullmatch(value):
+        return value
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
 def validate_payload(payload: dict[str, Any], settings: Settings) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise APIError(400, "invalid_json", "The request body must be a JSON object.")
@@ -512,6 +530,11 @@ def validate_payload(payload: dict[str, Any], settings: Settings) -> dict[str, A
                 if address.version != expected:
                     raise APIError(422, "invalid_record", "An address family is invalid.")
                 value = str(address)
+            elif record_type == "TXT":
+                # In a zone file an unquoted semicolon begins a comment. Store
+                # TXT presentation format canonically so rendering and knotc
+                # transactions cannot silently truncate customer data.
+                value = _normalize_txt_rdata(value)
             if value not in normalized_values:
                 normalized_values.append(value)
         normalized_records.append(
@@ -564,6 +587,22 @@ def verify_signature(
         raise APIError(401, "invalid_signature", "The request signature is invalid.")
 
 
+def parse_content_length(value: str | None) -> int:
+    try:
+        length = int(value or "0")
+    except ValueError as exc:
+        raise APIError(
+            400, "invalid_content_length", "Content-Length must be a non-negative integer."
+        ) from exc
+    if length < 0:
+        raise APIError(
+            400, "invalid_content_length", "Content-Length must be a non-negative integer."
+        )
+    if length > MAX_BODY_BYTES:
+        raise APIError(413, "body_too_large", "The request body is too large.")
+    return length
+
+
 class DNSControlHandler(BaseHTTPRequestHandler):
     server_version = "HyruleDNSControl/1"
 
@@ -590,9 +629,7 @@ class DNSControlHandler(BaseHTTPRequestHandler):
 
     def _dispatch(self) -> None:
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length < 0 or length > MAX_BODY_BYTES:
-                raise APIError(413, "body_too_large", "The request body is too large.")
+            length = parse_content_length(self.headers.get("Content-Length"))
             body = self.rfile.read(length) if length else b""
             path = urlsplit(self.path).path
             verify_signature(
