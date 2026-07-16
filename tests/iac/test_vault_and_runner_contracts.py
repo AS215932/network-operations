@@ -667,6 +667,31 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/ci-runner", policy)
         self.assertNotIn("kv/data/noc-agent", policy)
 
+    def test_hyrule_cloud_domain_purchases_require_both_launch_allowlists(self):
+        template = (
+            REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
+        ).read_text()
+
+        self.assertIn(
+            '{{ $domainTlds := or .Data.data.domain_tld_allowlist "[]" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainAccounts := or .Data.data.domain_account_allowlist "[]" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainLaunchAllowed := and (gt (len (parseJSON $domainTlds)) 0) '
+            '(gt (len (parseJSON $domainAccounts)) 0) }}',
+            template,
+        )
+        self.assertIn(
+            'DOMAIN_PURCHASES_ENABLED={{ if and '
+            '(eq (printf "%v" $domainPurchases) "true") $domainLaunchAllowed }}'
+            'true{{ else }}false{{ end }}',
+            template,
+        )
+
     def test_cloud_role_no_longer_renders_secret_env_from_ansible(self):
         role_text = "\n".join(path.read_text() for path in (REPO / "ansible/roles/hyrule_cloud/tasks").glob("*.yml"))
         self.assertNotIn("configs/hyrule-cloud.env.j2", role_text)

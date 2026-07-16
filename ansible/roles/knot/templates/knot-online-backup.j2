@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+umask 077
+
+root={{ knot_backup_dir }}
+destination="$root/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$destination"
+
+# DNS mutations and recovery take the same advisory lock. Hold it until the
+# Knot snapshot and both control-plane files represent one consistent point.
+exec 9>{{ knot_dns_control_state_dir }}/mutation.lock
+/usr/bin/flock --exclusive 9
+/usr/sbin/knotc -c {{ knot_conf_path }} -b zone-backup +backupdir "$destination" +zonefile +journal +timers +kaspdb +catalog
+# Keep the control plane's durable journal beside the Knot snapshot. The state
+# file is atomically replaced, so each copy is complete; a captured pending
+# transition is intentionally replayed when the control service starts.
+if [ -f {{ knot_dns_control_state_dir }}/state.json ]; then
+  cp {{ knot_dns_control_state_dir }}/state.json "$destination/hyrule-dns-control-state.json"
+fi
+if [ -f {{ knot_customer_zones_config }} ]; then
+  cp {{ knot_customer_zones_config }} "$destination/customer-zones.conf"
+fi
+/usr/bin/flock --unlock 9
+
+find "$root" -mindepth 1 -maxdepth 1 -type d -mtime +{{ knot_backup_retention_days }} -exec rm -rf -- {} +

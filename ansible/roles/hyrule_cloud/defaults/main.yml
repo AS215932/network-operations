@@ -32,6 +32,7 @@ hyrule_cloud_version: main
 hyrule_cloud_deploy_key_path: "{{ hyrule_cloud_state_dir }}/.ssh/id_hyrule_cloud"
 
 hyrule_cloud_service_name: hyrule-cloud
+hyrule_cloud_worker_service_name: hyrule-cloud-worker
 # /health is the lightweight readiness probe (no DB hit). Bound to :: in
 # the unit; loopback works.
 hyrule_cloud_listen_url: http://[::1]:8402/health
@@ -69,6 +70,12 @@ hyrule_cloud_required_env_keys:
   - OPENPROVIDER_ADMIN_HANDLE
   - OPENPROVIDER_TECH_HANDLE
   - OPENPROVIDER_BILLING_HANDLE
+  - DOMAIN_PURCHASES_ENABLED
+  - DOMAIN_LEGAL_APPROVED
+  - DOMAIN_TAX_APPROVED
+  - DOMAIN_DNS_CONTROL_SECRET
+  - DOMAIN_AUTHCODE_FERNET_KEY
+  - DOMAIN_OPENPROVIDER_WEBHOOK_SECRET
   - PAYMENT_RECEIVER_ADDRESS
   - PAYMENT_FACILITATOR_URL
   - PAYMENT_REQUIRE_NATIVE

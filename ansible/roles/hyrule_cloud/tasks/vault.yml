@@ -39,14 +39,14 @@
             'name': 'hyrule-cloud-monero.env.ctmpl',
             'destination': hyrule_cloud_monero_wallet_rpc_env_file,
             'group': hyrule_cloud_app_group,
-            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_worker_service_name ~ '.service',
           },
           {
             'src': 'hyrule-cloud-monero-password.ctmpl.j2',
             'name': 'hyrule-cloud-monero-password.ctmpl',
             'destination': hyrule_cloud_monero_wallet_rpc_password_file,
             'group': hyrule_cloud_app_group,
-            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_worker_service_name ~ '.service',
           },
         ]
       }}

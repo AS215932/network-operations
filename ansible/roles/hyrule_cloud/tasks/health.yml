@@ -27,6 +27,12 @@
     state: restarted
     enabled: true
 
+- name: Restart dedicated hyrule-cloud worker (deterministic on every apply)
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_worker_service_name }}"
+    state: restarted
+    enabled: true
+
 - name: Check hyrule-cloud systemd state
   ansible.builtin.systemd:
     name: "{{ hyrule_cloud_service_name }}"
@@ -39,6 +45,20 @@
     fail_msg: >-
       hyrule-cloud.service is {{ hyrule_cloud_service.status.ActiveState }};
       expected "active". Check journalctl -u hyrule-cloud on the target.
+
+- name: Check hyrule-cloud worker systemd state
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_worker_service_name }}"
+  register: hyrule_cloud_worker_service
+
+- name: Assert hyrule-cloud worker is active
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_worker_service.status.ActiveState == "active"
+    fail_msg: >-
+      hyrule-cloud-worker.service is
+      {{ hyrule_cloud_worker_service.status.ActiveState }}; expected "active".
+      Check journalctl -u hyrule-cloud-worker on the target.
 
 - name: HTTP health check (local loopback)
   ansible.builtin.uri:

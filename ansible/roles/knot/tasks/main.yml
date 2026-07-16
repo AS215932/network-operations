@@ -11,6 +11,17 @@
         set -a; source secrets.local.sh; set +a
   tags: [validate, diff, apply]
 
+- name: Assert customer DNS control secret is provided on the primary
+  assert:
+    that: knot_dns_control_secret | length >= 32
+    fail_msg: >-
+      HYRULE_DNS_CONTROL_SECRET must be exported with the same 32+ character
+      value stored in Vault kv/hyrule-cloud.
+  when:
+    - knot_role == "primary"
+    - knot_dns_control_enabled | bool
+  tags: [validate, diff, apply]
+
 - name: Install knot prerequisites
   include_tasks: install.yml
   when: knot_apply | default(false) | bool
@@ -39,4 +50,9 @@
   when:
     - knot_role == "primary"
     - knot_apply | default(false) | bool
+  tags: [apply]
+
+- name: Install customer-zone control plane and backups
+  include_tasks: customer_zones.yml
+  when: knot_apply | default(false) | bool
   tags: [apply]
