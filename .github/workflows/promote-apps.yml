@@ -127,7 +127,39 @@ jobs:
                 ;;
             esac
 
-            canonical="$(gh api "repos/${repo}/commits/${sha}" --jq .sha)"
+            # Keep the authenticated path for normal operation, but do not let
+            # a malformed GitHub API edge response wedge all promotions. The
+            # allowlist above contains public repositories, so an anonymous
+            # fallback can still verify the exact commit without broadening the
+            # promotion App token beyond network-operations.
+            canonical=""
+            for attempt in 1 2 3; do
+              if canonical="$(gh api "repos/${repo}/git/commits/${sha}" --jq .sha)"; then
+                break
+              fi
+
+              canonical=""
+              echo "::warning::Authenticated source commit lookup failed (attempt ${attempt}/3)"
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 2))
+              fi
+            done
+
+            if [ -z "$canonical" ]; then
+              echo "::warning::Falling back to public source commit verification"
+              canonical="$(
+                curl --fail-with-body --silent --show-error \
+                  --connect-timeout 5 \
+                  --max-time 20 \
+                  --retry 3 \
+                  --retry-all-errors \
+                  --header "Accept: application/vnd.github+json" \
+                  --header "X-GitHub-Api-Version: 2022-11-28" \
+                  "https://api.github.com/repos/${repo}/git/commits/${sha}" |
+                  jq -er .sha
+              )"
+            fi
+
             if [ "$canonical" != "$sha" ]; then
               echo "::error::commit ${sha} was not found in ${repo}"
               exit 1
