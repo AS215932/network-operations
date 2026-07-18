@@ -53,6 +53,13 @@
   tags: [apply]
 
 - name: Install customer-zone control plane and backups
-  include_tasks: customer_zones.yml
+  # Dynamic includes do not pass their tags to included tasks automatically.
+  # Propagate `apply` so the production workflow's `--tags apply` invocation
+  # installs the control service and backup units instead of only expanding
+  # this include.
+  ansible.builtin.include_tasks:
+    file: customer_zones.yml
+    apply:
+      tags: [apply]
   when: knot_apply | default(false) | bool
   tags: [apply]
