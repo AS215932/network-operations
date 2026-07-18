@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  author: AS215932
+  description: Deploy the overlay-bound Hyrule Beacon visibility worker
+  min_ansible_version: "2.16"
+dependencies: []

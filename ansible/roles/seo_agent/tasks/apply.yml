@@ -1,0 +1,117 @@
+---
+- name: Ensure seo-agent packages are installed
+  ansible.builtin.apt:
+    name: "{{ seo_agent_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled for seo-agent
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Ensure seo-agent group exists
+  ansible.builtin.group:
+    name: "{{ seo_agent_group }}"
+    state: present
+    system: true
+
+- name: Ensure seo-agent user exists
+  ansible.builtin.user:
+    name: "{{ seo_agent_user }}"
+    group: "{{ seo_agent_group }}"
+    home: "{{ seo_agent_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure seo-agent directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(seo_agent_user) }}"
+    group: "{{ item.group | default(seo_agent_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ seo_agent_install_dir }}", mode: "0755" }
+    - { path: "{{ seo_agent_config_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ seo_agent_state_dir }}", mode: "0750" }
+
+- name: Checkout seo-agent source at the production pin
+  ansible.builtin.git:
+    repo: "{{ seo_agent_repo }}"
+    dest: "{{ seo_agent_install_dir }}"
+    version: "{{ seo_agent_version }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ seo_agent_user }}"
+  notify: restart seo-agent
+
+- name: Wait for seo-agent env file rendered by Vault Agent
+  ansible.builtin.wait_for:
+    path: "{{ seo_agent_env_file }}"
+    state: present
+    timeout: 60
+    msg: >-
+      {{ seo_agent_env_file }} is missing. Bootstrap the seo-agent AppRole/KV
+      and run the Vault Agent role before applying seo_agent.
+
+- name: Resolve seo-agent runtime UID
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ seo_agent_user }}"
+
+- name: Record seo-agent container identity
+  ansible.builtin.set_fact:
+    seo_agent_runtime_uid: "{{ ansible_facts.getent_passwd[seo_agent_user][1] }}"
+    seo_agent_runtime_gid: "{{ ansible_facts.getent_passwd[seo_agent_user][2] }}"
+
+- name: Inspect existing seo-agent container image revision
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ seo_agent_image }}"
+      - --format
+      - "{{ '{{' }} index .Config.Labels \"org.opencontainers.image.revision\" {{ '}}' }}"
+  register: seo_agent_image_revision
+  failed_when: false
+  changed_when: false
+
+- name: Build seo-agent container image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - -t
+      - "{{ seo_agent_image }}"
+      - --label
+      - "org.opencontainers.image.revision={{ seo_agent_version }}"
+      - .
+  args:
+    chdir: "{{ seo_agent_install_dir }}"
+  changed_when: true
+  when: seo_agent_image_revision.stdout | trim != seo_agent_version
+  notify: restart seo-agent
+
+- name: Install seo-agent systemd service
+  ansible.builtin.template:
+    src: seo-agent.service.j2
+    dest: "/etc/systemd/system/{{ seo_agent_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart seo-agent
+
+- name: Set seo-agent service state
+  ansible.builtin.systemd:
+    name: "{{ seo_agent_service_name }}"
+    enabled: "{{ seo_agent_enabled | bool }}"
+    state: "{{ 'started' if seo_agent_enabled | bool else 'stopped' }}"
+    daemon_reload: true

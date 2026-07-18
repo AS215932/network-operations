@@ -1,0 +1,24 @@
+---
+- name: Validate seo-agent deployment inputs
+  ansible.builtin.assert:
+    that:
+      - seo_agent_install_dir.startswith('/')
+      - seo_agent_config_dir.startswith('/')
+      - seo_agent_env_file.startswith('/')
+      - seo_agent_state_dir.startswith('/')
+      - seo_agent_version is match('^[0-9a-f]{40}$')
+      - seo_agent_host == peers.loop.ipv6
+      - seo_agent_port | int == 8790
+      - seo_agent_beacon_control_plane_url is match('^https://[^/]+$')
+      - seo_agent_beacon_managed_mode | bool
+      - not (seo_agent_scheduler_enabled | bool)
+    fail_msg: >-
+      seo-agent must remain an immutable, overlay-bound Hyrule Beacon worker
+      with control-plane scheduling unless a reviewed change deliberately
+      widens that boundary.
+  tags: [validate, always]
+
+- name: Apply seo-agent runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: seo_agent_apply | bool
+  tags: [apply]

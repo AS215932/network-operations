@@ -9,7 +9,8 @@
 #
 # Apply (live deploy, timers remain disabled unless host vars enable them):
 #   ansible-playbook playbooks/engineering-loop.yml --tags apply \
-#     -e engineering_loop_apply=true -e knowledge_mcp_apply=true -e knowledge_loop_apply=true -e agentic_observatory_apply=true --limit loop
+#     -e engineering_loop_apply=true -e knowledge_mcp_apply=true -e knowledge_loop_apply=true \
+#     -e agentic_observatory_apply=true -e seo_agent_apply=true --limit loop
 #
 # First bootstrap with Vault Agent requires either:
 #   VAULT_ENGINEERING_LOOP_ROLE_ID=...
@@ -30,6 +31,12 @@
         state: present
         system: true
       tags: [apply, vault_agent, agentic_observatory]
+    - name: Ensure seo-agent group exists before Vault Agent
+      ansible.builtin.group:
+        name: "{{ seo_agent_group }}"
+        state: present
+        system: true
+      tags: [apply, vault_agent, seo_agent]
   roles:
     - role: firewall
       vars:
@@ -195,8 +202,40 @@
             group: "{{ agentic_observatory_group }}"
             mode: "0750"
       tags: [vault_agent, agentic_observatory]
+    - role: vault_agent
+      vars:
+        vault_agent_name: seo-agent
+        vault_agent_role_id: "{{ lookup('env', 'VAULT_SEO_AGENT_ROLE_ID') | default('', true) }}"
+        vault_agent_secret_id: >-
+          {{
+            lookup('env', 'VAULT_SEO_AGENT_WRAPPED_SECRET_ID') |
+            default(lookup('env', 'VAULT_SEO_AGENT_SECRET_ID'), true)
+          }}
+        vault_agent_secret_id_response_wrapping_path: >-
+          {{
+            'auth/approle/role/seo-agent/secret-id'
+            if (lookup('env', 'VAULT_SEO_AGENT_WRAPPED_SECRET_ID') | default('', true)) | length > 0
+            else ''
+          }}
+        vault_agent_env_destination: "{{ seo_agent_env_file }}"
+        vault_agent_reload_command: "(/bin/systemctl try-restart seo-agent.service || /bin/true)"
+        vault_agent_env_reload_command: "(/bin/systemctl try-restart seo-agent.service || /bin/true)"
+        vault_agent_templates:
+          - src: seo-agent.env.ctmpl.j2
+            name: seo-agent.env.ctmpl
+            destination: "{{ seo_agent_env_file }}"
+            group: "{{ seo_agent_group }}"
+            mode: "0640"
+            reload_command: "(/bin/systemctl try-restart seo-agent.service || /bin/true)"
+        vault_agent_extra_dirs:
+          - path: "{{ seo_agent_config_dir }}"
+            group: "{{ seo_agent_group }}"
+            mode: "0750"
+      tags: [vault_agent, seo_agent]
     - role: agentic_observatory
       tags: [agentic_observatory]
     - role: agent_core_collector
       tags: [agent_core_collector]
+    - role: seo_agent
+      tags: [seo_agent]
   tags: [engineering_loop]

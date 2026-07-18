@@ -36,6 +36,11 @@ on:
         type: string
         required: false
         default: ""
+      seo_agent_sha:
+        description: Optional AS215932/hyrule-seo-agent commit SHA
+        type: string
+        required: false
+        default: ""
       impact:
         description: Short deploy impact note
         type: string
@@ -83,6 +88,7 @@ jobs:
           INPUT_HYRULE_CLOUD_SHA: ${{ inputs.hyrule_cloud_sha }}
           INPUT_HYRULE_WEB_SHA: ${{ inputs.hyrule_web_sha }}
           INPUT_HYRULE_NETWORK_PROXY_SHA: ${{ inputs.hyrule_network_proxy_sha }}
+          INPUT_SEO_AGENT_SHA: ${{ inputs.seo_agent_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -94,6 +100,7 @@ jobs:
           hyrule_cloud_sha="${INPUT_HYRULE_CLOUD_SHA:-}"
           hyrule_web_sha="${INPUT_HYRULE_WEB_SHA:-}"
           hyrule_network_proxy_sha="${INPUT_HYRULE_NETWORK_PROXY_SHA:-}"
+          seo_agent_sha="${INPUT_SEO_AGENT_SHA:-}"
 
           if [ "$EVENT_NAME" = "repository_dispatch" ]; then
             repo="${DISPATCH_REPOSITORY:-}"
@@ -120,6 +127,9 @@ jobs:
                 ;;
               AS215932/hyrule-network-proxy)
                 hyrule_network_proxy_sha="$sha"
+                ;;
+              AS215932/hyrule-seo-agent)
+                seo_agent_sha="$sha"
                 ;;
               *)
                 echo "::error::unsupported promotion source repository: ${repo:-<missing>}"
@@ -177,6 +187,7 @@ jobs:
             printf 'hyrule_cloud_sha=%s\n' "$hyrule_cloud_sha"
             printf 'hyrule_web_sha=%s\n' "$hyrule_web_sha"
             printf 'hyrule_network_proxy_sha=%s\n' "$hyrule_network_proxy_sha"
+            printf 'seo_agent_sha=%s\n' "$seo_agent_sha"
           } >> "$GITHUB_OUTPUT"
 
       - name: Load promotion branch
@@ -204,7 +215,7 @@ jobs:
             scripts/ci/promote-app-pins.py $carry --title "Carry forward pending app promotions"
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+            git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml ansible/inventory/host_vars/loop.yml
             git commit -m "Carry forward pending app promotions"
           fi
 
@@ -217,11 +228,12 @@ jobs:
           HYRULE_CLOUD_SHA: ${{ steps.resolve.outputs.hyrule_cloud_sha }}
           HYRULE_WEB_SHA: ${{ steps.resolve.outputs.hyrule_web_sha }}
           HYRULE_NETWORK_PROXY_SHA: ${{ steps.resolve.outputs.hyrule_network_proxy_sha }}
+          SEO_AGENT_SHA: ${{ steps.resolve.outputs.seo_agent_sha }}
         run: |
           set -euo pipefail
           # Empty inputs are a valid self-heal run: rebuild + carry-forward
           # only, no new pins.
-          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}" ]; then
+          if [ -z "${NOC_AGENT_SHA}${HYRULE_MCP_SHA}${HYRULE_CLOUD_SHA}${HYRULE_WEB_SHA}${HYRULE_NETWORK_PROXY_SHA}${SEO_AGENT_SHA}" ]; then
             echo "No new app SHAs requested; carry-forward/self-heal run only." >> "$GITHUB_STEP_SUMMARY"
           else
             scripts/ci/promote-app-pins.py \
@@ -231,7 +243,8 @@ jobs:
               --hyrule-mcp-sha "$HYRULE_MCP_SHA" \
               --hyrule-cloud-sha "$HYRULE_CLOUD_SHA" \
               --hyrule-web-sha "$HYRULE_WEB_SHA" \
-              --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA"
+              --hyrule-network-proxy-sha "$HYRULE_NETWORK_PROXY_SHA" \
+              --seo-agent-sha "$SEO_AGENT_SHA"
           fi
 
       - name: Validate pins
@@ -241,7 +254,7 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml; then
+          if git diff --quiet -- ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml ansible/inventory/host_vars/loop.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No new app pin changes from this run." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -256,7 +269,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml
+          git add ansible/inventory/host_vars/noc.yml ansible/inventory/host_vars/api.yml ansible/inventory/host_vars/web.yml ansible/inventory/host_vars/netproxy.yml ansible/inventory/host_vars/loop.yml
           git commit -m "$COMMIT_MESSAGE"
 
       - name: Push promotion branch

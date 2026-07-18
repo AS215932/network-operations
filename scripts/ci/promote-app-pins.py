@@ -21,6 +21,11 @@ PIN_TARGETS = {
         "AS215932/hyrule-network-proxy",
         "network-proxy",
     ),
+    "seo_agent_version": (
+        "ansible/inventory/host_vars/loop.yml",
+        "AS215932/hyrule-seo-agent",
+        "engineering-loop",
+    ),
 }
 
 
@@ -31,6 +36,7 @@ def main() -> int:
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
     parser.add_argument("--hyrule-network-proxy-sha", default="")
+    parser.add_argument("--seo-agent-sha", default="")
     parser.add_argument("--title", default="Promote app SHAs")
     parser.add_argument("--impact", default="Automated app SHA promotion.")
     parser.add_argument("--body-file", default="")
@@ -48,6 +54,7 @@ def main() -> int:
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
+        "seo_agent_version": args.seo_agent_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
 

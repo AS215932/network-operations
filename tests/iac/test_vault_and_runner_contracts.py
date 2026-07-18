@@ -95,7 +95,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true seo_agent_apply=true"
 \s+;;
 \s+soc\)
 \s+# role gate is soc_agent_apply \(role name != playbook name\)
@@ -177,6 +177,49 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertRegex(str(host_vars["agent_core_collector_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
         self.assertEqual(host_vars["agent_core_collector_port"], 8770)
+
+    def test_seo_agent_is_overlay_bound_and_uses_a_worker_only_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2"
+        ).read_text()
+        policy = (REPO / "configs/vault/policies/seo-agent.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/defaults/main.yml").read_text()
+        )
+        host_vars = yaml.safe_load(
+            (REPO / "ansible/inventory/host_vars/loop.yml").read_text()
+        )
+        service = (
+            REPO / "ansible/roles/seo_agent/templates/seo-agent.service.j2"
+        ).read_text()
+
+        self.assertIn("role: seo_agent", playbook)
+        self.assertIn("vault_agent_name: seo-agent", playbook)
+        self.assertIn("VAULT_SEO_AGENT_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint seo-agent Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/seo-agent/role-id", workflow)
+        self.assertIn('path "auth/approle/role/seo-agent/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/seo-agent/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/seo-agent"', env_template)
+        self.assertIn('path "kv/data/seo-agent"', policy)
+        self.assertNotIn("kv/data/seo-agent", runner_policy)
+        self.assertIn("BEACON_WORKER_TOKEN", env_template)
+        self.assertNotIn("GITHUB_TOKEN", env_template)
+        self.assertNotIn("PRIVATE_KEY", env_template)
+        self.assertEqual(defaults["seo_agent_repo"], "https://github.com/AS215932/hyrule-seo-agent.git")
+        self.assertEqual(host_vars["seo_agent_host"], "{{ peers.loop.ipv6 }}")
+        self.assertEqual(host_vars["seo_agent_port"], 8790)
+        self.assertEqual(host_vars["seo_agent_beacon_managed_mode"], True)
+        self.assertEqual(host_vars["seo_agent_scheduler_enabled"], False)
+        self.assertEqual(host_vars["seo_agent_execute_automatic_actions"], False)
+        self.assertRegex(str(host_vars["seo_agent_version"]), r"^[0-9a-f]{40}$")
+        self.assertIn("--network=host", service)
+        self.assertIn("--read-only", service)
+        self.assertIn("--cap-drop=ALL", service)
+        self.assertIn("--user={{ seo_agent_runtime_uid }}:{{ seo_agent_runtime_gid }}", service)
 
     def test_reliability_governor_is_managed_with_safe_default_and_loop_enabled(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/engineering_loop/defaults/main.yml").read_text())

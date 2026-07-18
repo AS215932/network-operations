@@ -21,6 +21,7 @@ on:
       - ansible/roles/knowledge_api/**
       - ansible/roles/agent_core_collector/**
       - ansible/roles/agentic_observatory/**
+      - ansible/roles/seo_agent/**
       - configs/mon/icinga2/**
       - configs/mon/prometheus-rules/**
       - configs/mon/prometheus.yml
@@ -40,6 +41,7 @@ on:
       - ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2
       - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -82,6 +84,7 @@ jobs:
             ansible/roles/knowledge_api \
             ansible/roles/agent_core_collector \
             ansible/roles/agentic_observatory \
+            ansible/roles/seo_agent \
             configs/mon/icinga2 \
             configs/mon/prometheus-rules \
             configs/mon/prometheus.yml \
@@ -100,7 +103,8 @@ jobs:
             ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2 \
             ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2)"
+            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import sys
@@ -151,6 +155,7 @@ jobs:
               "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
+              "ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2",
           }) or any(
               path.startswith((
                   "ansible/roles/engineering_loop/",
@@ -159,6 +164,7 @@ jobs:
                   "ansible/roles/knowledge_api/",
                   "ansible/roles/agent_core_collector/",
                   "ansible/roles/agentic_observatory/",
+                  "ansible/roles/seo_agent/",
               ))
               for path in changed
           )
