@@ -99,6 +99,9 @@ hyrule_cloud_packages:
   - git
   - ca-certificates
   - curl
+  # Post-deploy validation runs on the API host so service, socket, and
+  # protected-file checks observe the deployed target rather than the runner.
+  - goss
   # libpq-dev is needed by asyncpg/psycopg builds on Debian. The api VM
   # already has it because PostgreSQL is installed locally; listing it
   # here makes the role portable to a fresh host.
