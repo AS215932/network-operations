@@ -15,13 +15,13 @@
     owner: root
     group: knot
     mode: "0640"
-  when: knot_apply
+  when: knot_apply | bool
   tags: [apply]
 
 - name: Validate rendered knot.conf
   command: "{{ knot_validate_cmd }} {{ knot_conf_path }}.new conf-check"
   changed_when: false
-  when: knot_apply
+  when: knot_apply | bool
   tags: [apply]
 
 - name: Backup currently-loaded config before swap
@@ -30,7 +30,7 @@
     dest: "{{ knot_backup_path }}"
     remote_src: true
     mode: "0640"
-  when: knot_apply
+  when: knot_apply | bool
   failed_when: false
   changed_when: false
   tags: [apply]
@@ -43,7 +43,7 @@
     owner: root
     group: knot
     mode: "0640"
-  when: knot_apply
+  when: knot_apply | bool
   notify: reload knot
   tags: [apply]
 
@@ -52,5 +52,5 @@
     name: "{{ knot_service }}"
     enabled: true
     state: started
-  when: knot_apply
+  when: knot_apply | bool
   tags: [apply]
