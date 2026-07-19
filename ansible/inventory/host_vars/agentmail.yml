@@ -1,0 +1,82 @@
+---
+# agentmail — dedicated Stalwart host for the API-only Agent Mail product.
+# This is intentionally separate from the corporate OpenBSD `mail` host.
+
+# Every mutation/listener is staged off. A launch change must flip these gates
+# in reviewed inventory and satisfy the role's readiness assertions.
+agent_mail_apply: false
+agent_mail_start: false
+agent_mail_public_enabled: false
+agent_mail_smtp_firewall_enabled: false
+agent_mail_bootstrap_enabled: false
+agent_mail_bootstrap_firewall_enabled: false
+agent_mail_backup_enabled: false
+
+agent_mail_legal_approved: false
+agent_mail_abuse_process_approved: false
+agent_mail_dns_verified: false
+agent_mail_ptr_verified: false
+agent_mail_backup_restore_verified: false
+agent_mail_canaries_verified: false
+
+# Dedicated public IPv4 is intentionally absent until provisioned and PTR-
+# verified. Never substitute the corporate mail failover address.
+agent_mail_public_ipv4: "{{ lookup('ansible.builtin.env', 'AGENT_MAIL_PUBLIC_IPV4') | default('', true) }}"
+
+# Apply-only secrets. Operators load these from Vault into the environment;
+# controller review artifacts contain names/placeholders, never values.
+agent_mail_dns_tsig_secret: "{{ lookup('ansible.builtin.env', 'AGENT_MAIL_DNS_TSIG_SECRET') | default('', true) }}"
+agent_mail_webhook_secret: "{{ lookup('ansible.builtin.env', 'AGENT_MAIL_WEBHOOK_SECRET') | default('', true) }}"
+agent_mail_recovery_admin_secret: "{{ lookup('ansible.builtin.env', 'AGENT_MAIL_RECOVERY_ADMIN_SECRET') | default('', true) }}"
+
+firewall_extra_rules:
+  # JMAP management/data plane and readiness/metrics. No customer credentials
+  # or public SMTP submission are exposed.
+  - { proto: tcp, dport: 443, src: ["{{ peers.api.ipv6 }}", "{{ peers.mon.ipv6 }}", "{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, comment: "Agent Mail internal HTTPS/JMAP" }
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: ip6, comment: "node_exporter scrape" }
+
+  # Bootstrap is a temporary operator-only listener. Both this inventory gate
+  # and agent_mail_bootstrap_enabled must be reviewed to true together.
+  - { proto: tcp, dport: 8080, src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, enabled: false, comment: "Stalwart bootstrap (temporary)" }
+
+  # Public SMTP reception is staged but disabled. Port 25 is the only public
+  # mail protocol this product will expose; submission/IMAP/POP remain absent.
+  - { proto: tcp, dport: 25, src: any, family: ip6, enabled: false, comment: "Agent Mail SMTP reception (launch-gated)" }
+  - { proto: tcp, dport: 25, src: any, family: ip, enabled: false, comment: "Agent Mail SMTP reception IPv4 (launch-gated)" }
+
+monitoring_register: true
+monitoring_role: agent-mail
+monitoring_display_name: "agentmail (Stalwart, API-only)"
+monitoring_node_listen: "[{{ peers.agentmail.ipv6 }}]:9100"
+monitoring_extra_services:
+  - name: stalwart-ready
+    check_command: http
+    interval: 1m
+    retry: 30s
+    max_check_attempts: 5
+    notes: "Stalwart readiness over the private HTTPS/JMAP listener"
+    vars:
+      http_address: "{{ peers.agentmail.ipv6 }}"
+      http_port: 443
+      http_uri: /healthz/ready
+      http_vhost: mx1.agentmail.hyrule.host
+      http_ssl: true
+      http_sni: true
+      http_ipv6: true
+      http_timeout: 10
+
+logs_register: true
+logs_role: agent-mail
+
+host_meta:
+  os: "Debian 13"
+  role: "Stalwart Agent Mail (dedicated, API-only)"
+  summary: "Dedicated Stalwart host for disposable Agent Mail accounts; public launch remains gated off in inventory."
+  notes: "Only SMTP reception on tcp/25 is eligible for public exposure. HTTPS/JMAP is private to api/mon/operators; SMTP submission, IMAP, POP, ManageSieve, and webmail are never published."
+  ipv4: "unassigned — dedicated address and PTR required before launch"
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "TSIG-authenticated Agent Mail DNS and ACME DNS-01 updates" }
+  - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "signed Stalwart event webhooks" }
+  - { to: acme-providers, proto: tcp, port: 443, purpose: "certificate issuance" }
+  - { to: public, proto: tcp, port: 25, purpose: "outbound SMTP delivery from product mailboxes" }
+  - { to: package-registries, proto: tcp, port: 443, purpose: "pinned Stalwart container image pull" }

@@ -1,0 +1,74 @@
+---
+- name: Assert the role only targets the dedicated Agent Mail host
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == "agentmail"
+      - agent_mail_overlay_ipv6 == peers.agentmail.ipv6
+      - agent_mail_hostname == "mx1.agentmail.hyrule.host"
+      - agent_mail_default_domain == "agentmail.hyrule.host"
+      - agent_mail_image is match('^stalwartlabs/stalwart:v[0-9]+\\.[0-9]+\\.[0-9]+@sha256:[0-9a-f]{64}$')
+    fail_msg: "Agent Mail identity, address, or immutable image contract is invalid."
+    quiet: true
+
+- name: Assert listener gates stay synchronized with firewall gates
+  vars:
+    _smtp_enabled_values: >-
+      {{ firewall_extra_rules | selectattr('dport', 'equalto', 25)
+         | map(attribute='enabled') | map('bool') | unique | list }}
+    _bootstrap_enabled_values: >-
+      {{ firewall_extra_rules | selectattr('dport', 'equalto', 8080)
+         | map(attribute='enabled') | map('bool') | unique | list }}
+  ansible.builtin.assert:
+    that:
+      - agent_mail_smtp_firewall_enabled | bool == agent_mail_public_enabled | bool
+      - agent_mail_bootstrap_firewall_enabled | bool == agent_mail_bootstrap_enabled | bool
+      - _smtp_enabled_values == [agent_mail_public_enabled | bool]
+      - _bootstrap_enabled_values == [agent_mail_bootstrap_enabled | bool]
+      - firewall_extra_rules | selectattr('dport', 'in', [110, 143, 465, 587, 993, 995, 4190]) | list | length == 0
+    fail_msg: "Compose and firewall listener gates differ, or a forbidden mail protocol is exposed."
+    quiet: true
+
+- name: Assert apply/start/bootstrap/backup sequencing
+  ansible.builtin.assert:
+    that:
+      - not (agent_mail_start | bool) or (agent_mail_apply | bool)
+      - not (agent_mail_bootstrap_enabled | bool) or (agent_mail_start | bool)
+      - not (agent_mail_backup_enabled | bool) or (agent_mail_start | bool)
+      - not (agent_mail_public_enabled | bool) or not (agent_mail_bootstrap_enabled | bool)
+    fail_msg: "Agent Mail rollout gates were enabled out of sequence."
+    quiet: true
+
+- name: Assert apply-only secrets are present and recovery mode cannot linger
+  ansible.builtin.assert:
+    that:
+      - agent_mail_dns_tsig_secret | length >= 20
+      - agent_mail_webhook_secret | length >= 32
+      - not (agent_mail_bootstrap_enabled | bool) or agent_mail_recovery_admin_secret | length >= 32
+      - (agent_mail_bootstrap_enabled | bool) or agent_mail_recovery_admin_secret | length == 0
+    fail_msg: >-
+      Apply requires Vault-backed TSIG/webhook secrets. A temporary recovery
+      admin is required only for bootstrap and must be removed immediately after.
+    quiet: true
+  no_log: true
+  when: agent_mail_apply | bool
+
+- name: Assert every public-launch approval is explicit
+  ansible.builtin.assert:
+    that:
+      - agent_mail_apply | bool
+      - agent_mail_start | bool
+      - agent_mail_backup_enabled | bool
+      - agent_mail_legal_approved | bool
+      - agent_mail_abuse_process_approved | bool
+      - agent_mail_dns_verified | bool
+      - agent_mail_ptr_verified | bool
+      - agent_mail_backup_restore_verified | bool
+      - agent_mail_canaries_verified | bool
+      - agent_mail_recovery_admin_secret | length == 0
+      - agent_mail_public_ipv4 is match('^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$')
+    fail_msg: >-
+      Public SMTP remains blocked until legal/abuse approval, DNS and PTR,
+      off-host restore, deliverability canaries, start/apply, and dedicated IPv4
+      are all explicitly verified.
+    quiet: true
+  when: agent_mail_public_enabled | bool

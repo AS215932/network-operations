@@ -1,0 +1,13 @@
+---
+# Render-only (safe default):
+#   ansible-playbook playbooks/agent_mail.yml --tags validate --connection=local
+# Apply only after following roles/agent_mail/README.md and supplying secrets:
+#   ansible-playbook playbooks/agent_mail.yml --tags apply \
+#     -e '{"agent_mail_apply":true}' --limit agentmail
+- name: Agent Mail — validate, stage, and explicitly apply Stalwart
+  hosts: agentmail
+  gather_facts: false
+  become: true
+  roles:
+    - agent_mail
+  tags: [agent-mail]

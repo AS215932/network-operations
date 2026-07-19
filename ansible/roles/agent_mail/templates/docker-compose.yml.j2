@@ -1,0 +1,25 @@
+# Managed by Ansible (agent_mail). Public listeners are inventory-gated.
+services:
+  stalwart:
+    image: "{{ agent_mail_image }}"
+    container_name: agent-mail-stalwart
+    restart: unless-stopped
+    stop_grace_period: 2m
+    env_file:
+      - "{{ agent_mail_env_file }}"
+    volumes:
+      - "{{ agent_mail_stalwart_config_dir }}:/etc/stalwart"
+      - "{{ agent_mail_stalwart_data_dir }}:/var/lib/stalwart"
+    ports:
+      - "[{{ agent_mail_overlay_ipv6 }}]:443:443/tcp"
+{% if agent_mail_bootstrap_enabled | bool %}
+      - "[{{ agent_mail_overlay_ipv6 }}]:8080:8080/tcp"
+{% endif %}
+{% if agent_mail_public_enabled | bool %}
+      - "[{{ agent_mail_overlay_ipv6 }}]:25:25/tcp"
+      - "{{ agent_mail_public_ipv4 }}:25:25/tcp"
+{% endif %}
+    logging:
+      driver: journald
+      options:
+        tag: agent-mail-stalwart

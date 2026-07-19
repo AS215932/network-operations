@@ -1,0 +1,63 @@
+---
+# Safe by default: render and validate only. Installation, process start,
+# bootstrap access, backups, and public SMTP each require explicit gates.
+agent_mail_apply: false
+agent_mail_start: false
+agent_mail_public_enabled: false
+agent_mail_smtp_firewall_enabled: false
+agent_mail_bootstrap_enabled: false
+agent_mail_bootstrap_firewall_enabled: false
+agent_mail_backup_enabled: false
+
+agent_mail_legal_approved: false
+agent_mail_abuse_process_approved: false
+agent_mail_dns_verified: false
+agent_mail_ptr_verified: false
+agent_mail_backup_restore_verified: false
+agent_mail_canaries_verified: false
+
+agent_mail_hostname: mx1.agentmail.hyrule.host
+agent_mail_default_domain: agentmail.hyrule.host
+agent_mail_overlay_ipv6: "{{ peers.agentmail.ipv6 }}"
+agent_mail_public_ipv4: ""
+
+# Exact v0.16.4 linux/amd64 manifest digest, reviewed 2026-07-19. Upgrades
+# require an explicit patch/security review and a new immutable digest.
+agent_mail_image: "stalwartlabs/stalwart:v0.16.4@sha256:c8aee803933a643558a9afaa3c208d4175a4ac09884f555b821aa5df1e89230c"
+agent_mail_packages:
+  - docker.io
+  - docker-compose-v2
+  - zstd
+
+agent_mail_root: /opt/agent-mail
+agent_mail_etc_dir: /etc/agent-mail
+agent_mail_stalwart_config_dir: /etc/stalwart
+agent_mail_stalwart_data_dir: /var/lib/stalwart
+agent_mail_backup_dir: /var/backups/agent-mail
+agent_mail_backup_retention_days: 14
+agent_mail_compose_file: "{{ agent_mail_root }}/docker-compose.yml"
+agent_mail_env_file: "{{ agent_mail_etc_dir }}/agent-mail.env"
+agent_mail_generated_dir: "{{ playbook_dir }}/../generated/agentmail"
+
+agent_mail_dns_tsig_secret: ""
+agent_mail_webhook_secret: ""
+agent_mail_recovery_admin_secret: ""
+agent_mail_webhook_url: https://cloud.hyrule.host/v1/internal/mail/events
+
+agent_mail_webhook_events:
+  - message-ingest.ham
+  - message-ingest.spam
+  - message-ingest.imap-append
+  - message-ingest.jmap-append
+  - message-ingest.duplicate
+  - message-ingest.error
+  - delivery.delivered
+  - delivery.failed
+  - delivery.completed
+  - delivery.rcpt-to-rejected
+  - delivery.message-rejected
+  - delivery.dsn-temp-fail
+  - delivery.dsn-perm-fail
+  - incoming-report.abuse-report
+  - incoming-report.fraud-report
+  - incoming-report.virus-report

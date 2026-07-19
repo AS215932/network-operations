@@ -51,6 +51,17 @@ acl:
     key: {{ knot_tsig_key_name }}
     action: update
 
+  - id: agentmail-update
+    address: {{ peers.agentmail.ipv6 }}
+    key: {{ knot_tsig_key_name }}
+    action: update
+    # Stalwart may reconcile only its hosted service subtree. Custom-domain
+    # mail records go through Hyrule Cloud's separately authenticated DNS
+    # control plane, so this host never needs zone-wide update authority.
+    update-owner: name
+    update-owner-match: sub-or-equal
+    update-owner-name: [ agentmail.hyrule.host. ]
+
 {% for s in knot_secondaries %}
   - id: {{ s.name }}-xfr
     address: [ {{ s.address_v6 }}, {{ s.address_v4 }} ]
@@ -106,7 +117,7 @@ template:
 zone:
 {% for z in knot_zones %}
   - domain: {{ z.name }}
-    acl: [ api-update, caddy-update, irc-update, home-xfr{% for s in knot_secondaries %}, {{ s.name }}-xfr{% endfor %} ]
+    acl: [ api-update, caddy-update, irc-update{% if z.name == 'hyrule.host' %}, agentmail-update{% endif %}, home-xfr{% for s in knot_secondaries %}, {{ s.name }}-xfr{% endfor %} ]
     template: default
 {% endfor %}
 {% if knot_customer_catalog_enabled %}

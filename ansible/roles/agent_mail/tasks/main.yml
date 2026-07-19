@@ -1,0 +1,37 @@
+---
+- name: Validate Agent Mail rollout gates
+  ansible.builtin.import_tasks: validate.yml
+  tags: [validate, diff, apply]
+
+- name: Ensure Agent Mail review-artifact directory exists
+  ansible.builtin.file:
+    path: "{{ agent_mail_generated_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Render non-secret Agent Mail review artifacts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ agent_mail_generated_dir }}/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: docker-compose.yml.j2, dest: docker-compose.yml, mode: "0644" }
+    - { src: agent-mail.env.example.j2, dest: agent-mail.env.example, mode: "0644" }
+    - { src: bootstrap.json.j2, dest: bootstrap.json, mode: "0644" }
+    - { src: desired-state.ndjson.j2, dest: desired-state.ndjson, mode: "0644" }
+    - { src: agent-mail-backup.sh.j2, dest: agent-mail-backup, mode: "0755" }
+    - { src: agent-mail-backup.service.j2, dest: agent-mail-backup.service, mode: "0644" }
+    - { src: agent-mail-backup.timer.j2, dest: agent-mail-backup.timer, mode: "0644" }
+  loop_control:
+    label: "{{ item.dest }}"
+  delegate_to: localhost
+  become: false
+  tags: [validate, diff, apply]
+
+- name: Apply Agent Mail host state
+  ansible.builtin.import_tasks: apply.yml
+  when: agent_mail_apply | bool
+  tags: [apply]

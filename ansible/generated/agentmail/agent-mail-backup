@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+umask 077
+readonly compose_file="/opt/agent-mail/docker-compose.yml"
+readonly backup_dir="/var/backups/agent-mail"
+readonly lock_file="/run/lock/agent-mail-backup.lock"
+
+exec 9>"$lock_file"
+flock -n 9 || exit 0
+
+mkdir -p "$backup_dir"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+partial="$backup_dir/stalwart-$timestamp.tar.zst.partial"
+archive="$backup_dir/stalwart-$timestamp.tar.zst"
+was_running=0
+
+if docker compose --file "$compose_file" ps --services --status running | grep -Fxq stalwart; then
+  was_running=1
+  docker compose --file "$compose_file" stop --timeout 120 stalwart
+fi
+
+restart_stalwart() {
+  if [[ "$was_running" -eq 1 ]]; then
+    docker compose --file "$compose_file" up --detach stalwart
+  fi
+}
+trap restart_stalwart EXIT
+
+# RocksDB must be quiescent. Preserve numeric UID/GID, xattrs, and ACLs so a
+# restore can recreate both the Stalwart configuration and data directories.
+tar --acls --xattrs --numeric-owner --zstd -C / \
+  -cf "$partial" \
+  etc/stalwart var/lib/stalwart
+mv "$partial" "$archive"
+sha256sum "$archive" > "$archive.sha256"
+
+find "$backup_dir" -type f \
+  \( -name 'stalwart-*.tar.zst' -o -name 'stalwart-*.tar.zst.sha256' \) \
+  -mtime +14 -delete
+
+# A local snapshot is not launch-ready by itself. Public readiness separately
+# requires an off-host copy and a successfully rehearsed restore.
