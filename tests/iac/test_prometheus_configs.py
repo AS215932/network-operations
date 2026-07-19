@@ -112,6 +112,18 @@ class PrometheusConfigContracts(unittest.TestCase):
             self.assertIn(exporter, module_sets, name)
             self.assertIn(selected[0], module_sets[exporter], name)
 
+    def test_public_ipv4_dns_jobs_probe_both_authorities(self):
+        jobs = {
+            job["job_name"]: job for job in self.prometheus["scrape_configs"]
+        }
+        expected = {"46.105.40.223:53", "54.38.14.218:53"}
+        for name in (
+            "blackbox-dns-hyrule-ipv4",
+            "blackbox-dns-hyrule-deploy-ipv4",
+        ):
+            targets = set(jobs[name]["static_configs"][0]["targets"])
+            self.assertEqual(targets, expected, name)
+
     def test_rule_files_have_valid_group_and_rule_structure(self):
         alert_names = []
         paths = sorted((MON / "prometheus-rules").glob("*.yml"))

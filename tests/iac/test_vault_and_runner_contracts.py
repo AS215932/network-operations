@@ -679,7 +679,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/ci-runner", policy)
         self.assertNotIn("kv/data/noc-agent", policy)
 
-    def test_hyrule_cloud_domain_purchases_require_both_launch_allowlists(self):
+    def test_hyrule_cloud_domain_sales_require_explicit_scope_and_channel(self):
         template = (
             REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
         ).read_text()
@@ -693,13 +693,32 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             template,
         )
         self.assertIn(
-            '{{ $domainLaunchAllowed := and (gt (len (parseJSON $domainTlds)) 0) '
-            '(gt (len (parseJSON $domainAccounts)) 0) }}',
+            '{{ $domainMarketplace := or .Data.data.domain_marketplace_sales_enabled '
+            '"false" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainPayers := or .Data.data.domain_marketplace_payer_allowlist "[]" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainTldScope := or (gt (len (parseJSON $domainTlds)) 0) '
+            '(eq (printf "%v" $domainAllTlds) "true") }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainLaunchAllowed := and $domainTldScope $domainSalesCohort }}',
             template,
         )
         self.assertIn(
             'DOMAIN_PURCHASES_ENABLED={{ if and '
             '(eq (printf "%v" $domainPurchases) "true") $domainLaunchAllowed }}'
+            'true{{ else }}false{{ end }}',
+            template,
+        )
+        self.assertIn(
+            'DOMAIN_MARKETPLACE_SALES_ENABLED={{ if and '
+            '(eq (printf "%v" $domainMarketplace) "true") $domainTldScope }}'
             'true{{ else }}false{{ end }}',
             template,
         )
