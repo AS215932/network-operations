@@ -8,11 +8,12 @@
 #   ../scripts/ci/check-drift.sh <log-dir> [playbook ...]
 #
 # With no playbook arguments the canonical sweep below runs. The limit can be
-# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr) — used by the post-merge
-# verify pass to re-check only the hosts it just applied.
+# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr:!staged) — used by the
+# post-merge verify pass to re-check only the hosts it just applied.
 #
 # ci-pr lives on the customer-isolated segment and is managed from the ops
-# workstation, not from the privileged ci runner — hence the default limit.
+# workstation, not from the privileged ci runner. Planned hosts in `staged`
+# are not reachable yet. Both groups are therefore absent from the default.
 
 set -uo pipefail
 
@@ -32,7 +33,7 @@ if [ "${#playbooks[@]}" -eq 0 ]; then
   playbooks=("${default_playbooks[@]}")
 fi
 
-limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr}"
+limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr:!staged}"
 
 mkdir -p "$logdir"
 status=0

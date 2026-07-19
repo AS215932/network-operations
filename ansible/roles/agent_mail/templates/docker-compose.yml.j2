@@ -23,3 +23,10 @@ services:
       driver: journald
       options:
         tag: agent-mail-stalwart
+
+networks:
+  default:
+    name: agent-mail
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: "{{ agent_mail_bridge_name }}"

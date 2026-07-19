@@ -65,6 +65,10 @@ class DriftDetectionTest(unittest.TestCase):
                 f"{name} must not carry its own playbook list — it lives in check-drift.sh",
             )
 
+    def test_unprovisioned_staged_hosts_are_excluded(self):
+        text = (REPO / "scripts/ci/check-drift.sh").read_text()
+        self.assertIn('CHECK_DRIFT_LIMIT:-all:!ci-pr:!staged', text)
+
     def test_post_merge_apply_never_auto_applies_the_ci_playbook(self):
         # Applying the runner's own playbook from the runner can restart the
         # runner service mid-job; drift-apply-plan.sh must keep skipping it.

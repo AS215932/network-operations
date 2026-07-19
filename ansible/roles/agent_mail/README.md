@@ -24,6 +24,10 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
 1. Provision the dedicated VM and its 80 GB disk. Do not reuse
    `mail_failover_ipv4`; allocate a new IPv4 and configure its forward and
    reverse routing.
+   The committed `agentmail` host is also a member of the `staged` inventory
+   group, which the canonical drift/apply sweep excludes. After SSH and base
+   reachability are proven, remove that membership in a reviewed change before
+   treating the host as part of the managed fleet.
 2. Put these values in Vault and expose them only to the approved Ansible apply
    job as environment variables:
    `AGENT_MAIL_DNS_TSIG_SECRET`, `AGENT_MAIL_WEBHOOK_SECRET`, and (temporarily)
@@ -43,8 +47,17 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    `agent_mail_bootstrap_firewall_enabled`, and the TCP/8080 rule's `enabled`
    field. Keep public SMTP false. Supply a new temporary recovery password of
    at least 32 characters.
-2. Apply this role and connect only from the ops prefix or VPN. Submit the
-   rendered `/etc/agent-mail/bootstrap.json` to the bootstrap API:
+2. Re-render and apply the firewall after enabling the TCP/8080 rule, then
+   apply this role. Connect only from the ops prefix or VPN:
+
+   ```sh
+   ansible-playbook playbooks/firewall.yml --tags apply --limit agentmail \
+     -e firewall_apply=true
+   ansible-playbook playbooks/agent_mail.yml --tags apply --limit agentmail \
+     -e agent_mail_apply=true
+   ```
+
+   Submit the rendered `/etc/agent-mail/bootstrap.json` to the bootstrap API:
 
    ```sh
    curl --fail-with-body --user "admin:$AGENT_MAIL_RECOVERY_ADMIN_SECRET" \
@@ -58,8 +71,9 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    required management permissions used by `hyrule-cloud`; store its bearer
    token in Vault as `mail_backend_token`.
 4. Immediately set both bootstrap controls and the firewall rule back to
-   false, remove `AGENT_MAIL_RECOVERY_ADMIN_SECRET`, re-apply, and verify that
-   TCP/8080 is neither published by Compose nor accepted by nftables.
+   false, remove `AGENT_MAIL_RECOVERY_ADMIN_SECRET`, re-apply this role and the
+   firewall, and verify that TCP/8080 is neither published by Compose nor
+   accepted by nftables.
 
 The bootstrap plan uses RocksDB, the internal directory, a container-console
 tracer, automatic DKIM, Let's Encrypt, and TSIG RFC2136 against Knot. Review
@@ -128,11 +142,15 @@ enabled only if that product is also approved.
 ## Emergency shutdown and restore
 
 1. Set Hyrule Cloud `MAIL_ENABLED=false` to stop new activation/send traffic.
-2. Set `agent_mail_public_enabled`, its SMTP firewall twin, and both TCP/25
-   rule fields false; apply Compose and nftables. This preserves stored mail
-   while stopping inbound/outbound public delivery.
-3. Preserve logs and a quiesced snapshot before destructive investigation.
-4. Restore only to an isolated host: verify the `.sha256`, stop Stalwart,
+2. Set `agent_mail_start=false` and apply the Agent Mail role. The role runs
+   `docker compose down`, which stops queued outbound delivery while preserving
+   the bind-mounted configuration and mailbox data.
+3. Set `agent_mail_public_enabled`, its SMTP firewall twin, and both TCP/25
+   rule fields false; apply the Agent Mail role and nftables. Verify the
+   container is absent and the forward chain contains the outbound TCP/25 kill
+   switch before treating public delivery as stopped.
+4. Preserve logs and a quiesced snapshot before destructive investigation.
+5. Restore only to an isolated host: verify the `.sha256`, stop Stalwart,
    extract with numeric ownership/xattrs/ACLs from `/`, then start without any
    public listener. Run integrity, DNS, webhook, and canary checks before
    re-enabling traffic.

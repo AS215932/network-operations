@@ -49,6 +49,7 @@ class AgentMailContractsTest(unittest.TestCase):
     def test_dedicated_host_address_and_membership_are_explicit(self):
         linux = self.hosts["linux"]["hosts"]
         self.assertEqual(linux["agentmail"]["ansible_host"], "2a0c:b641:b50:2::110")
+        self.assertIn("agentmail", self.hosts["staged"]["hosts"])
         self.assertIn("agentmail", self.hosts["infra_vms"]["hosts"])
         self.assertIn("agentmail", self.hosts["public_facing"]["hosts"])
         self.assertNotIn("agentmail", self.hosts["openbsd"]["hosts"])
@@ -60,6 +61,8 @@ class AgentMailContractsTest(unittest.TestCase):
             ipaddress.ip_address(linux["agentmail"]["ansible_host"]),
             ipaddress.ip_network(self.all_vars["infra_subnet"]),
         )
+        drift = (REPO / "scripts/ci/check-drift.sh").read_text()
+        self.assertIn("all:!ci-pr:!staged", drift)
 
     def test_every_mutating_or_public_gate_defaults_false(self):
         gates = (
@@ -86,6 +89,7 @@ class AgentMailContractsTest(unittest.TestCase):
         compose = self.render("docker-compose.yml.j2")
         self.assertIn(EXPECTED_IMAGE, compose)
         self.assertIn("[2a0c:b641:b50:2::110]:443:443/tcp", compose)
+        self.assertIn("com.docker.network.bridge.name: \"br-agentmail\"", compose)
         self.assertNotIn(":25:25/tcp", compose)
         self.assertNotIn(":8080:8080/tcp", compose)
         for port in FORBIDDEN_PUBLIC_PORTS:
@@ -118,6 +122,24 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertEqual(len(bootstrap), 1)
         self.assertIs(bootstrap[0]["enabled"], False)
         self.assertFalse(FORBIDDEN_PUBLIC_PORTS & {rule["dport"] for rule in rules})
+
+        forwarded = self.host_vars["firewall_forward_extra_raw_nft"]
+        self.assertIn('ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25', forwarded)
+        self.assertIn('iifname "{{ agent_mail_bridge_name }}" tcp dport 25', forwarded)
+        self.assertIn("Agent Mail outbound SMTP kill switch", forwarded)
+        self.assertIn("Agent Mail private JMAP DNAT", forwarded)
+
+    def test_shutdown_and_public_ipv4_guards_are_enforced(self):
+        apply = (ROLE / "tasks/apply.yml").read_text()
+        self.assertIn("down, --remove-orphans, --timeout", apply)
+        self.assertIn("when: not (agent_mail_start | bool)", apply)
+
+        validate = (ROLE / "tasks/validate.yml").read_text()
+        self.assertIn("25[0-5]", validate)
+        self.assertIn("agent_mail_public_ipv4 != (mail_failover_ipv4", validate)
+
+        renderer = (REPO / "scripts/ci/render-all.sh").read_text()
+        self.assertIn("extmon agent_mail", renderer)
 
     def test_bootstrap_and_declarative_plans_are_valid_secretless_json(self):
         bootstrap = json.loads(self.render("bootstrap.json.j2"))
@@ -205,11 +227,16 @@ class AgentMailContractsTest(unittest.TestCase):
     def test_backup_and_launch_runbook_require_off_host_restore_evidence(self):
         backup = self.render("agent-mail-backup.sh.j2")
         self.assertLess(backup.index(" stop --timeout 120 stalwart"), backup.index("tar --acls"))
-        self.assertIn("sha256sum", backup)
+        self.assertIn('archive_name="${archive##*/}"', backup)
+        self.assertIn('sha256sum "$archive_name"', backup)
+        self.assertNotIn('sha256sum "$archive"', backup)
         readme = (ROLE / "README.md").read_text()
         self.assertIn("off-host", readme)
         self.assertIn("agent_mail_backup_restore_verified", readme)
         self.assertIn("Never publish", readme)
+        self.assertIn("firewall_apply=true", readme)
+        self.assertIn("agent_mail_start=false", readme)
+        self.assertIn("outbound TCP/25 kill", readme)
 
     def test_monitoring_is_private_and_not_public_status_claim(self):
         prometheus = _yaml(REPO / "configs/mon/prometheus.yml")

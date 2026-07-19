@@ -66,6 +66,15 @@
     'Recreated' in _agent_mail_up.stderr
   when: agent_mail_start | bool
 
+- name: Stop and remove Agent Mail when the start gate is disabled
+  ansible.builtin.command:
+    argv: [docker, compose, --file, "{{ agent_mail_compose_file }}", down, --remove-orphans, --timeout, "120"]
+  register: _agent_mail_down
+  changed_when: >-
+    'Stopped' in (_agent_mail_down.stdout + _agent_mail_down.stderr) or
+    'Removed' in (_agent_mail_down.stdout + _agent_mail_down.stderr)
+  when: not (agent_mail_start | bool)
+
 - name: Configure the local quiesced-backup timer
   ansible.builtin.systemd:
     name: agent-mail-backup.timer

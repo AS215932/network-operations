@@ -33,7 +33,11 @@ tar --acls --xattrs --numeric-owner --zstd -C / \
   -cf "$partial" \
   etc/stalwart var/lib/stalwart
 mv "$partial" "$archive"
-sha256sum "$archive" > "$archive.sha256"
+archive_name="${archive##*/}"
+(
+  cd "$backup_dir"
+  sha256sum "$archive_name" > "$archive_name.sha256"
+)
 
 find "$backup_dir" -type f \
   \( -name 'stalwart-*.tar.zst' -o -name 'stalwart-*.tar.zst.sha256' \) \

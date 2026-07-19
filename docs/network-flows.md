@@ -88,7 +88,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | public | tcp | 25 | outbound SMTP delivery from product mailboxes |
-| dns | tcp | 53 | TSIG-authenticated Agent Mail DNS and ACME DNS-01 updates |
+| dns | tcp+udp | 53 | Agent Mail resolver traffic and TSIG-authenticated DNS updates |
 | acme-providers | tcp | 443 | certificate issuance |
 | hyrule-cloud | tcp | 443 | signed Stalwart event webhooks |
 | package-registries | tcp | 443 | pinned Stalwart container image pull |
