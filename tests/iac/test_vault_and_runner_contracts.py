@@ -95,7 +95,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
-\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true seo_agent_apply=true"
 \s+;;
 \s+soc\)
 \s+# role gate is soc_agent_apply \(role name != playbook name\)
@@ -177,6 +177,105 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertRegex(str(host_vars["agent_core_collector_version"]), r"^[0-9a-f]{40}$")
         self.assertEqual(host_vars["agent_core_collector_bind"], "{{ peers.loop.ipv6 }}")
         self.assertEqual(host_vars["agent_core_collector_port"], 8770)
+
+    def test_seo_agent_is_overlay_bound_and_uses_a_worker_only_vault_scope(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        playbook = (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        env_template = (
+            REPO / "ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2"
+        ).read_text()
+        policy = (REPO / "configs/vault/policies/seo-agent.hcl").read_text()
+        runner_policy = (REPO / "configs/vault/policies/github-runner.hcl").read_text()
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/defaults/main.yml").read_text()
+        )
+        host_vars = yaml.safe_load(
+            (REPO / "ansible/inventory/host_vars/loop.yml").read_text()
+        )
+        service = (
+            REPO / "ansible/roles/seo_agent/templates/seo-agent.service.j2"
+        ).read_text()
+        runbook = (REPO / "docs/runbooks/bootstrap-seo-agent-vault.md").read_text()
+        role_main = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/main.yml").read_text()
+        )
+        role_apply = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/apply.yml").read_text()
+        )
+        role_disable = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/disable.yml").read_text()
+        )
+        vault_playbook = yaml.safe_load(
+            (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        )
+        vault_roles = vault_playbook[0]["roles"]
+        seo_vault = next(
+            role for role in vault_roles
+            if role.get("role") == "vault_agent"
+            and role.get("vars", {}).get("vault_agent_name") == "seo-agent"
+        )
+
+        self.assertIn("role: seo_agent", playbook)
+        self.assertIn("vault_agent_name: seo-agent", playbook)
+        self.assertIn("VAULT_SEO_AGENT_WRAPPED_SECRET_ID", playbook)
+        self.assertIn("Mint seo-agent Vault bootstrap", workflow)
+        self.assertIn("auth/approle/role/seo-agent/role-id", workflow)
+        self.assertIn("Reusing installed persistent seo-agent SecretID", workflow)
+        self.assertLess(
+            workflow.index("Reusing installed persistent seo-agent SecretID"),
+            workflow.index(
+                "vault write -wrap-ttl=10m -field=wrapping_token -f "
+                "auth/approle/role/seo-agent/secret-id"
+            ),
+        )
+        self.assertIn('path "auth/approle/role/seo-agent/role-id"', runner_policy)
+        self.assertIn('path "auth/approle/role/seo-agent/secret-id"', runner_policy)
+        self.assertIn('secret "kv/data/seo-agent"', env_template)
+        self.assertIn('path "kv/data/seo-agent"', policy)
+        self.assertNotIn("kv/data/seo-agent", runner_policy)
+        self.assertIn("BEACON_WORKER_TOKEN", env_template)
+        self.assertNotIn("GITHUB_TOKEN", env_template)
+        self.assertNotIn("PRIVATE_KEY", env_template)
+        self.assertEqual(defaults["seo_agent_repo"], "https://github.com/AS215932/hyrule-seo-agent.git")
+        self.assertEqual(host_vars["seo_agent_host"], "{{ peers.loop.ipv6 }}")
+        self.assertEqual(host_vars["seo_agent_port"], 8790)
+        self.assertEqual(host_vars["seo_agent_beacon_managed_mode"], True)
+        self.assertEqual(host_vars["seo_agent_scheduler_enabled"], False)
+        self.assertEqual(host_vars["seo_agent_execute_automatic_actions"], False)
+        self.assertRegex(str(host_vars["seo_agent_version"]), r"^[0-9a-f]{40}$")
+        self.assertIn("secret_id_ttl=0", runbook)
+        self.assertIn("secret_id_num_uses=0", runbook)
+        self.assertNotIn("secret_id_ttl=10m", runbook)
+        self.assertNotIn("secret_id_num_uses=1", runbook)
+        self.assertEqual(
+            seo_vault["vars"]["vault_agent_persist_unwrapped_secret_id"], True
+        )
+        self.assertIn("seo_agent_enabled | bool", str(seo_vault["when"]))
+        enabled_validation = next(
+            task for task in role_main
+            if task.get("name") == "Validate enabled seo-agent deployment inputs"
+        )
+        self.assertIn("[0-9a-fA-F]", " ".join(enabled_validation["ansible.builtin.assert"]["that"]))
+        self.assertIn("seo_agent_enabled | bool", str(enabled_validation["when"]))
+        disabled_import = next(
+            task for task in role_main if task.get("name") == "Stop disabled seo-agent runtime"
+        )
+        self.assertIn("not (seo_agent_enabled | bool)", disabled_import["when"])
+        enabled_import = next(
+            task for task in role_main if task.get("name") == "Apply enabled seo-agent runtime"
+        )
+        self.assertIn("seo_agent_enabled | bool", enabled_import["when"])
+        self.assertEqual(role_apply[-1]["ansible.builtin.systemd"]["state"], "started")
+        self.assertEqual(role_apply[-1]["ansible.builtin.systemd"]["enabled"], True)
+        self.assertEqual(role_disable[-1]["ansible.builtin.systemd"]["state"], "stopped")
+        self.assertEqual(role_disable[-1]["ansible.builtin.systemd"]["enabled"], False)
+        self.assertIn("ExecStartPre", runbook)
+        self.assertIn("inspect and reuse", runbook)
+        self.assertIn("root-owned `0600`", runbook)
+        self.assertIn("--network=host", service)
+        self.assertIn("--read-only", service)
+        self.assertIn("--cap-drop=ALL", service)
+        self.assertIn("--user={{ seo_agent_runtime_uid }}:{{ seo_agent_runtime_gid }}", service)
 
     def test_reliability_governor_is_managed_with_safe_default_and_loop_enabled(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/engineering_loop/defaults/main.yml").read_text())
@@ -727,6 +826,34 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
         self.assertIn("secret_id_response_wrapping_path", hcl)
         self.assertIn("remove_secret_id_file_after_reading = true", hcl)
+
+    def test_vault_agent_can_persist_unwrapped_secret_id_for_restart_safety(self):
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        tasks = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        )
+        unit = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent.service.j2"
+        ).read_text()
+        helper = (
+            REPO / "ansible/roles/vault_agent/templates/unwrap-secret-id.sh.j2"
+        ).read_text()
+
+        self.assertEqual(defaults["vault_agent_persist_unwrapped_secret_id"], False)
+        staged = _task_by_name(
+            tasks,
+            "Stage response-wrapped Vault AppRole secret_id for persistent unwrapping",
+        )
+        self.assertEqual(staged["copy"]["mode"], "0600")
+        self.assertTrue(staged["no_log"])
+        self.assertIn("vault_agent_persist_unwrapped_secret_id | bool", staged["when"])
+        self.assertIn("ExecStartPre={{ vault_agent_unwrap_secret_id_script }}", unit)
+        self.assertIn("vault unwrap -field=secret_id", helper)
+        self.assertIn('chmod 0600 "$tmp_file"', helper)
+        self.assertIn('mv -f "$tmp_file" "$secret_id_file"', helper)
+        self.assertIn('rm -f "$wrapped_file"', helper)
 
     def test_hyrule_mcp_users_can_read_systemd_journals(self):
         service = (REPO / "configs/hyrule-mcp.service").read_text()

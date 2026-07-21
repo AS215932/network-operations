@@ -33,7 +33,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | extmon | Debian 13 | `2001:19f0:7402:0cd5:5400:06ff:fe40:7112` | `45.32.179.134` | External monitoring host (off-net) |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0` | `10.0.0.60` (mgmt) | Vector aggregator + Loki (centralized logs) |
-| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
+| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Agent operations-lane VM (governed automation, no fleet SSH) |
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
@@ -296,9 +296,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
-### loop — Engineering Loop operations-lane VM: consumes loop:approved issues and stops at draft PRs; hosts the Agent-Core trace collector and a loopback knowledge MCP.
+### loop — Operations-lane VM for the Engineering Loop and Hyrule Beacon worker; also hosts the Agent-Core trace collector, Knowledge services, and Agentic Observatory.
 
-> Not an infra deploy source: no fleet SSH key, no app runtime secrets, no Vault breadth. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6. loop does not SSH to the infra fleet.
+> Not an infra deploy source: no fleet SSH key and no broad production Vault access. The Beacon worker receives a worker-only token and no Git or publishing credential. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6.
 
 **Inbound**
 
@@ -307,6 +307,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | loop, noc, mon | tcp | 8770 | agent-core collector |
 | proxy, mon | tcp | 8780 | agentic observatory |
 | loop, mon | tcp | 8781 | knowledge read API |
+| mon | tcp | 8790 | seo-agent health |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**
@@ -317,6 +318,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | github | tcp | 443 | issues, checkouts, branch pushes, draft PRs, knowledge MCP build context |
 | model-providers | tcp | 443 | selected backend/provider LLM APIs |
 | public | tcp | 443 | Docker container base-image and package downloads over routed IPv6 egress |
+| public | tcp | 443 | Hyrule Beacon worker control-plane polling, owned-surface audits, public registry measurements, and optional evidence providers |
 | mon | tcp | 5665 | Icinga passive check submission |
 | log | tcp | 6000 | Vector agent to aggregator |
 | vault | tcp | 8200 | Vault Agent secret render |

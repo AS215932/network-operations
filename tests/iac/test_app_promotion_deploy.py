@@ -45,6 +45,19 @@ class AppPromotionDeployTest(unittest.TestCase):
         )
         self.assertIn('"ansible/roles/agentic_observatory/"', workflow_text)
 
+    def test_seo_agent_changes_trigger_loop_apply(self):
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
+
+        self.assertIn("ansible/roles/seo_agent/**", workflow_text)
+        self.assertIn("ansible/roles/seo_agent \\", workflow_text)
+        self.assertIn(
+            "ansible/roles/vault_agent/templates/seo-agent.env.ctmpl.j2",
+            workflow_text,
+        )
+        self.assertIn('"ansible/roles/seo_agent/"', workflow_text)
+
     def test_knowledge_loop_role_changes_trigger_loop_apply(self):
         workflow_text = (
             REPO / ".github/workflows/app-promotion-deploy.yml"

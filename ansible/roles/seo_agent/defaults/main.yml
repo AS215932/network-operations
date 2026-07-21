@@ -1,0 +1,45 @@
+---
+# Hyrule Beacon's overlay-bound LangGraph worker on the loop VM.
+# Validation is the default; mutation requires seo_agent_apply=true.
+
+seo_agent_apply: false
+seo_agent_enabled: true
+
+seo_agent_user: seo-agent
+seo_agent_group: seo-agent
+seo_agent_install_dir: /opt/seo-agent
+seo_agent_config_dir: /etc/seo-agent
+seo_agent_env_file: /etc/seo-agent/seo-agent.env
+seo_agent_state_dir: /var/lib/seo-agent
+
+seo_agent_repo: https://github.com/AS215932/hyrule-seo-agent.git
+seo_agent_version: "dd705c6b50d7f6f3f3053053c264eac5f3778204"
+
+seo_agent_container_name: seo-agent
+seo_agent_image_repository: as215932/hyrule-beacon-worker
+seo_agent_image_tag: "{{ seo_agent_version }}"
+seo_agent_image: "{{ seo_agent_image_repository }}:{{ seo_agent_image_tag }}"
+seo_agent_service_name: seo-agent.service
+seo_agent_memory: 768m
+seo_agent_pids_limit: 256
+
+seo_agent_host: "{{ peers.loop.ipv6 }}"
+seo_agent_port: 8790
+seo_agent_beacon_control_plane_url: https://beacon.hyrule.host
+seo_agent_beacon_managed_mode: true
+seo_agent_beacon_poll_interval_s: 10
+# Stage automatic execution separately after the worker and credential are
+# healthy. Approval-gated handoffs remain available while this is false.
+seo_agent_execute_automatic_actions: false
+seo_agent_scheduler_enabled: false
+
+seo_agent_site_base_url: https://hyrule.host
+seo_agent_x402_base_url: https://cloud.hyrule.host
+seo_agent_skills_repository_url: https://github.com/AS215932/hyrule-cloud
+seo_agent_mcp_server_url: https://github.com/AS215932/hyrule-cloud
+seo_agent_umami_base_url: ""
+
+seo_agent_packages:
+  - ca-certificates
+  - docker.io
+  - git

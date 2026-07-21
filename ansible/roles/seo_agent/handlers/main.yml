@@ -1,0 +1,11 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart seo-agent
+  ansible.builtin.systemd:
+    name: "{{ seo_agent_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when: seo_agent_enabled | bool

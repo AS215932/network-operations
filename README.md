@@ -3,8 +3,9 @@
 ## Production Deploys: Read This First
 
 This repository is the production deployment record for `noc-agent`,
-`hyrule-mcp`, `hyrule-cloud`, `hyrule-web`, and `hyrule-network-proxy`. App repos do not deploy
-production on merge.
+`hyrule-mcp`, `hyrule-cloud`, `hyrule-web`, `hyrule-network-proxy`, and the
+Hyrule Beacon worker in `hyrule-seo-agent`. App repos do not deploy production
+on merge.
 
 After an app repo's `ci` workflow succeeds on `main`, its
 **request-promotion** workflow asks this repo to open or update the promotion PR
@@ -90,7 +91,7 @@ image artifacts are committed together. Planned additions:
 |---------------|-------------|
 | `docs/diagrams/topology.mmd` / `docs/img/topology.png` | Full mesh of core routers (`cr1-nl1`, `cr1-de1`, `cr1-ch1`) with OSPFv3 internal connectivity and the edge router (`rtr`) at OVH. BGP multi-homing provides transit and IXP peering; WireGuard overlays stitch the stateless fabric together. |
 | `docs/diagrams/bgp-overview.mmd` / `docs/img/bgp-overview.png` | External BGP sessions to transit providers and IXPs; internal BGP policies for route filtering, RPKI validation, and ECMP load balancing. |
-| `docs/diagrams/deploy-flow.mmd` / `docs/img/deploy-flow.png` | App repositories (`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`) run CI on `main`, then request promotion via this repo. A promotion PR pins exact SHAs in inventory; after merge, `apply.yml` deploys through a GitHub environment approval gate. |
+| `docs/diagrams/deploy-flow.mmd` / `docs/img/deploy-flow.png` | App repositories (`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`, `hyrule-seo-agent`) run CI on `main`, then request promotion via this repo. A promotion PR pins exact SHAs in inventory; after merge, `apply.yml` deploys through a GitHub environment approval gate. |
 
 When adding diagrams, commit both the text source and rendered image so the
 public README never points at missing assets.
@@ -193,6 +194,7 @@ Feel free to:
 - [`as215932.net`](https://github.com/AS215932/as215932.net) — Public website and weathermap
 - [`hyrule-cloud`](https://github.com/AS215932/hyrule-cloud) — Agentic VPS hosting API with x402 payments
 - [`hyrule-web`](https://github.com/AS215932/hyrule-web) — Main branded website
+- [`hyrule-seo-agent`](https://github.com/AS215932/hyrule-seo-agent) — Overlay-bound Hyrule Beacon visibility worker
 
 ## Contact
 

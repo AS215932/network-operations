@@ -29,6 +29,7 @@ class AppPromotionBotTest(unittest.TestCase):
             "AS215932/hyrule-mcp)": 'hyrule_mcp_sha="$sha"',
             "AS215932/hyrule-cloud)": 'hyrule_cloud_sha="$sha"',
             "AS215932/hyrule-web)": 'hyrule_web_sha="$sha"',
+            "AS215932/hyrule-seo-agent)": 'seo_agent_sha="$sha"',
         }
         for repo_case, pin_assignment in expected_cases.items():
             with self.subTest(repo_case=repo_case):
