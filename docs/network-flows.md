@@ -291,6 +291,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | mon | tcp | 3100 | Loki HTTP API from Grafana on mon |
+| agentmail | tcp | 6000 | Vector ingest from agentmail |
 | api | tcp | 6000 | Vector ingest from api |
 | ci | tcp | 6000 | Vector ingest from ci |
 | cr1-de1 loopback | tcp | 6000 | Vector ingest from cr1-de1 (over WG mesh) |

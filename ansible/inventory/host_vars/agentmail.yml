@@ -78,6 +78,9 @@ monitoring_register: true
 monitoring_role: agent-mail
 monitoring_display_name: "agentmail (Stalwart, API-only)"
 monitoring_node_listen: "[{{ peers.agentmail.ipv6 }}]:9100"
+monitoring_disks:
+  "disk /": { mountpoint: "/" }
+  "disk /mnt/agent-mail-backup": { mountpoint: "/mnt/agent-mail-backup" }
 monitoring_extra_services:
   - name: stalwart-ready
     check_command: http
@@ -94,6 +97,15 @@ monitoring_extra_services:
       http_sni: true
       http_ipv6: true
       http_timeout: 10
+  - name: agent-mail-backup-timer
+    check_command: prom_systemd_unit
+    interval: 5m
+    retry: 1m
+    max_check_attempts: 3
+    notes: "Agent Mail quiesced-backup timer is active"
+    vars:
+      prom_instance: "[{{ peers.agentmail.ipv6 }}]:9100"
+      systemd_unit: agent-mail-backup.timer
 
 logs_register: true
 logs_role: agent-mail

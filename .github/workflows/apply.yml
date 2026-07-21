@@ -41,6 +41,7 @@ on:
           - rtr_routing
           - networkd_resolved
           - mail_openbsd
+          - agent_mail
           - freebsd_resolv
           - noc_mcp_key
       limit:

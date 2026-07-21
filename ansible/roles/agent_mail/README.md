@@ -60,11 +60,12 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    apply this role. Connect only from the ops prefix or VPN:
 
    ```sh
-   ansible-playbook playbooks/firewall.yml --tags apply --limit agentmail \
-     -e firewall_apply=true
-   ansible-playbook playbooks/agent_mail.yml --tags apply --limit agentmail \
-     -e agent_mail_apply=true
+   gh workflow run apply.yml -F playbook=firewall -F limit=agentmail -F dry_run=false
+   gh workflow run apply.yml -F playbook=agent_mail -F limit=agentmail -F dry_run=false
    ```
+
+   Approve each run through the protected `production` environment. Do not
+   bypass that review gate with a direct workstation apply.
 
    Submit the rendered `/etc/agent-mail/bootstrap.json` to the bootstrap API:
 

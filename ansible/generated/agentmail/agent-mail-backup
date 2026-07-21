@@ -16,6 +16,18 @@ if ! mountpoint --quiet "$backup_dir"; then
   exit 1
 fi
 
+if ! backup_device="$(stat --file-system --format=%d "$backup_dir")" ||
+   ! root_device="$(stat --file-system --format=%d /)" ||
+   ! data_device="$(stat --file-system --format=%d /var/lib/stalwart)"; then
+  echo "Agent Mail backup filesystem identity could not be verified" >&2
+  exit 1
+fi
+if [[ "$backup_device" == "$root_device" ]] ||
+   [[ "$backup_device" == "$data_device" ]]; then
+  echo "Agent Mail backup directory must use a filesystem distinct from root and Stalwart data" >&2
+  exit 1
+fi
+
 # The mount is sized for at most three full snapshots during the two-day
 # retention window (two retained archives plus the one being created). Clean
 # expired archives and abandoned partials before checking capacity.
@@ -41,7 +53,12 @@ partial="$backup_dir/stalwart-$timestamp.tar.zst.partial"
 archive="$backup_dir/stalwart-$timestamp.tar.zst"
 was_running=0
 
-if docker compose --file "$compose_file" ps --services --status running | grep -Fxq stalwart; then
+running_services=""
+if ! running_services="$(docker compose --file "$compose_file" ps --services --status running)"; then
+  echo "Agent Mail could not determine whether Stalwart is running; refusing an unsafe backup" >&2
+  exit 1
+fi
+if grep -Fxq stalwart <<<"$running_services"; then
   was_running=1
   docker compose --file "$compose_file" stop --timeout 120 stalwart
 fi

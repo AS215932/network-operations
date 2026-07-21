@@ -266,6 +266,12 @@ class AgentMailContractsTest(unittest.TestCase):
     def test_backup_and_launch_runbook_require_off_host_restore_evidence(self):
         backup = self.render("agent-mail-backup.sh.j2")
         self.assertLess(backup.index("mountpoint --quiet"), backup.index(" stop --timeout 120 stalwart"))
+        self.assertIn('stat --file-system --format=%d "$backup_dir"', backup)
+        self.assertIn('[[ "$backup_device" == "$root_device" ]]', backup)
+        self.assertIn('[[ "$backup_device" == "$data_device" ]]', backup)
+        self.assertIn('if ! running_services="$(docker compose', backup)
+        self.assertIn('grep -Fxq stalwart <<<"$running_services"', backup)
+        self.assertNotIn('ps --services --status running | grep', backup)
         self.assertIn('readonly min_capacity_bytes="107374182400"', backup)
         self.assertIn('readonly min_free_bytes="34359738368"', backup)
         self.assertLess(backup.index(" stop --timeout 120 stalwart"), backup.index("tar --acls"))
@@ -283,6 +289,58 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("agent_mail_start=false", readme)
         self.assertIn("agent_mail_backup_enabled=false", readme)
         self.assertIn("outbound TCP/25 kill", readme)
+
+        apply = (ROLE / "tasks/apply.yml").read_text()
+        self.assertIn("Inspect Agent Mail backup, root, and data filesystems", apply)
+        self.assertIn(".stat.dev !=", apply)
+
+    def test_protected_apply_logging_and_backup_monitoring_are_wired(self):
+        workflow = _yaml(REPO / ".github/workflows/apply.yml")
+        options = workflow[True]["workflow_dispatch"]["inputs"]["playbook"]["options"]
+        self.assertIn("agent_mail", options)
+
+        playbook = (REPO / "ansible/playbooks/agent_mail.yml").read_text()
+        readme = (ROLE / "README.md").read_text()
+        protected_command = (
+            "gh workflow run apply.yml -F playbook=agent_mail "
+            "-F limit=agentmail -F dry_run=false"
+        )
+        self.assertIn(protected_command, playbook)
+        self.assertIn(protected_command, readme)
+
+        log_vars = _yaml(INVENTORY / "host_vars/log.yml")
+        agentmail_ingest = [
+            rule
+            for rule in log_vars["firewall_extra_rules"]
+            if rule["dport"] == 6000 and "agentmail" in rule["comment"]
+        ]
+        self.assertEqual(
+            agentmail_ingest,
+            [
+                {
+                    "proto": "tcp",
+                    "dport": 6000,
+                    "src": "{{ peers.agentmail.ipv6 }}",
+                    "comment": "Vector ingest from agentmail",
+                }
+            ],
+        )
+
+        disks = self.host_vars["monitoring_disks"]
+        self.assertEqual(
+            disks["disk /mnt/agent-mail-backup"],
+            {"mountpoint": "/mnt/agent-mail-backup"},
+        )
+        backup_timer = next(
+            service
+            for service in self.host_vars["monitoring_extra_services"]
+            if service["name"] == "agent-mail-backup-timer"
+        )
+        self.assertEqual(backup_timer["check_command"], "prom_systemd_unit")
+        self.assertEqual(
+            backup_timer["vars"]["systemd_unit"],
+            "agent-mail-backup.timer",
+        )
 
     def test_staged_monitoring_is_inactive_and_not_public_status_claim(self):
         prometheus = _yaml(REPO / "configs/mon/prometheus.yml")

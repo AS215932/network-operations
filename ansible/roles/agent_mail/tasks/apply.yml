@@ -58,6 +58,29 @@
   check_mode: false
   when: agent_mail_backup_enabled | bool
 
+- name: Inspect Agent Mail backup, root, and data filesystems
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    get_attributes: false
+    get_checksum: false
+    get_mime: false
+  loop:
+    - "{{ agent_mail_backup_dir }}"
+    - /
+    - "{{ agent_mail_stalwart_data_dir }}"
+  register: _agent_mail_backup_filesystems
+  when: agent_mail_backup_enabled | bool
+
+- name: Require a backup filesystem distinct from root and Stalwart data
+  ansible.builtin.assert:
+    that:
+      - _agent_mail_backup_filesystems.results[0].stat.dev != _agent_mail_backup_filesystems.results[1].stat.dev
+      - _agent_mail_backup_filesystems.results[0].stat.dev != _agent_mail_backup_filesystems.results[2].stat.dev
+    fail_msg: >-
+      {{ agent_mail_backup_dir }} must be a distinct filesystem, not a bind mount
+      or directory on the root or Stalwart data filesystem.
+  when: agent_mail_backup_enabled | bool
+
 - name: Install Agent Mail runtime and staged control artifacts
   ansible.builtin.template:
     src: "{{ item.src }}"
