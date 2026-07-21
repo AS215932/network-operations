@@ -1,0 +1,11 @@
+---
+- name: Gather services for disabled seo-agent
+  ansible.builtin.service_facts:
+
+- name: Stop and disable installed seo-agent service
+  ansible.builtin.systemd:
+    name: "{{ seo_agent_service_name }}"
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  when: seo_agent_service_name in ansible_facts.services

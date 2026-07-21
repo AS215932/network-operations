@@ -464,6 +464,32 @@ jobs:
             exit 0
           fi
 
+          loop_inventory="$(cd ansible && ansible-inventory --host loop)"
+          if [ "$(jq -r '.seo_agent_enabled // true' <<<"$loop_inventory")" != "true" ]; then
+            echo "seo-agent is disabled; skipping Vault bootstrap"
+            exit 0
+          fi
+          loop_host="$(jq -r '.ansible_host // empty' <<<"$loop_inventory")"
+          if [ -z "$loop_host" ]; then
+            echo "::error::loop has no ansible_host in rendered inventory"
+            exit 1
+          fi
+          if ! installed_secret_id="$(
+            ssh -i "$ANSIBLE_PRIVATE_KEY_FILE" -o IdentitiesOnly=yes "ci@${loop_host}" \
+              "sudo -n /bin/sh -c 'if /usr/bin/test -s /etc/vault-agent.d/seo-agent-secret-id; then /usr/bin/printf present; else /usr/bin/printf absent; fi'"
+          )"; then
+            echo "::error::could not inspect the installed seo-agent Vault bootstrap"
+            exit 1
+          fi
+          if [ "$installed_secret_id" = "present" ]; then
+            echo "Reusing installed persistent seo-agent SecretID"
+            exit 0
+          fi
+          if [ "$installed_secret_id" != "absent" ]; then
+            echo "::error::unexpected seo-agent Vault bootstrap state"
+            exit 1
+          fi
+
           token_file="/run/vault-agent/github-runner.token"
           if [ ! -r "$token_file" ]; then
             echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"

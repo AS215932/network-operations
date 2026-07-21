@@ -1,12 +1,26 @@
 ---
-- name: Validate seo-agent deployment inputs
+- name: Validate seo-agent service control
+  ansible.builtin.assert:
+    that:
+      - seo_agent_service_name is match('^[A-Za-z0-9_.@-]+\.service$')
+    fail_msg: seo-agent service name must identify one systemd unit.
+  tags: [validate, always]
+
+- name: Stop disabled seo-agent runtime
+  ansible.builtin.import_tasks: disable.yml
+  when:
+    - seo_agent_apply | bool
+    - not (seo_agent_enabled | bool)
+  tags: [apply]
+
+- name: Validate enabled seo-agent deployment inputs
   ansible.builtin.assert:
     that:
       - seo_agent_install_dir.startswith('/')
       - seo_agent_config_dir.startswith('/')
       - seo_agent_env_file.startswith('/')
       - seo_agent_state_dir.startswith('/')
-      - seo_agent_version is match('^[0-9a-f]{40}$')
+      - seo_agent_version is match('^[0-9a-fA-F]{40}$')
       - seo_agent_host == peers.loop.ipv6
       - seo_agent_port | int == 8790
       - seo_agent_beacon_control_plane_url is match('^https://[^/]+$')
@@ -16,9 +30,12 @@
       seo-agent must remain an immutable, overlay-bound Hyrule Beacon worker
       with control-plane scheduling unless a reviewed change deliberately
       widens that boundary.
+  when: seo_agent_enabled | bool
   tags: [validate, always]
 
-- name: Apply seo-agent runtime
+- name: Apply enabled seo-agent runtime
   ansible.builtin.import_tasks: apply.yml
-  when: seo_agent_apply | bool
+  when:
+    - seo_agent_apply | bool
+    - seo_agent_enabled | bool
   tags: [apply]

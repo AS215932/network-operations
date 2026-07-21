@@ -196,6 +196,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             REPO / "ansible/roles/seo_agent/templates/seo-agent.service.j2"
         ).read_text()
         runbook = (REPO / "docs/runbooks/bootstrap-seo-agent-vault.md").read_text()
+        role_main = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/main.yml").read_text()
+        )
+        role_apply = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/apply.yml").read_text()
+        )
+        role_disable = yaml.safe_load(
+            (REPO / "ansible/roles/seo_agent/tasks/disable.yml").read_text()
+        )
         vault_playbook = yaml.safe_load(
             (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
         )
@@ -211,6 +220,14 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("VAULT_SEO_AGENT_WRAPPED_SECRET_ID", playbook)
         self.assertIn("Mint seo-agent Vault bootstrap", workflow)
         self.assertIn("auth/approle/role/seo-agent/role-id", workflow)
+        self.assertIn("Reusing installed persistent seo-agent SecretID", workflow)
+        self.assertLess(
+            workflow.index("Reusing installed persistent seo-agent SecretID"),
+            workflow.index(
+                "vault write -wrap-ttl=10m -field=wrapping_token -f "
+                "auth/approle/role/seo-agent/secret-id"
+            ),
+        )
         self.assertIn('path "auth/approle/role/seo-agent/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/seo-agent/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/seo-agent"', env_template)
@@ -233,7 +250,27 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(
             seo_vault["vars"]["vault_agent_persist_unwrapped_secret_id"], True
         )
+        self.assertIn("seo_agent_enabled | bool", str(seo_vault["when"]))
+        enabled_validation = next(
+            task for task in role_main
+            if task.get("name") == "Validate enabled seo-agent deployment inputs"
+        )
+        self.assertIn("[0-9a-fA-F]", " ".join(enabled_validation["ansible.builtin.assert"]["that"]))
+        self.assertIn("seo_agent_enabled | bool", str(enabled_validation["when"]))
+        disabled_import = next(
+            task for task in role_main if task.get("name") == "Stop disabled seo-agent runtime"
+        )
+        self.assertIn("not (seo_agent_enabled | bool)", disabled_import["when"])
+        enabled_import = next(
+            task for task in role_main if task.get("name") == "Apply enabled seo-agent runtime"
+        )
+        self.assertIn("seo_agent_enabled | bool", enabled_import["when"])
+        self.assertEqual(role_apply[-1]["ansible.builtin.systemd"]["state"], "started")
+        self.assertEqual(role_apply[-1]["ansible.builtin.systemd"]["enabled"], True)
+        self.assertEqual(role_disable[-1]["ansible.builtin.systemd"]["state"], "stopped")
+        self.assertEqual(role_disable[-1]["ansible.builtin.systemd"]["enabled"], False)
         self.assertIn("ExecStartPre", runbook)
+        self.assertIn("inspect and reuse", runbook)
         self.assertIn("root-owned `0600`", runbook)
         self.assertIn("--network=host", service)
         self.assertIn("--read-only", service)

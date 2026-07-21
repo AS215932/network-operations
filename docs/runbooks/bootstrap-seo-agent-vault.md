@@ -43,8 +43,10 @@ response-wrapping token. A target-side `ExecStartPre` helper unwraps it into a
 root-owned `0600` file and removes the consumed wrapper. Vault Agent reads the
 persistent SecretID without deleting it, so token-max-TTL reauthentication,
 service restarts, and host reboots remain autonomous; the plaintext SecretID
-never returns to the CI controller. Revoke the AppRole SecretID when retiring
-or rebuilding the worker.
+never returns to the CI controller. Normal applies inspect and reuse that
+installed credential, so they do not mint superseded non-expiring SecretIDs.
+Revoke the AppRole SecretID when deliberately rotating, retiring, or rebuilding
+the worker.
 
 ## Apply and verify
 

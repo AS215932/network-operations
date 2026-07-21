@@ -112,6 +112,6 @@
 - name: Set seo-agent service state
   ansible.builtin.systemd:
     name: "{{ seo_agent_service_name }}"
-    enabled: "{{ seo_agent_enabled | bool }}"
-    state: "{{ 'started' if seo_agent_enabled | bool else 'stopped' }}"
+    enabled: true
+    state: started
     daemon_reload: true

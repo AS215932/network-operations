@@ -232,6 +232,7 @@
           - path: "{{ seo_agent_config_dir }}"
             group: "{{ seo_agent_group }}"
             mode: "0750"
+      when: seo_agent_enabled | bool
       tags: [vault_agent, seo_agent]
     - role: agentic_observatory
       tags: [agentic_observatory]
