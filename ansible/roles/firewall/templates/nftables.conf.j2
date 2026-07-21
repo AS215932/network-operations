@@ -34,6 +34,11 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority filter; policy drop;
+{% if firewall_forward_pre_established_raw_nft %}
+
+        # --- pre-conntrack emergency controls ---
+{{ firewall_forward_pre_established_raw_nft | indent(8, True) }}
+{% endif %}
         ct state established,related accept
         ct state invalid drop
 {% if firewall_forward_extra_raw_nft %}

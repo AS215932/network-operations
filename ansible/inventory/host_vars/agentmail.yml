@@ -51,8 +51,12 @@ firewall_extra_rules:
 # Docker's default NAT gateway mode masquerades its egress to the host's
 # allowlisted overlay address. Private JMAP and bootstrap retain their source
 # restrictions; public SMTP permits both reception and delivery only while its
-# synchronized launch gate is true. The explicit drop is the outbound emergency
-# kill switch when that gate is false.
+# synchronized launch gate is true.
+firewall_forward_pre_established_raw_nft: |
+  {% if not (agent_mail_smtp_firewall_enabled | bool) %}
+  iifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter drop comment "Agent Mail outbound SMTP kill switch"
+  {% endif %}
+
 firewall_forward_extra_raw_nft: |
   ip6 saddr { {{ peers.api.ipv6 }}, {{ peers.mon.ipv6 }}, {{ ops_prefix_v6 }}, {{ vpn_clients_subnet }} } ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 443 counter accept comment "Agent Mail private JMAP DNAT"
   {% if agent_mail_bootstrap_firewall_enabled | bool %}
@@ -65,8 +69,6 @@ firewall_forward_extra_raw_nft: |
   {% if agent_mail_smtp_firewall_enabled | bool %}
   ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail SMTP reception DNAT"
   iifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail SMTP delivery"
-  {% else %}
-  iifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter drop comment "Agent Mail outbound SMTP kill switch"
   {% endif %}
 
 # The firewall role owns only `table inet filter` on this Docker host. Replacing
@@ -78,6 +80,7 @@ monitoring_register: true
 monitoring_role: agent-mail
 monitoring_display_name: "agentmail (Stalwart, API-only)"
 monitoring_node_listen: "[{{ peers.agentmail.ipv6 }}]:9100"
+monitoring_node_textfile_dir: /var/lib/node_exporter/textfile_collector
 monitoring_disks:
   "disk /": { mountpoint: "/" }
   "disk /mnt/agent-mail-backup": { mountpoint: "/mnt/agent-mail-backup" }
@@ -106,6 +109,25 @@ monitoring_extra_services:
     vars:
       prom_instance: "[{{ peers.agentmail.ipv6 }}]:9100"
       systemd_unit: agent-mail-backup.timer
+  - name: agent-mail-backup-service
+    check_command: prom_systemd_not_failed
+    interval: 5m
+    retry: 1m
+    max_check_attempts: 3
+    notes: "Agent Mail backup oneshot has no failed systemd state"
+    vars:
+      prom_instance: "[{{ peers.agentmail.ipv6 }}]:9100"
+      systemd_unit: agent-mail-backup.service
+  - name: agent-mail-backup-freshness
+    check_command: prom_agent_mail_backup_freshness
+    interval: 5m
+    retry: 1m
+    max_check_attempts: 3
+    notes: "Latest successful Agent Mail backup is recent"
+    vars:
+      prom_instance: "[{{ peers.agentmail.ipv6 }}]:9100"
+      backup_warn_seconds: 93600
+      backup_crit_seconds: 129600
 
 logs_register: true
 logs_role: agent-mail

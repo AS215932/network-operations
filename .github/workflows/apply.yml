@@ -142,6 +142,21 @@ jobs:
             echo "::warning::/etc/github-runner/secrets.env not found — apply may fail on env-var lookups"
           fi
 
+      - name: Validate Agent Mail runner secrets
+        if: ${{ !inputs.dry_run && inputs.playbook == 'agent_mail' }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for key in AGENT_MAIL_DNS_TSIG_SECRET AGENT_MAIL_WEBHOOK_SECRET; do
+            if [ -z "${!key-}" ]; then
+              missing+=("$key")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Agent Mail apply is missing Vault-rendered runner values: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Summarize app version pins
         if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy"]'), inputs.playbook) }}
         env:

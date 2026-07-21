@@ -39,6 +39,8 @@ agent_mail_backup_dir: /mnt/agent-mail-backup
 agent_mail_backup_retention_days: 2
 agent_mail_backup_min_capacity_bytes: 107374182400
 agent_mail_backup_min_free_bytes: 34359738368
+agent_mail_backup_metrics_dir: /var/lib/node_exporter/textfile_collector
+agent_mail_backup_metrics_file: "{{ agent_mail_backup_metrics_dir }}/agent-mail-backup.prom"
 agent_mail_compose_file: "{{ agent_mail_root }}/docker-compose.yml"
 agent_mail_env_file: "{{ agent_mail_etc_dir }}/agent-mail.env"
 agent_mail_generated_dir: "{{ playbook_dir }}/../generated/agentmail"

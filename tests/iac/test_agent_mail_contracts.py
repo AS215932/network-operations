@@ -104,11 +104,11 @@ class AgentMailContractsTest(unittest.TestCase):
         launch = dict(self.context)
         launch.update(
             agent_mail_public_enabled=True,
-            agent_mail_public_ipv4="203.0.113.25",
+            agent_mail_public_ipv4="192.0.43.8",
         )
         launched = self.render("docker-compose.yml.j2", launch)
         self.assertIn("[2a0c:b641:b50:2::110]:25:25/tcp", launched)
-        self.assertIn("203.0.113.25:25:25/tcp", launched)
+        self.assertIn("192.0.43.8:25:25/tcp", launched)
         for port in FORBIDDEN_PUBLIC_PORTS:
             self.assertNotIn(f":{port}:{port}/tcp", launched)
 
@@ -129,11 +129,19 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIs(bootstrap[0]["enabled"], False)
         self.assertFalse(FORBIDDEN_PUBLIC_PORTS & {rule["dport"] for rule in rules})
 
+        pre_established = self.host_vars["firewall_forward_pre_established_raw_nft"]
         forwarded = self.host_vars["firewall_forward_extra_raw_nft"]
         self.assertIn('ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25', forwarded)
         self.assertIn('iifname "{{ agent_mail_bridge_name }}" tcp dport 25', forwarded)
-        self.assertIn("Agent Mail outbound SMTP kill switch", forwarded)
+        self.assertIn("Agent Mail outbound SMTP kill switch", pre_established)
+        self.assertNotIn("Agent Mail outbound SMTP kill switch", forwarded)
         self.assertIn("Agent Mail private JMAP DNAT", forwarded)
+
+        firewall = (ROLE.parent / "firewall/templates/nftables.conf.j2").read_text()
+        self.assertLess(
+            firewall.index("firewall_forward_pre_established_raw_nft"),
+            firewall.index("ct state established,related accept"),
+        )
 
     def test_shutdown_and_public_ipv4_guards_are_enforced(self):
         apply = (ROLE / "tasks/apply.yml").read_text()
@@ -150,8 +158,20 @@ class AgentMailContractsTest(unittest.TestCase):
         )
 
         validate = (ROLE / "tasks/validate.yml").read_text()
-        self.assertIn("25[0-5]", validate)
+        self.assertIn("ipaddress.ip_address", validate)
+        self.assertIn("address.is_global", validate)
+        self.assertIn("not address.is_multicast", validate)
+        self.assertIn("Inspect the dedicated public SMTP IPv4 assignment", validate)
+        self.assertIn('"{{ agent_mail_public_ipv4 }}/32"', validate)
         self.assertIn("agent_mail_public_ipv4 != (mail_failover_ipv4", validate)
+        self.assertNotIn(
+            "not (agent_mail_start | bool) or (agent_mail_apply | bool)",
+            validate,
+        )
+        public_launch = validate.split(
+            "- name: Assert every public-launch approval is explicit", maxsplit=1
+        )[1]
+        self.assertNotIn("- agent_mail_apply | bool", public_launch)
         self.assertIs(self.host_vars["firewall_preserve_external_tables"], True)
 
         firewall = (ROLE.parent / "firewall/templates/nftables.conf.j2").read_text()
@@ -266,18 +286,23 @@ class AgentMailContractsTest(unittest.TestCase):
     def test_backup_and_launch_runbook_require_off_host_restore_evidence(self):
         backup = self.render("agent-mail-backup.sh.j2")
         self.assertLess(backup.index("mountpoint --quiet"), backup.index(" stop --timeout 120 stalwart"))
-        self.assertIn('stat --file-system --format=%d "$backup_dir"', backup)
+        self.assertIn('stat --file-system --format=%i "$backup_dir"', backup)
         self.assertIn('[[ "$backup_device" == "$root_device" ]]', backup)
         self.assertIn('[[ "$backup_device" == "$data_device" ]]', backup)
-        self.assertIn('if ! running_services="$(docker compose', backup)
-        self.assertIn('grep -Fxq stalwart <<<"$running_services"', backup)
-        self.assertNotIn('ps --services --status running | grep', backup)
+        self.assertIn('ps --all --quiet stalwart', backup)
+        self.assertIn("docker inspect --format '{{.State.Status}}'", backup)
+        self.assertIn("created|exited|dead", backup)
+        self.assertIn("*) was_active=1", backup)
         self.assertIn('readonly min_capacity_bytes="107374182400"', backup)
         self.assertIn('readonly min_free_bytes="34359738368"', backup)
         self.assertLess(backup.index(" stop --timeout 120 stalwart"), backup.index("tar --acls"))
         self.assertIn('archive_name="${archive##*/}"', backup)
         self.assertIn('sha256sum "$archive_name"', backup)
         self.assertNotIn('sha256sum "$archive"', backup)
+        self.assertIn("agent_mail_backup_last_success_timestamp_seconds", backup)
+        self.assertIn('if [[ "$status" -eq 0 ]] && ! write_success_metric', backup)
+        backup_service = self.render("agent-mail-backup.service.j2")
+        self.assertIn("TimeoutStartSec=infinity", backup_service)
         self.assertEqual(self.defaults["agent_mail_backup_dir"], "/mnt/agent-mail-backup")
         self.assertEqual(self.defaults["agent_mail_backup_retention_days"], 2)
         readme = (ROLE / "README.md").read_text()
@@ -331,16 +356,68 @@ class AgentMailContractsTest(unittest.TestCase):
             disks["disk /mnt/agent-mail-backup"],
             {"mountpoint": "/mnt/agent-mail-backup"},
         )
-        backup_timer = next(
-            service
+        backup_services = {
+            service["name"]: service
             for service in self.host_vars["monitoring_extra_services"]
-            if service["name"] == "agent-mail-backup-timer"
-        )
+            if service["name"].startswith("agent-mail-backup-")
+        }
+        backup_timer = backup_services["agent-mail-backup-timer"]
         self.assertEqual(backup_timer["check_command"], "prom_systemd_unit")
         self.assertEqual(
             backup_timer["vars"]["systemd_unit"],
             "agent-mail-backup.timer",
         )
+        self.assertEqual(
+            backup_services["agent-mail-backup-service"]["check_command"],
+            "prom_systemd_not_failed",
+        )
+        self.assertEqual(
+            backup_services["agent-mail-backup-freshness"]["check_command"],
+            "prom_agent_mail_backup_freshness",
+        )
+        self.assertEqual(
+            self.host_vars["monitoring_node_textfile_dir"],
+            "/var/lib/node_exporter/textfile_collector",
+        )
+        backup_checks = (
+            REPO / "configs/mon/icinga2/services/agent-mail-backup.conf"
+        ).read_text()
+        self.assertIn("node_systemd_unit_state", backup_checks)
+        self.assertIn("state=\\\"failed\\\"", backup_checks)
+        self.assertIn(
+            "agent_mail_backup_last_success_timestamp_seconds", backup_checks
+        )
+        node_exporter = (
+            ROLE.parent / "monitoring/tasks/node_exporter.yml"
+        ).read_text()
+        self.assertIn("--collector.textfile.directory=", node_exporter)
+
+    def test_protected_runner_maps_agent_mail_apply_values_from_vault(self):
+        runner_env = (
+            ROLE.parent / "vault_agent/templates/github-runner.env.ctmpl.j2"
+        ).read_text()
+        expected = {
+            "AGENT_MAIL_DNS_TSIG_SECRET": "agent_mail_dns_tsig_secret",
+            "AGENT_MAIL_WEBHOOK_SECRET": "agent_mail_webhook_secret",
+            "AGENT_MAIL_RECOVERY_ADMIN_SECRET": "agent_mail_recovery_admin_secret",
+            "AGENT_MAIL_PUBLIC_IPV4": "agent_mail_public_ipv4",
+        }
+        for variable, field in expected.items():
+            with self.subTest(variable=variable):
+                self.assertIn(variable, runner_env)
+                self.assertIn(f".Data.data.{field}", runner_env)
+
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        self.assertIn("Validate Agent Mail runner secrets", workflow)
+        self.assertIn(
+            "for key in AGENT_MAIL_DNS_TSIG_SECRET AGENT_MAIL_WEBHOOK_SECRET",
+            workflow,
+        )
+        runner_runbook = (
+            REPO / "docs/runbooks/bootstrap-runner-vault.md"
+        ).read_text()
+        for field in expected.values():
+            self.assertIn(field, runner_runbook)
 
     def test_staged_monitoring_is_inactive_and_not_public_status_claim(self):
         prometheus = _yaml(REPO / "configs/mon/prometheus.yml")

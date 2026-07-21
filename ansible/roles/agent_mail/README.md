@@ -32,8 +32,9 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    group, which the canonical drift/apply sweep excludes. After SSH and base
    reachability are proven, remove that membership in a reviewed change before
    treating the host as part of the managed fleet.
-2. Put these values in Vault and expose them only to the approved Ansible apply
-   job as environment variables:
+2. Put these values in the `kv/ci-runner` fields with the matching lower-case
+   names and expose them only through the Vault-rendered environment used by
+   the approved Ansible apply job:
    `AGENT_MAIL_DNS_TSIG_SECRET`, `AGENT_MAIL_WEBHOOK_SECRET`, and (temporarily)
    `AGENT_MAIL_RECOVERY_ADMIN_SECRET`. The DNS value must equal Knot's
    `hyrule-dns` key; the webhook value must also be stored as
@@ -43,9 +44,11 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    base64/base64url before apply. Before removing `agentmail` from `staged`,
    expose these same values to the privileged drift runner's Vault-backed
    environment so its canonical check-mode sweep remains fail-closed.
-3. Keep `agent_mail_public_enabled: false`. Set `agent_mail_apply` and
-   `agent_mail_start` only for the controlled host apply. A default invocation
-   renders review artifacts and cannot touch the host.
+3. Keep `agent_mail_public_enabled: false`. Set the desired
+   `agent_mail_start` state only in reviewed inventory. Never commit
+   `agent_mail_apply: true`; the protected workflow supplies that transient
+   extra-var only for an approved live apply. A default invocation renders
+   review artifacts and cannot touch the host.
 4. Apply Knot and the firewall additions first. Confirm the Knot update ACL is
    restricted to `agentmail`'s exact IPv6 source.
 
@@ -120,9 +123,12 @@ All items below must have durable evidence before changing a launch gate:
    `mx1.agentmail.hyrule.host`, whose forward records return the same addresses.
 3. Backup: enable the quiesced timer only after the dedicated backup mount is
    active. The script enforces a 100 GiB minimum volume, 32 GiB free-space
-   floor, and two-day local retention before it stops Stalwart. Transfer every
-   snapshot to an encrypted off-host repository, verify checksums, and complete
-   a restore into an isolated VM. A same-disk tarball alone never satisfies
+   floor, and two-day local retention before it stops Stalwart. A successful
+   archive, checksum, and service restart update the node-exporter textfile
+   timestamp; Icinga checks both that timestamp and the backup service failed
+   state, not merely timer liveness. Transfer every snapshot to an encrypted
+   off-host repository, verify checksums, and complete a restore into an
+   isolated VM. A same-disk tarball alone never satisfies
    `agent_mail_backup_restore_verified`.
 4. Monitoring: apply the monitoring, Prometheus, and logs roles only after the
    host is reachable. While `agentmail` remains staged, the live Prometheus
@@ -149,7 +155,7 @@ In one reviewed change, assign the dedicated IPv4 and set every readiness flag
 to true. Then set `agent_mail_public_enabled`,
 `agent_mail_smtp_firewall_enabled`, and both TCP/25 firewall rules' `enabled`
 fields to true. The role refuses the change if any approval is missing, if
-bootstrap/recovery mode remains, or if backups/start/apply are not enabled.
+bootstrap/recovery mode remains, or if backups and desired start are not enabled.
 
 Before enabling Hyrule Cloud's public Agent Mail gate, verify its Vault-rendered
 configuration has `MAIL_ENABLED=true`, both legal/abuse approvals true, the
@@ -162,9 +168,10 @@ enabled only if that product is also approved.
 2. In one inventory change set `agent_mail_start=false`,
    `agent_mail_backup_enabled=false`, `agent_mail_public_enabled=false`, its
    SMTP firewall twin, and both TCP/25 rule fields false. Apply the Agent Mail
-   role with `agent_mail_apply=true`; validation then permits the stop path,
-   the backup timer stops, and `docker compose down` stops queued outbound
-   delivery while preserving the bind-mounted configuration and mailbox data.
+   role through the protected `apply.yml` workflow; its transient apply gate
+   permits the stop path, the backup timer stops, and `docker compose down`
+   stops queued outbound delivery while preserving the bind-mounted
+   configuration and mailbox data.
 3. Apply nftables with `firewall_apply=true`. Verify the container and backup
    timer are absent and the forward chain contains the outbound TCP/25 kill
    switch before treating public delivery as stopped.

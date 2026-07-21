@@ -51,6 +51,15 @@
     - { path: "{{ agent_mail_stalwart_data_dir }}", owner: "2000", group: "2000", mode: "0750" }
     - { path: "{{ agent_mail_backup_dir }}", owner: root, group: root, mode: "0700" }
 
+- name: Ensure Agent Mail backup metrics directory exists
+  ansible.builtin.file:
+    path: "{{ agent_mail_backup_metrics_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: agent_mail_backup_enabled | bool
+
 - name: Verify the dedicated Agent Mail backup volume is mounted
   ansible.builtin.command:
     argv: [mountpoint, --quiet, "{{ agent_mail_backup_dir }}"]

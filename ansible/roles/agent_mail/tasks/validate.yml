@@ -31,10 +31,9 @@
     fail_msg: "Compose and firewall listener gates differ, or a forbidden mail protocol is exposed."
     quiet: true
 
-- name: Assert apply/start/bootstrap/backup sequencing
+- name: Assert desired start/bootstrap/backup sequencing
   ansible.builtin.assert:
     that:
-      - not (agent_mail_start | bool) or (agent_mail_apply | bool)
       - not (agent_mail_bootstrap_enabled | bool) or (agent_mail_start | bool)
       - not (agent_mail_backup_enabled | bool) or (agent_mail_start | bool)
       - not (agent_mail_public_enabled | bool) or not (agent_mail_bootstrap_enabled | bool)
@@ -73,10 +72,70 @@
   no_log: true
   when: agent_mail_apply | bool
 
+- name: Validate the dedicated public SMTP IPv4 as global unicast
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import ipaddress
+        import sys
+
+        try:
+            address = ipaddress.ip_address(sys.argv[1])
+        except ValueError:
+            raise SystemExit(1)
+        valid = (
+            isinstance(address, ipaddress.IPv4Address)
+            and address.is_global
+            and not address.is_multicast
+        )
+        raise SystemExit(0 if valid else 1)
+      - "{{ agent_mail_public_ipv4 }}"
+  register: _agent_mail_public_ipv4_semantics
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  delegate_to: localhost
+  become: false
+  when: agent_mail_public_enabled | bool
+
+- name: Inspect the dedicated public SMTP IPv4 assignment
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -4
+      - -o
+      - address
+      - show
+      - to
+      - "{{ agent_mail_public_ipv4 }}/32"
+      - scope
+      - global
+  register: _agent_mail_public_ipv4_assignment
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - agent_mail_public_enabled | bool
+    - agent_mail_apply | bool
+
+- name: Require the public SMTP IPv4 to be explicitly assigned on agentmail
+  ansible.builtin.assert:
+    that:
+      - _agent_mail_public_ipv4_assignment.rc == 0
+      - _agent_mail_public_ipv4_assignment.stdout | trim | length > 0
+    fail_msg: >-
+      The dedicated public SMTP IPv4 must be assigned with global scope on the
+      Agent Mail host before Docker may bind port 25.
+    quiet: true
+  when:
+    - agent_mail_public_enabled | bool
+    - agent_mail_apply | bool
+
 - name: Assert every public-launch approval is explicit
   ansible.builtin.assert:
     that:
-      - agent_mail_apply | bool
       - agent_mail_start | bool
       - agent_mail_backup_enabled | bool
       - agent_mail_legal_approved | bool
@@ -86,11 +145,11 @@
       - agent_mail_backup_restore_verified | bool
       - agent_mail_canaries_verified | bool
       - agent_mail_recovery_admin_secret | length == 0
-      - agent_mail_public_ipv4 is match('^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$')
+      - _agent_mail_public_ipv4_semantics.rc == 0
       - agent_mail_public_ipv4 != (mail_failover_ipv4 | default(''))
     fail_msg: >-
       Public SMTP remains blocked until legal/abuse approval, DNS and PTR,
-      off-host restore, deliverability canaries, start/apply, and dedicated IPv4
+      off-host restore, deliverability canaries, desired start, and dedicated IPv4
       are all explicitly verified.
     quiet: true
   when: agent_mail_public_enabled | bool
