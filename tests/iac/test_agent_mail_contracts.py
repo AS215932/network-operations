@@ -69,6 +69,7 @@ class AgentMailContractsTest(unittest.TestCase):
             "agent_mail_apply",
             "agent_mail_start",
             "agent_mail_public_enabled",
+            "agent_mail_canary_enabled",
             "agent_mail_smtp_firewall_enabled",
             "agent_mail_bootstrap_enabled",
             "agent_mail_bootstrap_firewall_enabled",
@@ -83,9 +84,19 @@ class AgentMailContractsTest(unittest.TestCase):
         for gate in gates:
             with self.subTest(gate=gate):
                 self.assertIs(self.host_vars[gate], False)
+        for key in (
+            "agent_mail_canary_inbound_ipv4_sources",
+            "agent_mail_canary_inbound_ipv6_sources",
+            "agent_mail_canary_outbound_ipv4_destinations",
+            "agent_mail_canary_outbound_ipv6_destinations",
+        ):
+            with self.subTest(canary_networks=key):
+                self.assertEqual(self.host_vars[key], [])
 
     def test_stalwart_image_is_immutable_and_public_protocols_are_absent(self):
         self.assertEqual(self.defaults["agent_mail_image"], EXPECTED_IMAGE)
+        self.assertIn("docker-compose", self.defaults["agent_mail_packages"])
+        self.assertNotIn("docker-compose-v2", self.defaults["agent_mail_packages"])
         compose = self.render("docker-compose.yml.j2")
         self.assertIn(EXPECTED_IMAGE, compose)
         self.assertIn("[2a0c:b641:b50:2::110]:443:443/tcp", compose)
@@ -112,6 +123,15 @@ class AgentMailContractsTest(unittest.TestCase):
         for port in FORBIDDEN_PUBLIC_PORTS:
             self.assertNotIn(f":{port}:{port}/tcp", launched)
 
+        canary = dict(self.context)
+        canary.update(
+            agent_mail_canary_enabled=True,
+            agent_mail_public_ipv4="192.0.43.8",
+        )
+        canary_compose = self.render("docker-compose.yml.j2", canary)
+        self.assertIn("[2a0c:b641:b50:2::110]:25:25/tcp", canary_compose)
+        self.assertIn("192.0.43.8:25:25/tcp", canary_compose)
+
     def test_bootstrap_listener_is_temporary_and_never_implies_smtp(self):
         bootstrap = dict(self.context)
         bootstrap["agent_mail_bootstrap_enabled"] = True
@@ -136,6 +156,12 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("Agent Mail outbound SMTP kill switch", pre_established)
         self.assertNotIn("Agent Mail outbound SMTP kill switch", forwarded)
         self.assertIn("Agent Mail private JMAP DNAT", forwarded)
+        self.assertIn("agent_mail_canary_inbound_ipv4_sources", forwarded)
+        self.assertIn("agent_mail_canary_inbound_ipv6_sources", forwarded)
+        self.assertIn("agent_mail_canary_outbound_ipv4_destinations", forwarded)
+        self.assertIn("agent_mail_canary_outbound_ipv6_destinations", forwarded)
+        self.assertNotIn("0.0.0.0/0", forwarded)
+        self.assertNotIn("::/0", forwarded)
 
         firewall = (ROLE.parent / "firewall/templates/nftables.conf.j2").read_text()
         self.assertLess(
@@ -149,23 +175,48 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("when: not (agent_mail_start | bool)", apply)
         self.assertIn("net.ipv6.conf.all.forwarding", apply)
         self.assertLess(
-            apply.index("Stop and disable the Agent Mail backup timer before shutdown"),
-            apply.index("Stop any in-flight Agent Mail backup before shutdown"),
+            apply.index("Stop the Agent Mail backup timer before runtime changes"),
+            apply.index("Stop any in-flight Agent Mail backup before runtime changes"),
         )
         self.assertLess(
-            apply.index("Stop any in-flight Agent Mail backup before shutdown"),
+            apply.index("Stop any in-flight Agent Mail backup before runtime changes"),
+            apply.index("Wait for any in-flight Agent Mail backup before runtime changes"),
+        )
+        self.assertLess(
+            apply.index("Wait for any in-flight Agent Mail backup before runtime changes"),
             apply.index("Stop and remove Agent Mail when the start gate is disabled"),
         )
+        self.assertGreaterEqual(
+            apply.count("/run/lock/agent-mail-backup.lock"),
+            4,
+        )
+        self.assertIn("flock, --wait", apply)
 
         validate = (ROLE / "tasks/validate.yml").read_text()
         self.assertIn("ipaddress.ip_address", validate)
         self.assertIn("address.is_global", validate)
         self.assertIn("not address.is_multicast", validate)
-        self.assertIn("Inspect the dedicated public SMTP IPv4 assignment", validate)
+        self.assertIn("Inspect the dedicated SMTP IPv4 assignment", validate)
         self.assertIn('"{{ agent_mail_public_ipv4 }}/32"', validate)
         self.assertIn("agent_mail_public_ipv4 != (mail_failover_ipv4", validate)
         self.assertNotIn(
             "not (agent_mail_start | bool) or (agent_mail_apply | bool)",
+            validate,
+        )
+        self.assertIn("Validate restricted Agent Mail canary networks", validate)
+        self.assertIn("ipaddress.ip_network", validate)
+        self.assertIn("network.prefixlen > 0", validate)
+        self.assertIn("network.is_global", validate)
+        self.assertIn(
+            "_smtp_ipv4_sources == [agent_mail_canary_inbound_ipv4_sources]",
+            validate,
+        )
+        self.assertIn(
+            "_smtp_ipv6_sources == [agent_mail_canary_inbound_ipv6_sources]",
+            validate,
+        )
+        self.assertIn(
+            "Assert the temporary canary path is restricted and otherwise launch-ready",
             validate,
         )
         public_launch = validate.split(
@@ -314,10 +365,17 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("agent_mail_start=false", readme)
         self.assertIn("agent_mail_backup_enabled=false", readme)
         self.assertIn("outbound TCP/25 kill", readme)
+        self.assertIn("Restricted pre-launch SMTP canary window", readme)
+        self.assertIn("agent_mail_canary_inbound_", readme)
+        self.assertIn("agent_mail_canary_outbound_", readme)
 
         apply = (ROLE / "tasks/apply.yml").read_text()
         self.assertIn("Inspect Agent Mail backup, root, and data filesystems", apply)
         self.assertIn(".stat.dev !=", apply)
+        self.assertLess(
+            apply.index("Wait for any in-flight Agent Mail backup before runtime changes"),
+            apply.index("Install Agent Mail runtime and staged control artifacts"),
+        )
 
     def test_protected_apply_logging_and_backup_monitoring_are_wired(self):
         workflow = _yaml(REPO / ".github/workflows/apply.yml")

@@ -45,7 +45,7 @@ on:
           - freebsd_resolv
           - noc_mcp_key
       limit:
-        description: Ansible --limit pattern (host or group)
+        description: Ansible --limit pattern; empty safely defaults to all:!ci-pr:!staged
         type: string
         required: true
         default: ""
@@ -118,6 +118,8 @@ jobs:
       # New inventory hosts become reachable without a manual `apply.yml ci`
       # known_hosts reseed (network-operations#404).
       - name: Seed missing SSH host keys
+        env:
+          SEED_HOST_KEYS_LIMIT: ${{ inputs.limit != '' && inputs.limit || 'all:!ci-pr:!staged' }}
         run: scripts/ci/seed-missing-host-keys.sh
 
       - name: Source Vault-rendered secrets
@@ -477,14 +479,11 @@ jobs:
           PLAYBOOK: ${{ inputs.playbook }}
           LIMIT: ${{ inputs.limit }}
         run: |
-          limit_args=()
-          if [ -n "$LIMIT" ]; then
-            limit_args=(--limit "$LIMIT")
-          fi
+          effective_limit="${LIMIT:-all:!ci-pr:!staged}"
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags validate \
             --connection=local \
-            "${limit_args[@]}"
+            --limit "$effective_limit"
 
       # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
       # user on every host (created + NOPASSWD-root by the ci_runner_key role)
@@ -500,10 +499,7 @@ jobs:
         run: |
           playbook="$PLAYBOOK"
           user_args=(-e ansible_user=ci)
-          limit_args=()
-          if [ -n "$LIMIT" ]; then
-            limit_args=(--limit "$LIMIT")
-          fi
+          effective_limit="${LIMIT:-all:!ci-pr:!staged}"
           if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then
             user_args=()
           fi
@@ -516,7 +512,7 @@ jobs:
             "${user_args[@]}" \
             -e "${APPLY_VAR}" \
             "${extra_var_args[@]}" \
-            "${limit_args[@]}"
+            --limit "$effective_limit"
 
       - name: Post-deploy Goss validation
         if: ${{ !inputs.dry_run }}

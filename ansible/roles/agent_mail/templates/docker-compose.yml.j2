@@ -15,7 +15,7 @@ services:
 {% if agent_mail_bootstrap_enabled | bool %}
       - "[{{ agent_mail_overlay_ipv6 }}]:8080:8080/tcp"
 {% endif %}
-{% if agent_mail_public_enabled | bool %}
+{% if agent_mail_public_enabled | bool or agent_mail_canary_enabled | bool %}
       - "[{{ agent_mail_overlay_ipv6 }}]:25:25/tcp"
       - "{{ agent_mail_public_ipv4 }}:25:25/tcp"
 {% endif %}

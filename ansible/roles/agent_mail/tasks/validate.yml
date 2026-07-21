@@ -21,14 +21,33 @@
     _bootstrap_enabled_values: >-
       {{ firewall_extra_rules | selectattr('dport', 'equalto', 8080)
          | map(attribute='enabled') | map('bool') | unique | list }}
+    _smtp_ipv4_sources: >-
+      {{ firewall_extra_rules | selectattr('dport', 'equalto', 25)
+         | selectattr('family', 'equalto', 'ip') | map(attribute='src') | list }}
+    _smtp_ipv6_sources: >-
+      {{ firewall_extra_rules | selectattr('dport', 'equalto', 25)
+         | selectattr('family', 'equalto', 'ip6') | map(attribute='src') | list }}
   ansible.builtin.assert:
     that:
-      - agent_mail_smtp_firewall_enabled | bool == agent_mail_public_enabled | bool
+      - >-
+        agent_mail_smtp_firewall_enabled | bool ==
+        ((agent_mail_public_enabled | bool) or (agent_mail_canary_enabled | bool))
       - agent_mail_bootstrap_firewall_enabled | bool == agent_mail_bootstrap_enabled | bool
-      - _smtp_enabled_values == [agent_mail_public_enabled | bool]
+      - _smtp_enabled_values == [agent_mail_smtp_firewall_enabled | bool]
       - _bootstrap_enabled_values == [agent_mail_bootstrap_enabled | bool]
+      - not ((agent_mail_public_enabled | bool) and (agent_mail_canary_enabled | bool))
+      - >-
+        not (agent_mail_canary_enabled | bool) or
+        _smtp_ipv4_sources == [agent_mail_canary_inbound_ipv4_sources]
+      - >-
+        not (agent_mail_canary_enabled | bool) or
+        _smtp_ipv6_sources == [agent_mail_canary_inbound_ipv6_sources]
+      - not (agent_mail_public_enabled | bool) or _smtp_ipv4_sources == ['any']
+      - not (agent_mail_public_enabled | bool) or _smtp_ipv6_sources == ['any']
       - firewall_extra_rules | selectattr('dport', 'in', [110, 143, 465, 587, 993, 995, 4190]) | list | length == 0
-    fail_msg: "Compose and firewall listener gates differ, or a forbidden mail protocol is exposed."
+    fail_msg: >-
+      Compose and firewall listener gates differ, public and canary SMTP overlap,
+      or a forbidden mail protocol is exposed.
     quiet: true
 
 - name: Assert desired start/bootstrap/backup sequencing
@@ -37,6 +56,7 @@
       - not (agent_mail_bootstrap_enabled | bool) or (agent_mail_start | bool)
       - not (agent_mail_backup_enabled | bool) or (agent_mail_start | bool)
       - not (agent_mail_public_enabled | bool) or not (agent_mail_bootstrap_enabled | bool)
+      - not (agent_mail_canary_enabled | bool) or not (agent_mail_bootstrap_enabled | bool)
     fail_msg: "Agent Mail rollout gates were enabled out of sequence."
     quiet: true
 
@@ -72,7 +92,45 @@
   no_log: true
   when: agent_mail_apply | bool
 
-- name: Validate the dedicated public SMTP IPv4 as global unicast
+- name: Validate restricted Agent Mail canary networks
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import ipaddress
+        import json
+        import sys
+
+        expected_versions = (4, 6, 4, 6)
+        try:
+            groups = [json.loads(value) for value in sys.argv[1:]]
+            valid = all(isinstance(group, list) and group for group in groups)
+            for group, version in zip(groups, expected_versions, strict=True):
+                networks = [ipaddress.ip_network(value, strict=False) for value in group]
+                valid = valid and len(networks) == len({str(network) for network in networks})
+                valid = valid and all(
+                    network.version == version
+                    and network.prefixlen > 0
+                    and network.is_global
+                    for network in networks
+                )
+        except (TypeError, ValueError):
+            valid = False
+        raise SystemExit(0 if valid else 1)
+      - "{{ agent_mail_canary_inbound_ipv4_sources | to_json }}"
+      - "{{ agent_mail_canary_inbound_ipv6_sources | to_json }}"
+      - "{{ agent_mail_canary_outbound_ipv4_destinations | to_json }}"
+      - "{{ agent_mail_canary_outbound_ipv6_destinations | to_json }}"
+  register: _agent_mail_canary_network_semantics
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  delegate_to: localhost
+  become: false
+  when: agent_mail_canary_enabled | bool
+
+- name: Validate the dedicated SMTP IPv4 as global unicast
   ansible.builtin.command:
     argv:
       - python3
@@ -98,9 +156,9 @@
   check_mode: false
   delegate_to: localhost
   become: false
-  when: agent_mail_public_enabled | bool
+  when: (agent_mail_public_enabled | bool) or (agent_mail_canary_enabled | bool)
 
-- name: Inspect the dedicated public SMTP IPv4 assignment
+- name: Inspect the dedicated SMTP IPv4 assignment
   ansible.builtin.command:
     argv:
       - ip
@@ -117,10 +175,10 @@
   failed_when: false
   check_mode: false
   when:
-    - agent_mail_public_enabled | bool
+    - (agent_mail_public_enabled | bool) or (agent_mail_canary_enabled | bool)
     - agent_mail_apply | bool
 
-- name: Require the public SMTP IPv4 to be explicitly assigned on agentmail
+- name: Require the SMTP IPv4 to be explicitly assigned on agentmail
   ansible.builtin.assert:
     that:
       - _agent_mail_public_ipv4_assignment.rc == 0
@@ -130,8 +188,33 @@
       Agent Mail host before Docker may bind port 25.
     quiet: true
   when:
-    - agent_mail_public_enabled | bool
+    - (agent_mail_public_enabled | bool) or (agent_mail_canary_enabled | bool)
     - agent_mail_apply | bool
+
+- name: Assert the temporary canary path is restricted and otherwise launch-ready
+  ansible.builtin.assert:
+    that:
+      - agent_mail_start | bool
+      - agent_mail_backup_enabled | bool
+      - agent_mail_legal_approved | bool
+      - agent_mail_abuse_process_approved | bool
+      - agent_mail_dns_verified | bool
+      - agent_mail_ptr_verified | bool
+      - agent_mail_backup_restore_verified | bool
+      - not (agent_mail_canaries_verified | bool)
+      - not (agent_mail_public_enabled | bool)
+      - not (agent_mail_bootstrap_enabled | bool)
+      - agent_mail_recovery_admin_secret | length == 0
+      - _agent_mail_canary_network_semantics.rc == 0
+      - _agent_mail_public_ipv4_semantics.rc == 0
+      - agent_mail_public_ipv4 != (mail_failover_ipv4 | default(''))
+    fail_msg: >-
+      Canary SMTP requires every non-canary readiness approval, a dedicated IPv4,
+      and non-empty global-unicast IPv4/IPv6 source and destination CIDRs. Public
+      launch and bootstrap must remain off, and the canary result must not be
+      pre-asserted.
+    quiet: true
+  when: agent_mail_canary_enabled | bool
 
 - name: Assert every public-launch approval is explicit
   ansible.builtin.assert:
@@ -144,12 +227,17 @@
       - agent_mail_ptr_verified | bool
       - agent_mail_backup_restore_verified | bool
       - agent_mail_canaries_verified | bool
+      - not (agent_mail_canary_enabled | bool)
+      - agent_mail_canary_inbound_ipv4_sources | length == 0
+      - agent_mail_canary_inbound_ipv6_sources | length == 0
+      - agent_mail_canary_outbound_ipv4_destinations | length == 0
+      - agent_mail_canary_outbound_ipv6_destinations | length == 0
       - agent_mail_recovery_admin_secret | length == 0
       - _agent_mail_public_ipv4_semantics.rc == 0
       - agent_mail_public_ipv4 != (mail_failover_ipv4 | default(''))
     fail_msg: >-
       Public SMTP remains blocked until legal/abuse approval, DNS and PTR,
-      off-host restore, deliverability canaries, desired start, and dedicated IPv4
-      are all explicitly verified.
+      off-host restore, completed deliverability canaries, desired start, and a
+      dedicated IPv4 are all explicitly verified, with the temporary canary gate off.
     quiet: true
   when: agent_mail_public_enabled | bool

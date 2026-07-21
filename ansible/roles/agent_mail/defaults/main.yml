@@ -4,6 +4,7 @@
 agent_mail_apply: false
 agent_mail_start: false
 agent_mail_public_enabled: false
+agent_mail_canary_enabled: false
 agent_mail_smtp_firewall_enabled: false
 agent_mail_bootstrap_enabled: false
 agent_mail_bootstrap_firewall_enabled: false
@@ -15,6 +16,13 @@ agent_mail_dns_verified: false
 agent_mail_ptr_verified: false
 agent_mail_backup_restore_verified: false
 agent_mail_canaries_verified: false
+
+# Temporary pre-launch SMTP may reach only explicitly reviewed public CIDRs.
+# Keep all four lists empty except during the short canary window.
+agent_mail_canary_inbound_ipv4_sources: []
+agent_mail_canary_inbound_ipv6_sources: []
+agent_mail_canary_outbound_ipv4_destinations: []
+agent_mail_canary_outbound_ipv6_destinations: []
 
 agent_mail_hostname: mx1.agentmail.hyrule.host
 agent_mail_default_domain: agentmail.hyrule.host
@@ -28,7 +36,7 @@ agent_mail_bridge_ipv6_subnet: "fd21:5932:110::/64"
 agent_mail_image: "stalwartlabs/stalwart:v0.16.4@sha256:c8aee803933a643558a9afaa3c208d4175a4ac09884f555b821aa5df1e89230c"
 agent_mail_packages:
   - docker.io
-  - docker-compose-v2
+  - docker-compose
   - zstd
 
 agent_mail_root: /opt/agent-mail

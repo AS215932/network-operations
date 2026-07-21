@@ -9,10 +9,17 @@
     path: /etc/systemd/system/agent-mail-backup.service
   register: _agent_mail_backup_service_unit
 
-# Stop the timer first, then wait for any in-flight backup to finish its EXIT
-# trap before Compose is allowed to take Stalwart down. Otherwise that trap can
-# restart the container after the shutdown path has completed.
-- name: Stop and disable the Agent Mail backup timer before shutdown
+# Stop the timer for every apply, then wait on the same lock the backup script
+# holds from inspection through its EXIT trap. No template or Compose lifecycle
+# operation may race a quiesced RocksDB archive.
+- name: Stop the Agent Mail backup timer before runtime changes
+  ansible.builtin.systemd:
+    name: agent-mail-backup.timer
+    state: stopped
+    daemon_reload: true
+  when: _agent_mail_backup_timer_unit.stat.exists
+
+- name: Disable the Agent Mail backup timer when its gate is off
   ansible.builtin.systemd:
     name: agent-mail-backup.timer
     enabled: false
@@ -22,13 +29,22 @@
     - not (agent_mail_start | bool) or not (agent_mail_backup_enabled | bool)
     - _agent_mail_backup_timer_unit.stat.exists
 
-- name: Stop any in-flight Agent Mail backup before shutdown
+- name: Stop any in-flight Agent Mail backup before runtime changes
   ansible.builtin.systemd:
     name: agent-mail-backup.service
     state: stopped
-  when:
-    - not (agent_mail_start | bool) or not (agent_mail_backup_enabled | bool)
-    - _agent_mail_backup_service_unit.stat.exists
+  when: _agent_mail_backup_service_unit.stat.exists
+
+- name: Wait for any in-flight Agent Mail backup before runtime changes
+  ansible.builtin.command:
+    argv:
+      - flock
+      - --wait
+      - "1800"
+      - /run/lock/agent-mail-backup.lock
+      - "true"
+  changed_when: false
+  when: _agent_mail_backup_service_unit.stat.exists
 
 - name: Install Agent Mail runtime packages
   ansible.builtin.apt:
@@ -130,14 +146,14 @@
 
 - name: Pull the immutable Stalwart image
   ansible.builtin.command:
-    argv: [docker, compose, --file, "{{ agent_mail_compose_file }}", pull, stalwart]
+    argv: [flock, --wait, "1800", /run/lock/agent-mail-backup.lock, docker, compose, --file, "{{ agent_mail_compose_file }}", pull, stalwart]
   register: _agent_mail_pull
   changed_when: "'Downloaded newer image' in _agent_mail_pull.stdout"
   when: agent_mail_start | bool
 
 - name: Start the staged Agent Mail container
   ansible.builtin.command:
-    argv: [docker, compose, --file, "{{ agent_mail_compose_file }}", up, --detach, --remove-orphans]
+    argv: [flock, --wait, "1800", /run/lock/agent-mail-backup.lock, docker, compose, --file, "{{ agent_mail_compose_file }}", up, --detach, --remove-orphans]
   register: _agent_mail_up
   changed_when: >-
     'Started' in _agent_mail_up.stderr or 'Created' in _agent_mail_up.stderr or
@@ -146,7 +162,7 @@
 
 - name: Stop and remove Agent Mail when the start gate is disabled
   ansible.builtin.command:
-    argv: [docker, compose, --file, "{{ agent_mail_compose_file }}", down, --remove-orphans, --timeout, "120"]
+    argv: [flock, --wait, "1800", /run/lock/agent-mail-backup.lock, docker, compose, --file, "{{ agent_mail_compose_file }}", down, --remove-orphans, --timeout, "120"]
   register: _agent_mail_down
   changed_when: >-
     'Stopped' in (_agent_mail_down.stdout + _agent_mail_down.stderr) or

@@ -9,20 +9,26 @@
 # The trust-on-first-scan here is equivalent to the github_runner role's
 # full-fleet ssh-keyscan seeding.
 #
-# Usage: seed-missing-host-keys.sh   (run from the repo root; needs
-# ansible-inventory + jq, both present on the ci runner)
+# Usage: SEED_HOST_KEYS_LIMIT='all:!ci-pr:!staged' seed-missing-host-keys.sh
+# (run from the repo root; needs ansible-inventory + jq, both present on the ci
+# runner). The safe default excludes isolated and staged hosts;
+# explicit first-host applies pass their reviewed limit through apply.yml.
 
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 known_hosts="${KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
+inventory_limit="${SEED_HOST_KEYS_LIMIT:-all:!ci-pr:!staged}"
 
 mkdir -p "$(dirname "$known_hosts")"
 touch "$known_hosts"
 
-targets="$(cd "$repo_root/ansible" && ansible-inventory --list 2>/dev/null \
-  | jq -r '._meta.hostvars | to_entries[] | .value.ansible_host // .key' \
-  | sort -u)"
+targets="$(
+  cd "$repo_root/ansible"
+  ansible-inventory --list --limit "$inventory_limit" 2>/dev/null |
+    jq -r '._meta.hostvars | to_entries[] | .value.ansible_host // .key' |
+    sort -u
+)"
 
 added=0
 for target in $targets; do

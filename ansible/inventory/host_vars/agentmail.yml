@@ -7,6 +7,7 @@
 agent_mail_apply: false
 agent_mail_start: false
 agent_mail_public_enabled: false
+agent_mail_canary_enabled: false
 agent_mail_smtp_firewall_enabled: false
 agent_mail_bootstrap_enabled: false
 agent_mail_bootstrap_firewall_enabled: false
@@ -18,6 +19,14 @@ agent_mail_dns_verified: false
 agent_mail_ptr_verified: false
 agent_mail_backup_restore_verified: false
 agent_mail_canaries_verified: false
+
+# Populated only for the bounded pre-launch canary window. Each entry must be a
+# global-unicast CIDR; /0 is rejected. Resolve and freeze the exact controlled
+# sender and recipient MX ranges immediately before the reviewed canary apply.
+agent_mail_canary_inbound_ipv4_sources: []
+agent_mail_canary_inbound_ipv6_sources: []
+agent_mail_canary_outbound_ipv4_destinations: []
+agent_mail_canary_outbound_ipv6_destinations: []
 
 # Dedicated public IPv4 is intentionally absent until provisioned and PTR-
 # verified. Never substitute the corporate mail failover address.
@@ -41,17 +50,17 @@ firewall_extra_rules:
   # and agent_mail_bootstrap_enabled must be reviewed to true together.
   - { proto: tcp, dport: 8080, src: ["{{ ops_prefix_v6 }}", "{{ vpn_clients_subnet }}"], family: ip6, enabled: false, comment: "Stalwart bootstrap (temporary)" }
 
-  # Public SMTP reception is staged but disabled. Port 25 is the only public
-  # mail protocol this product will expose; submission/IMAP/POP remain absent.
-  - { proto: tcp, dport: 25, src: any, family: ip6, enabled: false, comment: "Agent Mail SMTP reception (launch-gated)" }
-  - { proto: tcp, dport: 25, src: any, family: ip, enabled: false, comment: "Agent Mail SMTP reception IPv4 (launch-gated)" }
+  # SMTP reception is staged but disabled. Public launch uses `any`; the
+  # temporary canary mode substitutes the reviewed source CIDRs above.
+  - { proto: tcp, dport: 25, src: "{{ 'any' if agent_mail_public_enabled | bool else agent_mail_canary_inbound_ipv6_sources }}", family: ip6, enabled: false, comment: "Agent Mail SMTP reception IPv6 (gated)" }
+  - { proto: tcp, dport: 25, src: "{{ 'any' if agent_mail_public_enabled | bool else agent_mail_canary_inbound_ipv4_sources }}", family: ip, enabled: false, comment: "Agent Mail SMTP reception IPv4 (gated)" }
 
 # Docker-published ports traverse the forward hook after DNAT. Pin the bridge
 # name in Compose so these rules are deterministic. The bridge has an IPv6 ULA;
 # Docker's default NAT gateway mode masquerades its egress to the host's
 # allowlisted overlay address. Private JMAP and bootstrap retain their source
-# restrictions; public SMTP permits both reception and delivery only while its
-# synchronized launch gate is true.
+# restrictions. SMTP is unrestricted only at public launch; the temporary
+# canary gate pins both reception and delivery to reviewed global CIDRs.
 firewall_forward_pre_established_raw_nft: |
   {% if not (agent_mail_smtp_firewall_enabled | bool) %}
   iifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter drop comment "Agent Mail outbound SMTP kill switch"
@@ -66,9 +75,14 @@ firewall_forward_extra_raw_nft: |
   iifname "{{ agent_mail_bridge_name }}" udp dport 53 counter accept comment "Agent Mail DNS egress"
   iifname "{{ agent_mail_bridge_name }}" tcp dport { 53, 443 } counter accept comment "Agent Mail DNS and HTTPS egress"
   {% endif %}
-  {% if agent_mail_smtp_firewall_enabled | bool %}
+  {% if agent_mail_public_enabled | bool %}
   ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail SMTP reception DNAT"
   iifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail SMTP delivery"
+  {% elif agent_mail_canary_enabled | bool %}
+  ip6 saddr { {{ agent_mail_canary_inbound_ipv6_sources | join(', ') }} } ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail restricted canary SMTP reception IPv6"
+  ip saddr { {{ agent_mail_canary_inbound_ipv4_sources | join(', ') }} } ct status dnat oifname "{{ agent_mail_bridge_name }}" tcp dport 25 counter accept comment "Agent Mail restricted canary SMTP reception IPv4"
+  iifname "{{ agent_mail_bridge_name }}" ip6 daddr { {{ agent_mail_canary_outbound_ipv6_destinations | join(', ') }} } tcp dport 25 counter accept comment "Agent Mail restricted canary SMTP delivery IPv6"
+  iifname "{{ agent_mail_bridge_name }}" ip daddr { {{ agent_mail_canary_outbound_ipv4_destinations | join(', ') }} } tcp dport 25 counter accept comment "Agent Mail restricted canary SMTP delivery IPv4"
   {% endif %}
 
 # The firewall role owns only `table inet filter` on this Docker host. Replacing

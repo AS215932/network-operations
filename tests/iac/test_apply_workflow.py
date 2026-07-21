@@ -15,6 +15,18 @@ class ApplyWorkflowTest(unittest.TestCase):
         self.assertEqual(workflow["run-name"], expected)
         self.assertEqual(workflow["jobs"]["apply"]["name"], expected)
 
+    def test_empty_limit_excludes_staged_and_unprivileged_hosts(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+        safe_default = 'effective_limit="${LIMIT:-all:!ci-pr:!staged}"'
+
+        self.assertEqual(workflow.count(safe_default), 2)
+        self.assertIn('SEED_HOST_KEYS_LIMIT: ${{ inputs.limit != \'\' && inputs.limit', workflow)
+        self.assertNotIn('if [ -n "$LIMIT" ]', workflow)
+
+        seeder = (REPO / "scripts/ci/seed-missing-host-keys.sh").read_text()
+        self.assertIn('inventory_limit="${SEED_HOST_KEYS_LIMIT:-all:!ci-pr:!staged}"', seeder)
+        self.assertIn('ansible-inventory --list --limit "$inventory_limit"', seeder)
+
 
 if __name__ == "__main__":
     unittest.main()

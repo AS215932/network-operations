@@ -149,10 +149,33 @@ All items below must have durable evidence before changing a launch gate:
    Record exact prompts, redacted results, x402 spend, and elapsed time; do not
    publish placeholder success claims.
 
+### Restricted pre-launch SMTP canary window
+
+The canaries above do not require asserting their own success in advance. Open
+a short, reviewed canary window after every other readiness item is true:
+
+1. Resolve and freeze the exact global-unicast IPv4 and IPv6 CIDRs used by the
+   controlled inbound senders and the recipient MXs for the Gmail, Outlook, and
+   independent-domain journeys. Put them in the four
+   `agent_mail_canary_inbound_*` and `agent_mail_canary_outbound_*` lists. The
+   role rejects empty lists, duplicates, non-global networks, and `/0` ranges.
+2. Keep `agent_mail_public_enabled` and `agent_mail_canaries_verified` false.
+   Set `agent_mail_canary_enabled`, `agent_mail_smtp_firewall_enabled`, and both
+   TCP/25 firewall rule `enabled` fields true in one reviewed change. Apply the
+   Agent Mail role and firewall through the protected workflow. Compose may now
+   publish TCP/25, but nftables admits only the frozen canary source and
+   destination ranges; all other SMTP remains blocked.
+3. Run the controlled journeys promptly. If any address range changes, close
+   the gate and review a replacement list rather than widening it to `any`.
+4. Immediately set both canary/firewall gates and both TCP/25 rule fields false,
+   clear all four CIDR lists, and re-apply. Only after the closed state is
+   verified should a separate reviewed change set
+   `agent_mail_canaries_verified: true`.
+
 ## Stage 5 — public SMTP launch
 
-In one reviewed change, assign the dedicated IPv4 and set every readiness flag
-to true. Then set `agent_mail_public_enabled`,
+In one reviewed change, assign the dedicated IPv4, confirm the temporary canary
+gate and CIDR lists are off/empty, and set every readiness flag to true. Then set `agent_mail_public_enabled`,
 `agent_mail_smtp_firewall_enabled`, and both TCP/25 firewall rules' `enabled`
 fields to true. The role refuses the change if any approval is missing, if
 bootstrap/recovery mode remains, or if backups and desired start are not enabled.
@@ -167,7 +190,8 @@ enabled only if that product is also approved.
 1. Set Hyrule Cloud `MAIL_ENABLED=false` to stop new activation/send traffic.
 2. In one inventory change set `agent_mail_start=false`,
    `agent_mail_backup_enabled=false`, `agent_mail_public_enabled=false`, its
-   SMTP firewall twin, and both TCP/25 rule fields false. Apply the Agent Mail
+   canary gate, SMTP firewall twin, all canary CIDR lists, and both TCP/25 rule
+   fields false/empty. Apply the Agent Mail
    role through the protected `apply.yml` workflow; its transient apply gate
    permits the stop path, the backup timer stops, and `docker compose down`
    stops queued outbound delivery while preserving the bind-mounted
