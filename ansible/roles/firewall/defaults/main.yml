@@ -18,6 +18,10 @@ firewall_extra_raw_nft: ""
 firewall_forward_extra_raw_nft: ""
 firewall_extra_raw_pf: ""
 
+# Replace only the role-owned `table inet filter` when another service manages
+# additional nftables tables (for example Docker bridge NAT/masquerade state).
+firewall_preserve_external_tables: false
+
 # rtr-only — preserves the existing IPv4 NAT/forward block.
 firewall_rtr_v4_nat: false
 

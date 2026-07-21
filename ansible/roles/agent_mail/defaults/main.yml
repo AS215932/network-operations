@@ -21,6 +21,7 @@ agent_mail_default_domain: agentmail.hyrule.host
 agent_mail_overlay_ipv6: "{{ peers.agentmail.ipv6 }}"
 agent_mail_public_ipv4: ""
 agent_mail_bridge_name: br-agentmail
+agent_mail_bridge_ipv6_subnet: "fd21:5932:110::/64"
 
 # Exact v0.16.4 linux/amd64 manifest digest, reviewed 2026-07-19. Upgrades
 # require an explicit patch/security review and a new immutable digest.

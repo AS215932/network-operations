@@ -7,6 +7,8 @@
       - agent_mail_hostname == "mx1.agentmail.hyrule.host"
       - agent_mail_default_domain == "agentmail.hyrule.host"
       - agent_mail_bridge_name is match('^[A-Za-z0-9_.-]{1,15}$')
+      - agent_mail_bridge_ipv6_subnet == "fd21:5932:110::/64"
+      - firewall_preserve_external_tables | bool
       - agent_mail_image is match('^stalwartlabs/stalwart:v[0-9]+\\.[0-9]+\\.[0-9]+@sha256:[0-9a-f]{64}$')
     fail_msg: "Agent Mail identity, address, or immutable image contract is invalid."
     quiet: true

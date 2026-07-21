@@ -45,6 +45,14 @@
     enabled: true
     state: started
 
+- name: Enable IPv6 forwarding for the Agent Mail bridge
+  ansible.posix.sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-agent-mail-docker.conf
+    state: present
+    reload: true
+
 - name: Validate the rendered Compose project
   ansible.builtin.command:
     argv: [docker, compose, --file, "{{ agent_mail_compose_file }}", config, --quiet]

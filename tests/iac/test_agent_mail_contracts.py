@@ -90,6 +90,12 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn(EXPECTED_IMAGE, compose)
         self.assertIn("[2a0c:b641:b50:2::110]:443:443/tcp", compose)
         self.assertIn("com.docker.network.bridge.name: \"br-agentmail\"", compose)
+        project = yaml.safe_load(compose)
+        self.assertIs(project["networks"]["default"]["enable_ipv6"], True)
+        self.assertEqual(
+            project["networks"]["default"]["ipam"]["config"],
+            [{"subnet": "fd21:5932:110::/64"}],
+        )
         self.assertNotIn(":25:25/tcp", compose)
         self.assertNotIn(":8080:8080/tcp", compose)
         for port in FORBIDDEN_PUBLIC_PORTS:
@@ -133,10 +139,16 @@ class AgentMailContractsTest(unittest.TestCase):
         apply = (ROLE / "tasks/apply.yml").read_text()
         self.assertIn("down, --remove-orphans, --timeout", apply)
         self.assertIn("when: not (agent_mail_start | bool)", apply)
+        self.assertIn("net.ipv6.conf.all.forwarding", apply)
 
         validate = (ROLE / "tasks/validate.yml").read_text()
         self.assertIn("25[0-5]", validate)
         self.assertIn("agent_mail_public_ipv4 != (mail_failover_ipv4", validate)
+        self.assertIs(self.host_vars["firewall_preserve_external_tables"], True)
+
+        firewall = (ROLE.parent / "firewall/templates/nftables.conf.j2").read_text()
+        self.assertIn("destroy table inet filter", firewall)
+        self.assertIn("firewall_preserve_external_tables", firewall)
 
         renderer = (REPO / "scripts/ci/render-all.sh").read_text()
         self.assertIn("extmon agent_mail", renderer)
@@ -236,18 +248,17 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("Never publish", readme)
         self.assertIn("firewall_apply=true", readme)
         self.assertIn("agent_mail_start=false", readme)
+        self.assertIn("agent_mail_backup_enabled=false", readme)
         self.assertIn("outbound TCP/25 kill", readme)
 
-    def test_monitoring_is_private_and_not_public_status_claim(self):
+    def test_staged_monitoring_is_inactive_and_not_public_status_claim(self):
         prometheus = _yaml(REPO / "configs/mon/prometheus.yml")
-        job = next(
-            item
-            for item in prometheus["scrape_configs"]
-            if item["job_name"] == "agent-mail-stalwart"
+        jobs = {item["job_name"]: item for item in prometheus["scrape_configs"]}
+        self.assertNotIn("agent-mail-stalwart", jobs)
+        self.assertNotIn(
+            "[2a0c:b641:b50:2::110]:9100",
+            (REPO / "configs/mon/prometheus.yml").read_text(),
         )
-        self.assertEqual(job["scheme"], "https")
-        self.assertEqual(job["metrics_path"], "/metrics/prometheus")
-        self.assertFalse(job["tls_config"]["insecure_skip_verify"])
         rules = _yaml(REPO / "configs/mon/prometheus-rules/agent-mail.yml")
         self.assertEqual(rules["groups"][0]["name"], "agent-mail")
         self.assertNotIn("public_status", (REPO / "configs/mon/prometheus-rules/agent-mail.yml").read_text())

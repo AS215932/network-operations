@@ -113,8 +113,13 @@ All items below must have durable evidence before changing a launch gate:
    isolated VM. A same-disk tarball alone never satisfies
    `agent_mail_backup_restore_verified`.
 4. Monitoring: apply the monitoring, Prometheus, and logs roles only after the
-   host is reachable. Confirm node, readiness, Stalwart metrics, logs, disk,
-   certificate, queue, delivery-failure, and webhook-failure signals.
+   host is reachable. While `agentmail` remains staged, the live Prometheus
+   configuration intentionally contains neither its node-exporter target nor
+   the `agent-mail-stalwart` scrape job, so the committed alert rules have no
+   series and remain inactive. In the reviewed change that removes `agentmail`
+   from the `staged` group, add both targets to `configs/mon/prometheus.yml`,
+   apply Prometheus, and then confirm node, readiness, Stalwart metrics, logs,
+   disk, certificate, queue, delivery-failure, and webhook-failure signals.
 5. Abuse/legal: approve terms, complaint intake, postmaster/abuse handling,
    malware suspension, rate limits, recipient limits, retention/deletion, and
    emergency shutdown ownership. Prove the Cloud worker's daily JMAP mailbox
@@ -142,12 +147,14 @@ enabled only if that product is also approved.
 ## Emergency shutdown and restore
 
 1. Set Hyrule Cloud `MAIL_ENABLED=false` to stop new activation/send traffic.
-2. Set `agent_mail_start=false` and apply the Agent Mail role. The role runs
-   `docker compose down`, which stops queued outbound delivery while preserving
-   the bind-mounted configuration and mailbox data.
-3. Set `agent_mail_public_enabled`, its SMTP firewall twin, and both TCP/25
-   rule fields false; apply the Agent Mail role and nftables. Verify the
-   container is absent and the forward chain contains the outbound TCP/25 kill
+2. In one inventory change set `agent_mail_start=false`,
+   `agent_mail_backup_enabled=false`, `agent_mail_public_enabled=false`, its
+   SMTP firewall twin, and both TCP/25 rule fields false. Apply the Agent Mail
+   role with `agent_mail_apply=true`; validation then permits the stop path,
+   the backup timer stops, and `docker compose down` stops queued outbound
+   delivery while preserving the bind-mounted configuration and mailbox data.
+3. Apply nftables with `firewall_apply=true`. Verify the container and backup
+   timer are absent and the forward chain contains the outbound TCP/25 kill
    switch before treating public delivery as stopped.
 4. Preserve logs and a quiesced snapshot before destructive investigation.
 5. Restore only to an isolated host: verify the `.sha256`, stop Stalwart,

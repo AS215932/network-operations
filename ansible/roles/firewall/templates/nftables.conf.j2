@@ -3,7 +3,12 @@
 # Host: {{ inventory_hostname }}
 # Generated: do not edit by hand.
 
+{% if firewall_preserve_external_tables | bool %}
+# Preserve tables owned by Docker or other local services.
+destroy table inet filter
+{% else %}
 flush ruleset
+{% endif %}
 
 table inet filter {
     chain input {

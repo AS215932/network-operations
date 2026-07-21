@@ -21,5 +21,9 @@ networks:
   default:
     name: agent-mail
     driver: bridge
+    enable_ipv6: true
     driver_opts:
       com.docker.network.bridge.name: "br-agentmail"
+    ipam:
+      config:
+        - subnet: "fd21:5932:110::/64"
