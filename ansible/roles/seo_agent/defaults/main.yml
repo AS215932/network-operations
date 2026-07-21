@@ -13,7 +13,7 @@ seo_agent_env_file: /etc/seo-agent/seo-agent.env
 seo_agent_state_dir: /var/lib/seo-agent
 
 seo_agent_repo: https://github.com/AS215932/hyrule-seo-agent.git
-seo_agent_version: "3682620bcf5c14d9f3fb7b3a67b1ba9c568900ac"
+seo_agent_version: "dd705c6b50d7f6f3f3053053c264eac5f3778204"
 
 seo_agent_container_name: seo-agent
 seo_agent_image_repository: as215932/hyrule-beacon-worker

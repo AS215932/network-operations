@@ -112,7 +112,7 @@ agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 # Hyrule Beacon managed visibility worker. The pin is deployable only after
 # this revision is published to AS215932/hyrule-seo-agent; until then no apply
 # should be approved. Automatic mutation is staged off for the first rollout.
-seo_agent_version: "3682620bcf5c14d9f3fb7b3a67b1ba9c568900ac"
+seo_agent_version: "dd705c6b50d7f6f3f3053053c264eac5f3778204"
 seo_agent_enabled: true
 seo_agent_host: "{{ peers.loop.ipv6 }}"
 seo_agent_port: 8790

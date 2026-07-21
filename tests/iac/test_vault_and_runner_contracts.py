@@ -195,6 +195,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         service = (
             REPO / "ansible/roles/seo_agent/templates/seo-agent.service.j2"
         ).read_text()
+        runbook = (REPO / "docs/runbooks/bootstrap-seo-agent-vault.md").read_text()
 
         self.assertIn("role: seo_agent", playbook)
         self.assertIn("vault_agent_name: seo-agent", playbook)
@@ -216,6 +217,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertEqual(host_vars["seo_agent_scheduler_enabled"], False)
         self.assertEqual(host_vars["seo_agent_execute_automatic_actions"], False)
         self.assertRegex(str(host_vars["seo_agent_version"]), r"^[0-9a-f]{40}$")
+        self.assertIn("secret_id_ttl=0", runbook)
+        self.assertIn("secret_id_num_uses=0", runbook)
+        self.assertNotIn("secret_id_ttl=10m", runbook)
+        self.assertNotIn("secret_id_num_uses=1", runbook)
         self.assertIn("--network=host", service)
         self.assertIn("--read-only", service)
         self.assertIn("--cap-drop=ALL", service)

@@ -31,16 +31,19 @@ vault write auth/approle/role/seo-agent \
   token_policies=seo-agent \
   token_ttl=1h \
   token_max_ttl=4h \
-  secret_id_ttl=10m \
-  secret_id_num_uses=1
+  secret_id_ttl=0 \
+  secret_id_num_uses=0
 
 # Refresh the trusted runner policy before the first engineering-loop apply.
 vault policy write github-runner configs/vault/policies/github-runner.hcl
 ```
 
-The apply workflow mints a 10-minute response-wrapped SecretID. The target-side
-Vault Agent unwraps it and renders `/etc/seo-agent/seo-agent.env`; the CI runner
-cannot read `kv/seo-agent`.
+The apply workflow places a reusable, non-expiring SecretID inside a 10-minute
+response-wrapping token. The target-side Vault Agent unwraps and retains that
+SecretID so it can authenticate again after the four-hour token maximum, then
+renders `/etc/seo-agent/seo-agent.env`; the CI runner cannot read
+`kv/seo-agent`. Revoke the AppRole SecretID when retiring or rebuilding the
+worker.
 
 ## Apply and verify
 
