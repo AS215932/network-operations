@@ -217,6 +217,7 @@
             if (lookup('env', 'VAULT_SEO_AGENT_WRAPPED_SECRET_ID') | default('', true)) | length > 0
             else ''
           }}
+        vault_agent_persist_unwrapped_secret_id: true
         vault_agent_env_destination: "{{ seo_agent_env_file }}"
         vault_agent_reload_command: "(/bin/systemctl try-restart seo-agent.service || /bin/true)"
         vault_agent_env_reload_command: "(/bin/systemctl try-restart seo-agent.service || /bin/true)"

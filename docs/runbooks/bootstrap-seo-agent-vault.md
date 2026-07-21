@@ -39,11 +39,12 @@ vault policy write github-runner configs/vault/policies/github-runner.hcl
 ```
 
 The apply workflow places a reusable, non-expiring SecretID inside a 10-minute
-response-wrapping token. The target-side Vault Agent unwraps and retains that
-SecretID so it can authenticate again after the four-hour token maximum, then
-renders `/etc/seo-agent/seo-agent.env`; the CI runner cannot read
-`kv/seo-agent`. Revoke the AppRole SecretID when retiring or rebuilding the
-worker.
+response-wrapping token. A target-side `ExecStartPre` helper unwraps it into a
+root-owned `0600` file and removes the consumed wrapper. Vault Agent reads the
+persistent SecretID without deleting it, so token-max-TTL reauthentication,
+service restarts, and host reboots remain autonomous; the plaintext SecretID
+never returns to the CI controller. Revoke the AppRole SecretID when retiring
+or rebuilding the worker.
 
 ## Apply and verify
 

@@ -196,6 +196,15 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             REPO / "ansible/roles/seo_agent/templates/seo-agent.service.j2"
         ).read_text()
         runbook = (REPO / "docs/runbooks/bootstrap-seo-agent-vault.md").read_text()
+        vault_playbook = yaml.safe_load(
+            (REPO / "ansible/playbooks/engineering-loop.yml").read_text()
+        )
+        vault_roles = vault_playbook[0]["roles"]
+        seo_vault = next(
+            role for role in vault_roles
+            if role.get("role") == "vault_agent"
+            and role.get("vars", {}).get("vault_agent_name") == "seo-agent"
+        )
 
         self.assertIn("role: seo_agent", playbook)
         self.assertIn("vault_agent_name: seo-agent", playbook)
@@ -221,6 +230,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("secret_id_num_uses=0", runbook)
         self.assertNotIn("secret_id_ttl=10m", runbook)
         self.assertNotIn("secret_id_num_uses=1", runbook)
+        self.assertEqual(
+            seo_vault["vars"]["vault_agent_persist_unwrapped_secret_id"], True
+        )
+        self.assertIn("ExecStartPre", runbook)
+        self.assertIn("root-owned `0600`", runbook)
         self.assertIn("--network=host", service)
         self.assertIn("--read-only", service)
         self.assertIn("--cap-drop=ALL", service)
@@ -775,6 +789,34 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
         self.assertIn("secret_id_response_wrapping_path", hcl)
         self.assertIn("remove_secret_id_file_after_reading = true", hcl)
+
+    def test_vault_agent_can_persist_unwrapped_secret_id_for_restart_safety(self):
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        tasks = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        )
+        unit = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent.service.j2"
+        ).read_text()
+        helper = (
+            REPO / "ansible/roles/vault_agent/templates/unwrap-secret-id.sh.j2"
+        ).read_text()
+
+        self.assertEqual(defaults["vault_agent_persist_unwrapped_secret_id"], False)
+        staged = _task_by_name(
+            tasks,
+            "Stage response-wrapped Vault AppRole secret_id for persistent unwrapping",
+        )
+        self.assertEqual(staged["copy"]["mode"], "0600")
+        self.assertTrue(staged["no_log"])
+        self.assertIn("vault_agent_persist_unwrapped_secret_id | bool", staged["when"])
+        self.assertIn("ExecStartPre={{ vault_agent_unwrap_secret_id_script }}", unit)
+        self.assertIn("vault unwrap -field=secret_id", helper)
+        self.assertIn('chmod 0600 "$tmp_file"', helper)
+        self.assertIn('mv -f "$tmp_file" "$secret_id_file"', helper)
+        self.assertIn('rm -f "$wrapped_file"', helper)
 
     def test_hyrule_mcp_users_can_read_systemd_journals(self):
         service = (REPO / "configs/hyrule-mcp.service").read_text()
