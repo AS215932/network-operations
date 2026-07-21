@@ -10,7 +10,7 @@
 # grant/no-op-guard substrate ships dark. Everything is default-off until the
 # env promotions in docs/runbooks/noc-standing-grant-rollout.md
 # (NOC_INSIGHT_RECORDS_ENABLED first).
-noc_agent_version: fd0cfa5617224e184f9932bb1691a7e2d6afd0d0
+noc_agent_version: 179d96368c5fecce1e0f6ebaa6637893b0fe1d42
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 
 # Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
