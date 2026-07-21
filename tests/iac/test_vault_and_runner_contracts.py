@@ -57,7 +57,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         spec = yaml.safe_load((REPO / ".github/workflows/post-merge-apply.yml").read_text())
         apply_job = spec["jobs"]["apply"]
         self.assertEqual(apply_job.get("environment"), "production")
-        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v2")
+        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v3")
         self.assertFalse(apply_job.get("concurrency", {}).get("cancel-in-progress"))
 
     def test_required_render_check_reports_on_every_pull_request(self):
