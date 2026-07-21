@@ -84,9 +84,9 @@ permissions:
 concurrency:
   # Live applies remain strictly serialized. Dry-runs are render/check only and
   # must not get stuck behind, or block, the production apply lane. The live
-  # key is versioned because the original production-infra key produced
-  # jobless pending workflow_dispatch runs after cancelled attempts.
-  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra-live-v2' }}
+  # key is versioned because cancelled attempts can leave GitHub's previous
+  # concurrency lane producing jobless pending workflow_dispatch runs.
+  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra-live-v3' }}
   cancel-in-progress: false
 
 jobs:
