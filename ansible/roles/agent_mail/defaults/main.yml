@@ -35,8 +35,10 @@ agent_mail_root: /opt/agent-mail
 agent_mail_etc_dir: /etc/agent-mail
 agent_mail_stalwart_config_dir: /etc/stalwart
 agent_mail_stalwart_data_dir: /var/lib/stalwart
-agent_mail_backup_dir: /var/backups/agent-mail
-agent_mail_backup_retention_days: 14
+agent_mail_backup_dir: /mnt/agent-mail-backup
+agent_mail_backup_retention_days: 2
+agent_mail_backup_min_capacity_bytes: 107374182400
+agent_mail_backup_min_free_bytes: 34359738368
 agent_mail_compose_file: "{{ agent_mail_root }}/docker-compose.yml"
 agent_mail_env_file: "{{ agent_mail_etc_dir }}/agent-mail.env"
 agent_mail_generated_dir: "{{ playbook_dir }}/../generated/agentmail"

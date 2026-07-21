@@ -25,8 +25,11 @@ fi
 logdir=$1
 shift
 # The canonical sweep. tests/iac/test_drift_detection.py guards this list —
-# removing an entry fails CI.
-default_playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved extmon)
+# removing an entry fails CI. Agent Mail's apply-only assertions and runtime
+# environment template are no_log; the privileged workflows source their
+# Vault-backed runner environment before this sweep. Until the host leaves the
+# staged group, the default limit excludes it without dropping the playbook.
+default_playbooks=(firewall monitoring logs icinga2 prometheus alertmanager ci rtr_routing networkd_resolved extmon agent_mail)
 
 playbooks=("$@")
 if [ "${#playbooks[@]}" -eq 0 ]; then

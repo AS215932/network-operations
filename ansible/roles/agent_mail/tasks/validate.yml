@@ -48,9 +48,27 @@
       - agent_mail_webhook_secret | length >= 32
       - not (agent_mail_bootstrap_enabled | bool) or agent_mail_recovery_admin_secret | length >= 32
       - (agent_mail_bootstrap_enabled | bool) or agent_mail_recovery_admin_secret | length == 0
+      - >-
+        "'" not in agent_mail_dns_tsig_secret and
+        "\\" not in agent_mail_dns_tsig_secret and
+        "\n" not in agent_mail_dns_tsig_secret and
+        "\r" not in agent_mail_dns_tsig_secret
+      - >-
+        "'" not in agent_mail_webhook_secret and
+        "\\" not in agent_mail_webhook_secret and
+        "\n" not in agent_mail_webhook_secret and
+        "\r" not in agent_mail_webhook_secret
+      - >-
+        not (agent_mail_bootstrap_enabled | bool) or (
+        "'" not in agent_mail_recovery_admin_secret and
+        "\\" not in agent_mail_recovery_admin_secret and
+        "\n" not in agent_mail_recovery_admin_secret and
+        "\r" not in agent_mail_recovery_admin_secret)
     fail_msg: >-
       Apply requires Vault-backed TSIG/webhook secrets. A temporary recovery
       admin is required only for bootstrap and must be removed immediately after.
+      Values are Compose-literal quoted and must not contain quotes, backslashes,
+      or line breaks; use unwrapped base64/base64url when rotation produces one.
     quiet: true
   no_log: true
   when: agent_mail_apply | bool

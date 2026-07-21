@@ -140,6 +140,14 @@ class AgentMailContractsTest(unittest.TestCase):
         self.assertIn("down, --remove-orphans, --timeout", apply)
         self.assertIn("when: not (agent_mail_start | bool)", apply)
         self.assertIn("net.ipv6.conf.all.forwarding", apply)
+        self.assertLess(
+            apply.index("Stop and disable the Agent Mail backup timer before shutdown"),
+            apply.index("Stop any in-flight Agent Mail backup before shutdown"),
+        )
+        self.assertLess(
+            apply.index("Stop any in-flight Agent Mail backup before shutdown"),
+            apply.index("Stop and remove Agent Mail when the start gate is disabled"),
+        )
 
         validate = (ROLE / "tasks/validate.yml").read_text()
         self.assertIn("25[0-5]", validate)
@@ -187,6 +195,25 @@ class AgentMailContractsTest(unittest.TestCase):
         combined = self.render("bootstrap.json.j2") + self.render("desired-state.ndjson.j2")
         self.assertNotIn("AGENT_MAIL_WEBHOOK_SECRET=", combined)
         self.assertNotIn("AGENT_MAIL_DNS_TSIG_SECRET=", combined)
+
+    def test_runtime_secret_env_preserves_compose_special_characters(self):
+        secret_context = dict(self.context)
+        secret_context.update(
+            agent_mail_bootstrap_enabled=True,
+            agent_mail_dns_tsig_secret="tsig$HOME # key=value",
+            agent_mail_webhook_secret="webhook${TOKEN} # key=value",
+            agent_mail_recovery_admin_secret="recovery$TOKEN # key=value",
+        )
+        rendered = self.render("agent-mail.env.j2", secret_context)
+        self.assertIn("STALWART_DNS_TSIG_SECRET='tsig$HOME # key=value'", rendered)
+        self.assertIn("STALWART_WEBHOOK_SECRET='webhook${TOKEN} # key=value'", rendered)
+        self.assertIn(
+            "STALWART_RECOVERY_ADMIN='admin:recovery$TOKEN # key=value'",
+            rendered,
+        )
+        validation = (ROLE / "tasks/validate.yml").read_text()
+        self.assertIn('"\\\\" not in agent_mail_dns_tsig_secret', validation)
+        self.assertIn("no_log: true", validation)
 
     def test_dns_acl_and_cloud_network_flow_are_source_scoped(self):
         knot = (REPO / "ansible/roles/knot/templates/knot.conf.j2").read_text()
@@ -238,12 +265,18 @@ class AgentMailContractsTest(unittest.TestCase):
 
     def test_backup_and_launch_runbook_require_off_host_restore_evidence(self):
         backup = self.render("agent-mail-backup.sh.j2")
+        self.assertLess(backup.index("mountpoint --quiet"), backup.index(" stop --timeout 120 stalwart"))
+        self.assertIn('readonly min_capacity_bytes="107374182400"', backup)
+        self.assertIn('readonly min_free_bytes="34359738368"', backup)
         self.assertLess(backup.index(" stop --timeout 120 stalwart"), backup.index("tar --acls"))
         self.assertIn('archive_name="${archive##*/}"', backup)
         self.assertIn('sha256sum "$archive_name"', backup)
         self.assertNotIn('sha256sum "$archive"', backup)
+        self.assertEqual(self.defaults["agent_mail_backup_dir"], "/mnt/agent-mail-backup")
+        self.assertEqual(self.defaults["agent_mail_backup_retention_days"], 2)
         readme = (ROLE / "README.md").read_text()
         self.assertIn("off-host", readme)
+        self.assertIn("at least 100 GiB", readme)
         self.assertIn("agent_mail_backup_restore_verified", readme)
         self.assertIn("Never publish", readme)
         self.assertIn("firewall_apply=true", readme)

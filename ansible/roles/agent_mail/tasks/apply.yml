@@ -1,4 +1,35 @@
 ---
+- name: Inspect the installed Agent Mail backup timer
+  ansible.builtin.stat:
+    path: /etc/systemd/system/agent-mail-backup.timer
+  register: _agent_mail_backup_timer_unit
+
+- name: Inspect the installed Agent Mail backup service
+  ansible.builtin.stat:
+    path: /etc/systemd/system/agent-mail-backup.service
+  register: _agent_mail_backup_service_unit
+
+# Stop the timer first, then wait for any in-flight backup to finish its EXIT
+# trap before Compose is allowed to take Stalwart down. Otherwise that trap can
+# restart the container after the shutdown path has completed.
+- name: Stop and disable the Agent Mail backup timer before shutdown
+  ansible.builtin.systemd:
+    name: agent-mail-backup.timer
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  when:
+    - not (agent_mail_start | bool) or not (agent_mail_backup_enabled | bool)
+    - _agent_mail_backup_timer_unit.stat.exists
+
+- name: Stop any in-flight Agent Mail backup before shutdown
+  ansible.builtin.systemd:
+    name: agent-mail-backup.service
+    state: stopped
+  when:
+    - not (agent_mail_start | bool) or not (agent_mail_backup_enabled | bool)
+    - _agent_mail_backup_service_unit.stat.exists
+
 - name: Install Agent Mail runtime packages
   ansible.builtin.apt:
     name: "{{ agent_mail_packages }}"
@@ -19,6 +50,13 @@
     - { path: "{{ agent_mail_stalwart_config_dir }}", owner: "2000", group: "2000", mode: "0750" }
     - { path: "{{ agent_mail_stalwart_data_dir }}", owner: "2000", group: "2000", mode: "0750" }
     - { path: "{{ agent_mail_backup_dir }}", owner: root, group: root, mode: "0700" }
+
+- name: Verify the dedicated Agent Mail backup volume is mounted
+  ansible.builtin.command:
+    argv: [mountpoint, --quiet, "{{ agent_mail_backup_dir }}"]
+  changed_when: false
+  check_mode: false
+  when: agent_mail_backup_enabled | bool
 
 - name: Install Agent Mail runtime and staged control artifacts
   ansible.builtin.template:
@@ -89,3 +127,4 @@
     enabled: "{{ agent_mail_backup_enabled | bool }}"
     state: "{{ 'started' if agent_mail_backup_enabled | bool else 'stopped' }}"
     daemon_reload: true
+  when: agent_mail_start | bool

@@ -5,11 +5,37 @@ umask 077
 readonly compose_file="{{ agent_mail_compose_file }}"
 readonly backup_dir="{{ agent_mail_backup_dir }}"
 readonly lock_file="/run/lock/agent-mail-backup.lock"
+readonly min_capacity_bytes="{{ agent_mail_backup_min_capacity_bytes }}"
+readonly min_free_bytes="{{ agent_mail_backup_min_free_bytes }}"
 
 exec 9>"$lock_file"
 flock -n 9 || exit 0
 
-mkdir -p "$backup_dir"
+if ! mountpoint --quiet "$backup_dir"; then
+  echo "Agent Mail backup directory is not a dedicated mount: $backup_dir" >&2
+  exit 1
+fi
+
+# The mount is sized for at most three full snapshots during the two-day
+# retention window (two retained archives plus the one being created). Clean
+# expired archives and abandoned partials before checking capacity.
+find "$backup_dir" -type f \
+  \( -name 'stalwart-*.tar.zst' -o -name 'stalwart-*.tar.zst.sha256' \) \
+  -mtime +{{ agent_mail_backup_retention_days }} -delete
+find "$backup_dir" -type f -name 'stalwart-*.tar.zst.partial' -delete
+
+read -r capacity_bytes available_bytes < <(
+  LC_ALL=C df --output=size,avail --block-size=1 "$backup_dir" |
+    awk 'NR == 2 { print $1, $2 }'
+)
+if [[ ! "$capacity_bytes" =~ ^[0-9]+$ ]] ||
+   [[ ! "$available_bytes" =~ ^[0-9]+$ ]] ||
+   (( capacity_bytes < min_capacity_bytes )) ||
+   (( available_bytes < min_free_bytes )); then
+  echo "Agent Mail backup volume lacks required capacity/free space" >&2
+  exit 1
+fi
+
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 partial="$backup_dir/stalwart-$timestamp.tar.zst.partial"
 archive="$backup_dir/stalwart-$timestamp.tar.zst"
@@ -20,12 +46,21 @@ if docker compose --file "$compose_file" ps --services --status running | grep -
   docker compose --file "$compose_file" stop --timeout 120 stalwart
 fi
 
-restart_stalwart() {
-  if [[ "$was_running" -eq 1 ]]; then
-    docker compose --file "$compose_file" up --detach stalwart
+finish_backup() {
+  status=$?
+  if [[ "$status" -ne 0 ]]; then
+    rm -f -- "$partial"
   fi
+  if [[ "$was_running" -eq 1 ]]; then
+    if ! docker compose --file "$compose_file" up --detach stalwart; then
+      echo "Agent Mail backup could not restart Stalwart" >&2
+      status=1
+    fi
+  fi
+  trap - EXIT
+  exit "$status"
 }
-trap restart_stalwart EXIT
+trap finish_backup EXIT
 
 # RocksDB must be quiescent. Preserve numeric UID/GID, xattrs, and ACLs so a
 # restore can recreate both the Stalwart configuration and data directories.
@@ -39,9 +74,5 @@ archive_name="${archive##*/}"
   sha256sum "$archive_name" > "$archive_name.sha256"
 )
 
-find "$backup_dir" -type f \
-  \( -name 'stalwart-*.tar.zst' -o -name 'stalwart-*.tar.zst.sha256' \) \
-  -mtime +{{ agent_mail_backup_retention_days }} -delete
-
-# A local snapshot is not launch-ready by itself. Public readiness separately
-# requires an off-host copy and a successfully rehearsed restore.
+# A dedicated-volume snapshot is not launch-ready by itself. Public readiness
+# separately requires an off-host copy and a successfully rehearsed restore.

@@ -28,7 +28,7 @@ class DriftDetectionTest(unittest.TestCase):
 
     def test_monitoring_stack_playbooks_are_in_drift_sweep(self):
         playbooks = self._playbooks()
-        for expected in ("prometheus", "alertmanager"):
+        for expected in ("prometheus", "alertmanager", "agent_mail"):
             self.assertIn(
                 expected,
                 playbooks,

@@ -9,8 +9,9 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
 
 - Hostname: `mx1.agentmail.hyrule.host`; service domain:
   `agentmail.hyrule.host`.
-- Planned VM: Debian 13, 2 vCPU, 4 GB RAM, 80 GB disk, overlay IPv6
-  `2a0c:b641:b50:2::110`, plus a new dedicated IPv4.
+- Planned VM: Debian 13, 2 vCPU, 4 GB RAM, an 80 GiB data disk, a separate
+  backup volume of at least 100 GiB mounted at `/mnt/agent-mail-backup`, overlay
+  IPv6 `2a0c:b641:b50:2::110`, plus a new dedicated IPv4.
 - Public ingress may contain only SMTP reception on TCP/25. Never publish
   SMTP submission (465/587), IMAP (143/993), POP (110/995), ManageSieve
   (4190), JMAP/admin, or webmail.
@@ -21,9 +22,12 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
 
 ## Stage 1 — provision without a listener
 
-1. Provision the dedicated VM and its 80 GB disk. Do not reuse
-   `mail_failover_ipv4`; allocate a new IPv4 and configure its forward and
-   reverse routing.
+1. Provision the dedicated VM, its 80 GiB data disk, and a distinct backup
+   volume of at least 100 GiB. Mount the backup volume persistently at
+   `/mnt/agent-mail-backup` and verify it with `mountpoint`; the role and backup
+   script refuse to enable backups when that path resolves to the data/root
+   filesystem. Do not reuse `mail_failover_ipv4`; allocate a new IPv4 and
+   configure its forward and reverse routing.
    The committed `agentmail` host is also a member of the `staged` inventory
    group, which the canonical drift/apply sweep excludes. After SSH and base
    reachability are proven, remove that membership in a reviewed change before
@@ -33,7 +37,12 @@ bootstrap, backups, public SMTP, and every launch approval are `false`.
    `AGENT_MAIL_DNS_TSIG_SECRET`, `AGENT_MAIL_WEBHOOK_SECRET`, and (temporarily)
    `AGENT_MAIL_RECOVERY_ADMIN_SECRET`. The DNS value must equal Knot's
    `hyrule-dns` key; the webhook value must also be stored as
-   `mail_internal_webhook_secret` for Hyrule Cloud.
+   `mail_internal_webhook_secret` for Hyrule Cloud. Runtime env values are
+   single-quoted so `$`, `#`, spaces, and `=` remain literal. Secrets containing
+   a quote, backslash, or line break are rejected; rotate those to unwrapped
+   base64/base64url before apply. Before removing `agentmail` from `staged`,
+   expose these same values to the privileged drift runner's Vault-backed
+   environment so its canonical check-mode sweep remains fail-closed.
 3. Keep `agent_mail_public_enabled: false`. Set `agent_mail_apply` and
    `agent_mail_start` only for the controlled host apply. A default invocation
    renders review artifacts and cannot touch the host.
@@ -108,9 +117,11 @@ All items below must have durable evidence before changing a launch gate:
    scope cannot alter zones outside the managed Hyrule set.
 2. PTR: the dedicated IPv4 and IPv6 reverse to
    `mx1.agentmail.hyrule.host`, whose forward records return the same addresses.
-3. Backup: enable the local quiesced timer, transfer snapshots to an encrypted
-   off-host repository, verify checksums, and complete a restore into an
-   isolated VM. A same-disk tarball alone never satisfies
+3. Backup: enable the quiesced timer only after the dedicated backup mount is
+   active. The script enforces a 100 GiB minimum volume, 32 GiB free-space
+   floor, and two-day local retention before it stops Stalwart. Transfer every
+   snapshot to an encrypted off-host repository, verify checksums, and complete
+   a restore into an isolated VM. A same-disk tarball alone never satisfies
    `agent_mail_backup_restore_verified`.
 4. Monitoring: apply the monitoring, Prometheus, and logs roles only after the
    host is reachable. While `agentmail` remains staged, the live Prometheus

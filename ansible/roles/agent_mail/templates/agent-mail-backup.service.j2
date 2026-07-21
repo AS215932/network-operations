@@ -1,6 +1,7 @@
 [Unit]
 Description=Quiesced Stalwart Agent Mail backup
 Requires=docker.service
+RequiresMountsFor={{ agent_mail_backup_dir }}
 After=docker.service
 
 [Service]
