@@ -37,11 +37,14 @@ monitoring_extra_services:
     interval: 2m
     notes: "Public reverse-SSH tunnel intake on tcp/2222"
     vars: { tcp_address: "{{ peers.netproxy.ipv6 }}", tcp_port: 2222 }
-  - name: tunnel-control-api
+  - name: tunnel-metrics
     check_command: tcp
     interval: 5m
-    notes: "Internal tunnel control API on tcp/8452 (api VM only)"
-    vars: { tcp_address: "{{ peers.netproxy.ipv6 }}", tcp_port: 8452 }
+    # The control API :8452 is firewalled to the api VM only, so mon cannot
+    # probe it; :8453 (metrics/health) IS allowed from mon and confirms the
+    # daemon process is up.
+    notes: "hyrule-tunnel-proxy metrics/health listener on tcp/8453 (mon-reachable)"
+    vars: { tcp_address: "{{ peers.netproxy.ipv6 }}", tcp_port: 8453 }
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true

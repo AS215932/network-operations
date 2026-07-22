@@ -15,6 +15,20 @@
     update_cache: true
     cache_valid_time: 3600
 
+# IPv4-only rescue clients reach the tunnel via rtr DNAT to 10.0.2.224, so the
+# VM must actually carry that address. netproxy's ::e0 comes from cloud-init;
+# this networkd drop-in adds the static RFC1918 v4 (and re-declares the v6 GUA)
+# on enX0 so a normal apply assigns it rather than leaving DNAT pointed at an
+# unconfigured address. Reload is additive (adds an address; keeps the link up).
+- name: Install netproxy enX0 networkd drop-in (adds static IPv4 for DNAT)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/netproxy/10-enX0.network"
+    dest: /etc/systemd/network/10-enX0.network
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload networkd
+
 - name: Ensure hyrule-tunnel-proxy group exists
   ansible.builtin.group:
     name: "{{ hyrule_tunnel_proxy_group }}"
@@ -97,6 +111,13 @@
     enabled: true
     state: started
     daemon_reload: true
+
+# Flush the restart handler now so the health check below validates the NEWLY
+# deployed binary/config, not the still-running old process (on an upgrade the
+# checkout/build/env/unit tasks only notify; without this the restart would run
+# after the play and the health check could pass against the old version).
+- name: Flush handlers before health check
+  ansible.builtin.meta: flush_handlers
 
 - name: Wait for hyrule-tunnel-proxy health endpoint
   ansible.builtin.uri:

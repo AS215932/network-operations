@@ -50,14 +50,16 @@ leases.
 ## IPv4 for rescue clients
 
 Rescue images are often IPv4-only, so netproxy gets a static internal
-`10.0.2.224/24` (`configs/netproxy/10-enX0.network`, mirroring proxy/vpn) and
-rtr DNATs the public failover IPv4 for `2222/tcp`, `3478/udp`, and
-`10000-10499/tcp` to it (`configs/rtr/nftables.conf` +
-`roles/firewall/templates/nftables-rtr.conf.j2`, `rtr_tunnel_v4`). The return
-path rides the existing `From=10.0.2.0/24 → main` VRF-leak rule (no new policy
-rule). DNAT preserves the client source IP (masquerade only on WAN), so the
-daemon's per-lease allowlist sees real visitor IPs. IPv6 clients hit the netproxy
-GUA directly (no DNAT).
+`10.0.2.224/24` (`configs/netproxy/10-enX0.network`, mirroring proxy/vpn). Unlike
+proxy/vpn (whose drop-ins are applied out-of-band), the **`hyrule_tunnel_proxy`
+role installs this drop-in and reloads networkd**, so a normal tunnel-proxy apply
+actually assigns the address rather than leaving DNAT pointed at nothing. rtr
+DNATs the public failover IPv4 for `2222/tcp`, `3478/udp`, and `10000-10499/tcp`
+to it (`configs/rtr/nftables.conf` + `roles/firewall/templates/nftables-rtr.conf.j2`,
+`rtr_tunnel_v4`). The return path rides the existing `From=10.0.2.0/24 → main`
+VRF-leak rule (no new policy rule). DNAT preserves the client source IP
+(masquerade only on WAN), so the daemon's per-lease allowlist sees real visitor
+IPs. IPv6 clients hit the netproxy GUA directly (no DNAT).
 
 ## DNS
 
@@ -72,9 +74,14 @@ enforced by `scripts/ci/deploy-preflight.sh`. Operator-seeded (≥32 chars).
 
 ## Monitoring
 
-netproxy is registered in Icinga (`monitoring_register: true`) with a TCP check
-on `:2222` and the control API `:8452`; Prometheus scrapes `[netproxy]:8453`
-(`hyrule-tunnel-proxy` job — manual `prometheus.yml` edit + reload).
+netproxy is registered in Icinga (`monitoring_register: true`) with TCP checks on
+the public SSH intake `:2222` and the mon-reachable metrics/health listener
+`:8453` (NOT the control API `:8452`, which is firewalled to the api VM). Setting
+`monitoring_register` only makes the role *capable* of rendering the objects, so
+the rollout runs `playbooks/monitoring.yml --limit netproxy` (and the post-merge
+`app-promotion-deploy` matrix now schedules `monitoring` on any `netproxy.yml`
+change). Prometheus scrapes `[netproxy]:8453` (`hyrule-tunnel-proxy` job — manual
+`prometheus.yml` edit + reload).
 
 ## Rollout (operator-gated ⛔)
 
@@ -86,15 +93,19 @@ on `:2222` and the control API `:8452`; Prometheus scrapes `[netproxy]:8453`
    pass (firewall render + network-flows freshness).
 4. ⛔ Icinga pre-deploy snapshot (baseline before touching rtr/netproxy).
 5. ⛔ Apply rtr firewall/DNAT (`playbooks/firewall.yml --tags apply`, serial:1,
-   at(1) watchdog) — highest-risk step. Then apply netproxy networkd v4 +
-   `tunnel-proxy.yml --tags apply` → daemon healthy.
-6. ⛔ Apply DNS (Knot reload) → `tun.hyrule.host` resolves A+AAAA.
-7. ⛔ Icinga post-deploy check vs baseline (TCP-2222 green, nothing newly broken).
-8. Deploy hyrule-cloud behind `gate="tunnel"` (hidden until the token is present);
+   at(1) watchdog) — highest-risk step. Then `tunnel-proxy.yml --tags apply`
+   (which installs the networkd v4 drop-in + reloads networkd, builds the binary,
+   and health-checks the newly restarted daemon) → daemon healthy on `::e0`.
+6. ⛔ Apply monitoring so the Icinga objects land on mon:
+   `playbooks/monitoring.yml --tags apply -e monitoring_apply=true --limit netproxy`.
+7. ⛔ Apply DNS (Knot reload) → `tun.hyrule.host` resolves A+AAAA.
+8. ⛔ Icinga post-deploy check vs baseline (tunnel-ssh-intake + tunnel-metrics
+   green, nothing newly broken).
+9. Deploy hyrule-cloud behind `gate="tunnel"` (hidden until the token is present);
    keep dark.
-9. Live paid canary (`x402_canary.py tunnel`, 1h lease, real USDC, self-revokes).
-   Nothing announced until it passes.
-10. Open the gate / announce (MCP tools + docs public).
+10. Live paid canary (`x402_canary.py tunnel`, 1h lease, real USDC, self-revokes).
+    Nothing announced until it passes.
+11. Open the gate / announce (MCP tools + docs public).
 
 **Rollback:** unset the token → catalog entry hidden instantly; `DELETE` all
 leases via the control API; remove rtr DNAT + netproxy public firewall rules to

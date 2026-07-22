@@ -1,4 +1,8 @@
 ---
+- name: reload networkd
+  ansible.builtin.command: networkctl reload
+  changed_when: true
+
 - name: restart hyrule-tunnel-proxy
   ansible.builtin.systemd:
     name: hyrule-tunnel-proxy
