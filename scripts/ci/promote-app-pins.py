@@ -21,13 +21,19 @@ PIN_TARGETS = {
         "AS215932/hyrule-network-proxy",
         "network-proxy",
     ),
-    # The reverse-SSH tunnel daemon is a second binary in the same repo, so it
-    # is pinned to the SAME commit as the egress sidecar (driven off
-    # --hyrule-network-proxy-sha, not a separate input).
+}
+
+# Pins that are slaved to another pin (same repo, same commit) rather than being
+# independently settable. The reverse-SSH tunnel daemon is a second binary in the
+# hyrule-network-proxy repo, so its pin always moves with the sidecar's — it is
+# NOT a PIN_TARGETS entry (so carry-forward / pending-promotions never emit an
+# unsupported --hyrule-tunnel-proxy-sha flag for it); it is written as a
+# side-effect of the network-proxy pin below.
+_SLAVED_PINS: dict[str, tuple[str, str]] = {
+    # slave_key: (driver_key, host_vars_path)
     "hyrule_tunnel_proxy_version": (
+        "hyrule_network_proxy_version",
         "ansible/inventory/host_vars/netproxy.yml",
-        "AS215932/hyrule-network-proxy",
-        "tunnel-proxy",
     ),
 }
 
@@ -56,8 +62,6 @@ def main() -> int:
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
-        # Same repo, same commit as the egress sidecar.
-        "hyrule_tunnel_proxy_version": args.hyrule_network_proxy_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
 
@@ -85,6 +89,13 @@ def main() -> int:
         path = REPO / rel_path
         old_sha = update_pin(path, key, new_sha)
         changes.append((key, repo, playbook, old_sha, new_sha))
+
+        # Move any pins slaved to this one to the same SHA (same repo/commit).
+        for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+            if driver_key != key:
+                continue
+            slave_old = update_pin(REPO / slave_path, slave_key, new_sha)
+            changes.append((slave_key, repo, "tunnel-proxy", slave_old, new_sha))
 
     if args.body_file:
         Path(args.body_file).write_text(render_body(args.title, args.impact, changes))

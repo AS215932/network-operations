@@ -91,21 +91,37 @@ change). Prometheus scrapes `[netproxy]:8453` (`hyrule-tunnel-proxy` job — man
 3. Merge these network-operations changes (role, host_vars, netproxy v4, rtr
    DNAT, DNS serial, prometheus, CI enum, ctmpl, preflight). CI validate must
    pass (firewall render + network-flows freshness).
-4. ⛔ Icinga pre-deploy snapshot (baseline before touching rtr/netproxy).
-5. ⛔ Apply rtr firewall/DNAT (`playbooks/firewall.yml --tags apply`, serial:1,
-   at(1) watchdog) — highest-risk step. Then `tunnel-proxy.yml --tags apply`
-   (which installs the networkd v4 drop-in + reloads networkd, builds the binary,
-   and health-checks the newly restarted daemon) → daemon healthy on `::e0`.
-6. ⛔ Apply monitoring so the Icinga objects land on mon:
+4. ⛔ **Refresh the CI runner's Vault template FIRST** — the tunnel token is a
+   new var in `github-runner.env.ctmpl.j2`, and the tunnel role's apply asserts
+   `HYRULE_TUNNEL_PROXY_TOKEN` is present in the runner's sourced
+   `secrets.env`. Apply `playbooks/ci.yml` (vault_agent role) so vault-agent
+   re-renders the runner env, then confirm the var is non-empty on the runner
+   before scheduling any tunnel-proxy apply — otherwise the apply fails the
+   token assertion.
+5. ⛔ Icinga pre-deploy snapshot (baseline before touching rtr/netproxy).
+6. ⛔ Apply rtr firewall/DNAT (`playbooks/firewall.yml --tags apply --limit rtr`,
+   serial:1, at(1) watchdog) — highest-risk step. Then **apply the netproxy
+   firewall** so its public 2222/3478/10000-10499 allowances are installed
+   (`playbooks/firewall.yml --tags apply --limit netproxy`) — the daemon can
+   pass its internal IPv6 health check while every public listener is still
+   blocked, so this must not be skipped. Then `tunnel-proxy.yml --tags apply`
+   (installs the networkd v4 drop-in + reloads networkd, builds the binary,
+   health-checks the newly restarted daemon) → daemon healthy on `::e0`.
+7. ⛔ Apply monitoring so the Icinga objects land on mon:
    `playbooks/monitoring.yml --tags apply -e monitoring_apply=true --limit netproxy`.
-7. ⛔ Apply DNS (Knot reload) → `tun.hyrule.host` resolves A+AAAA.
-8. ⛔ Icinga post-deploy check vs baseline (tunnel-ssh-intake + tunnel-metrics
+8. ⛔ Apply DNS (Knot reload) → `tun.hyrule.host` resolves A+AAAA.
+9. ⛔ Icinga post-deploy check vs baseline (tunnel-ssh-intake + tunnel-metrics
    green, nothing newly broken).
-9. Deploy hyrule-cloud behind `gate="tunnel"` (hidden until the token is present);
-   keep dark.
-10. Live paid canary (`x402_canary.py tunnel`, 1h lease, real USDC, self-revokes).
+10. Deploy hyrule-cloud behind `gate="tunnel"` (hidden until the token is present);
+    keep dark.
+11. Live paid canary (`x402_canary.py tunnel`, 1h lease, real USDC, self-revokes).
     Nothing announced until it passes.
-11. Open the gate / announce (MCP tools + docs public).
+12. Open the gate / announce (MCP tools + docs public).
+
+Note: the post-merge `app-promotion-deploy` workflow schedules `network-proxy`,
+`tunnel-proxy`, `monitoring`, AND the `netproxy` firewall on any `netproxy.yml`
+change, so subsequent promotions install the firewall/monitoring automatically;
+the explicit applies above are for the first operator-gated rollout.
 
 **Rollback:** unset the token → catalog entry hidden instantly; `DELETE` all
 leases via the control API; remove rtr DNAT + netproxy public firewall rules to
