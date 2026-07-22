@@ -99,14 +99,19 @@ change). Prometheus scrapes `[netproxy]:8453` (`hyrule-tunnel-proxy` job — man
    before scheduling any tunnel-proxy apply — otherwise the apply fails the
    token assertion.
 5. ⛔ Icinga pre-deploy snapshot (baseline before touching rtr/netproxy).
-6. ⛔ Apply rtr firewall/DNAT (`playbooks/firewall.yml --tags apply --limit rtr`,
+6. ⛔ Apply rtr firewall/DNAT
+   (`playbooks/firewall.yml --tags apply -e firewall_apply=true --limit rtr`,
    serial:1, at(1) watchdog) — highest-risk step. Then **apply the netproxy
    firewall** so its public 2222/3478/10000-10499 allowances are installed
-   (`playbooks/firewall.yml --tags apply --limit netproxy`) — the daemon can
-   pass its internal IPv6 health check while every public listener is still
-   blocked, so this must not be skipped. Then `tunnel-proxy.yml --tags apply`
+   (`playbooks/firewall.yml --tags apply -e firewall_apply=true --limit netproxy`)
+   — the daemon can pass its internal IPv6 health check while every public
+   listener is still blocked, so this must not be skipped. Then
+   `playbooks/tunnel-proxy.yml --tags apply -e hyrule_tunnel_proxy_apply=true --limit netproxy`
    (installs the networkd v4 drop-in + reloads networkd, builds the binary,
    health-checks the newly restarted daemon) → daemon healthy on `::e0`.
+   (The apply gate vars are required — `--tags apply` alone only renders/
+   validates; the roles gate every live task on `*_apply=true`. Or dispatch the
+   equivalent `apply.yml` workflow, which sets these automatically.)
 7. ⛔ Apply monitoring so the Icinga objects land on mon:
    `playbooks/monitoring.yml --tags apply -e monitoring_apply=true --limit netproxy`.
 8. ⛔ Apply DNS (Knot reload) → `tun.hyrule.host` resolves A+AAAA.

@@ -111,9 +111,18 @@ def find_pin(text: str, key: str) -> str | None:
 
 
 def ref_changes(ref: str) -> list[tuple[str, str, str, str, str]]:
-    """Pin deltas between a git ref (old) and the working tree (new)."""
+    """Pin deltas between a git ref (old) and the working tree (new). Includes
+    slaved pins (e.g. the tunnel daemon) so a promotion PR body shows the full
+    deployment impact even though they aren't independent PIN_TARGETS."""
     changes: list[tuple[str, str, str, str, str]] = []
-    for key, (rel_path, repo, playbook) in PIN_TARGETS.items():
+    # (key, host_vars_path, repo, playbook) for every reportable pin.
+    reportable: list[tuple[str, str, str, str]] = [
+        (key, rel_path, repo, playbook) for key, (rel_path, repo, playbook) in PIN_TARGETS.items()
+    ]
+    for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+        repo = PIN_TARGETS[driver_key][1]
+        reportable.append((slave_key, slave_path, repo, "tunnel-proxy"))
+    for key, rel_path, repo, playbook in reportable:
         new_sha = find_pin((REPO / rel_path).read_text(), key)
         shown = subprocess.run(
             ["git", "show", f"{ref}:{rel_path}"],
