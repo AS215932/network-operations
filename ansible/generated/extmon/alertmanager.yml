@@ -2,21 +2,22 @@ global:
   resolve_timeout: 5m
 
 route:
-  receiver: discord
+  receiver: noc-agent
   group_by: [alertname, severity]
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 1h
+  repeat_interval: 24h
 
   routes:
     # Critical alerts skip group_wait so they hit Discord faster.
     - matchers:
         - severity = "critical"
-      receiver: discord
+      receiver: critical-discord
       group_wait: 10s
 
 receivers:
-  - name: discord
+  - name: noc-agent
+  - name: critical-discord
     discord_configs:
       - webhook_url: ''
         send_resolved: true

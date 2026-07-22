@@ -4,10 +4,6 @@
 # artifact only and never install packages or mutate the host.
 alertmanager_apply: false
 
-# Discord webhook for Prometheus alerts. Same secret the icinga2 role uses,
-# sourced from the Vault-rendered runner env; redacted in the review render.
-mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default(lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL'), true) | default('') }}"
-
 # Live config path Debian's prometheus-alertmanager reads.
 alertmanager_config_path: /etc/prometheus/alertmanager.yml
 

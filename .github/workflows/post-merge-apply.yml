@@ -188,11 +188,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-      - name: Alert NOC on apply failure
-        if: failure() && env.DISCORD_WEBHOOK_URL != ''
+      - name: Alert CI on apply failure
+        if: failure() && env.CI_DISCORD_WEBHOOK_URL != ''
         env:
-          DISCORD_WEBHOOK_URL: ${{ env.DISCORD_WEBHOOK_URL }}
+          CI_DISCORD_WEBHOOK_URL: ${{ env.CI_DISCORD_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           jq -n --arg content "AS215932 post-merge apply failed: ${RUN_URL}" '{content: $content}' \
-            | curl -fsS -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL"
+            | curl -fsS -H 'Content-Type: application/json' -d @- "$CI_DISCORD_WEBHOOK_URL"

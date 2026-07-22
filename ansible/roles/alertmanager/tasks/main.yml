@@ -3,8 +3,8 @@
 # actually delivered. Prometheus (configs/mon/prometheus.yml) already routes to
 # 127.0.0.1:9093; this installs the service and renders
 # configs/mon/alertmanager.yml.j2 → /etc/prometheus/alertmanager.yml, closing the
-# path to the noc-agent webhook + Discord. Without it every mon alert fires into
-# a dead socket.
+# path to the NOC Agent webhook. Without it every mon alert fires into a dead
+# socket.
 #
 # `apply:` propagates the include's tags to the included tasks — tags on a
 # dynamic include_tasks otherwise cover only the include itself.

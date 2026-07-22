@@ -1,13 +1,5 @@
 ---
 # mon — Prometheus + Alertmanager + Grafana + Icinga2 + blackbox_exporter.
-# Discord webhook for mon alerts (Alertmanager + Icinga2). On the CI runner the
-# Vault-rendered env provides DISCORD_WEBHOOK_URL (github-runner.env.ctmpl.j2),
-# NOT a mon-specific var — so DISCORD_WEBHOOK_URL must be in the fallback chain
-# or the automated `apply(alertmanager, mon)` pre-flight sees an empty webhook
-# and aborts. MON_DISCORD_WEBHOOK_URL is the optional mon-specific override
-# (e.g. from secrets.local.sh for a manual apply). Mirrors icinga2's default.
-#   export MON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'  # optional override
-mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default(lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL'), true) | default('') }}"
 
 firewall_extra_rules:
   # Grafana via Caddy.

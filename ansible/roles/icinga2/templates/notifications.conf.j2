@@ -42,9 +42,7 @@ object NotificationCommand "discord-service-notification" {
 object User "discord" {
   display_name = "Discord webhook"
   states = [ OK, Warning, Critical, Unknown ]
-  types  = [ Problem, Acknowledgement, Recovery, Custom,
-             FlappingStart, FlappingEnd,
-             DowntimeStart, DowntimeEnd, DowntimeRemoved ]
+  types  = [ Problem, Acknowledgement, Recovery ]
 }
 
 object UserGroup "discord" {
@@ -56,33 +54,31 @@ apply Notification "discord-host" to Host {
   command = "discord-host-notification"
   users   = [ "discord" ]
   states  = [ Up, Down ]
-  types   = [ Problem, Acknowledgement, Recovery, Custom,
-              FlappingStart, FlappingEnd,
-              DowntimeStart, DowntimeEnd, DowntimeRemoved ]
-  // Re-notify unresolved problems hourly. interval=0 (single-shot) masked
-  // the 2026-05-07 outage when the first notify failed to deliver.
-  interval = {{ icinga2_notification_interval }}
+  types   = [ Problem, Acknowledgement, Recovery ]
+  interval = {{ icinga2_fallback_notification_interval }}
 
-  assign where true
+  // Independent emergency path for loss of the NOC/monitoring plane only.
+  assign where host.name in [ "noc", "mon" ]
 }
 
 apply Notification "discord-service" to Service {
   command = "discord-service-notification"
   users   = [ "discord" ]
   states  = [ OK, Warning, Critical, Unknown ]
-  types   = [ Problem, Acknowledgement, Recovery, Custom,
-              FlappingStart, FlappingEnd,
-              DowntimeStart, DowntimeEnd, DowntimeRemoved ]
-  interval = {{ icinga2_notification_interval }}
+  types   = [ Problem, Acknowledgement, Recovery ]
+  interval = {{ icinga2_fallback_notification_interval }}
 
-  assign where true
+  assign where service.name in [
+    "noc-agent-health",
+    "prometheus-health",
+    "alertmanager-health"
+  ]
 }
 
-// --- noc-agent (parallel notification path; runs alongside Discord) ---
+// --- noc-agent (primary case-card notification path) ---
 //
 // Forwards every Problem/Recovery to the autonomous NOC agent on noc.as215932.net.
-// Discord remains the human-readable channel; noc-agent investigates and posts
-// its own structured triage to the same Discord webhook.
+// It deterministically routes and updates the persistent Discord case card.
 
 object NotificationCommand "noc-agent-host-notification" {
   command = [ "/etc/icinga2/scripts/notify-noc-agent.sh" ]
@@ -95,6 +91,7 @@ object NotificationCommand "noc-agent-host-notification" {
     HOST_STATE          = "$host.state$"
     HOST_OUTPUT         = "$host.output$"
     HOST_CHECK_COMMAND  = "$host.check_command$"
+    NOTIFICATION_ROUTE  = "$host.vars.notification_route$"
   }
 }
 
@@ -113,6 +110,8 @@ object NotificationCommand "noc-agent-service-notification" {
     SERVICE_STATE          = "$service.state$"
     SERVICE_OUTPUT         = "$service.output$"
     SERVICE_CHECK_COMMAND  = "$service.check_command$"
+    NOTIFICATION_ROUTE     = "$service.vars.notification_route$"
+    HOST_NOTIFICATION_ROUTE = "$host.vars.notification_route$"
   }
 }
 
@@ -132,7 +131,7 @@ apply Notification "noc-agent-host" to Host {
   users   = [ "noc-agent" ]
   states  = [ Up, Down ]
   types   = [ Problem, Recovery ]
-  interval = {{ icinga2_notification_interval }}
+  interval = 0
 
   assign where true
 }
@@ -142,7 +141,7 @@ apply Notification "noc-agent-service" to Service {
   users   = [ "noc-agent" ]
   states  = [ Warning, Critical, Unknown ]
   types   = [ Problem, Recovery ]
-  interval = {{ icinga2_notification_interval }}
+  interval = 0
 
   assign where true
 }

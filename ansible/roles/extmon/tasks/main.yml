@@ -25,6 +25,19 @@
     - ansible_host == '0.0.0.0'
   tags: [apply]
 
+- name: Pre-flight — require both external alert delivery paths
+  ansible.builtin.fail:
+    msg: |
+      EXTMON_DISCORD_WEBHOOK_URL and EXTMON_NOC_ALERTMANAGER_WEBHOOK_URL are
+      both required for apply. Critical network alerts use independent direct
+      Discord delivery; all alerts also enter the persistent NOC case path.
+  when:
+    - extmon_apply | bool
+    - >-
+      (extmon_discord_webhook_url | default('') | length == 0) or
+      (extmon_noc_alertmanager_webhook_url | default('') | length == 0)
+  tags: [apply]
+
 - name: Apply — install repository bootstrap packages
   apt:
     name:

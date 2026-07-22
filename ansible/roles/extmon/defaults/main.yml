@@ -14,9 +14,8 @@ extmon_node_exporter_listen: "0.0.0.0:9100"     # scraped by self-job
 extmon_scrape_interval: 30s
 extmon_evaluation_interval: 30s
 
-# Alertmanager repeat interval — how often unresolved problems re-notify.
-# 1h is the right answer for the in-house Icinga too (Phase C/Notify).
-extmon_alert_repeat_interval: 1h
+# Transport reassertion only; CaseService owns acknowledgement-aware reminders.
+extmon_alert_repeat_interval: 24h
 
 # --- BGP / routing intelligence ---
 extmon_bgp_asn: 215932

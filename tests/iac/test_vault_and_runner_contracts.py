@@ -10,6 +10,15 @@ JOURNAL_GROUP = "systemd-journal"
 
 
 class VaultAndRunnerContractsTest(unittest.TestCase):
+    def test_ci_discord_notifications_use_dedicated_runner_secret(self):
+        template = (REPO / "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2").read_text()
+        self.assertIn("CI_DISCORD_WEBHOOK_URL", template)
+        self.assertIn("discord_ci_webhook_url", template)
+        for name in ("drift-detection.yml", "post-merge-apply.yml", "netops-nightly.yml"):
+            workflow = (REPO / ".github/workflows" / name).read_text()
+            self.assertIn("CI_DISCORD_WEBHOOK_URL", workflow, name)
+            self.assertIn("Alert CI", workflow, name)
+
     def test_runner_labels_cover_all_workflows(self):
         defaults = yaml.safe_load((REPO / "ansible/roles/github_runner/defaults/main.yml").read_text())
         labels = {str(label).replace("{{ github_runner_arch }}", defaults["github_runner_arch"]) for label in defaults["github_runner_labels"]}

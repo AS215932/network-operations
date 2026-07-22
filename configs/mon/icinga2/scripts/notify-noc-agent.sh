@@ -33,6 +33,12 @@ import os
 import sys
 import urllib.request
 
+notification_route = (
+    os.environ.get("NOTIFICATION_ROUTE") or os.environ.get("HOST_NOTIFICATION_ROUTE") or "network"
+).strip()
+if notification_route not in {"network", "ai", "ci"}:
+    notification_route = "network"
+
 payload = {
     "host_name": os.environ.get("HOST_NAME", ""),
     "host_address": os.environ.get("HOST_ADDRESS", ""),
@@ -41,7 +47,10 @@ payload = {
     "state": os.environ.get("SERVICE_STATE") or os.environ.get("HOST_STATE", ""),
     "state_type": os.environ.get("NOTIFICATION_TYPE", ""),
     "output": os.environ.get("SERVICE_OUTPUT") or os.environ.get("HOST_OUTPUT", ""),
-    "tags": {"source": "icinga2"},
+    "tags": {
+        "source": "icinga2",
+        "notification_route": notification_route,
+    },
 }
 
 req = urllib.request.Request(
