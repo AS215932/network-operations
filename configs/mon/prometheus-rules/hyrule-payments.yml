@@ -64,6 +64,43 @@ groups:
           summary: "elevated x402 verification failures"
           description: "More than 10 payment verification failures in the last hour. Could be a broken client in the wild, a facilitator issue, or someone probing the payment path."
 
+      - alert: HyruleSolanaPaymentFailure
+        expr: sum(increase(hyrule_payment_events_total{event_type=~"verify_failed|settle_failed",network=~"solana:.*"}[15m])) > 0
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "Solana x402 payment failed"
+          description: "At least one exact Solana payment failed verification or settlement in the last 15 minutes. Check the CDP facilitator response, CAIP-2 network, feePayer enrichment, and hyrule-cloud payment logs before leaving Solana advertised."
+
+      - alert: HyruleNativePaymentWorkerUnavailable
+        expr: hyrule_payment_worker_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+          public_status: "true"
+          public_state: degraded
+          public_components: "api_checkout"
+        annotations:
+          summary: "BTC payment-intent worker is unavailable"
+          description: "The durable native-payment scanner has no fresh successful heartbeat. The API automatically stops advertising BTC while this alert is active; inspect hyrule-cloud-worker.service and its Esplora connectivity."
+          public_title: "BTC checkout temporarily unavailable"
+          public_message: "Bitcoin payment-intent checkout is temporarily unavailable. USDC checkout remains available."
+
+      - alert: HyruleNativePaymentIntentScanLag
+        expr: |
+          max by (asset) (hyrule_native_payment_intent_scan_lag_seconds) > 90
+            and on (asset)
+          max by (asset) (hyrule_native_payment_intents_pending) > 0
+        for: 2m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "{{ $labels.asset }} payment intents are not being scanned"
+          description: "The oldest pending {{ $labels.asset }} intent has not been scanned within 90 seconds. Stop advertising the native rail and inspect the worker/provider before deposits age past their quote window."
+
       - alert: HyruleVMProvisionFailureRatio
         expr: |
           sum(increase(hyrule_vm_provision_total{result="failed"}[1h])) >= 3
