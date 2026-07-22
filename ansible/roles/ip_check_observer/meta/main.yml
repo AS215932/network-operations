@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  author: AS215932
+  description: Public STUN-only binding observer for Hyrule network checks
+  min_ansible_version: "2.15"
+dependencies: []

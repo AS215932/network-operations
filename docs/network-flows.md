@@ -85,8 +85,12 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 
 | To | Proto | Port | Purpose |
 |---|---|---|---|
+| team-cymru | tcp | 43 | Team Cymru ASN enrichment |
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
+| ipqs | tcp | 443 | licensed IP reputation enrichment (dark until resale approval) |
+| maxmind | tcp | 443 | licensed GeoIP/anonymous-IP enrichment (dark until resale approval) |
 | openprovider | tcp | 443 | domain registration API |
+| ripe-stat | tcp | 443 | RIPEstat routing and registration evidence |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
 | dns | tcp | 8453 | HMAC-authenticated managed customer DNS control |
 
@@ -208,6 +212,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | ns2 | tcp+udp | 53 | NOTIFY plus serve AXFR pull to the off-net secondary (TSIG hyrule-dns) |
+| proxy | tcp | 443 | HMAC-signed dns.check.hyrule.host observations over HTTPS |
 
 ### dom0 — Underlay-only Xen host for the whole AS215932 fleet; hypervisor every VM runs on.
 
@@ -420,6 +425,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | dns | tcp | 53 | AXFR pull from the primary on NOTIFY (TSIG hyrule-dns) |
+| proxy | tcp | 443 | HMAC-signed dns.check.hyrule.host observations over HTTPS |
 | log | tcp | 6000 | off-net Vector agent to aggregator over public IPv6 |
 
 ### proxy — Terminates public TLS and reverse-proxies to web, api, and other backends; ACME DNS-01 via RFC 2136 to dns.
@@ -432,6 +438,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | any | tcp (v4+v6) | 80 | HTTP (ACME + redirect) |
 | any | tcp (v4+v6) | 443 | HTTPS (Caddy TLS) |
+| any | tcp+udp (v4+v6) | 3478 | STUN binding observer |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**
@@ -573,6 +580,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | public | rtr | tcp+udp (v4) | 53 | DNAT to dns |
 | public | rtr | tcp (v4) | 80 | DNAT to proxy |
 | public | rtr | tcp (v4) | 443 | DNAT to proxy |
+| public | rtr | tcp+udp (v4) | 3478 | DNAT to proxy STUN binding observer |
 | public | rtr | udp (v4) | 51820 | DNAT to vpn |
 | routers | routers | udp | 1337-1342 | WireGuard full mesh between router underlays |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
@@ -595,13 +603,17 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |
 | `github` | github.com | GitHub API, Actions runner queue, checkouts, PRs, action/image pulls |
 | `hyrule-cloud` | cloud.hyrule.host | Hyrule Cloud public API (BGP snapshot / ingest) |
+| `ipqs` | www.ipqualityscore.com | licensed IP reputation enrichment; dark until resale approval |
+| `maxmind` | geoip.maxmind.com | licensed GeoIP and anonymous-IP enrichment; dark until resale approval |
 | `model-providers` | LLM backend/provider APIs | OpenRouter / Venice and other configured model providers |
 | `ntp-pool` | pool.ntp.org | NTP time sync |
 | `openprovider` | api.openprovider.eu | Openprovider domain registration API |
 | `openrouter` | openrouter.ai | OpenRouter LLM API (PR-Agent) |
 | `ops-prefix` | ops workstation prefix (KPN home) | 2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow |
 | `package-registries` | PyPI / npm / ghcr.io / Docker Hub | toolchain and container image pulls |
+| `ripe-stat` | stat.ripe.net | RIPEstat routing and registration evidence |
 | `routers` | AS215932 routers | rtr, cr1-nl1, cr1-de1, cr1-ch1 |
+| `team-cymru` | whois.cymru.com | Team Cymru ASN enrichment over whois |
 | `vpn-clients` | VPN clients | 2a0c:b641:b50:3::/64, routed via the vpn VM |
 
 ---

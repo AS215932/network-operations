@@ -1,0 +1,38 @@
+[Unit]
+Description=Hyrule session-scoped DNS observation forwarder
+Documentation=https://github.com/AS215932/network-operations
+After=network-online.target
+Wants=network-online.target
+Before=knot.service
+
+[Service]
+Type=simple
+User={{ knot_ip_check_observer_user }}
+Group=knot
+SupplementaryGroups={{ knot_ip_check_observer_group }}
+EnvironmentFile={{ knot_ip_check_observer_env_file }}
+ExecStart=/usr/bin/python3 /usr/local/libexec/hyrule-dns-observer.py
+Restart=on-failure
+RestartSec=3s
+RuntimeDirectory=hyrule-dns-observer
+RuntimeDirectoryMode=0750
+UMask=0007
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

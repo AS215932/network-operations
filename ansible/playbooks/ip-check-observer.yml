@@ -1,0 +1,8 @@
+---
+- name: Hyrule network-check STUN observer
+  hosts: proxy
+  gather_facts: false
+  become: true
+  roles:
+    - ip_check_observer
+  tags: [ip-check-observer]

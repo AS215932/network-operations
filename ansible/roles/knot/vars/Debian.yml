@@ -1,6 +1,8 @@
 ---
 knot_pkg: knot
 knot_dnssecutils_pkg: knot-dnssecutils
+knot_dnstap_module_pkg: knot-module-dnstap
+knot_dnstap_cli_pkg: golang-github-dnstap-golang-dnstap-cli
 knot_service: knot
 knot_conf_path: /etc/knot/knot.conf
 knot_backup_path: /etc/knot/knot.conf.backup

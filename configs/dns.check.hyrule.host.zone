@@ -1,0 +1,18 @@
+; /var/lib/knot/zones/dns.check.hyrule.host.zone
+; Dedicated authoritative zone for short-lived DNS observation labels.
+
+$ORIGIN dns.check.hyrule.host.
+$TTL 60
+
+@       IN  SOA   ns1.servify.network. admin.servify.network. (
+                  2026071601 ; serial (YYYYMMDDNN)
+                  3600       ; refresh (1h)
+                  900        ; retry (15m)
+                  604800     ; expire (7d)
+                  60 )       ; negative TTL (1m)
+
+@       IN  NS    ns1.servify.network.
+@       IN  NS    ns2.servify.network.
+
+; Random, session-scoped labels intentionally return NXDOMAIN. Knot still
+; emits their AUTH_QUERY dnstap events to the local observer.

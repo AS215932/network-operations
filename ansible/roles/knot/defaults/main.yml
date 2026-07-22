@@ -60,3 +60,15 @@ knot_dns_control_env_file: /etc/knot/hyrule-dns-control.env
 knot_backup_enabled: true
 knot_backup_dir: /var/backups/knot
 knot_backup_retention_days: 14
+
+# Session-scoped DNS-leak observer. The feature is attached only to the
+# dedicated probe zone; normal authoritative traffic is never exported.
+knot_ip_check_observer_enabled: false
+knot_ip_check_observer_zone: dns.check.hyrule.host
+knot_ip_check_observer_secret: ""
+knot_ip_check_observer_api_url: https://cloud.hyrule.host/v1/internal/ip-check/dns-observations
+knot_ip_check_observer_socket: /run/hyrule-dns-observer/dnstap.sock
+knot_ip_check_observer_env_file: /etc/knot/hyrule-dns-observer.env
+knot_ip_check_observer_user: hyrule-dns-observer
+knot_ip_check_observer_group: hyrule-dns-observer
+knot_ip_check_observer_cli: /usr/bin/dnstap

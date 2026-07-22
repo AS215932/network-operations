@@ -14,6 +14,7 @@ Usage:
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -46,7 +47,7 @@ def host_groups(inv: dict, host: str) -> list[str]:
     def walk(node: dict, path: list[str]):
         for name, child in (node.get("children") or {}).items():
             sub_path = path + [name]
-            if (child.get("hosts") or {}).get(host) is not None:
+            if host in (child.get("hosts") or {}):
                 groups.append(name)
             if child.get("children"):
                 walk(child, sub_path)
@@ -72,8 +73,8 @@ def host_inv_vars(inv: dict, host: str) -> dict:
     """Walk groups looking for the host's leaf vars (ansible_host etc)."""
 
     def walk(node: dict):
-        if (node.get("hosts") or {}).get(host) is not None:
-            return node["hosts"][host] or {}
+        if host in (node.get("hosts") or {}):
+            return node["hosts"].get(host) or {}
         for child in (node.get("children") or {}).values():
             r = walk(child)
             if r is not None:
@@ -86,7 +87,10 @@ def host_inv_vars(inv: dict, host: str) -> dict:
 def build_vars(inv: dict, host: str) -> dict:
     groups = host_groups(inv, host)
     # Precedence: all < OS family < routers/infra_vms < public_facing < host_vars
-    files: list[Path] = [INV_DIR / "group_vars" / "all.yml"]
+    files: list[Path] = [
+        ROLE_DIR / "defaults" / "main.yml",
+        INV_DIR / "group_vars" / "all.yml",
+    ]
     for g in ["linux", "freebsd", "routers", "infra_vms", "public_facing"]:
         if g in groups:
             files.append(INV_DIR / "group_vars" / f"{g}.yml")
@@ -97,6 +101,7 @@ def build_vars(inv: dict, host: str) -> dict:
         layered.update(load_yaml(f))
     layered.update(host_inv_vars(inv, host))
     layered["inventory_hostname"] = host
+    layered["playbook_dir"] = str(ANSIBLE_DIR / "playbooks")
     return layered
 
 
@@ -133,9 +138,17 @@ def render_host(host: str, inv: dict) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(ROLE_DIR / "templates")),
         undefined=StrictUndefined,
-        trim_blocks=False,
+        # Ansible's template action enables trim_blocks by default. Matching it
+        # keeps local review artifacts byte-for-byte comparable to live renders.
+        trim_blocks=True,
         lstrip_blocks=False,
         keep_trailing_newline=True,
+    )
+    # Mirror the only Ansible lookup used by firewall inventory values. Local
+    # review renders must not require a secret; an absent env value resolves to
+    # the same empty string as lookup('env', ...).
+    env.globals["lookup"] = lambda plugin, name: (
+        os.environ.get(name, "") if plugin == "env" else ""
     )
 
     # Two-pass: first resolve {{ }} inside variable values (peers.mon.ipv6 etc.),

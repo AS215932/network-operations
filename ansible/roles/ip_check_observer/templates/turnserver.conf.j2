@@ -1,0 +1,26 @@
+# /etc/turnserver.conf — managed by ansible/roles/ip_check_observer.
+# Public RFC 5389 binding observer. This service cannot allocate relays.
+
+listening-port={{ ip_check_observer_listening_port }}
+listening-ip={{ ip_check_observer_listening_ipv4 }}
+listening-ip={{ ip_check_observer_listening_ipv6 }}
+
+stun-only
+no-auth
+no-tls
+no-dtls
+no-cli
+no-rfc5780
+no-multicast-peers
+no-loopback-peers
+fingerprint
+
+realm={{ ip_check_observer_realm }}
+server-name={{ ip_check_observer_realm }}
+syslog
+simple-log
+no-stdout-log
+
+# Do not enable log-binding: coturn documents it as a potential DoS vector.
+# Prometheus support is not assumed because Debian's apt build may omit it;
+# Icinga runs real RFC 5389 IPv4 and IPv6 binding probes instead.

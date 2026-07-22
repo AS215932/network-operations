@@ -26,3 +26,7 @@ network_flows_outbound:
   - { to: dns, proto: tcp, port: 8453, purpose: "HMAC-authenticated managed customer DNS control" }
   - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
   - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }
+  - { to: maxmind, proto: tcp, port: 443, purpose: "licensed GeoIP/anonymous-IP enrichment (dark until resale approval)" }
+  - { to: ipqs, proto: tcp, port: 443, purpose: "licensed IP reputation enrichment (dark until resale approval)" }
+  - { to: ripe-stat, proto: tcp, port: 443, purpose: "RIPEstat routing and registration evidence" }
+  - { to: team-cymru, proto: tcp, port: 43, purpose: "Team Cymru ASN enrichment" }

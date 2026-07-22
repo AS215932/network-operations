@@ -1,0 +1,52 @@
+---
+- name: Create DNS observer group
+  group:
+    name: "{{ knot_ip_check_observer_group }}"
+    system: true
+
+- name: Create DNS observer user
+  user:
+    name: "{{ knot_ip_check_observer_user }}"
+    group: "{{ knot_ip_check_observer_group }}"
+    groups: knot
+    append: true
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Install DNS observer
+  copy:
+    src: hyrule_dns_observer.py
+    dest: /usr/local/libexec/hyrule-dns-observer.py
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart hyrule-dns-observer
+
+- name: Render DNS observer environment
+  template:
+    src: hyrule-dns-observer.env.j2
+    dest: "{{ knot_ip_check_observer_env_file }}"
+    owner: root
+    group: "{{ knot_ip_check_observer_group }}"
+    mode: "0640"
+  no_log: true
+  notify: restart hyrule-dns-observer
+
+- name: Install DNS observer systemd service
+  template:
+    src: hyrule-dns-observer.service.j2
+    dest: /etc/systemd/system/hyrule-dns-observer.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart hyrule-dns-observer
+
+- name: Enable and start DNS observer
+  systemd:
+    name: hyrule-dns-observer.service
+    enabled: true
+    state: started
+    daemon_reload: true

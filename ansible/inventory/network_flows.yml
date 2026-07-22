@@ -71,6 +71,7 @@ cross_cutting_flows:
   - { from: public, to: rtr, proto: "tcp+udp", port: 53, family: ipv4, purpose: "DNAT to dns" }
   - { from: public, to: rtr, proto: tcp, port: 80, family: ipv4, purpose: "DNAT to proxy" }
   - { from: public, to: rtr, proto: tcp, port: 443, family: ipv4, purpose: "DNAT to proxy" }
+  - { from: public, to: rtr, proto: "tcp+udp", port: 3478, family: ipv4, purpose: "DNAT to proxy STUN binding observer" }
   - { from: public, to: rtr, proto: udp, port: 51820, family: ipv4, purpose: "DNAT to vpn" }
 
   # --- SSH (from ssh_allow_sources_*, not firewall_extra_rules) ---
@@ -107,6 +108,10 @@ network_externals:
   anthropic: { name: "api.anthropic.com", note: "Claude API for CI AI review" }
   openrouter: { name: "openrouter.ai", note: "OpenRouter LLM API (PR-Agent)" }
   openprovider: { name: "api.openprovider.eu", note: "Openprovider domain registration API" }
+  maxmind: { name: "geoip.maxmind.com", note: "licensed GeoIP and anonymous-IP enrichment; dark until resale approval" }
+  ipqs: { name: "www.ipqualityscore.com", note: "licensed IP reputation enrichment; dark until resale approval" }
+  ripe-stat: { name: "stat.ripe.net", note: "RIPEstat routing and registration evidence" }
+  team-cymru: { name: "whois.cymru.com", note: "Team Cymru ASN enrichment over whois" }
   acme-providers: { name: "ACME CAs (Let's Encrypt / ZeroSSL)", note: "certificate issuance" }
   debian-mirrors: { name: "deb.debian.org + security.debian.org", note: "apt / unattended-upgrades" }
   ntp-pool: { name: "pool.ntp.org", note: "NTP time sync" }

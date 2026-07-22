@@ -1,0 +1,40 @@
+---
+- name: Validate STUN observer configuration
+  assert:
+    that:
+      - ip_check_observer_listening_port | int == 3478
+      - ip_check_observer_listening_ipv4 | length > 0
+      - ip_check_observer_listening_ipv6 | length > 0
+      - ip_check_observer_realm == "stun.hyrule.host"
+    fail_msg: "The public observer must retain the reviewed STUN-only identity and port."
+  tags: [validate, diff, apply]
+
+- name: Validate Caddy DNS update secret for apply
+  assert:
+    that: ip_check_observer_tsig_secret | length > 0
+    fail_msg: "TSIG_SECRET is required to render the full proxy Caddyfile safely."
+  when: ip_check_observer_apply | bool
+  tags: [apply]
+
+- name: Ensure generated proxy directory exists
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ ip_check_observer_generated_dir }}"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render STUN-only config for review
+  delegate_to: localhost
+  become: false
+  template:
+    src: turnserver.conf.j2
+    dest: "{{ ip_check_observer_generated_dir }}/turnserver.conf"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Install STUN observer
+  include_tasks: apply.yml
+  when: ip_check_observer_apply | bool
+  tags: [apply]

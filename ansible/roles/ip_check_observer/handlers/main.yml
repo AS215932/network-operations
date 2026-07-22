@@ -1,0 +1,11 @@
+---
+- name: restart coturn
+  systemd:
+    name: "{{ ip_check_observer_service }}"
+    state: restarted
+    daemon_reload: true
+
+- name: reload caddy
+  systemd:
+    name: caddy.service
+    state: reloaded

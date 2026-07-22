@@ -6,6 +6,10 @@ firewall_extra_rules:
   - { proto: tcp, dport: 80,  src: any, family: both, comment: "HTTP (ACME + redirect)" }
   - { proto: tcp, dport: 443, src: any, family: both, comment: "HTTPS (Caddy TLS)" }
 
+  # Public RFC 5389 binding service. coturn is configured STUN-only: no relay,
+  # credentials, admin interface, TLS, or DTLS listener.
+  - { proto: tcp+udp, dport: 3478, src: any, family: both, comment: "STUN binding observer" }
+
   # Monitoring.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 
@@ -23,3 +27,7 @@ host_meta:
 network_flows_outbound:
   - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates for ACME DNS-01 (TSIG hyrule-dns)" }
   - { to: acme-providers, proto: tcp, port: 443, purpose: "ACME certificate issuance (Let's Encrypt / ZeroSSL)" }
+
+# Installed by ansible/playbooks/ip-check-observer.yml. Kept dark at the API
+# and web layers until the Vault feature flags are deliberately enabled.
+ip_check_observer_apply: false

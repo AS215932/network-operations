@@ -48,11 +48,36 @@ vault kv put kv/hyrule-cloud \
     xmr_daemon_address="node.moneroworld.com:18089" \
     xmr_rpc_url="http://127.0.0.1:18088/json_rpc" \
     ip_prefix_pepper="$(openssl rand -hex 32)" \
+    ip_check_dns_observer_secret="$(openssl rand -hex 32)" \
     dev_bypass_secret="" \
     tsig_secret="..." \
     db_password="..." \
     network_proxy_token="..."
 ```
+
+Keep the paid IP-quality route dark until both vendors have approved resale.
+Provider credentials and approvals can be staged without publishing it:
+
+```bash
+vault kv patch kv/hyrule-cloud \
+    payment_price_ip_quality="0.02" \
+    ip_quality_enabled="false" \
+    ip_quality_tool_enabled="false" \
+    ip_quality_maxmind_account_id="..." \
+    ip_quality_maxmind_license_key="..." \
+    ip_quality_maxmind_resale_approved="false" \
+    ip_quality_maxmind_unit_cost_usd="0" \
+    ip_quality_ipqs_api_key="..." \
+    ip_quality_ipqs_resale_approved="false" \
+    ip_quality_ipqs_unit_cost_usd="0" \
+    ip_quality_cache_rights_approved="false" \
+    ip_quality_cache_ttl_seconds="0" \
+    ip_check_enabled="false"
+```
+
+The value of `ip_check_dns_observer_secret` must also be exported as
+`HYRULE_IP_CHECK_DNS_OBSERVER_SECRET` when applying the Knot role. Never put
+provider keys in URLs, DNS records, Caddy configuration, or logs.
 
 Optional native BTC payment key, only needed when native BTC is enabled:
 

@@ -24,3 +24,9 @@
     name: hyrule-dns-control.service
     state: restarted
   when: knot_dns_control_enabled | bool
+
+- name: restart hyrule-dns-observer
+  systemd:
+    name: hyrule-dns-observer.service
+    state: restarted
+  when: knot_ip_check_observer_enabled | bool

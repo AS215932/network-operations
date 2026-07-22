@@ -16,6 +16,18 @@ log:
 database:
   storage: "/var/lib/knot"
 
+{% if knot_ip_check_observer_enabled | bool %}
+# Session-scoped DNS-leak evidence. This module is attached only to
+# {{ knot_ip_check_observer_zone }} below.
+mod-dnstap:
+  - id: ip-check
+    sink: "unix:{{ knot_ip_check_observer_socket }}"
+    log-queries: on
+    log-responses: off
+    identity: ""
+    version: ""
+{% endif %}
+
 # TSIG key shared between primary (dns) and all secondaries. Name MUST be
 # "{{ knot_tsig_key_name }}" — hardcoded in hyrule_cloud/providers/dns.py.
 key:
@@ -108,6 +120,9 @@ zone:
   - domain: {{ z.name }}
     acl: [ api-update, caddy-update, irc-update, home-xfr{% for s in knot_secondaries %}, {{ s.name }}-xfr{% endfor %} ]
     template: default
+{% if knot_ip_check_observer_enabled | bool and z.name == knot_ip_check_observer_zone %}
+    module: mod-dnstap/ip-check
+{% endif %}
 {% endfor %}
 {% if knot_customer_catalog_enabled %}
   - domain: {{ knot_customer_catalog_zone }}
@@ -154,6 +169,9 @@ template:
 zone:
 {% for z in knot_zones %}
   - domain: {{ z.name }}
+{% if knot_ip_check_observer_enabled | bool and z.name == knot_ip_check_observer_zone %}
+    module: mod-dnstap/ip-check
+{% endif %}
 {% endfor %}
 {% if knot_customer_catalog_enabled %}
   - domain: {{ knot_customer_catalog_zone }}

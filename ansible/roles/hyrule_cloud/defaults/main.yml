@@ -90,6 +90,7 @@ hyrule_cloud_required_env_keys:
   - HYRULE_CUSTOMER_IPV6_SUPERNET
   - HYRULE_CUSTOMER_IPV6_GATEWAY
   - HYRULE_CUSTOMER_IPV6_DNS
+  - IP_CHECK_DNS_OBSERVER_SECRET
 
 # Base apt packages on the target. uv is installed separately via the
 # upstream script (same idiom as hyrule_web / hyrule_mcp).

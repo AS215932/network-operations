@@ -22,6 +22,15 @@
     - knot_dns_control_enabled | bool
   tags: [validate, diff, apply]
 
+- name: Assert IP-check DNS observer secret is provided
+  assert:
+    that: knot_ip_check_observer_secret | length >= 32
+    fail_msg: >-
+      HYRULE_IP_CHECK_DNS_OBSERVER_SECRET must be the same 32+ character
+      value on both nameservers and in Vault kv/hyrule-cloud.
+  when: knot_ip_check_observer_enabled | bool
+  tags: [validate, diff, apply]
+
 - name: Install knot prerequisites
   include_tasks: install.yml
   when: knot_apply | default(false) | bool
@@ -30,6 +39,13 @@
 # Flush so systemd-resolved restarts before knot tries to bind 0.0.0.0:53.
 - name: Flush handlers before configuring knot
   meta: flush_handlers
+  tags: [apply]
+
+- name: Install session-scoped DNS observer
+  include_tasks: ip_check_observer.yml
+  when:
+    - knot_apply | default(false) | bool
+    - knot_ip_check_observer_enabled | bool
   tags: [apply]
 
 - name: Ensure generated/<host>/ directory exists (controller)
