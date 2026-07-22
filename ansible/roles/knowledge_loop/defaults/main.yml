@@ -47,6 +47,10 @@ knowledge_loop_agent_core_trace_collector_url: ""
 # PR). Default off; enabled via a reviewed promotion PR.
 knowledge_loop_insight_sync_enabled: false
 knowledge_loop_insight_collector_url: ""
+knowledge_loop_coordinator_enabled: false
+knowledge_loop_coordinator_url: ""
+knowledge_loop_coordinator_key_id: v1
+knowledge_loop_coordinator_proposal_dir: "{{ knowledge_loop_state_dir }}/coordinator-intake"
 
 # Daily instead of hourly: ingest currently refreshes timestamps, so hourly would
 # create noisy PRs. Increase cadence only after stable no-op detection lands.

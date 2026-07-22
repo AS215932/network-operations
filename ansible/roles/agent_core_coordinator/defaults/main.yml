@@ -1,0 +1,32 @@
+---
+# Central LHP-v2 coordinator. It is deliberately distinct from the trace
+# collector and defaults disabled until all app PRs are merged and promoted.
+agent_core_coordinator_apply: false
+agent_core_coordinator_enabled: false
+
+agent_core_coordinator_user: agent-core-coordinator
+agent_core_coordinator_group: agent-core-coordinator
+agent_core_coordinator_install_dir: /opt/agent-core-coordinator
+agent_core_coordinator_config_dir: /etc/agent-core-coordinator
+agent_core_coordinator_env_file: /etc/agent-core-coordinator/coordinator.env
+agent_core_coordinator_state_dir: /var/lib/agent-core-coordinator
+agent_core_coordinator_repo: https://github.com/AS215932/agent-core.git
+# A live apply requires an exact merged 40-character SHA. `main` keeps this
+# scaffold non-deployable until the app promotion PR lands.
+agent_core_coordinator_version: main
+
+agent_core_coordinator_bind: "{{ peers.loop.ipv6 }}"
+agent_core_coordinator_port: 8771
+agent_core_coordinator_database_name: agent_core_coordinator
+agent_core_coordinator_database_role: agent_core_coordinator
+agent_core_coordinator_database_host: 127.0.0.1
+agent_core_coordinator_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
+agent_core_coordinator_service_name: agent-core-coordinator.service
+
+agent_core_coordinator_packages:
+  - ca-certificates
+  - curl
+  - git
+  - postgresql
+  - postgresql-client
+  - python3

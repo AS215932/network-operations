@@ -1,7 +1,6 @@
 ---
-# promtool validation runs as a pre-publish task in install.yml (against the
-# staging mirror), so a broken ruleset never reaches the live directory. This
-# handler only reloads Prometheus once the live rules.d has actually changed.
+# promtool validation runs before publishing either prometheus.yml or the
+# staged rules mirror, so this handler only reloads a fully validated config.
 - name: Reload prometheus
   ansible.builtin.systemd:
     name: prometheus

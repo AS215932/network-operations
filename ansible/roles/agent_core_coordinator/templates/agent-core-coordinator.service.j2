@@ -1,0 +1,27 @@
+# Managed by ansible/roles/agent_core_coordinator.
+[Unit]
+Description=AS215932 Agent Core LHP-v2 coordinator
+After=network-online.target postgresql.service vault-agent-agent-core-coordinator.service
+Wants=network-online.target postgresql.service vault-agent-agent-core-coordinator.service
+ConditionPathIsReadable={{ agent_core_coordinator_env_file }}
+
+[Service]
+User={{ agent_core_coordinator_user }}
+Group={{ agent_core_coordinator_group }}
+WorkingDirectory={{ agent_core_coordinator_install_dir }}
+EnvironmentFile={{ agent_core_coordinator_env_file }}
+Environment=HYRULE_COORDINATOR_ENVIRONMENT=production
+Environment=HYRULE_COORDINATOR_HOST={{ agent_core_coordinator_bind }}
+Environment=HYRULE_COORDINATOR_PORT={{ agent_core_coordinator_port }}
+Environment=HYRULE_COORDINATOR_COLLECTOR_URL={{ agent_core_coordinator_collector_url }}
+ExecStart={{ agent_core_coordinator_install_dir }}/.venv/bin/agent-core-coordinator
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ agent_core_coordinator_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

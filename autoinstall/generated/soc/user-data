@@ -1,0 +1,29 @@
+#cloud-config
+# NoCloud user-data for the dedicated SOC VM. Substitute the root password
+# from the operator secret source before attaching the NoCloud seed.
+hostname: soc
+manage_etc_hosts: true
+
+users:
+  - name: root
+    lock_passwd: false
+    ssh_authorized_keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIqhNk5JGwvgtQQgt+bs5t9zOz0XX1sVUZV8NeYdM2IE svag@Z"
+
+ssh_pwauth: false
+disable_root: false
+
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: __SUBSTITUTE_SOC_ROOT_PASSWORD__
+      type: text
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/root.conf
+    content: |
+      PermitRootLogin prohibit-password
+
+runcmd:
+  - systemctl restart ssh

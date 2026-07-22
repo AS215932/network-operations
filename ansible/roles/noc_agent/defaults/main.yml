@@ -25,6 +25,10 @@ noc_disk_alert_handoff_enabled: false
 noc_lhp_disk_alert_fingerprint: ""
 noc_agent_core_trace_enabled: false
 noc_agent_core_trace_collector_url: ""
+noc_coordinator_worker_enabled: false
+noc_coordinator_url: ""
+noc_coordinator_key_id: v1
+noc_coordinator_poll_seconds: 5
 
 noc_agent_google_wif_enabled: false
 noc_agent_google_wif_project_id: project-73d4ac43-0c8a-4ec0-ac5

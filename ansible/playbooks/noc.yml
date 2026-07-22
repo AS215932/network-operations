@@ -124,6 +124,7 @@
           /bin/sh -c 'test "{{ "1" if noc_lhp_enabled | bool else "0" }}" != "1" || /bin/grep -Eq ^NOC_LHP_ENGINEERING_SECRET=................................ /opt/noc-agent/.env' &&
           /bin/systemctl restart xo-mcp.service &&
           /bin/systemctl restart noc-agent.service &&
-          /bin/systemctl restart noc-agent-bot.service
+          /bin/systemctl restart noc-agent-bot.service &&
+          /bin/sh -c 'test "{{ "1" if noc_coordinator_worker_enabled | bool else "0" }}" != "1" || /bin/systemctl restart noc-coordinator-worker.service'
       when: noc_agent_secret_backend == 'vault'
   tags: [noc]

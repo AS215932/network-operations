@@ -26,6 +26,12 @@ agentic_observatory_actions_enabled: false
 agentic_observatory_enabled_actions: ""
 agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
+agentic_observatory_coordinator_enabled: false
+agentic_observatory_coordinator_base_url: ""
+agentic_observatory_coordinator_key_id: v1
+agentic_observatory_github_oauth_org: AS215932
+agentic_observatory_github_oauth_ops_team_slug: ops
+agentic_observatory_github_oauth_require_org_2fa: true
 
 agentic_observatory_packages:
   - ca-certificates

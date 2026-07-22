@@ -3,7 +3,7 @@
 
 firewall_extra_rules:
   - { proto: tcp, dport: 8200, src: "{{ peers.proxy.ipv6 }}", comment: "Vault API from Caddy proxy" }
-  - { proto: tcp, dport: 8200, src: ["{{ peers.noc.ipv6 }}", "{{ peers.mon.ipv6 }}", "{{ peers.api.ipv6 }}", "{{ peers.web.ipv6 }}", "{{ peers.ci.ipv6 }}", "{{ peers.loop.ipv6 }}"], comment: "Vault API from internal agents/checks" }
+  - { proto: tcp, dport: 8200, src: ["{{ peers.noc.ipv6 }}", "{{ peers.mon.ipv6 }}", "{{ peers.api.ipv6 }}", "{{ peers.web.ipv6 }}", "{{ peers.ci.ipv6 }}", "{{ peers.loop.ipv6 }}", "{{ peers.soc.ipv6 }}"], comment: "Vault API from internal agents/checks" }
   - { proto: tcp, dport: 8200, src: "{{ vpn_clients_subnet }}", comment: "Vault API from VPN operators" }
   - { proto: tcp, dport: 8200, src: "{{ ops_prefix_v6 }}", comment: "Vault API from ops prefix" }
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
@@ -32,5 +32,5 @@ host_meta:
   os: "Debian 13"
   role: "Vault secret plane"
   summary: "HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly."
-  notes: "Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, VPN operators, ops-prefix) are captured in the cross-cutting flows table."
+  notes: "Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, soc, VPN operators, ops-prefix) are captured in the cross-cutting flows table."
 network_flows_outbound: []

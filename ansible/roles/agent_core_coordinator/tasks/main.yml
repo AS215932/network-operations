@@ -1,0 +1,22 @@
+---
+- name: Validate Agent Core coordinator deployment inputs
+  ansible.builtin.assert:
+    that:
+      - agent_core_coordinator_user | length > 0
+      - agent_core_coordinator_install_dir.startswith('/')
+      - agent_core_coordinator_config_dir.startswith('/')
+      - agent_core_coordinator_state_dir.startswith('/')
+      - agent_core_coordinator_bind == peers.loop.ipv6
+      - agent_core_coordinator_port | int == 8771
+      - >-
+        not (agent_core_coordinator_apply | bool)
+        or (agent_core_coordinator_version is match('^[0-9a-f]{40}$'))
+    fail_msg: >-
+      The coordinator must remain an overlay-only loop-host service. Live apply
+      requires an exact merged agent-core SHA; moving refs are refused.
+  tags: [validate, always]
+
+- name: Apply Agent Core coordinator runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: agent_core_coordinator_apply | bool
+  tags: [apply]

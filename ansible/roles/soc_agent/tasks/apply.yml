@@ -36,13 +36,17 @@
 
 - name: Install SOC bootstrap packages
   ansible.builtin.apt:
-    name:
-      - git
-      - curl
-      - ca-certificates
+    name: "{{ soc_agent_packages }}"
     state: present
     update_cache: true
     cache_valid_time: 3600
+
+- name: Ensure SOC PostgreSQL is enabled
+  ansible.builtin.systemd:
+    name: postgresql
+    state: started
+    enabled: true
+  when: soc_database_enabled | bool
 
 - name: Install uv (Python package manager)
   ansible.builtin.shell:
@@ -81,6 +85,95 @@
   register: soc_agent_uv_sync
   changed_when: "'No changes' not in soc_agent_uv_sync.stderr"
 
+- name: Wait for SOC secrets env rendered by Vault Agent
+  ansible.builtin.wait_for:
+    path: "{{ soc_agent_secrets_env_file }}"
+    state: present
+    timeout: 60
+  when: soc_database_enabled | bool or soc_coordinator_enabled | bool
+
+- name: Read SOC Vault-rendered environment
+  ansible.builtin.slurp:
+    src: "{{ soc_agent_secrets_env_file }}"
+  register: soc_agent_secrets_env_blob
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Resolve SOC PostgreSQL password in memory
+  ansible.builtin.set_fact:
+    soc_agent_db_password: >-
+      {{
+        (
+          (soc_agent_secrets_env_blob.content | b64decode).splitlines()
+          | select('match', '^SOC_DB_PASSWORD=')
+          | list
+          | first
+          | default('')
+        )
+        | regex_replace('^SOC_DB_PASSWORD=', '')
+      }}
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Assert SOC PostgreSQL password is present
+  ansible.builtin.assert:
+    that: soc_agent_db_password | length > 0
+    fail_msg: SOC_DB_PASSWORD missing from the Vault-rendered environment
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Configure SOC PostgreSQL role over stdin
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+    stdin: |
+      DO $role$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ soc_database_role | replace("'", "''") }}') THEN
+          CREATE ROLE "{{ soc_database_role | replace('"', '""') }}"
+            LOGIN
+            PASSWORD '{{ soc_agent_db_password | replace("'", "''") }}';
+        ELSE
+          ALTER ROLE "{{ soc_database_role | replace('"', '""') }}"
+            WITH LOGIN
+            PASSWORD '{{ soc_agent_db_password | replace("'", "''") }}';
+        END IF;
+      END
+      $role$;
+  become: true
+  become_user: postgres
+  changed_when: false
+  no_log: true
+  when: soc_database_enabled | bool
+
+- name: Check SOC PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -tAc
+      - "SELECT 1 FROM pg_database WHERE datname='{{ soc_database_name }}'"
+  become: true
+  become_user: postgres
+  register: soc_agent_pg_database
+  changed_when: false
+  when: soc_database_enabled | bool
+
+- name: Create SOC PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -c
+      - "CREATE DATABASE {{ soc_database_name }} OWNER {{ soc_database_role }}"
+  become: true
+  become_user: postgres
+  when:
+    - soc_database_enabled | bool
+    - soc_agent_pg_database.stdout | trim != '1'
+
 - name: Render SOC mode/kill-switch environment (non-secret)
   ansible.builtin.template:
     src: soc-agent-mode.env.j2
@@ -113,6 +206,34 @@
     mode: "0644"
   notify: restart soc-agent service
 
+- name: Install SOC inbound handoff service
+  ansible.builtin.template:
+    src: soc-handoffs.service.j2
+    dest: /etc/systemd/system/soc-handoffs.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Install SOC inbound handoff timer
+  ansible.builtin.template:
+    src: soc-handoffs.timer.j2
+    dest: /etc/systemd/system/soc-handoffs.timer
+    mode: "0644"
+  notify: restart soc-handoff timer
+
+- name: Install SOC approved probe service
+  ansible.builtin.template:
+    src: soc-probes.service.j2
+    dest: /etc/systemd/system/soc-probes.service
+    mode: "0644"
+  notify: reload systemd
+
+- name: Install SOC approved probe timer
+  ansible.builtin.template:
+    src: soc-probes.timer.j2
+    dest: /etc/systemd/system/soc-probes.timer
+    mode: "0644"
+  notify: restart soc-probe timer
+
 # Enforce the desired unit states on every apply — a promotion PR that only
 # flips soc_posture_timer_enabled/soc_agent_service_enabled must take effect
 # even when no template changed (handlers alone would never fire).
@@ -128,4 +249,18 @@
     name: soc-agent.service
     state: "{{ 'started' if soc_agent_service_enabled | bool else 'stopped' }}"
     enabled: "{{ soc_agent_service_enabled | bool }}"
+    daemon_reload: true
+
+- name: Enforce SOC inbound handoff timer state
+  ansible.builtin.systemd:
+    name: soc-handoffs.timer
+    state: "{{ 'started' if soc_handoff_timer_enabled | bool else 'stopped' }}"
+    enabled: "{{ soc_handoff_timer_enabled | bool }}"
+    daemon_reload: true
+
+- name: Enforce SOC approved probe timer state
+  ansible.builtin.systemd:
+    name: soc-probes.timer
+    state: "{{ 'started' if soc_probe_timer_enabled | bool else 'stopped' }}"
+    enabled: "{{ soc_probe_timer_enabled | bool }}"
     daemon_reload: true

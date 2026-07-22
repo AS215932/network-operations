@@ -24,18 +24,20 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 
 
-def load_pin_targets() -> dict[str, tuple[str, str, str]]:
+def load_promotion_contract() -> tuple[dict[str, tuple[str, str, str]], dict[str, str]]:
     spec = importlib.util.spec_from_file_location(
         "promote_app_pins", HERE / "promote-app-pins.py"
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.PIN_TARGETS
+    return module.PIN_TARGETS, module.PROMOTION_FLAGS
 
 
 def extract_pin(text: str, key: str) -> str | None:
     match = re.search(
-        rf"^{re.escape(key)}:\s*([0-9a-fA-F]{{40}})\s*$", text, re.MULTILINE
+        rf"^{re.escape(key)}:\s*[\"']?([0-9a-fA-F]{{40}}|main)[\"']?\s*$",
+        text,
+        re.MULTILINE,
     )
     return match.group(1) if match else None
 
@@ -76,16 +78,24 @@ def main() -> int:
     args = parser.parse_args()
 
     flags: list[str] = []
-    for key, (rel_path, repo, _playbook) in load_pin_targets().items():
+    pin_targets, promotion_flags = load_promotion_contract()
+    emitted: set[tuple[str, str]] = set()
+    for key, (rel_path, repo, _playbook) in pin_targets.items():
         current = extract_pin((REPO / rel_path).read_text(), key)
         old_text = git_show(args.old_ref, rel_path)
         old = extract_pin(old_text, key) if old_text else None
         if not current or not old or old == current:
             continue
-        status = compare_status(repo, current, old)
+        # A moving `main` value is permitted only for a disabled first-deploy
+        # scaffold. It is not a deployed baseline and must never cause an
+        # immutable pending first promotion to be discarded on a self-heal.
+        status = "ahead" if current == "main" else compare_status(repo, current, old)
         if status == "ahead":
-            flag = "--" + key.removesuffix("_version").replace("_", "-") + "-sha"
-            flags.extend([flag, old])
+            flag = promotion_flags[key]
+            request = (flag, old)
+            if request not in emitted:
+                flags.extend(request)
+                emitted.add(request)
             print(f"carry {key}: {old} (ahead of {current})", file=sys.stderr)
         else:
             print(

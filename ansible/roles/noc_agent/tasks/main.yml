@@ -3,6 +3,17 @@
 # Assumes hyrule_mcp role has run first (creates the noc-agent user and lays
 # down /opt/hyrule-mcp).
 
+- name: Validate NOC coordinator worker inputs
+  ansible.builtin.assert:
+    that:
+      - not (noc_coordinator_worker_enabled | bool) or noc_coordinator_url | length > 0
+      - noc_coordinator_poll_seconds | int >= 1
+      - noc_coordinator_poll_seconds | int <= 60
+    fail_msg: >-
+      The NOC coordinator adapter requires an explicit overlay URL and a
+      bounded poll interval.
+  tags: [validate, always]
+
 - name: Ensure base packages are installed
   apt:
     name:
@@ -361,6 +372,18 @@
     - restart noc-agent-bot
   tags: [apply]
 
+- name: Install NOC LHP-v2 coordinator worker service
+  ansible.builtin.template:
+    src: noc-coordinator-worker.service.j2
+    dest: /etc/systemd/system/noc-coordinator-worker.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart noc coordinator worker
+  tags: [apply]
+
 - name: Enable and start noc-agent
   systemd:
     name: noc-agent
@@ -404,5 +427,15 @@
   when:
     - noc_agent_pyproject.stat.exists
     - noc_agent_secret_backend == 'vault'
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: [apply]
+
+- name: Set NOC coordinator worker service state
+  ansible.builtin.systemd:
+    name: noc-coordinator-worker.service
+    enabled: "{{ noc_coordinator_worker_enabled | bool }}"
+    state: "{{ 'started' if noc_coordinator_worker_enabled | bool else 'stopped' }}"
+    daemon_reload: true
+  when: noc_agent_pyproject.stat.exists
   ignore_errors: "{{ ansible_check_mode }}"
   tags: [apply]

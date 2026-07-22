@@ -95,6 +95,7 @@ cross_cutting_flows:
   - { from: web, to: vault, proto: tcp, port: 8200, purpose: "vault-agent secret render" }
   - { from: ci, to: vault, proto: tcp, port: 8200, purpose: "vault-agent secret render" }
   - { from: loop, to: vault, proto: tcp, port: 8200, purpose: "vault-agent secret render" }
+  - { from: soc, to: vault, proto: tcp, port: 8200, purpose: "vault-agent secret render" }
 
   # --- Routine host egress (all Debian hosts) ---
   - { from: all-linux, to: debian-mirrors, proto: tcp, port: 80, purpose: "apt / unattended-upgrades" }
@@ -112,10 +113,11 @@ network_externals:
   ntp-pool: { name: "pool.ntp.org", note: "NTP time sync" }
   hyrule-cloud: { name: "cloud.hyrule.host", note: "Hyrule Cloud public API (BGP snapshot / ingest)" }
   model-providers: { name: "LLM backend/provider APIs", note: "OpenRouter / Venice and other configured model providers" }
+  owned-public-assets: { name: "AS215932-owned public assets", note: "Explicitly cited assets eligible for bounded senior-approved SOC RT-2 probes" }
   package-registries: { name: "PyPI / npm / ghcr.io / Docker Hub", note: "toolchain and container image pulls" }
   ops-prefix: { name: "ops workstation prefix (KPN home)", note: "2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow" }
   vpn-clients: { name: "VPN clients", note: "2a0c:b641:b50:3::/64, routed via the vpn VM" }
-  all-infra: { name: "log-shipping infra hosts", note: "infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator)." }
+  all-infra: { name: "log-shipping infra hosts", note: "infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop, soc. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator)." }
   all-linux: { name: "every Linux host", note: "all Debian VMs (routine apt / NTP egress)" }
   routers: { name: "AS215932 routers", note: "rtr, cr1-nl1, cr1-de1, cr1-ch1" }
 

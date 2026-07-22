@@ -1,0 +1,24 @@
+# Managed by ansible/roles/knowledge_loop. LHP-v2 context and A4 proposal intake.
+[Unit]
+Description=AS215932 Knowledge LHP-v2 coordinator adapter
+After=network-online.target vault-agent-knowledge-loop.service
+Wants=network-online.target vault-agent-knowledge-loop.service
+ConditionPathIsReadable={{ knowledge_loop_env_file }}
+
+[Service]
+User={{ knowledge_loop_user }}
+Group={{ knowledge_loop_group }}
+WorkingDirectory={{ knowledge_loop_install_dir }}
+Environment=HOME={{ knowledge_loop_state_dir }}
+EnvironmentFile={{ knowledge_loop_env_file }}
+ExecStart={{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge-coordinator --store {{ knowledge_loop_install_dir }}/exports/knowledge.sqlite --policy {{ knowledge_loop_install_dir }}/knowledge-policy.yml --proposal-dir {{ knowledge_loop_coordinator_proposal_dir }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths={{ knowledge_loop_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

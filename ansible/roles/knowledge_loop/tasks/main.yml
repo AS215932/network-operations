@@ -16,6 +16,8 @@
       - knowledge_loop_max_prs_per_day | int >= 0
       - knowledge_loop_max_openrouter_calls_per_day | int >= 0
       - knowledge_loop_max_learning_events_per_day | int >= 0
+      - knowledge_loop_coordinator_proposal_dir.startswith(knowledge_loop_state_dir)
+      - not (knowledge_loop_coordinator_enabled | bool) or knowledge_loop_coordinator_url | length > 0
     fail_msg: >-
       Knowledge Loop must run as a dedicated, bounded producer agent with an
       explicit checked-out Knowledge revision and no production fleet secrets.

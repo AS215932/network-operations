@@ -1,0 +1,19 @@
+[Unit]
+Description=SOC Agent exact-scope senior-approved RT-2 probe cycle
+After=network-online.target postgresql.service vault-agent-soc-agent.service
+Wants=network-online.target postgresql.service vault-agent-soc-agent.service
+ConditionPathIsReadable={{ soc_agent_secrets_env_file }}
+
+[Service]
+Type=oneshot
+User={{ soc_agent_user }}
+Group={{ soc_agent_group }}
+WorkingDirectory={{ soc_agent_install_dir }}/repo
+EnvironmentFile={{ soc_agent_mode_env_file }}
+EnvironmentFile={{ soc_agent_secrets_env_file }}
+ExecStart={{ soc_agent_uv_path }} run socctl probes run-once
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ soc_agent_state_dir }}
+PrivateTmp=true

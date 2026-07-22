@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll central coordinator for senior-approved SOC probe plans
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec={{ soc_probe_on_unit_active_sec }}s
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

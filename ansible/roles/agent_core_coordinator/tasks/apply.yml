@@ -1,0 +1,159 @@
+---
+- name: Install Agent Core coordinator packages
+  ansible.builtin.apt:
+    name: "{{ agent_core_coordinator_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install uv for Agent Core coordinator
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
+  args:
+    creates: /usr/local/bin/uv
+    executable: /bin/bash
+
+- name: Create Agent Core coordinator group
+  ansible.builtin.group:
+    name: "{{ agent_core_coordinator_group }}"
+    system: true
+
+- name: Create Agent Core coordinator user
+  ansible.builtin.user:
+    name: "{{ agent_core_coordinator_user }}"
+    group: "{{ agent_core_coordinator_group }}"
+    home: "{{ agent_core_coordinator_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Create Agent Core coordinator directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(agent_core_coordinator_user) }}"
+    group: "{{ item.group | default(agent_core_coordinator_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ agent_core_coordinator_install_dir }}", mode: "0755" }
+    - { path: "{{ agent_core_coordinator_config_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ agent_core_coordinator_state_dir }}", mode: "0750" }
+
+- name: Wait for coordinator env rendered by Vault Agent
+  ansible.builtin.wait_for:
+    path: "{{ agent_core_coordinator_env_file }}"
+    state: present
+    timeout: 60
+
+- name: Read coordinator Vault-rendered environment
+  ansible.builtin.slurp:
+    src: "{{ agent_core_coordinator_env_file }}"
+  register: agent_core_coordinator_env_blob
+  no_log: true
+
+- name: Resolve coordinator PostgreSQL password in memory
+  ansible.builtin.set_fact:
+    agent_core_coordinator_db_password: >-
+      {{
+        (
+          (agent_core_coordinator_env_blob.content | b64decode).splitlines()
+          | select('match', '^HYRULE_COORDINATOR_DB_PASSWORD=')
+          | list
+          | first
+          | default('')
+        )
+        | regex_replace('^HYRULE_COORDINATOR_DB_PASSWORD=', '')
+      }}
+  no_log: true
+
+- name: Assert coordinator PostgreSQL password is present
+  ansible.builtin.assert:
+    that: agent_core_coordinator_db_password | length > 0
+    fail_msg: HYRULE_COORDINATOR_DB_PASSWORD missing from the Vault-rendered environment
+  no_log: true
+
+- name: Configure coordinator PostgreSQL role over stdin
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+    stdin: |
+      DO $role$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ agent_core_coordinator_database_role | replace("'", "''") }}') THEN
+          CREATE ROLE "{{ agent_core_coordinator_database_role | replace('"', '""') }}"
+            LOGIN
+            PASSWORD '{{ agent_core_coordinator_db_password | replace("'", "''") }}';
+        ELSE
+          ALTER ROLE "{{ agent_core_coordinator_database_role | replace('"', '""') }}"
+            WITH LOGIN
+            PASSWORD '{{ agent_core_coordinator_db_password | replace("'", "''") }}';
+        END IF;
+      END
+      $role$;
+  become: true
+  become_user: postgres
+  changed_when: false
+  no_log: true
+
+- name: Check coordinator PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -tAc
+      - "SELECT 1 FROM pg_database WHERE datname='{{ agent_core_coordinator_database_name }}'"
+  become: true
+  become_user: postgres
+  register: agent_core_coordinator_pg_database
+  changed_when: false
+
+- name: Create coordinator PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -c
+      - "CREATE DATABASE {{ agent_core_coordinator_database_name }} OWNER {{ agent_core_coordinator_database_role }}"
+  become: true
+  become_user: postgres
+  when: agent_core_coordinator_pg_database.stdout | trim != '1'
+
+- name: Checkout pinned Agent Core coordinator source
+  ansible.builtin.git:
+    repo: "{{ agent_core_coordinator_repo }}"
+    dest: "{{ agent_core_coordinator_install_dir }}"
+    version: "{{ agent_core_coordinator_version }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ agent_core_coordinator_user }}"
+  notify: restart agent-core coordinator
+
+- name: Sync Agent Core coordinator dependencies
+  ansible.builtin.command: /usr/local/bin/uv sync --frozen --extra coordinator
+  args:
+    chdir: "{{ agent_core_coordinator_install_dir }}"
+  become: true
+  become_user: "{{ agent_core_coordinator_user }}"
+  notify: restart agent-core coordinator
+
+- name: Install Agent Core coordinator service
+  ansible.builtin.template:
+    src: agent-core-coordinator.service.j2
+    dest: "/etc/systemd/system/{{ agent_core_coordinator_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart agent-core coordinator
+
+- name: Set Agent Core coordinator service state
+  ansible.builtin.systemd:
+    name: "{{ agent_core_coordinator_service_name }}"
+    enabled: "{{ agent_core_coordinator_enabled | bool }}"
+    state: "{{ 'started' if agent_core_coordinator_enabled | bool else 'stopped' }}"
+    daemon_reload: true

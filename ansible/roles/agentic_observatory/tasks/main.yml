@@ -12,6 +12,15 @@
       - agentic_observatory_host == peers.loop.ipv6
       - agentic_observatory_port | int == 8780
       - agentic_observatory_database_name == 'agentic_observatory'
+      - >-
+        not (agentic_observatory_coordinator_enabled | bool)
+        or agentic_observatory_coordinator_base_url | length > 0
+      - >-
+        'handoff_approval' not in agentic_observatory_enabled_actions.split(',')
+        or agentic_observatory_coordinator_enabled | bool
+      - >-
+        'handoff_cancel' not in agentic_observatory_enabled_actions.split(',')
+        or agentic_observatory_coordinator_enabled | bool
     fail_msg: >-
       agentic_observatory must remain a loop-host, overlay-bound internal console
       with local cache/audit state unless a later reviewed PR deliberately widens it.

@@ -19,6 +19,15 @@
   when: noc_agent_pyproject.stat.exists | default(false)
   ignore_errors: "{{ ansible_check_mode }}"
 
+- name: restart noc coordinator worker
+  systemd:
+    name: noc-coordinator-worker.service
+    state: "{{ 'restarted' if noc_coordinator_worker_enabled | bool else 'stopped' }}"
+    enabled: "{{ noc_coordinator_worker_enabled | bool }}"
+    daemon_reload: true
+  when: noc_agent_pyproject.stat.exists | default(false)
+  ignore_errors: "{{ ansible_check_mode }}"
+
 - name: restart xo-mcp
   systemd:
     name: xo-mcp

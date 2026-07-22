@@ -19,7 +19,7 @@ $ORIGIN 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026061401 ; serial
+                  2026071101 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
@@ -76,6 +76,9 @@ $TTL 3600
 
 ; --- :2::f0 — loop ---
 0.f.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  loop.as215932.net.
+
+; --- :2::100 — soc ---
+0.0.1.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  soc.as215932.net.
 
 ; --- ::a — cr1-nl1 loopback ---
 a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0  IN  PTR  cr1-nl1.as215932.net.

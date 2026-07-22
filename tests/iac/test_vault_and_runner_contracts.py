@@ -96,11 +96,20 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
 \s+extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+\s+coordinator_version=.*
+\s+if \[ -n "\$coordinator_version" \]; then
+\s+extra_apply_vars="\$extra_apply_vars agent_core_coordinator_apply=true"
+\s+fi
 \s+;;
 \s+soc\)
 \s+# role gate is soc_agent_apply \(role name != playbook name\)
 \s+apply_var="soc_agent_apply=true"
 \s+expected_apply_var="soc_agent_apply=true"
+\s+if ! \[\[ "\$\{GITHUB_SHA:-\}" =~ \^\[0-9a-fA-F\]\{40\}\$ \]\]; then
+\s+echo "::error::SOC apply requires the exact network-operations GITHUB_SHA"
+\s+exit 1
+\s+fi
+\s+extra_apply_vars="soc_network_operations_version=\$\{GITHUB_SHA,,\}"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -120,6 +129,50 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         )
         self.assertIn('user_args=()', workflow)
         self.assertNotIn('${{ inputs.playbook }}_apply=true', workflow)
+
+    def test_workload_bootstrap_credentials_are_scoped_to_the_apply_step(self):
+        workflow = (REPO / ".github/workflows/apply.yml").read_text()
+
+        self.assertIn("Initialize scoped Vault bootstrap environment", workflow)
+        self.assertIn('install -m 0600 /dev/null "$bootstrap_env"', workflow)
+        self.assertIn('>> "$VAULT_BOOTSTRAP_ENV"', workflow)
+        self.assertIn('set -a; . "$VAULT_BOOTSTRAP_ENV"; set +a', workflow)
+        self.assertIn("Remove scoped Vault bootstrap environment", workflow)
+        self.assertIn('shred --remove "$VAULT_BOOTSTRAP_ENV"', workflow)
+        self.assertNotRegex(
+            workflow,
+            re.compile(
+                r"printf 'VAULT_[A-Z_]+(?:ROLE_ID|SECRET_ID)=%s\\n'.*"
+                r">> \"\$GITHUB_ENV\""
+            ),
+        )
+
+    def test_new_database_roles_stream_secrets_to_psql_without_temp_files(self):
+        for role in ("agent_core_coordinator", "soc_agent"):
+            apply = (REPO / "ansible/roles" / role / "tasks/apply.yml").read_text()
+            self.assertIn("PostgreSQL role over stdin", apply, role)
+            self.assertIn("ansible.builtin.slurp", apply, role)
+            self.assertIn("stdin: |", apply, role)
+            self.assertNotIn("sql_file", apply, role)
+            self.assertNotIn("mktemp", apply, role)
+            self.assertNotIn("print(", apply, role)
+
+    def test_new_vault_runbooks_refresh_runner_policy_and_quote_loop_keys(self):
+        runner_policy_command = (
+            "vault policy write github-runner configs/vault/policies/github-runner.hcl"
+        )
+        for name in (
+            "bootstrap-agent-core-coordinator-vault.md",
+            "bootstrap-soc-agent-vault.md",
+        ):
+            runbook = (REPO / "docs/runbooks" / name).read_text()
+            self.assertIn(runner_policy_command, runbook, name)
+
+        template = (
+            REPO
+            / "ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2"
+        ).read_text()
+        self.assertIn(".Data.data.loop_keys_json | toJSON", template)
 
     def test_knowledge_mcp_does_not_usermod_shared_loop_home(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/knowledge_mcp/tasks/apply.yml").read_text())

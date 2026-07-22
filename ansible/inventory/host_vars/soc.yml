@@ -1,0 +1,73 @@
+---
+# Dedicated SOC Agent VM. This integration scaffold is intentionally dark:
+# moving app refs and all timers/services prevent an accidental pre-promotion
+# deployment. The shadow-cutover runbook pins merged SHAs before first apply.
+soc_agent_version: main
+# Dark-scaffold sentinel only. Every live `apply.yml` SOC run overrides this
+# with that workflow's exact network-operations GITHUB_SHA, so the posture
+# checkout always matches the reviewed desired state being deployed.
+soc_network_operations_version: main
+soc_enabled: false
+soc_mode: shadow
+soc_posture_enabled: false
+soc_posture_timer_enabled: false
+soc_agent_service_enabled: false
+soc_handoff_timer_enabled: false
+soc_probe_timer_enabled: false
+
+soc_coordinator_enabled: false
+soc_coordinator_url: "http://[{{ peers.loop.ipv6 }}]:8771"
+soc_coordinator_key_id: v1
+
+soc_redteam_enabled: false
+soc_redteam_max_tier: 1
+soc_redteam_allow_active_probes: false
+soc_lhp_enabled: false
+soc_posture_handoff_enabled: false
+soc_case_verification_dry_run: true
+
+monitoring_register: true
+monitoring_role: soc
+monitoring_disks:
+  "disk /": { mountpoint: "/" }
+monitoring_extra_services:
+  - name: soc-posture-timer
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    enable_active_checks: false
+    notes: "Enable only after the SOC shadow timer promotion"
+    vars:
+      prom_instance: "[{{ peers.soc.ipv6 }}]:9100"
+      systemd_unit: soc-posture.timer
+  - name: soc-coordinator-handoffs
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    enable_active_checks: false
+    notes: "Enable with the LHP-v2 SOC handoff worker promotion"
+    vars:
+      prom_instance: "[{{ peers.soc.ipv6 }}]:9100"
+      systemd_unit: soc-handoffs.timer
+
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+  - { proto: tcp, dport: 8600, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "SOC authenticated control/health" }
+
+logs_register: true
+logs_role: soc
+
+host_meta:
+  os: "Debian 13"
+  role: "Dedicated SOC Agent security-governance VM"
+  summary: "Runs desired-state security posture, coordinator handoff, verification, and individually senior-approved bounded RT-2 probe cycles."
+  notes: "No production-remediation credentials. SOC reads operations through the NOC coordinator adapter, writes only its local case database/state, and can execute only the bounded probe contract after an exact-scope senior approval."
+
+network_flows_outbound:
+  - { to: loop, proto: tcp, port: 8771, purpose: "signed LHP-v2 coordination" }
+  - { to: loop, proto: tcp, port: 8770, purpose: "agent-core trace and insight emission" }
+  - { to: vault, proto: tcp, port: 8200, purpose: "Vault Agent secret render" }
+  - { to: log, proto: tcp, port: 6000, purpose: "Vector agent to aggregator" }
+  - { to: github, proto: tcp, port: 443, purpose: "pinned public source and desired-state checkouts" }
+  - { to: owned-public-assets, proto: tcp, port: 443, purpose: "senior-approved bounded RT-2 TLS/HTTP probes only" }
+  - { to: rtr, proto: "tcp+udp", port: 53, purpose: "DNS resolution and approved DNS-consistency probes" }

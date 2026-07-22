@@ -67,17 +67,47 @@ class AppPromotionDeployTest(unittest.TestCase):
             REPO / ".github/workflows/app-promotion-deploy.yml"
         ).read_text()
 
-        # Trigger paths, git-diff scope, and detect logic must all cover the
-        # mon Prometheus rules so a rule edit deploys via apply.yml → mon.
+        # Trigger paths, git-diff scope, and detect logic must cover the main
+        # scrape/blackbox configs and rules so none remains repository-only.
+        self.assertIn("configs/mon/prometheus.yml \\", workflow_text)
         self.assertIn("configs/mon/prometheus-rules/**", workflow_text)
         self.assertIn("configs/mon/prometheus-rules \\", workflow_text)
-        self.assertIn("configs/mon/prometheus.yml", workflow_text)
         self.assertIn("configs/mon/blackbox.yml", workflow_text)
         self.assertIn("ansible/roles/prometheus/**", workflow_text)
-        self.assertIn('path.startswith("configs/mon/prometheus-rules/")', workflow_text)
         self.assertIn('path == "configs/mon/prometheus.yml"', workflow_text)
+        self.assertIn('path.startswith("configs/mon/prometheus-rules/")', workflow_text)
         self.assertIn('path == "configs/mon/blackbox.yml"', workflow_text)
         self.assertIn('add_once("prometheus", "mon")', workflow_text)
+
+        install = (REPO / "ansible/roles/prometheus/tasks/install.yml").read_text()
+        defaults = (REPO / "ansible/roles/prometheus/defaults/main.yml").read_text()
+        self.assertIn("Validate staged Prometheus config", install)
+        self.assertIn("Publish validated Prometheus core config", install)
+        self.assertIn("prometheus_config_repo", defaults)
+
+    def test_zone_changes_trigger_serialized_knot_apply(self):
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
+
+        self.assertIn("configs/*.zone", workflow_text)
+        self.assertIn("'configs/*.zone' \\", workflow_text)
+        self.assertIn("ansible/roles/knot/**", workflow_text)
+        self.assertIn("ansible/roles/knot \\", workflow_text)
+        self.assertIn('path.endswith(".zone")', workflow_text)
+        self.assertIn('add_once("knot", "nameservers")', workflow_text)
+
+    def test_soc_firewall_changes_gate_soc_apply(self):
+        workflow_text = (
+            REPO / ".github/workflows/app-promotion-deploy.yml"
+        ).read_text()
+
+        firewall = workflow_text.index(
+            'add_firewall_once("vault,log,loop,soc")'
+        )
+        soc = workflow_text.index('add_once("soc", "soc")')
+        self.assertLess(firewall, soc)
+        self.assertNotIn('add_once("firewall", "vault,log,loop,soc")', workflow_text)
 
     def test_mon_firewall_changes_apply_before_prometheus(self):
         workflow_text = (

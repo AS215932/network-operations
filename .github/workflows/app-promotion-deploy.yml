@@ -10,26 +10,33 @@ on:
       - ansible/inventory/host_vars/web.yml
       - ansible/inventory/host_vars/netproxy.yml
       - ansible/inventory/host_vars/loop.yml
+      - ansible/inventory/host_vars/soc.yml
       - ansible/inventory/host_vars/mon.yml
       - ansible/inventory/host_vars/extmon.yml
       - ansible/playbooks/noc.yml
       - ansible/playbooks/engineering-loop.yml
+      - ansible/playbooks/soc.yml
       - ansible/roles/noc_agent/**
       - ansible/roles/engineering_loop/**
       - ansible/roles/knowledge_mcp/**
       - ansible/roles/knowledge_loop/**
       - ansible/roles/knowledge_api/**
       - ansible/roles/agent_core_collector/**
+      - ansible/roles/agent_core_coordinator/**
       - ansible/roles/agentic_observatory/**
+      - ansible/roles/soc_agent/**
       - configs/mon/icinga2/**
-      - configs/mon/prometheus-rules/**
       - configs/mon/prometheus.yml
+      - configs/mon/prometheus-rules/**
       - configs/mon/blackbox.yml
       - ansible/roles/prometheus/**
       - ansible/playbooks/prometheus.yml
       - configs/mon/alertmanager.yml.j2
       - ansible/roles/alertmanager/**
       - ansible/playbooks/alertmanager.yml
+      - configs/*.zone
+      - ansible/roles/knot/**
+      - ansible/playbooks/knot.yml
       - configs/xo-mcp-package.json
       - configs/noc-agent.env.j2
       - configs/noc-agent.service
@@ -39,7 +46,9 @@ on:
       - ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2
       - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -71,26 +80,33 @@ jobs:
             ansible/inventory/host_vars/web.yml \
             ansible/inventory/host_vars/netproxy.yml \
             ansible/inventory/host_vars/loop.yml \
+            ansible/inventory/host_vars/soc.yml \
             ansible/inventory/host_vars/mon.yml \
             ansible/inventory/host_vars/extmon.yml \
             ansible/playbooks/noc.yml \
             ansible/playbooks/engineering-loop.yml \
+            ansible/playbooks/soc.yml \
             ansible/roles/noc_agent \
             ansible/roles/engineering_loop \
             ansible/roles/knowledge_mcp \
             ansible/roles/knowledge_loop \
             ansible/roles/knowledge_api \
             ansible/roles/agent_core_collector \
+            ansible/roles/agent_core_coordinator \
             ansible/roles/agentic_observatory \
+            ansible/roles/soc_agent \
             configs/mon/icinga2 \
-            configs/mon/prometheus-rules \
             configs/mon/prometheus.yml \
+            configs/mon/prometheus-rules \
             configs/mon/blackbox.yml \
             ansible/roles/prometheus \
             ansible/playbooks/prometheus.yml \
             configs/mon/alertmanager.yml.j2 \
             ansible/roles/alertmanager \
             ansible/playbooks/alertmanager.yml \
+            'configs/*.zone' \
+            ansible/roles/knot \
+            ansible/playbooks/knot.yml \
             configs/xo-mcp-package.json \
             configs/noc-agent.env.j2 \
             configs/noc-agent.service \
@@ -100,10 +116,14 @@ jobs:
             ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2 \
             ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2)"
+            ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import re
           import sys
+          from pathlib import Path
 
           changed = set(sys.argv[1].splitlines())
           matrix = []
@@ -134,6 +154,12 @@ jobs:
               or path == "ansible/playbooks/alertmanager.yml"
               for path in changed
           )
+          dns_changed = any(
+              (path.startswith("configs/") and path.endswith(".zone"))
+              or path.startswith("ansible/roles/knot/")
+              or path == "ansible/playbooks/knot.yml"
+              for path in changed
+          )
           noc_changed = any(path in changed for path in {
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/noc.yml",
@@ -150,6 +176,7 @@ jobs:
               "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2",
+              "ansible/roles/vault_agent/templates/agent-core-coordinator.env.ctmpl.j2",
               "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
           }) or any(
               path.startswith((
@@ -158,9 +185,29 @@ jobs:
                   "ansible/roles/knowledge_loop/",
                   "ansible/roles/knowledge_api/",
                   "ansible/roles/agent_core_collector/",
+                  "ansible/roles/agent_core_coordinator/",
                   "ansible/roles/agentic_observatory/",
               ))
               for path in changed
+          )
+          soc_changed = any(path in changed for path in {
+              "ansible/inventory/host_vars/soc.yml",
+              "ansible/playbooks/soc.yml",
+              "ansible/roles/vault_agent/templates/soc-agent.env.ctmpl.j2",
+          }) or any(path.startswith("ansible/roles/soc_agent/") for path in changed)
+
+          # The infrastructure PR intentionally ships SOC on a moving app ref
+          # with every service disabled. Do not attempt a production apply
+          # until a promotion PR replaces the app ref with an immutable SHA.
+          # apply.yml supplies the exact network-operations deployment SHA as
+          # an extra var, avoiding an impossible self-referential commit pin.
+          soc_vars = Path("ansible/inventory/host_vars/soc.yml").read_text()
+          soc_ready = bool(
+              re.search(
+                  r"^soc_agent_version:\s*[\"']?[0-9a-fA-F]{40}[\"']?\s*$",
+                  soc_vars,
+                  re.MULTILINE,
+              )
           )
 
           mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
@@ -182,7 +229,18 @@ jobs:
               add_once("noc", "noc")
           if engineering_loop_changed:
               add_once("engineering-loop", "loop")
-          if prometheus_changed:
+          if dns_changed or (soc_changed and soc_ready):
+              # Re-apply authoritative zones on the first SOC promotion too,
+              # so its forward/PTR records cannot depend on an earlier gate.
+              add_once("knot", "nameservers")
+          if soc_changed and soc_ready:
+              # Destination allowlists must land before the first SOC Vault,
+              # log, collector, or coordinator connection can succeed.
+              add_firewall_once("vault,log,loop,soc")
+              add_once("soc", "soc")
+          if prometheus_changed or (soc_changed and soc_ready):
+              # The first SOC promotion also reconciles its scrape target after
+              # node_exporter has been installed by the SOC playbook.
               add_once("prometheus", "mon")
           if alertmanager_changed:
               add_once("alertmanager", "mon")
