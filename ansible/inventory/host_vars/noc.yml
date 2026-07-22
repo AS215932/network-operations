@@ -13,6 +13,12 @@
 noc_agent_version: 179d96368c5fecce1e0f6ebaa6637893b0fe1d42
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 
+# hyrule-prober — AS215932 looking-glass backing Hyrule Cloud /v1/path/* (ping +
+# traceroute). Apply is gated (hyrule_prober_apply); go-live also needs
+# prober_token in kv/hyrule-cloud so the api VM authenticates. See
+# hyrule-cloud/docs/runbooks/prober-deploy.md.
+hyrule_prober_version: 1e2fc5495ec470dc5eacc80b0ac35f3edf49ab1d
+
 # Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
 # DeepSeek V4 Flash as fallback; venice:deepseek-v4-flash keeps the chain
 # provider-redundant (issue #393 — a single OpenRouter key cap must not take
@@ -55,6 +61,11 @@ firewall_extra_rules:
 
   # Internal Loop Handoff Protocol fetch/callback traffic from Engineering Loop.
   - { proto: tcp, dport: 8000, src: "{{ peers.loop.ipv6 }}", comment: "LHP-v1 Engineering Loop fetch/callback to noc-agent" }
+
+  # hyrule-prober (:8460): x402-gated path probes from the api VM; liveness
+  # check from Icinga on mon.
+  - { proto: tcp, dport: 8460, src: "{{ peers.api.ipv6 }}", comment: "hyrule-cloud API to hyrule-prober (path probes)" }
+  - { proto: tcp, dport: 8460, src: "{{ peers.mon.ipv6 }}", comment: "Icinga /healthz check for hyrule-prober" }
 
   # Monitoring scrapes.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
@@ -131,6 +142,19 @@ monitoring_extra_services:
       noc_model_host: "{{ peers.noc.ipv6 }}"
       noc_model_port: 8000
 
+  - name: hyrule-prober-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    notes: "hyrule-prober liveness (AS215932 path-probe backend for Hyrule Cloud /v1/path/*)"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8460
+      http_uri: "/healthz"
+      http_ipv6: true
+      http_timeout: 10
+      http_expect_body_regex: '"status":"live"'
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: noc
@@ -138,11 +162,12 @@ logs_role: noc
 # --- Structured flow metadata (read by scripts/render-network-flows.py) ---
 host_meta:
   os: "Debian 13"
-  role: "noc-agent (FastAPI :8000) + hyrule-mcp"
-  summary: "Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child)."
+  role: "noc-agent (FastAPI :8000) + hyrule-mcp + hyrule-prober (:8460)"
+  summary: "Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child), plus the hyrule-prober sidecar (:8460) for Hyrule Cloud /v1/path/* probes."
 network_flows_outbound:
   - { to: all-infra, proto: tcp, port: 22, purpose: "hyrule-mcp SSH to every infra host" }
   - { to: mon, proto: tcp, port: 9090, purpose: "Prometheus query API" }
   - { to: mon, proto: tcp, port: 5665, purpose: "Icinga2 REST API" }
   - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP snapshot ingest (cloud.hyrule.host)" }
   - { to: public, proto: tcp, port: 443, purpose: "LLM API, Discord webhook, and npx package install" }
+  - { to: public, proto: "icmp+udp", purpose: "hyrule-prober ping/traceroute to probe targets (AS215932 vantage)" }
