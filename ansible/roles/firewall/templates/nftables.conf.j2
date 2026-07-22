@@ -3,7 +3,12 @@
 # Host: {{ inventory_hostname }}
 # Generated: do not edit by hand.
 
+{% if firewall_preserve_external_tables | bool %}
+# Preserve tables owned by Docker or other local services.
+destroy table inet filter
+{% else %}
 flush ruleset
+{% endif %}
 
 table inet filter {
     chain input {
@@ -29,6 +34,11 @@ table inet filter {
 
     chain forward {
         type filter hook forward priority filter; policy drop;
+{% if firewall_forward_pre_established_raw_nft %}
+
+        # --- pre-conntrack emergency controls ---
+{{ firewall_forward_pre_established_raw_nft | indent(8, True) }}
+{% endif %}
         ct state established,related accept
         ct state invalid drop
 {% if firewall_forward_extra_raw_nft %}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Quiesced Stalwart Agent Mail backup
+Requires=docker.service
+RequiresMountsFor=/mnt/agent-mail-backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/agent-mail-backup
+TimeoutStartSec=infinity
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectHome=true

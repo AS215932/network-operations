@@ -22,7 +22,9 @@
     # host_vars on any high-cardinality node where that scrape cost matters.
     line: >-
       ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd{{
-      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}"
+      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}{{
+      ' --collector.textfile.directory=' ~ monitoring_node_textfile_dir
+      if monitoring_node_textfile_dir | length > 0 else '' }}"
     owner: root
     group: root
     mode: "0644"

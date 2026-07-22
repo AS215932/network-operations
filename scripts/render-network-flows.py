@@ -325,6 +325,10 @@ def synthesize_router_inbound(hv) -> list:
 def render_inbound_table(resolver, rules) -> list:
     entries = []
     for r in rules:
+        # Disabled rules are staged desired state, not active network paths.
+        # Public services use this for a separate, reviewed launch gate.
+        if r.get("enabled", True) is False:
+            continue
         frm = resolver.resolve_src(r.get("src"))
         proto = format_proto(r.get("proto"), r.get("family"))
         port = format_port(r.get("dport"))

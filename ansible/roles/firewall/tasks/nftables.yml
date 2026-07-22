@@ -56,9 +56,9 @@
   tags: [apply]
 
 # The watchdog restores {{ firewall_backup_path }} with `nft -f`. On hosts
-# that never had a config, synthesize it from the live ruleset instead —
-# prefixed with `flush ruleset` (which `nft list ruleset` omits but every
-# rendered config carries) so the restore replaces rather than merges.
+# that never had a config, synthesize it from the live ruleset instead.
+# `nft list ruleset` omits the leading flush, so add it to ensure a watchdog
+# restore replaces rather than merges the captured ruleset.
 - name: Backup currently-loaded ruleset before swap
   shell: |
     set -e

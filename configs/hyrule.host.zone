@@ -5,7 +5,7 @@ $ORIGIN hyrule.host.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026071501 ; serial (YYYYMMDDNN)
+                  2026071901 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -37,6 +37,10 @@ cloud   IN  A     46.105.40.223
 cloud   IN  AAAA  2a0c:b641:b50:2::40
 api     IN  A     46.105.40.223
 api     IN  AAAA  2a0c:b641:b50:2::40
+
+; Dedicated Agent Mail transport identity. SMTP/MX remains launch-gated; this
+; forward identity exists now so TLS and reverse-DNS checks can converge.
+mx1.agentmail IN AAAA 2a0c:b641:b50:2::110
 
 ; Branded registrar glue/host records for managed customer zones. The
 ; hyrule.host zone itself deliberately remains delegated to servify.network.

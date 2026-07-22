@@ -1,0 +1,13 @@
+---
+# Render-only (safe default):
+#   ansible-playbook playbooks/agent_mail.yml --tags validate --connection=local
+# Apply only through the protected production workflow after following
+# roles/agent_mail/README.md and supplying its Vault-backed secrets:
+#   gh workflow run apply.yml -F playbook=agent_mail -F limit=agentmail -F dry_run=false
+- name: Agent Mail — validate, stage, and explicitly apply Stalwart
+  hosts: agentmail
+  gather_facts: false
+  become: true
+  roles:
+    - agent_mail
+  tags: [agent-mail]

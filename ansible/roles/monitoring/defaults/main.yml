@@ -28,6 +28,10 @@ monitoring_node_listen: ":9100"
 # set false in host_vars on a high-cardinality node to cap scrape cost.
 monitoring_node_restart_metrics: true
 
+# Optional node_exporter textfile collector. Roles that emit durable local
+# success timestamps opt in per host; empty keeps the fleet-wide default off.
+monitoring_node_textfile_dir: ""
+
 # Disks to monitor. Each key is the Icinga service name suffix; mountpoint is
 # read by the prom_disk apply rule on mon. Default = root only.
 monitoring_disks:

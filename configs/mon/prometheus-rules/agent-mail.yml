@@ -1,0 +1,25 @@
+groups:
+  - name: agent-mail
+    interval: 30s
+    rules:
+      - alert: AgentMailStalwartMetricsUnavailable
+        expr: up{job="agent-mail-stalwart"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          source: prometheus
+          service: agent-mail
+        annotations:
+          summary: "Agent Mail Stalwart metrics endpoint is unavailable"
+          description: "Prometheus cannot scrape Stalwart over the private HTTPS listener for five minutes. New Agent Mail work should remain fail-closed."
+
+      - alert: AgentMailNodeUnavailable
+        expr: up{job="node-infra",instance="[2a0c:b641:b50:2::110]:9100"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          source: prometheus
+          service: agent-mail
+        annotations:
+          summary: "Agent Mail host node exporter is unavailable"
+          description: "The dedicated Agent Mail host has been unreachable to Prometheus for five minutes."
