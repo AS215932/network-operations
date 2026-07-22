@@ -8,6 +8,12 @@ knot_tsig_key_name: hyrule-dns
 # before running the playbook.
 knot_tsig_secret: "{{ lookup('env', 'TSIG_SECRET') }}"
 
+# Nameserver playbooks are production convergence, not render-only previews.
+# Keeping this explicit ensures hyrule.host glue records, the customer-zone
+# control service, and online-backup timer are actually installed on both
+# authoritative servers when the gated apply workflow runs.
+knot_apply: true
+
 # Zones served by every nameserver in this group. The primary (dns) loads
 # from /var/lib/knot/zones/<name>.zone; the secondary (ns2) AXFR-pulls.
 knot_zones:
