@@ -21,6 +21,14 @@ PIN_TARGETS = {
         "AS215932/hyrule-network-proxy",
         "network-proxy",
     ),
+    # The reverse-SSH tunnel daemon is a second binary in the same repo, so it
+    # is pinned to the SAME commit as the egress sidecar (driven off
+    # --hyrule-network-proxy-sha, not a separate input).
+    "hyrule_tunnel_proxy_version": (
+        "ansible/inventory/host_vars/netproxy.yml",
+        "AS215932/hyrule-network-proxy",
+        "tunnel-proxy",
+    ),
 }
 
 
@@ -48,6 +56,8 @@ def main() -> int:
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
         "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
+        # Same repo, same commit as the egress sidecar.
+        "hyrule_tunnel_proxy_version": args.hyrule_network_proxy_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
 

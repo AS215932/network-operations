@@ -12,11 +12,12 @@ flush ruleset
 # `ansible --check --diff` shows zero functional change to v4 behaviour
 # on first run; only the inet filter table below is new.
 
-define WAN_IP   = {{ rtr_wan_ip }}
-define WAN_IF   = {{ rtr_wan_if }}
-define DNS_IP   = {{ rtr_dns_v4 }}
-define PROXY_IP = {{ rtr_proxy_v4 }}
-define VPN_IP   = {{ rtr_vpn_v4 }}
+define WAN_IP    = {{ rtr_wan_ip }}
+define WAN_IF    = {{ rtr_wan_if }}
+define DNS_IP    = {{ rtr_dns_v4 }}
+define PROXY_IP  = {{ rtr_proxy_v4 }}
+define VPN_IP    = {{ rtr_vpn_v4 }}
+define TUNNEL_IP = {{ rtr_tunnel_v4 }}
 
 table ip nat {
     chain prerouting {
@@ -31,6 +32,13 @@ table ip nat {
 
         # WireGuard VPN → vpn VM
         ip daddr $WAN_IP udp dport 51820 dnat to $VPN_IP
+
+        # Reverse-SSH tunnel (netproxy): SSH intake, STUN, and the public
+        # data-port range. IPv4-only rescue clients reach the tunnel this way;
+        # IPv6 clients hit the netproxy GUA directly (no DNAT).
+        ip daddr $WAN_IP tcp dport 2222 dnat to $TUNNEL_IP
+        ip daddr $WAN_IP udp dport 3478 dnat to $TUNNEL_IP
+        ip daddr $WAN_IP tcp dport 10000-10499 dnat to $TUNNEL_IP
     }
 
     chain postrouting {
@@ -61,6 +69,9 @@ table ip filter {
         ip daddr $DNS_IP udp dport 53 accept
         ip daddr $PROXY_IP tcp dport { 80, 443 } accept
         ip daddr $VPN_IP udp dport 51820 accept
+        ip daddr $TUNNEL_IP tcp dport 2222 accept
+        ip daddr $TUNNEL_IP udp dport 3478 accept
+        ip daddr $TUNNEL_IP tcp dport 10000-10499 accept
     }
 }
 

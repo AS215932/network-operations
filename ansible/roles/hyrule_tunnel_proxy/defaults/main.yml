@@ -1,0 +1,47 @@
+---
+# hyrule-tunnel-proxy — public reverse-SSH tunnel daemon on the netproxy VM.
+# Sibling binary to hyrule-network-proxy (same repo), separate process/user/token.
+
+hyrule_tunnel_proxy_apply: false
+
+hyrule_tunnel_proxy_user: hyrule-tunnel
+hyrule_tunnel_proxy_group: hyrule-tunnel
+
+# Same repository as the egress sidecar; the tunnel is a second cmd/ binary.
+hyrule_tunnel_proxy_repo: https://github.com/AS215932/hyrule-network-proxy.git
+hyrule_tunnel_proxy_version: main
+
+hyrule_tunnel_proxy_src_dir: /opt/hyrule-tunnel-proxy/src
+hyrule_tunnel_proxy_bin_path: /usr/local/bin/hyrule-tunnel-proxy
+hyrule_tunnel_proxy_etc_dir: /etc/hyrule-tunnel-proxy
+hyrule_tunnel_proxy_state_dir: /var/lib/hyrule-tunnel-proxy
+hyrule_tunnel_proxy_env_file: "{{ hyrule_tunnel_proxy_etc_dir }}/env"
+hyrule_tunnel_proxy_service_name: hyrule-tunnel-proxy
+
+# Public SSH intake — dual-stack so it covers the IPv6 GUA and the DNAT'd IPv4.
+hyrule_tunnel_proxy_ssh_listen_addr: ":2222"
+hyrule_tunnel_proxy_ssh_port: 2222
+# Public STUN responder (UDP).
+hyrule_tunnel_proxy_stun_listen_addr: ":3478"
+# Internal control API (api VM only) + metrics (mon only) — never wildcard.
+hyrule_tunnel_proxy_control_listen_addr: "[{{ peers.netproxy.ipv6 }}]:8452"
+hyrule_tunnel_proxy_metrics_listen_addr: "[{{ peers.netproxy.ipv6 }}]:8453"
+
+hyrule_tunnel_proxy_auth_token: "{{ lookup('env', 'HYRULE_TUNNEL_PROXY_TOKEN') | default('', true) }}"
+
+hyrule_tunnel_proxy_endpoint_host: tun.hyrule.host
+hyrule_tunnel_proxy_data_port_range: "10000-10499"
+hyrule_tunnel_proxy_min_lease_seconds: 3600
+hyrule_tunnel_proxy_max_lease_seconds: 2592000
+hyrule_tunnel_proxy_max_visitor_conns_per_lease: 64
+hyrule_tunnel_proxy_log_level: info
+
+# node_exporter is already managed on netproxy by hyrule_network_proxy /
+# monitoring; the tunnel role only needs the build toolchain.
+hyrule_tunnel_proxy_packages:
+  - ca-certificates
+  - curl
+  - git
+  - golang-go
+
+hyrule_tunnel_proxy_health_url: "http://[{{ peers.netproxy.ipv6 }}]:8453/healthz"
