@@ -1,12 +1,50 @@
 ---
-# netproxy — internal Hyrule network proxy sidecar target.
+# netproxy — internal Hyrule network proxy sidecar + public reverse-SSH tunnel.
+#
+# Posture: internal-only for the egress sidecar (:8450 api-only), MIXED once the
+# tunnel daemon is applied — only the SSH intake (:2222), STUN (:3478/udp), and
+# the data-port range (10000-10499) face the Internet. Control/metrics stay
+# internal. Management SSH (:22) stays internal via ssh_allow_sources_*, so
+# netproxy is deliberately NOT in the public_facing group.
 
 hyrule_network_proxy_version: b82dc72bbf382167062bff272606ce84ec20538c
+# Sibling tunnel daemon (same repo, second binary). Promotion updates this SHA.
+hyrule_tunnel_proxy_version: e010725715349b0bdd9529b93087f871b51af253
 
 firewall_extra_rules:
+  # --- egress sidecar (internal only) ---
   - { proto: tcp, dport: 8450, src: "{{ peers.api.ipv6 }}", comment: "hyrule-cloud API to network proxy sidecar" }
   - { proto: tcp, dport: 8451, src: "{{ peers.mon.ipv6 }}", comment: "Prometheus scrape hyrule-network-proxy metrics" }
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+  # --- reverse-SSH tunnel daemon: PUBLIC intake surface ---
+  # src:any in the inet table matches both families with one rule (v6 direct to
+  # the GUA; v4 arrives via rtr DNAT to 10.0.2.224), so no `family:` qualifier.
+  - { proto: tcp, dport: 2222, src: "any", comment: "public reverse-SSH tunnel intake (hyrule-tunnel-proxy)" }
+  - { proto: udp, dport: 3478, src: "any", comment: "public STUN binding responder" }
+  - { proto: tcp, dport: "10000-10499", src: "any", comment: "public reverse-tunnel data ports" }
+  # --- reverse-SSH tunnel daemon: internal control/metrics ---
+  - { proto: tcp, dport: 8452, src: "{{ peers.api.ipv6 }}", comment: "hyrule-cloud API to tunnel control API" }
+  - { proto: tcp, dport: 8453, src: "{{ peers.mon.ipv6 }}", comment: "Prometheus scrape hyrule-tunnel-proxy metrics" }
+
+# --- Monitoring (Icinga2 host + service objects on mon) ---
+# netproxy is not in the legacy /etc/icinga2/conf.d/hosts/*.conf set, so register here.
+monitoring_register: true
+monitoring_display_name: "netproxy (Hyrule network proxy + reverse-SSH tunnel)"
+monitoring_role: netproxy
+monitoring_extra_services:
+  - name: tunnel-ssh-intake
+    check_command: tcp
+    interval: 2m
+    notes: "Public reverse-SSH tunnel intake on tcp/2222"
+    vars: { tcp_address: "{{ peers.netproxy.ipv6 }}", tcp_port: 2222 }
+  - name: tunnel-metrics
+    check_command: tcp
+    interval: 5m
+    # The control API :8452 is firewalled to the api VM only, so mon cannot
+    # probe it; :8453 (metrics/health) IS allowed from mon and confirms the
+    # daemon process is up.
+    notes: "hyrule-tunnel-proxy metrics/health listener on tcp/8453 (mon-reachable)"
+    vars: { tcp_address: "{{ peers.netproxy.ipv6 }}", tcp_port: 8453 }
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
@@ -15,8 +53,16 @@ logs_role: netproxy
 # --- Structured flow metadata (read by scripts/render-network-flows.py) ---
 host_meta:
   os: "Debian 13"
-  role: "Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health)"
-  summary: "Internal Hyrule Network Proxy sidecar that executes paid x402-gated Hyrule Cloud network requests."
-  notes: "Prometheus scrape targets go green once the VM is provisioned and the sidecar applied (issue #214)."
+  role: "Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data)"
+  summary: "Internal egress sidecar for x402 network requests PLUS the public hyrule-tunnel-proxy reverse-SSH tunnel daemon (per-hour x402 leases)."
+  notes: >-
+    Mixed posture: only tunnel SSH/STUN/data ports are public; sidecar API
+    :8450 and tunnel control :8452 stay internal. Static IPv4 10.0.2.224
+    (configs/netproxy) + rtr DNAT carry IPv4-only rescue clients.
+network_flows_inbound:
+  - { from: public, proto: tcp, port: 2222, purpose: "reverse-SSH tunnel intake (ssh -R); username = x402 lease token" }
+  - { from: public, proto: udp, port: 3478, purpose: "STUN binding responder (free)" }
+  - { from: public, proto: tcp, port: "10000-10499", purpose: "per-lease public data ports (visitor traffic)" }
+  - { from: api, proto: tcp, port: 8452, purpose: "tunnel control API (create/extend/revoke leases)" }
 network_flows_outbound:
   - { to: public, proto: "tcp+udp", purpose: "direct/Tor/I2P/Yggdrasil egress for request modes, subject to sidecar SSRF/IP policy" }

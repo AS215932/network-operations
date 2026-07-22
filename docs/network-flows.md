@@ -36,7 +36,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
-| netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
+| netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data) |
 | noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp |
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
@@ -88,6 +88,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
 | openprovider | tcp | 443 | domain registration API |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
+| netproxy | tcp | 8452 | authenticated reverse-SSH tunnel control API (create/extend/revoke leases) |
 | dns | tcp | 8453 | HMAC-authenticated managed customer DNS control |
 
 ### ci — Privileged self-hosted GitHub Actions runner for AS215932/network-operations; runs apply jobs against the fleet.
@@ -364,17 +365,22 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | public | tcp | 443 | blackbox_exporter HTTPS probes of public services |
 | public | icmp6 | — | blackbox_exporter ICMP reachability probes of public services (internal fleet ICMP sweep is noted in network_flows.yml) |
 
-### netproxy — Internal Hyrule Network Proxy sidecar that executes paid x402-gated Hyrule Cloud network requests.
+### netproxy — Internal egress sidecar for x402 network requests PLUS the public hyrule-tunnel-proxy reverse-SSH tunnel daemon (per-hour x402 leases).
 
-> Prometheus scrape targets go green once the VM is provisioned and the sidecar applied (issue #214).
+> Mixed posture: only tunnel SSH/STUN/data ports are public; sidecar API :8450 and tunnel control :8452 stay internal. Static IPv4 10.0.2.224 (configs/netproxy) + rtr DNAT carry IPv4-only rescue clients.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| any | tcp | 2222 | public reverse-SSH tunnel intake (hyrule-tunnel-proxy) |
+| any | udp | 3478 | public STUN binding responder |
 | api | tcp | 8450 | hyrule-cloud API to network proxy sidecar |
 | mon | tcp | 8451 | Prometheus scrape hyrule-network-proxy metrics |
+| api | tcp | 8452 | hyrule-cloud API to tunnel control API |
+| mon | tcp | 8453 | Prometheus scrape hyrule-tunnel-proxy metrics |
 | mon | tcp | 9100 | node_exporter scrape |
+| any | tcp | 10000-10499 | public reverse-tunnel data ports |
 
 **Outbound**
 

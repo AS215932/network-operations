@@ -191,7 +191,21 @@ jobs:
           if "ansible/inventory/host_vars/web.yml" in changed:
               add_once("web", "web")
           if "ansible/inventory/host_vars/netproxy.yml" in changed:
+              # netproxy hosts two app binaries from the hyrule-network-proxy
+              # repo (the egress sidecar and the reverse-SSH tunnel daemon), so a
+              # pin bump must deploy BOTH — otherwise the tunnel SHA is recorded
+              # as production while the installed binary stays stale.
               add_once("network-proxy", "netproxy")
+              add_once("tunnel-proxy", "netproxy")
+              # netproxy.yml also carries monitoring_register + extra services;
+              # apply the monitoring role so the Icinga host/service objects are
+              # (re)rendered on mon rather than only being "capable" of it.
+              add_once("monitoring", "netproxy")
+              # netproxy's public tunnel/STUN/data-port allowances live in its
+              # firewall_extra_rules; apply the firewall so those rendered rules
+              # are installed (the daemon can pass its internal health check while
+              # every public listener is still blocked otherwise).
+              add_firewall_once("netproxy")
           print(f"matrix={json.dumps({'include': matrix})}")
           print(f"has_changes={'true' if matrix else 'false'}")
           print(f"firewall_matrix={json.dumps({'include': firewall_matrix})}")

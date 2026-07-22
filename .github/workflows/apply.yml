@@ -30,6 +30,7 @@ on:
           - web
           - noc
           - network-proxy
+          - tunnel-proxy
           - vault
           - ci
           - ci-runner-key
@@ -142,7 +143,7 @@ jobs:
           fi
 
       - name: Summarize app version pins
-        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy"]'), inputs.playbook) }}
+        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy","tunnel-proxy"]'), inputs.playbook) }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
         run: |
@@ -168,6 +169,10 @@ jobs:
             network-proxy)
               host_vars="ansible/inventory/host_vars/netproxy.yml"
               entries="hyrule_network_proxy_version|AS215932/hyrule-network-proxy"
+              ;;
+            tunnel-proxy)
+              host_vars="ansible/inventory/host_vars/netproxy.yml"
+              entries="hyrule_tunnel_proxy_version|AS215932/hyrule-network-proxy"
               ;;
           esac
 
@@ -226,6 +231,10 @@ jobs:
             network-proxy)
               apply_var="hyrule_network_proxy_apply=true"
               expected_apply_var="hyrule_network_proxy_apply=true"
+              ;;
+            tunnel-proxy)
+              apply_var="hyrule_tunnel_proxy_apply=true"
+              expected_apply_var="hyrule_tunnel_proxy_apply=true"
               ;;
             engineering-loop)
               apply_var="engineering_loop_apply=true"

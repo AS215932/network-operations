@@ -1,0 +1,130 @@
+---
+- name: Assert tunnel proxy auth token is available for apply
+  ansible.builtin.assert:
+    that:
+      - hyrule_tunnel_proxy_auth_token | length >= 32
+    fail_msg: >-
+      HYRULE_TUNNEL_PROXY_TOKEN must be available to the apply run and at least
+      32 characters. Store tunnel_proxy_token in kv/ci-runner for the runner and
+      kv/hyrule-cloud for the api VM.
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ hyrule_tunnel_proxy_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# IPv4-only rescue clients reach the tunnel via rtr DNAT to 10.0.2.224, so the
+# VM must actually carry that address. netproxy's ::e0 comes from cloud-init;
+# this networkd drop-in adds the static RFC1918 v4 (and re-declares the v6 GUA)
+# on enX0 so a normal apply assigns it rather than leaving DNAT pointed at an
+# unconfigured address. Reload is additive (adds an address; keeps the link up).
+- name: Install netproxy enX0 networkd drop-in (adds static IPv4 for DNAT)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/netproxy/10-enX0.network"
+    dest: /etc/systemd/network/10-enX0.network
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload networkd
+
+- name: Ensure hyrule-tunnel-proxy group exists
+  ansible.builtin.group:
+    name: "{{ hyrule_tunnel_proxy_group }}"
+    system: true
+
+- name: Ensure hyrule-tunnel-proxy user exists
+  ansible.builtin.user:
+    name: "{{ hyrule_tunnel_proxy_user }}"
+    group: "{{ hyrule_tunnel_proxy_group }}"
+    shell: /bin/bash
+    system: true
+
+- name: Ensure runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_tunnel_proxy_user) }}"
+    group: "{{ item.group | default(hyrule_tunnel_proxy_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_tunnel_proxy_src_dir | dirname }}", mode: "0755" }
+    - { path: "{{ hyrule_tunnel_proxy_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_tunnel_proxy_state_dir }}", mode: "0750" }
+
+- name: Checkout hyrule-tunnel-proxy at requested ref
+  ansible.builtin.git:
+    repo: "{{ hyrule_tunnel_proxy_repo }}"
+    dest: "{{ hyrule_tunnel_proxy_src_dir }}"
+    version: "{{ hyrule_tunnel_proxy_version }}"
+    update: true
+  become: true
+  become_user: "{{ hyrule_tunnel_proxy_user }}"
+  notify: restart hyrule-tunnel-proxy
+
+- name: Build hyrule-tunnel-proxy binary
+  ansible.builtin.command:
+    argv:
+      - go
+      - build
+      - -buildvcs=false
+      - -ldflags
+      - "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_tunnel_proxy_version }}"
+      - -o
+      - "{{ hyrule_tunnel_proxy_bin_path }}"
+      - ./cmd/hyrule-tunnel-proxy
+    chdir: "{{ hyrule_tunnel_proxy_src_dir }}"
+  environment:
+    GOCACHE: "{{ hyrule_tunnel_proxy_state_dir }}/go-build"
+    GOMODCACHE: "{{ hyrule_tunnel_proxy_state_dir }}/go-mod"
+  notify: restart hyrule-tunnel-proxy
+
+- name: Ensure binary ownership/mode
+  ansible.builtin.file:
+    path: "{{ hyrule_tunnel_proxy_bin_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render hyrule-tunnel-proxy env
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ hyrule_tunnel_proxy_env_file }}"
+    owner: root
+    group: "{{ hyrule_tunnel_proxy_group }}"
+    mode: "0640"
+  notify: restart hyrule-tunnel-proxy
+
+- name: Install hyrule-tunnel-proxy systemd unit
+  ansible.builtin.template:
+    src: hyrule-tunnel-proxy.service.j2
+    dest: /etc/systemd/system/hyrule-tunnel-proxy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart hyrule-tunnel-proxy
+
+- name: Ensure hyrule-tunnel-proxy is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ hyrule_tunnel_proxy_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Flush the restart handler now so the health check below validates the NEWLY
+# deployed binary/config, not the still-running old process (on an upgrade the
+# checkout/build/env/unit tasks only notify; without this the restart would run
+# after the play and the health check could pass against the old version).
+- name: Flush handlers before health check
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for hyrule-tunnel-proxy health endpoint
+  ansible.builtin.uri:
+    url: "{{ hyrule_tunnel_proxy_health_url }}"
+    method: GET
+    status_code: 200
+  register: hyrule_tunnel_proxy_health
+  retries: 10
+  delay: 2
+  until: hyrule_tunnel_proxy_health.status == 200
