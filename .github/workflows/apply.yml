@@ -107,7 +107,7 @@ jobs:
       # target hosts. In apply.yml runs the key already exists on the runner.
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2
 

@@ -58,7 +58,7 @@ jobs:
       firewall_matrix: ${{ steps.detect.outputs.firewall_matrix }}
       has_firewalls: ${{ steps.detect.outputs.has_firewalls }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2
 
