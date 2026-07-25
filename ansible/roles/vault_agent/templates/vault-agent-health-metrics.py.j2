@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+# {{ vault_agent_metrics_script }}
+# Managed by ansible/roles/vault_agent — do not edit by hand.
+#
+# NOTE: this file is a Jinja2 template. Never write a literal "{" immediately
+# followed by "{" or "%" — Jinja would consume it. Metric lines are therefore
+# assembled by concatenation instead of str.format()/f-strings.
+"""Publish Vault Agent health metrics for node_exporter's textfile collector.
+
+Why this exists
+---------------
+Between 2026-07-18 and 2026-07-25 ``vault-agent-hyrule-cloud.service`` on the
+``api`` VM failed every AppRole login with 403 while systemd still reported
+``active (running)``. ``/opt/hyrule-cloud/.env`` stayed frozen at its 18 July
+content and ``/run/vault-agent/hyrule-cloud.token`` was never written, so a week
+of ``vault kv patch`` writes never reached the application. Every existing check
+(ping, node-up, systemd unit state, HTTP health) was green throughout.
+
+This collector enumerates every Vault Agent configured on the host and exports
+the signals that would have caught it:
+
+  * ``vault_agent_token_sink_present`` / ``..._mtime_seconds``
+    The sink is (re)written on every successful authentication. Absent or old
+    means the agent holds no usable Vault token.
+  * ``vault_agent_auth_errors_recent``
+    AppRole login failures seen in the agent's journal in the recent window —
+    the 403 backoff loop, visible within minutes.
+  * ``vault_agent_secret_id_file_present`` / ``vault_agent_secret_id_ephemeral``
+    ``ephemeral=1`` means the config sets
+    ``remove_secret_id_file_after_reading = true``; combined with
+    ``file_present=0`` the credential is already spent and the NEXT restart of
+    the agent — reboot, package upgrade, OOM, deploy — will fail. A leading
+    indicator, not a post-mortem one.
+  * ``vault_agent_render_present`` / ``..._mtime_seconds``
+    Per rendered destination. Note that Vault Agent writes a destination only
+    when the rendered content actually changes, so a healthy agent whose secrets
+    are stable legitimately shows an old mtime; treat a missing destination as a
+    hard failure and age as advisory. Token-sink freshness is the reliable
+    liveness signal.
+
+The script never raises: a partial sample is more useful to the alerting path
+than no sample at all, and an empty output file would itself be a false alarm.
+"""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+
+CONFIG_DIR = "{{ vault_agent_config_dir }}"
+TEXTFILE_DIR = "{{ vault_agent_metrics_textfile_dir }}"
+OUTPUT_PATH = os.path.join(TEXTFILE_DIR, "vault_agent.prom")
+AUTH_ERROR_WINDOW = "{{ vault_agent_metrics_auth_error_window }}"
+
+# Vault Agent's auto-auth handler logs these on AppRole failure. Kept broad on
+# purpose: a false positive is a WARNING an operator dismisses, a false negative
+# is another silent week.
+AUTH_ERROR_RE = re.compile(
+    "|".join(
+        [
+            r"permission denied",
+            r"error authenticating",
+            r"authentication failed",
+            r"invalid role or secret id",
+            r"invalid secret id",
+            r"wrapping token is not valid",
+            r"failed to get credentials",
+            r"no known credentials",
+        ]
+    ),
+    re.IGNORECASE,
+)
+
+SECRET_ID_FILE_RE = re.compile(r'^\s*secret_id_file_path\s*=\s*"([^"]+)"')
+REMOVE_SECRET_ID_RE = re.compile(
+    r"^\s*remove_secret_id_file_after_reading\s*=\s*(true|false)"
+)
+# Only the file sink block has a bare `path =`; role_id_file_path,
+# secret_id_file_path and pid_file all carry a prefix.
+SINK_PATH_RE = re.compile(r'^\s*path\s*=\s*"([^"]+)"')
+DESTINATION_RE = re.compile(r'^\s*destination\s*=\s*"([^"]+)"')
+
+OPEN_BRACE = "{"
+CLOSE_BRACE = "}"
+
+
+def run(argv, timeout=10):
+    """Run a command, returning (rc, stdout). Never raises."""
+    try:
+        proc = subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,
+        )
+        return proc.returncode, proc.stdout.decode("utf-8", "replace")
+    except Exception:
+        return 127, ""
+
+
+def escape_label(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "")
+
+
+def metric(name, labels, value):
+    """Render one Prometheus sample line."""
+    if labels:
+        return name + OPEN_BRACE + labels + CLOSE_BRACE + " " + value
+    return name + " " + value
+
+
+def parse_config(path):
+    """Extract the paths this collector needs from a rendered agent config."""
+    cfg = {
+        "secret_id_file": "",
+        "ephemeral_secret_id": False,
+        "token_sink": "",
+        "destinations": [],
+    }
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except OSError:
+        return cfg
+
+    for line in lines:
+        match = SECRET_ID_FILE_RE.match(line)
+        if match:
+            cfg["secret_id_file"] = match.group(1)
+            continue
+        match = REMOVE_SECRET_ID_RE.match(line)
+        if match:
+            cfg["ephemeral_secret_id"] = match.group(1) == "true"
+            continue
+        match = SINK_PATH_RE.match(line)
+        if match and not cfg["token_sink"]:
+            cfg["token_sink"] = match.group(1)
+            continue
+        match = DESTINATION_RE.match(line)
+        if match:
+            cfg["destinations"].append(match.group(1))
+    return cfg
+
+
+def mtime(path):
+    """Return the file's mtime, or None when it does not exist."""
+    if not path:
+        return None
+    try:
+        return os.stat(path).st_mtime
+    except OSError:
+        return None
+
+
+def unit_active(unit):
+    rc, _ = run(["systemctl", "is-active", "--quiet", unit])
+    return 1 if rc == 0 else 0
+
+
+def recent_auth_errors(unit):
+    rc, out = run(
+        [
+            "journalctl",
+            "-u",
+            unit,
+            "--since",
+            "-" + AUTH_ERROR_WINDOW,
+            "--no-pager",
+            "-o",
+            "cat",
+        ],
+        timeout=20,
+    )
+    if rc != 0:
+        return -1  # journal unreadable; the check treats a negative as unknown
+    return sum(1 for line in out.splitlines() if AUTH_ERROR_RE.search(line))
+
+
+def collect():
+    lines = [
+        "# HELP vault_agent_collector_run_timestamp_seconds Unix time of the last "
+        "vault-agent-health-metrics run.",
+        "# TYPE vault_agent_collector_run_timestamp_seconds gauge",
+        metric(
+            "vault_agent_collector_run_timestamp_seconds", "", "%.0f" % time.time()
+        ),
+        "# HELP vault_agent_unit_active Vault Agent systemd unit is active (1) or not (0).",
+        "# TYPE vault_agent_unit_active gauge",
+        "# HELP vault_agent_token_sink_present Vault Agent token sink file exists.",
+        "# TYPE vault_agent_token_sink_present gauge",
+        "# HELP vault_agent_token_sink_mtime_seconds Unix mtime of the token sink; "
+        "rewritten on every successful authentication.",
+        "# TYPE vault_agent_token_sink_mtime_seconds gauge",
+        "# HELP vault_agent_secret_id_file_present AppRole SecretID file exists on disk.",
+        "# TYPE vault_agent_secret_id_file_present gauge",
+        "# HELP vault_agent_secret_id_ephemeral Agent uses "
+        "remove_secret_id_file_after_reading (single-use credential).",
+        "# TYPE vault_agent_secret_id_ephemeral gauge",
+        "# HELP vault_agent_auth_errors_recent Vault auth failures in the agent journal "
+        "over the recent window (-1 = journal unreadable).",
+        "# TYPE vault_agent_auth_errors_recent gauge",
+        "# HELP vault_agent_render_present Rendered destination file exists.",
+        "# TYPE vault_agent_render_present gauge",
+        "# HELP vault_agent_render_mtime_seconds Unix mtime of a rendered destination.",
+        "# TYPE vault_agent_render_mtime_seconds gauge",
+    ]
+
+    try:
+        configs = sorted(
+            name for name in os.listdir(CONFIG_DIR) if name.endswith(".hcl")
+        )
+    except OSError:
+        configs = []
+
+    for config_name in configs:
+        name = config_name[: -len(".hcl")]
+        agent_label = 'agent="' + escape_label(name) + '"'
+        unit = "vault-agent-" + name + ".service"
+        cfg = parse_config(os.path.join(CONFIG_DIR, config_name))
+
+        lines.append(
+            metric("vault_agent_unit_active", agent_label, "%d" % unit_active(unit))
+        )
+
+        sink_mtime = mtime(cfg["token_sink"])
+        lines.append(
+            metric(
+                "vault_agent_token_sink_present",
+                agent_label,
+                "%d" % (1 if sink_mtime is not None else 0),
+            )
+        )
+        if sink_mtime is not None:
+            lines.append(
+                metric(
+                    "vault_agent_token_sink_mtime_seconds",
+                    agent_label,
+                    "%.0f" % sink_mtime,
+                )
+            )
+
+        secret_id_mtime = mtime(cfg["secret_id_file"])
+        lines.append(
+            metric(
+                "vault_agent_secret_id_file_present",
+                agent_label,
+                "%d" % (1 if secret_id_mtime is not None else 0),
+            )
+        )
+        lines.append(
+            metric(
+                "vault_agent_secret_id_ephemeral",
+                agent_label,
+                "%d" % (1 if cfg["ephemeral_secret_id"] else 0),
+            )
+        )
+        lines.append(
+            metric(
+                "vault_agent_auth_errors_recent",
+                agent_label,
+                "%d" % recent_auth_errors(unit),
+            )
+        )
+
+        for destination in cfg["destinations"]:
+            labels = agent_label + ',destination="' + escape_label(destination) + '"'
+            dest_mtime = mtime(destination)
+            lines.append(
+                metric(
+                    "vault_agent_render_present",
+                    labels,
+                    "%d" % (1 if dest_mtime is not None else 0),
+                )
+            )
+            if dest_mtime is not None:
+                lines.append(
+                    metric(
+                        "vault_agent_render_mtime_seconds", labels, "%.0f" % dest_mtime
+                    )
+                )
+
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    try:
+        os.makedirs(TEXTFILE_DIR, exist_ok=True)
+    except OSError as exc:
+        print("cannot create %s: %s" % (TEXTFILE_DIR, exc), file=sys.stderr)
+        return 1
+
+    payload = collect()
+
+    # Atomic publish: node_exporter must never read a half-written sample. The
+    # temp name deliberately does not end in .prom so the collector skips it.
+    handle = None
+    tmp_path = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=TEXTFILE_DIR, prefix=".vault_agent.prom.")
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+        handle.write(payload)
+        handle.close()
+        handle = None
+        os.chmod(tmp_path, 0o644)
+        os.replace(tmp_path, OUTPUT_PATH)
+    except OSError as exc:
+        if handle is not None:
+            handle.close()
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        print("cannot write %s: %s" % (OUTPUT_PATH, exc), file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

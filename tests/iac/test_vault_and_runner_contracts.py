@@ -57,7 +57,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         spec = yaml.safe_load((REPO / ".github/workflows/post-merge-apply.yml").read_text())
         apply_job = spec["jobs"]["apply"]
         self.assertEqual(apply_job.get("environment"), "production")
-        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v2")
+        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v3")
         self.assertFalse(apply_job.get("concurrency", {}).get("cancel-in-progress"))
 
     def test_required_render_check_reports_on_every_pull_request(self):
@@ -402,6 +402,151 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             restart_task["systemd"]["state"],
         )
 
+    def test_vault_agent_durable_mode_persists_the_secret_id(self):
+        # 2026-07-18 -> 2026-07-25: vault-agent-hyrule-cloud on api 403-looped for
+        # a week because a response-wrapped SecretID is deleted after first read,
+        # so the restart on 18 July left it with no credential at all. Durable
+        # mode must clear the wrapping path (which is what makes the template emit
+        # remove_secret_id_file_after_reading = false) even when a stale wrapping
+        # path is still deployed in the host's .hcl.
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertIs(defaults["vault_agent_require_durable_secret_id"], False)
+
+        tasks = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        )
+        resolve = _task_by_name(tasks, "Resolve Vault Agent response wrapping path")
+        wrapping = resolve["set_fact"][
+            "vault_agent_effective_secret_id_response_wrapping_path"
+        ]
+        self.assertIn("vault_agent_require_durable_secret_id | bool", wrapping)
+
+        hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
+        self.assertIn("remove_secret_id_file_after_reading = false", hcl)
+        self.assertIn("remove_secret_id_file_after_reading = true", hcl)
+
+        # A wrapping token handed to a durable consumer would be persisted and
+        # spent on first use — the same trap by another route.
+        guard = _task_by_name(tasks, "Assert durable Vault Agent consumers get a plain SecretID")
+        self.assertIn("vault_agent_require_durable_secret_id | bool", guard["when"])
+        self.assertIn("secret_id_bound_cidrs", guard["assert"]["fail_msg"])
+
+    def test_vault_agent_stops_before_installing_a_wrapped_secret_id(self):
+        # A running agent in its retry loop unwraps the token the moment the file
+        # lands, so the restart afterwards finds a spent token
+        # ("wrapping token is not valid or does not exist"). Stop first.
+        text = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        stop_index = text.index("Stop Vault Agent before installing a response-wrapped SecretID")
+        install_index = text.index("Install Vault AppRole secret_id")
+        self.assertLess(stop_index, install_index)
+
+        tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        stop = _task_by_name(tasks, "Stop Vault Agent before installing a response-wrapped SecretID")
+        self.assertEqual(stop["systemd"]["state"], "stopped")
+        self.assertIn(
+            "vault_agent_effective_secret_id_response_wrapping_path | length > 0",
+            stop["when"],
+        )
+
+    def test_hyrule_cloud_requires_a_durable_secret_id(self):
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/hyrule_cloud/defaults/main.yml").read_text()
+        )
+        self.assertIs(defaults["hyrule_cloud_vault_require_durable_secret_id"], True)
+        self.assertIn(
+            "not hyrule_cloud_vault_require_durable_secret_id | bool",
+            defaults["hyrule_cloud_vault_secret_id_response_wrapping_path"],
+        )
+
+        vault_tasks = (REPO / "ansible/roles/hyrule_cloud/tasks/vault.yml").read_text()
+        self.assertIn(
+            "vault_agent_require_durable_secret_id: "
+            '"{{ hyrule_cloud_vault_require_durable_secret_id }}"',
+            vault_tasks,
+        )
+
+        runbook = (REPO / "docs/runbooks/bootstrap-hyrule-cloud-vault.md").read_text()
+        # The AppRole is only safe to persist when it is non-expiring AND pinned
+        # to api's single address.
+        self.assertIn("secret_id_ttl=0", runbook)
+        self.assertIn("secret_id_num_uses=0", runbook)
+        self.assertIn('secret_id_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
+        self.assertIn('token_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
+
+    def test_vault_agent_staleness_is_monitored(self):
+        # The July outage was silent for a week: the unit stayed active, so no
+        # existing check saw it. Every Vault Agent host must publish freshness
+        # metrics and every agent must have an Icinga service watching them.
+        metrics_tasks = (REPO / "ansible/roles/vault_agent/tasks/metrics.yml").read_text()
+        self.assertIn("vault-agent-health-metrics.timer", metrics_tasks)
+
+        collector = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent-health-metrics.py.j2"
+        ).read_text()
+        for metric in (
+            "vault_agent_token_sink_present",
+            "vault_agent_token_sink_mtime_seconds",
+            "vault_agent_secret_id_file_present",
+            "vault_agent_secret_id_ephemeral",
+            "vault_agent_auth_errors_recent",
+            "vault_agent_render_present",
+            "vault_agent_render_mtime_seconds",
+        ):
+            self.assertIn(metric, collector)
+
+        # node_exporter must actually read the textfile dir the collector writes.
+        monitoring_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/monitoring/defaults/main.yml").read_text()
+        )
+        vault_agent_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertIs(monitoring_defaults["monitoring_node_textfile_enabled"], True)
+        self.assertEqual(
+            monitoring_defaults["monitoring_textfile_dir"],
+            vault_agent_defaults["vault_agent_metrics_textfile_dir"],
+        )
+        self.assertIn(
+            "collector.textfile.directory",
+            (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text(),
+        )
+
+        plugin = REPO / "configs/mon/icinga2/scripts/check_vault_agent_health.py"
+        self.assertTrue(plugin.exists())
+        service = (REPO / "configs/mon/icinga2/services/vault-agent.conf").read_text()
+        self.assertIn('object CheckCommand "vault_agent_health"', service)
+        self.assertIn("for (agent in host.vars.vault_agents)", service)
+        self.assertIn("docs/runbooks/vault-agent-durable-auth.md", service)
+
+        # Every host that runs an agent is registered for the check.
+        self.assertIn(
+            'vars.vault_agents = [ "hyrule-cloud" ]',
+            (REPO / "configs/mon/icinga2/hosts/infra-vms.conf").read_text(),
+        )
+        for host, agents in (
+            ("noc", {"noc-agent"}),
+            ("ci", {"github-runner"}),
+            (
+                "loop",
+                {
+                    "engineering-loop",
+                    "knowledge-loop",
+                    "agent-core-collector",
+                    "agentic-observatory",
+                },
+            ),
+        ):
+            host_vars = yaml.safe_load(
+                (REPO / "ansible/inventory/host_vars" / f"{host}.yml").read_text()
+            )
+            self.assertEqual(
+                set(host_vars["monitoring_check_vars"]["vault_agents"]),
+                agents,
+                f"{host} must register its Vault Agents for the staleness check",
+            )
+
     def test_vault_agent_preserves_wrapped_approle_mode_on_repeat_apply(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
         names = [task["name"] for task in tasks]
@@ -683,7 +828,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/ci-runner", policy)
         self.assertNotIn("kv/data/noc-agent", policy)
 
-    def test_hyrule_cloud_domain_purchases_require_both_launch_allowlists(self):
+    def test_hyrule_cloud_domain_sales_require_explicit_scope_and_channel(self):
         template = (
             REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
         ).read_text()
@@ -697,8 +842,25 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             template,
         )
         self.assertIn(
-            '{{ $domainLaunchAllowed := and (gt (len (parseJSON $domainTlds)) 0) '
-            '(gt (len (parseJSON $domainAccounts)) 0) }}',
+            '{{ $domainMarketplace := or .Data.data.domain_marketplace_sales_enabled '
+            '"false" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainPayers := or .Data.data.domain_marketplace_payer_allowlist "[]" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainTldScope := or (gt (len (parseJSON $domainTlds)) 0) '
+            '(eq (printf "%v" $domainAllTlds) "true") }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainAccountCohort := gt (len (parseJSON $domainAccounts)) 0 }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainLaunchAllowed := and $domainTldScope $domainAccountCohort }}',
             template,
         )
         self.assertIn(
@@ -707,6 +869,29 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             'true{{ else }}false{{ end }}',
             template,
         )
+        self.assertIn(
+            'DOMAIN_MARKETPLACE_SALES_ENABLED={{ if and '
+            '(eq (printf "%v" $domainMarketplace) "true") $domainTldScope }}'
+            'true{{ else }}false{{ end }}',
+            template,
+        )
+
+    def test_domain_account_checkout_does_not_piggyback_on_marketplace_toggle(self):
+        # Regression: $domainLaunchAllowed used to fall back to "marketplace
+        # sales enabled" when domain_account_allowlist was empty. That let the
+        # exact canary Vault config the rollout runbook documents — purchases
+        # + marketplace enabled, tld_allowlist=["xyz"], no account allowlist —
+        # silently unlock account-based checkout too, not just the intended
+        # wallet-owned marketplace cohort. DOMAIN_PURCHASES_ENABLED's gate must
+        # depend only on a non-empty account allowlist.
+        template = (
+            REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
+        ).read_text()
+        launch_allowed_line = next(
+            line for line in template.splitlines() if "$domainLaunchAllowed :=" in line
+        )
+        self.assertNotIn("domainMarketplace", launch_allowed_line)
+        self.assertIn("domainAccountCohort", launch_allowed_line)
 
     def test_cloud_role_no_longer_renders_secret_env_from_ansible(self):
         role_text = "\n".join(path.read_text() for path in (REPO / "ansible/roles/hyrule_cloud/tasks").glob("*.yml"))

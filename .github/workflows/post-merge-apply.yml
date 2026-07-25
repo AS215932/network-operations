@@ -118,7 +118,7 @@ jobs:
     # this run never overlaps a manual apply.
     environment: production
     concurrency:
-      group: production-infra-live-v2
+      group: production-infra-live-v3
       cancel-in-progress: false
     timeout-minutes: 60
     env:

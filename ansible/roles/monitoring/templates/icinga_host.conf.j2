@@ -40,6 +40,13 @@ object Host "{{ inventory_hostname }}" {
   vars.{{ k }} = {{ v | to_json }}
 {% elif v is mapping %}
   vars.{{ k }} = { {% for kk, vv in v.items() %}{{ kk }} = {{ vv | to_json }}{% if not loop.last %}, {% endif %}{% endfor %} }
+{% elif v is sequence %}
+{# JSON arrays are valid Icinga2 array literals, so to_json renders them
+   directly. Needed by `apply Service ... for (x in host.vars.<list>)` rules
+   such as vault-agent.conf; without this branch a list fell through to the
+   raw-value branch and emitted Python repr (single quotes), which Icinga
+   rejects. #}
+  vars.{{ k }} = {{ v | to_json }}
 {% else %}
   vars.{{ k }} = {{ v }}
 {% endif %}

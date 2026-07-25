@@ -49,6 +49,82 @@
        ] + vault_agent_extra_dirs }}
   tags: [apply]
 
+- name: Check existing Vault Agent configuration
+  stat:
+    path: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
+  register: vault_agent_existing_config
+  tags: [apply]
+
+- name: Read existing Vault Agent response wrapping path
+  command:
+    argv:
+      - awk
+      - '/^[[:space:]]*secret_id_response_wrapping_path[[:space:]]*=/{gsub(/^[^"]*"/, ""); gsub(/".*$/, ""); print; exit}'
+      - "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
+  register: vault_agent_existing_response_wrapping_path
+  changed_when: false
+  failed_when: false
+  when: vault_agent_existing_config.stat.exists
+  tags: [apply]
+
+# Resolved before the credential files are written so the wrapped-mode stop
+# guard below knows which shape this apply is installing.
+#
+# vault_agent_require_durable_secret_id wins over everything: it clears a
+# wrapping path that is still deployed in the host's .hcl, which is what flips
+# an existing consumer from the single-use shape to the persisted one. Without
+# it the precedence is unchanged — an explicitly passed wrapping path, else a
+# plain secret_id means durable, else keep whatever is already deployed.
+- name: Resolve Vault Agent response wrapping path
+  set_fact:
+    vault_agent_effective_secret_id_response_wrapping_path: >-
+      {{
+        ''
+        if (
+          vault_agent_require_durable_secret_id | bool
+          or (
+            vault_agent_secret_id | length > 0
+            and vault_agent_secret_id_response_wrapping_path | length == 0
+          )
+        )
+        else (
+          vault_agent_secret_id_response_wrapping_path
+          if vault_agent_secret_id_response_wrapping_path | length > 0
+          else vault_agent_existing_response_wrapping_path.stdout | default('')
+        )
+      }}
+  tags: [apply]
+
+# Response-wrapping tokens are service tokens ("hvs." on Vault >= 1.10, "s." on
+# older releases); AppRole SecretIDs are UUIDs. Handing a wrapping token to a
+# durable consumer would persist a token that is spent on first use — the exact
+# trap this mode exists to remove — and the failure would only surface as a 403
+# loop on the target. Computed as a fact (no_log) so the assert below can report
+# the problem without echoing credential material.
+- name: Detect a response-wrapping token supplied as a plain SecretID
+  set_fact:
+    vault_agent_secret_id_looks_wrapped: >-
+      {{ vault_agent_secret_id is match('^(hvs\.|s\.)') }}
+  no_log: true
+  tags: [apply]
+
+- name: Assert durable Vault Agent consumers get a plain SecretID
+  assert:
+    that:
+      - not (vault_agent_secret_id_looks_wrapped | bool)
+    fail_msg: >-
+      vault-agent-{{ vault_agent_name }} requires a durable (persisted)
+      SecretID but was handed what looks like a response-wrapping token.
+      Mint a non-expiring SecretID instead:
+      `vault write -f auth/approle/role/{{ vault_agent_name }}/secret-id`
+      and pass the secret_id field. The AppRole must have
+      secret_id_num_uses=0, secret_id_ttl=0 and secret_id_bound_cidrs set —
+      see docs/runbooks/vault-agent-durable-auth.md.
+  when:
+    - vault_agent_require_durable_secret_id | bool
+    - vault_agent_secret_id | length > 0
+  tags: [apply]
+
 - name: Install Vault AppRole role_id
   copy:
     content: "{{ vault_agent_role_id }}"
@@ -59,6 +135,23 @@
   no_log: true
   when: vault_agent_role_id | length > 0
   register: vault_agent_role_id_state
+  tags: [apply]
+
+# Wrapped mode only. An agent already running in its auth retry loop unwraps
+# the token the moment the file lands, so the restart the role performs later
+# would find a spent token and fail with "wrapping token is not valid or does
+# not exist". Stopping first makes the unwrap happen exactly once. Skipped on
+# first bootstrap (no config yet ⇒ no unit to stop) and in durable mode, where
+# re-reading the persisted SecretID is harmless.
+- name: Stop Vault Agent before installing a response-wrapped SecretID
+  systemd:
+    name: "vault-agent-{{ vault_agent_name }}"
+    state: stopped
+  when:
+    - vault_agent_stop_before_wrapped_secret_id_install | bool
+    - vault_agent_secret_id | length > 0
+    - vault_agent_effective_secret_id_response_wrapping_path | length > 0
+    - vault_agent_existing_config.stat.exists
   tags: [apply]
 
 - name: Install Vault AppRole secret_id
@@ -84,41 +177,6 @@
   loop_control:
     label: "{{ item.name }}"
   register: vault_agent_templates_state
-  tags: [apply]
-
-- name: Check existing Vault Agent configuration
-  stat:
-    path: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
-  register: vault_agent_existing_config
-  tags: [apply]
-
-- name: Read existing Vault Agent response wrapping path
-  command:
-    argv:
-      - awk
-      - '/^[[:space:]]*secret_id_response_wrapping_path[[:space:]]*=/{gsub(/^[^"]*"/, ""); gsub(/".*$/, ""); print; exit}'
-      - "{{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl"
-  register: vault_agent_existing_response_wrapping_path
-  changed_when: false
-  failed_when: false
-  when: vault_agent_existing_config.stat.exists
-  tags: [apply]
-
-- name: Resolve Vault Agent response wrapping path
-  set_fact:
-    vault_agent_effective_secret_id_response_wrapping_path: >-
-      {{
-        ''
-        if (
-          vault_agent_secret_id | length > 0
-          and vault_agent_secret_id_response_wrapping_path | length == 0
-        )
-        else (
-          vault_agent_secret_id_response_wrapping_path
-          if vault_agent_secret_id_response_wrapping_path | length > 0
-          else vault_agent_existing_response_wrapping_path.stdout | default('')
-        )
-      }}
   tags: [apply]
 
 - name: Render Vault Agent configuration
@@ -220,6 +278,12 @@
       Existing active service plus rendered destinations is accepted only for
       steady-state, no-restart applies; the token sink is output state and is
       not sufficient restart bootstrap material.
+      {% if vault_agent_require_durable_secret_id | bool %}
+      This consumer runs in durable mode: the SecretID file is expected to
+      persist on disk. If it is gone, a previous wrapped-mode bootstrap
+      consumed it — mint a non-expiring, CIDR-bound SecretID and re-run.
+      See docs/runbooks/vault-agent-durable-auth.md.
+      {% endif %}
   tags: [apply]
 
 # Restart in-role (not via a handler) so vault_agent_name binds at task-execution
@@ -251,4 +315,13 @@
     - vault_agent_token_sink_group != "root" or vault_agent_token_sink_mode != "0600"
     - vault_agent_role_id | length > 0 or vault_agent_existing_role_id.stat.exists
     - vault_agent_has_bootstrap_material | bool or vault_agent_existing_token_sink.stat.exists
+  tags: [apply]
+
+# Host-wide (scans every .hcl in the config dir), so re-running it for a second
+# agent on the same host is a no-op. Publishes the freshness signals mon alerts
+# on — without this the July 2026 failure mode (agent active, auth broken,
+# renders frozen) is invisible to every existing check.
+- name: Install Vault Agent health metrics collector
+  include_tasks: metrics.yml
+  when: vault_agent_metrics_enabled | bool
   tags: [apply]

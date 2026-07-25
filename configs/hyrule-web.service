@@ -27,6 +27,10 @@ SyslogIdentifier=hyrule-web
 # Security hardening
 ProtectSystem=strict
 ReadWritePaths=/opt/hyrule-web
+# Writable last-good x402 manifest snapshot (hyrule-web falls back to it when
+# the api backend is unreachable; there is no hardcoded catalog mirror).
+StateDirectory=hyrule-web
+Environment=HYRULE_WEB_STATE_DIR=/var/lib/hyrule-web
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

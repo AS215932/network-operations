@@ -8,18 +8,23 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 playbook="${1:-}"
 limit="${2:-}"
 
-if ! command -v goss >/dev/null 2>&1; then
-  echo "::warning::goss is not installed on the runner; install goss before making postflight validation required"
-  exit 0
-fi
-
 case "$playbook" in
   ci)
+    if ! command -v goss >/dev/null 2>&1; then
+      echo "::warning::goss is not installed on the runner; install goss before making postflight validation required"
+      exit 0
+    fi
     spec="$repo_root/tests/goss/ci-runner.yml"
     ;;
   cloud)
-    echo "::notice::hyrule-cloud Goss spec is staged, but target-side execution is paused with the cloud/web refactor"
-    exit 0
+    limit_args=()
+    if [[ -n "$limit" ]]; then
+      limit_args=(--limit "$limit")
+    fi
+    cd "$repo_root/ansible"
+    exec ansible-playbook playbooks/goss_cloud.yml \
+      -e ansible_user=ci \
+      "${limit_args[@]}"
     ;;
   rtr_routing|firewall|frr)
     echo "::notice::router Goss spec is staged; remote target execution must be wired before making it a hard apply gate"

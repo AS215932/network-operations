@@ -1,0 +1,22 @@
+# /etc/systemd/system/vault-agent-health-metrics.service
+# Managed by ansible/roles/vault_agent.
+#
+# Host-wide: one unit covers every Vault Agent configured in
+# {{ vault_agent_config_dir }}. Started by the matching .timer.
+
+[Unit]
+Description=Publish Vault Agent health metrics for node_exporter
+
+[Service]
+Type=oneshot
+User=root
+# Reads {{ vault_agent_config_dir }} (0750 root), the agent journals and the
+# mtimes of rendered secret destinations; writes only the textfile sample.
+ExecStart={{ vault_agent_metrics_script }}
+ProtectSystem=strict
+ReadWritePaths={{ vault_agent_metrics_textfile_dir }}
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes

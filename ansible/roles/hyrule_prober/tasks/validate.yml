@@ -1,0 +1,36 @@
+---
+- name: Assert hyrule_prober_version is pinned to a commit SHA
+  ansible.builtin.assert:
+    that:
+      - hyrule_prober_version is defined
+      - hyrule_prober_version is match('^[0-9a-fA-F]{40}$')
+    fail_msg: >-
+      hyrule_prober_version must be a 40-character commit SHA. Production deploys
+      are SHA-pinned from host_vars/noc.yml.
+
+- name: Assert prober and api peers exist
+  ansible.builtin.assert:
+    that:
+      - peers.noc.ipv6 is defined
+      - peers.api.ipv6 is defined
+    fail_msg: peers.noc and peers.api must be defined in group_vars/all.yml.
+
+- name: Assert prober API listener is not a wildcard
+  ansible.builtin.assert:
+    that:
+      - "'0.0.0.0' not in hyrule_prober_listen_addr"
+      - "'[::]' not in hyrule_prober_listen_addr"
+    fail_msg: >-
+      The prober must bind noc's internal address, never a wildcard — it is not
+      Internet-reachable.
+
+- name: Assert vantage names match Hyrule Cloud DiagnosticVantage values
+  ansible.builtin.assert:
+    that:
+      - hyrule_prober_vantages | length > 0
+      - >-
+        (hyrule_prober_vantages | map(attribute='name') | list
+          | difference(['as215932', 'extmon']) | length) == 0
+    fail_msg: >-
+      Every prober vantage name must be one of as215932/extmon so Hyrule Cloud's
+      requested vantages resolve on the prober.

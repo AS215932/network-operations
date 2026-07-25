@@ -209,17 +209,16 @@ scrape_configs:
         replacement: "[::1]:9115"
 
   # Exercise IPv4 DNS reachability from the dual-stack off-net exporter (the mon
-  # VM has no public IPv4 route). Only ns2 is probed: ns1 (internal Knot) has no
-  # public IPv4 DNS endpoint — ns1.servify.network's A record is the web/proxy IP
-  # (46.105.40.223, HTTP only), which does not answer on :53. See the follow-up
-  # issue on ns1's IPv4 glue.
+  # VM has no public IPv4 route). The primary is reached through rtr's public
+  # 46.105.40.223:53 DNAT; ns2 is the independent off-net authority.
   - job_name: blackbox-dns-hyrule-ipv4
     metrics_path: /probe
     params:
       module: [dns_soa_hyrule_host]
     static_configs:
       - targets:
-          - "54.38.14.218:53"              # ns2 IPv4 (sole IPv4-reachable authoritative NS)
+          - "46.105.40.223:53"             # ns1 via rtr public IPv4 DNAT
+          - "54.38.14.218:53"              # ns2 public IPv4
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -234,7 +233,8 @@ scrape_configs:
       module: [dns_soa_deploy_hyrule_host]
     static_configs:
       - targets:
-          - "54.38.14.218:53"              # ns2 IPv4 (sole IPv4-reachable authoritative NS)
+          - "46.105.40.223:53"             # ns1 via rtr public IPv4 DNAT
+          - "54.38.14.218:53"              # ns2 public IPv4
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

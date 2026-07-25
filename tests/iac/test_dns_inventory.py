@@ -10,6 +10,8 @@ REPO = Path(__file__).resolve().parents[2]
 FORWARD_ZONE = REPO / "configs/as215932.net.zone"
 REVERSE_ZONE = REPO / "configs/0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.zone"
 GROUP_VARS = REPO / "ansible/inventory/group_vars/all.yml"
+NAMESERVER_VARS = REPO / "ansible/inventory/group_vars/nameservers.yml"
+HYRULE_ZONE = REPO / "configs/hyrule.host.zone"
 AS215932_REVERSE_ORIGIN = "0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa."
 
 
@@ -127,6 +129,17 @@ class DnsInventoryTest(unittest.TestCase):
                     ip6 = ipaddress.IPv6Address(value)
                     self.assertFalse(ip6.is_link_local, f"{zone}: {fqdn} leaks link-local IPv6 {ip6}")
                     self.assertFalse(ip6.is_private and not ip6.is_global, f"{zone}: {fqdn} leaks ULA/special IPv6 {ip6}")
+
+    def test_hyrule_nameserver_glue_is_deployed_without_rebranding_delegation(self):
+        records = parse_zone_records(HYRULE_ZONE)
+        self.assertIn(("hyrule.host.", "NS", "ns1.servify.network"), records)
+        self.assertIn(("hyrule.host.", "NS", "ns2.servify.network"), records)
+        self.assertIn(("ns1.hyrule.host.", "A", "46.105.40.223"), records)
+        self.assertIn(("ns2.hyrule.host.", "A", "54.38.14.218"), records)
+
+        nameservers = yaml.safe_load(NAMESERVER_VARS.read_text())
+        self.assertTrue(nameservers["knot_apply"])
+        self.assertIn({"name": "hyrule.host"}, nameservers["knot_zones"])
 
 
 if __name__ == "__main__":

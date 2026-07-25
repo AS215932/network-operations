@@ -36,8 +36,20 @@ class AppPromotionBotTest(unittest.TestCase):
                 self.assertIn(pin_assignment, workflow_text)
 
         self.assertIn("unsupported promotion source repository", workflow_text)
-        self.assertIn('gh api "repos/${repo}/commits/${sha}" --jq .sha', workflow_text)
+        self.assertIn('gh api "repos/${repo}/git/commits/${sha}" --jq .sha', workflow_text)
         self.assertIn("repository_dispatch payload sha must be a 40-character commit SHA", workflow_text)
+
+    def test_promote_apps_retries_and_falls_back_to_public_commit_verification(self):
+        workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()
+
+        self.assertIn("for attempt in 1 2 3", workflow_text)
+        self.assertIn("Authenticated source commit lookup failed", workflow_text)
+        self.assertIn("Falling back to public source commit verification", workflow_text)
+        self.assertIn("--retry-all-errors", workflow_text)
+        self.assertIn(
+            '"https://api.github.com/repos/${repo}/git/commits/${sha}"',
+            workflow_text,
+        )
 
     def test_promote_apps_uses_app_token_and_rebuilds_branch_from_main(self):
         workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()

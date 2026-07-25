@@ -8,6 +8,18 @@
   when: ansible_os_family == "Debian"
   tags: [apply]
 
+- name: Ensure node_exporter textfile collector dir exists (Debian)
+  file:
+    path: "{{ monitoring_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_node_textfile_enabled | bool
+  tags: [apply]
+
 - name: Configure node_exporter listen address (Debian)
   lineinfile:
     path: "{{ monitoring_node_env_path }}"
@@ -20,9 +32,15 @@
     # fleet-wide (the blind spot is not github-runner-specific); it adds one
     # series per systemd unit, so set monitoring_node_restart_metrics: false in
     # host_vars on any high-cardinality node where that scrape cost matters.
+    #
+    # --collector.textfile.directory lets on-host collectors publish state that
+    # node_exporter cannot derive itself. First consumer: the Vault Agent health
+    # collector, which is the only thing that sees an agent stuck in a 403 auth
+    # loop while its unit stays active.
     line: >-
       ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd{{
-      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}"
+      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}{{
+      ' --collector.textfile.directory=' ~ monitoring_textfile_dir if monitoring_node_textfile_enabled | bool else '' }}"
     owner: root
     group: root
     mode: "0644"

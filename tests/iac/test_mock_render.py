@@ -80,6 +80,19 @@ class MockRenderTest(unittest.TestCase):
             "customer_ipv6_dns",
         ):
             self.assertIn(f".Data.data.{key}", rendered)
+        for setting in (
+            "XCPNG_VCPU_OVERCOMMIT_RATIO=2.0",
+            "XCPNG_MEMORY_HEADROOM_MB=2048",
+            "XCPNG_STORAGE_HEADROOM_GB=20",
+            "PAYMENT_PRICE_VM_XS=0.20",
+            "PAYMENT_PRICE_VM_SM=0.40",
+            "PAYMENT_PRICE_VM_MD=0.60",
+            "PAYMENT_PRICE_VM_LG=0.80",
+            "PAYMENT_PRICE_VM_ADDON_VCPU=0.10",
+            "PAYMENT_PRICE_VM_ADDON_RAM_GB=0.15",
+            "PAYMENT_PRICE_VM_ADDON_DISK_10GB=0.05",
+        ):
+            self.assertIn(setting, rendered)
 
     def test_reliability_governor_templates_render(self):
         context = deepcopy(MOCK)

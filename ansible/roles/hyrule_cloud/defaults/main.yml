@@ -37,19 +37,38 @@ hyrule_cloud_worker_service_name: hyrule-cloud-worker
 # the unit; loopback works.
 hyrule_cloud_listen_url: http://[::1]:8402/health
 
-# Runtime secrets are rendered on the target VM by Vault Agent. CI should pass
-# a short-lived response-wrapped SecretID as VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID
-# for first bootstrap/re-bootstrap; a direct SecretID remains as an emergency
-# fallback only.
+# Runtime secrets are rendered on the target VM by Vault Agent, using a durable
+# (persisted) AppRole SecretID passed as VAULT_HYRULE_CLOUD_SECRET_ID.
+#
+# It used to be the other way round — a response-wrapped SecretID was the
+# documented path — and that caused a week-long silent outage: Vault Agent
+# consumes and DELETES a wrapped SecretID on first read, so the restart on
+# 2026-07-18 left vault-agent-hyrule-cloud with no credential. It 403-looped
+# until 2026-07-25 while systemd still showed it `active (running)`,
+# /opt/hyrule-cloud/.env stayed frozen at its 18 July content, and every
+# `vault kv patch` in between never reached the app.
+#
+# The durable SecretID must be non-expiring (secret_id_ttl=0,
+# secret_id_num_uses=0) and, because it now sits at rest on the VM, the AppRole
+# must be bound to api's address with secret_id_bound_cidrs / token_bound_cidrs
+# so a copied credential is useless anywhere else. Setup commands:
+# docs/runbooks/vault-agent-durable-auth.md.
+#
+# hyrule_cloud_vault_wrapped_secret_id is kept for break-glass use with
+# hyrule_cloud_vault_require_durable_secret_id explicitly turned off; while the
+# require flag is true the role refuses a wrapping token and forces the
+# persisted shape (clearing any wrapping path left in the deployed .hcl).
 hyrule_cloud_env_file: "{{ hyrule_cloud_install_dir }}/.env"
 hyrule_cloud_vault_enabled: true
 hyrule_cloud_vault_role_name: hyrule-cloud
+hyrule_cloud_vault_require_durable_secret_id: true
 hyrule_cloud_vault_role_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_ROLE_ID') | default('', true) }}"
 hyrule_cloud_vault_wrapped_secret_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_WRAPPED_SECRET_ID') | default('', true) }}"
 hyrule_cloud_vault_secret_id: "{{ lookup('env', 'VAULT_HYRULE_CLOUD_SECRET_ID') | default('', true) }}"
 hyrule_cloud_vault_secret_id_response_wrapping_path: >-
   {{ ('auth/approle/role/' ~ hyrule_cloud_vault_role_name ~ '/secret-id')
-     if (hyrule_cloud_vault_wrapped_secret_id | length > 0) else '' }}
+     if (hyrule_cloud_vault_wrapped_secret_id | length > 0
+         and not hyrule_cloud_vault_require_durable_secret_id | bool) else '' }}
 hyrule_cloud_vault_render_hook: /usr/local/sbin/hyrule-cloud-vault-render-hook
 hyrule_cloud_monero_wallet_rpc_enabled: false
 hyrule_cloud_monero_wallet_rpc_service_name: monero-wallet-rpc
@@ -71,6 +90,11 @@ hyrule_cloud_required_env_keys:
   - OPENPROVIDER_TECH_HANDLE
   - OPENPROVIDER_BILLING_HANDLE
   - DOMAIN_PURCHASES_ENABLED
+  - DOMAIN_MARKETPLACE_SALES_ENABLED
+  - DOMAIN_MARKETPLACE_PAYER_ALLOWLIST
+  - DOMAIN_ALLOW_ALL_ELIGIBLE_TLDS
+  - DOMAIN_REGISTRATION_LIMIT_PER_24H
+  - DOMAIN_MARKETPLACE_PREFLIGHTS_PER_HOUR
   - DOMAIN_LEGAL_APPROVED
   - DOMAIN_TAX_APPROVED
   - DOMAIN_DNS_CONTROL_SECRET
@@ -99,6 +123,9 @@ hyrule_cloud_packages:
   - git
   - ca-certificates
   - curl
+  # Post-deploy validation runs on the API host so service, socket, and
+  # protected-file checks observe the deployed target rather than the runner.
+  - goss
   # libpq-dev is needed by asyncpg/psycopg builds on Debian. The api VM
   # already has it because PostgreSQL is installed locally; listing it
   # here makes the role portable to a fresh host.
