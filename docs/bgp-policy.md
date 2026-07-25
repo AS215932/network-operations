@@ -131,6 +131,31 @@ curl -s "https://stat.ripe.net/data/rpki-roas/data.json?resource=2a0c:b641:b50::
 If the aggregate is ever re-issued with a different maxLength, the more-specifics
 must be re-checked before the next FRR deploy.
 
+**A valid ROA is necessary but not sufficient.** Upstreams build their customer
+prefix-filters from **IRR**, not from RPKI. A prefix with a valid ROA and no
+`route6` object will be accepted by your own router, advertised to the upstream,
+and silently dropped there — it simply never appears in the DFZ.
+
+This is exactly what happened on first deploy: both /48s were RPKI Valid, cr1-ch1
+advertised all three prefixes to Securebit, and RIPEstat showed `0 / 324` RIS
+peers seeing either /48, because only the /44 had a `route6` object. Tracked in
+#480.
+
+Check **both** before announcing a new prefix:
+
+```bash
+# 1. RPKI — is the announcement authorised?
+curl -s "https://stat.ripe.net/data/rpki-roas/data.json?resource=<prefix>"
+
+# 2. IRR — will upstreams' filters actually admit it?
+whois -h whois.ripe.net -- "-T route6 <prefix>"
+# A result showing only the covering aggregate means NO object exists for it.
+
+# 3. After deploying, confirm it actually propagated:
+curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=<prefix>"
+# ris_peers_seeing == 0 means it is being filtered upstream.
+```
+
 ## Transit and IX filters
 
 Every eBGP neighbour has both an inbound and an outbound route-map — enforced by
