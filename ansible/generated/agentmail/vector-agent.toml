@@ -1,0 +1,60 @@
+# /etc/vector/vector.toml — managed by ansible (roles/logs)
+# Host: agentmail  Role: agent-mail
+# Generated: do not edit by hand.
+#
+# Reads journald (Linux) or files (FreeBSD), normalizes labels, ships
+# vector-native protocol to log:6000.
+# See docs/application-logging.md for the contract apps follow.
+
+data_dir = "/var/lib/vector"
+
+# --- API (health probe + tap) ---
+[api]
+enabled = true
+address = "127.0.0.1:8686"
+
+# --- Sources -----------------------------------------------------------------
+
+[sources.journald]
+type = "journald"
+include_units = []   # all units
+# Without since_now, Vector replays the host's entire journald history on
+# first start. Loki then 500s with "timestamp too old" / "no schema config
+# found" for entries older than reject_old_samples_max_age. Forensics
+# pre-agent-install isn't queryable through Loki anyway, so cap at "now".
+since_now = true
+
+
+
+
+# --- Transforms --------------------------------------------------------------
+
+# Lift JSON-encoded MESSAGE bodies into structured fields. OS daemons that
+# emit plaintext fall through unchanged with .message preserved.
+[transforms.parse_json]
+type = "remap"
+inputs = ["journald"]
+source = '''
+parsed, err = parse_json(.message)
+if err == null && is_object(parsed) {
+    . = merge(., object!(parsed))
+}
+.service = string(.service) ?? string(._SYSTEMD_UNIT) ?? string(.SYSLOG_IDENTIFIER) ?? "unknown"
+.level = string(.level) ?? "info"
+.host = "agentmail"
+.role = "agent-mail"
+'''
+
+# --- Sinks -------------------------------------------------------------------
+
+[sinks.aggregator]
+type = "vector"
+inputs = ["parse_json"]
+address = "[2a0c:b641:b50:2::b0]:6000"
+version = "2"
+compression = true
+
+[sinks.aggregator.buffer]
+type = "disk"
+max_size = 1073741824
+when_full = "block"

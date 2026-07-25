@@ -49,11 +49,13 @@ cross_cutting_flows:
   - { from: mon, to: ns2, proto: udp, port: 53, purpose: "blackbox_exporter authoritative DNS probes (apex AAAA and delegated-zone SOA)" }
   - { from: mon, to: extmon, proto: tcp, port: 9115, purpose: "delegate public IPv4 API health probe to off-net blackbox_exporter" }
   - { from: api, to: mon, proto: tcp, port: 9090, purpose: "customer-facing service-status query of curated Prometheus alerts" }
+  - { from: mon, to: agentmail, proto: tcp, port: 443, purpose: "Stalwart readiness and Prometheus metrics scrape" }
 
   # --- Authoritative DNS / dynamic updates / zone transfer ---
   - { from: api, to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic updates (TSIG hyrule-dns)" }
   - { from: proxy, to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic updates (TSIG hyrule-dns)" }
   - { from: irc, to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic updates for ACME DNS-01 (TSIG hyrule-dns)" }
+  - { from: agentmail, to: dns, proto: tcp, port: 53, purpose: "RFC 2136 updates for Agent Mail DNS and ACME DNS-01 (TSIG hyrule-dns)" }
   - { from: dns, to: ns2, proto: "tcp+udp", port: 53, purpose: "NOTIFY to the off-net secondary (TSIG hyrule-dns)" }
   - { from: ns2, to: dns, proto: tcp, port: 53, purpose: "AXFR pull on NOTIFY (TSIG hyrule-dns)" }
 
@@ -115,7 +117,7 @@ network_externals:
   package-registries: { name: "PyPI / npm / ghcr.io / Docker Hub", note: "toolchain and container image pulls" }
   ops-prefix: { name: "ops workstation prefix (KPN home)", note: "2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow" }
   vpn-clients: { name: "VPN clients", note: "2a0c:b641:b50:3::/64, routed via the vpn VM" }
-  all-infra: { name: "log-shipping infra hosts", note: "infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator)." }
+  all-infra: { name: "log-shipping infra hosts", note: "infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop, agentmail. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator)." }
   all-linux: { name: "every Linux host", note: "all Debian VMs (routine apt / NTP egress)" }
   routers: { name: "AS215932 routers", note: "rtr, cr1-nl1, cr1-de1, cr1-ch1" }
 

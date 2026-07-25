@@ -54,8 +54,19 @@ vault kv put kv/ci-runner \
     icinga_api_user="..." \
     icinga_api_password="..." \
     icinga_noc_agent_api_password="..." \
-    network_proxy_token="..."
+    network_proxy_token="..." \
+    agent_mail_dns_tsig_secret="<unwrapped-base64url>" \
+    agent_mail_webhook_secret="<unwrapped-base64url>" \
+    agent_mail_recovery_admin_secret="" \
+    agent_mail_public_ipv4=""
 ```
+
+The Agent Mail apply workflow reads those fields through the same rendered
+runner environment. Keep the recovery value empty except during the reviewed
+bootstrap apply, then patch it back to empty immediately. Populate the public
+IPv4 only after the dedicated address is assigned. Agent Mail secrets must be
+single-line values without quotes or backslashes; unwrapped base64url is the
+preferred representation because the rendered file is sourced by Bash.
 
 Do **not** store `XO_TOKEN` or `XCPNG_XO_TOKEN` here. Hyrule Cloud receives
 XCP-ng/Openprovider/payment/database secrets through its own target-side Vault

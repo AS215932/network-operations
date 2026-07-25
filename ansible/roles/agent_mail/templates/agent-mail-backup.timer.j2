@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Stalwart Agent Mail backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+RandomizedDelaySec=20m
+Persistent=true
+Unit=agent-mail-backup.service
+
+[Install]
+WantedBy=timers.target

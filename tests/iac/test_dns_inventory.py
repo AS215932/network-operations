@@ -7,7 +7,7 @@ import yaml
 
 
 REPO = Path(__file__).resolve().parents[2]
-FORWARD_ZONE = REPO / "configs/as215932.net.zone"
+FORWARD_ZONES = tuple(sorted((REPO / "configs").glob("*.zone")))
 REVERSE_ZONE = REPO / "configs/0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.zone"
 GROUP_VARS = REPO / "ansible/inventory/group_vars/all.yml"
 AS215932_REVERSE_ORIGIN = "0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa."
@@ -64,7 +64,9 @@ def ptr_relative_to_ip(relative_name, origin):
 class DnsInventoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.forward_records = parse_zone_records(FORWARD_ZONE)
+        cls.forward_records = [
+            record for zone in FORWARD_ZONES for record in parse_zone_records(zone)
+        ]
         cls.reverse_records = parse_zone_records(REVERSE_ZONE)
         cls.forward_by_name = {}
         for name, rtype, value in cls.forward_records:
@@ -90,7 +92,7 @@ class DnsInventoryTest(unittest.TestCase):
         infra_net = ipaddress.IPv6Network(self.vars["infra_subnet"])
         expected = {}
         for name, data in self.vars["peers"].items():
-            dns_name = name.replace("_", "-")
+            dns_name = data.get("dns_name", name.replace("_", "-"))
             if data.get("ipv6") and data["ipv6"] != "::":
                 ip = ipaddress.IPv6Address(data["ipv6"])
                 if ip in infra_net:

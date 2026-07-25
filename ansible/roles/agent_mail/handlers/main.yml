@@ -1,0 +1,13 @@
+---
+- name: restart agent mail
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --file
+      - "{{ agent_mail_compose_file }}"
+      - up
+      - --detach
+      - --remove-orphans
+  when: agent_mail_start | bool
+  changed_when: true

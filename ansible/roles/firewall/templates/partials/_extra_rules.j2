@@ -24,6 +24,7 @@ dport {{ dport }}
 {%- endif -%}
 {%- endmacro -%}
 {% for r in firewall_extra_rules %}
+{% if r.enabled | default(true) | bool %}
 {% set fams = ['ip6'] if (r.family | default('ip6')) == 'ip6' else (['ip'] if r.family == 'ip' else ['ip6', 'ip']) %}
 {% set protos = ['tcp', 'udp'] if r.proto == 'tcp+udp' else [r.proto] %}
 {% for fam in fams %}
@@ -31,4 +32,5 @@ dport {{ dport }}
         {% if r.iifname is defined %}iifname {{ r.iifname }} {% endif %}{{ render_src(r.src, fam) }} {% if proto in ['tcp', 'udp'] %}{{ proto }} {{ render_dport(r.dport) }} {% endif %}counter accept comment "{{ r.comment }}"
 {% endfor %}
 {% endfor %}
+{% endif %}
 {% endfor %}

@@ -23,8 +23,8 @@ firewall_extra_rules:
   - { proto: tcp, dport: 53, src: "{{ ops_prefix_v6 }}", family: ip6, comment: "AXFR from ops-prefix (v6)" }
   - { proto: tcp, dport: 53, src: "{{ ops_prefix_v4 }}", family: ip,  comment: "AXFR from ops-prefix (v4)" }
 
-  # RFC 2136 dynamic updates from api (TSIG), proxy (ACME DNS-01), irc (ACME DNS-01).
-  - { proto: tcp, dport: 53, src: ["{{ peers.api.ipv6 }}", "{{ peers.proxy.ipv6 }}", "{{ peers.irc.ipv6 }}"], comment: "RFC 2136 dyn updates from api/proxy/irc" }
+  # RFC 2136 dynamic updates from api and ACME-capable service hosts.
+  - { proto: tcp, dport: 53, src: ["{{ peers.api.ipv6 }}", "{{ peers.proxy.ipv6 }}", "{{ peers.irc.ipv6 }}", "{{ peers.agentmail.ipv6 }}"], comment: "RFC 2136 dyn updates from api/proxy/irc/agentmail" }
 
   # Desired-state customer-zone control. HMAC-authenticated by the service and
   # reachable only from the hyrule-cloud API host.

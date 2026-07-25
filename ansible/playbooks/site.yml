@@ -1,3 +1,4 @@
 ---
 - import_playbook: firewall.yml
 - import_playbook: mail_openbsd.yml
+- import_playbook: agent_mail.yml

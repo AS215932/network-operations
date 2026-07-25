@@ -22,6 +22,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 
 | Host | OS | IPv6 (overlay) | IPv4 | Role |
 |---|---|---|---|---|
+| agentmail | Debian 13 | `2a0c:b641:b50:2::110` | unassigned — dedicated address and PTR required before launch | Stalwart Agent Mail (dedicated, API-only) |
 | api | Debian 13 | `2a0c:b641:b50:2::20` | — | hyrule-cloud (FastAPI :8402) + Postgres |
 | ci | Debian 13 | `2a0c:b641:b50:2::d0` | — | Self-hosted GitHub Actions runner (privileged) |
 | ci-pr | Debian 13 | `2a0c:b641:b51::c1` | — | Unprivileged PR runner (PR-Agent/Semgrep/PR CI) |
@@ -71,6 +72,27 @@ dom0 is an XCP-NG hypervisor on the underlay only; it is not on the AS215932 ove
 
 Inbound tables are rendered from each host's `firewall_extra_rules`; outbound tables from `network_flows_outbound`. SSH and other cross-cutting flows are in the cross-cutting section below, not repeated per host.
 
+### agentmail — Dedicated Stalwart host for disposable Agent Mail accounts; public launch remains gated off in inventory.
+
+> Only SMTP reception on tcp/25 is eligible for public exposure. HTTPS/JMAP is private to api/mon/operators; SMTP submission, IMAP, POP, ManageSieve, and webmail are never published.
+
+**Inbound**
+
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| api, mon, ops-prefix, vpn-clients | tcp | 443 | Agent Mail internal HTTPS/JMAP |
+| mon | tcp | 9100 | node_exporter scrape |
+
+**Outbound**
+
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| public | tcp | 25 | outbound SMTP delivery from product mailboxes |
+| dns | tcp+udp | 53 | Agent Mail resolver traffic and TSIG-authenticated DNS updates |
+| acme-providers | tcp | 443 | certificate issuance |
+| hyrule-cloud | tcp | 443 | signed Stalwart event webhooks |
+| package-registries | tcp | 443 | pinned Stalwart container image pull |
+
 ### api — hyrule-cloud VM-lifecycle API on :8402 backed by PostgreSQL, with postgres_exporter for monitoring.
 
 **Inbound**
@@ -86,6 +108,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
+| agentmail | tcp | 443 | Agent Mail management JMAP and mailbox data plane |
 | openprovider | tcp | 443 | domain registration API |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
 | dns | tcp | 8453 | HMAC-authenticated managed customer DNS control |
@@ -194,7 +217,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| api, proxy, irc | tcp | 53 | RFC 2136 dyn updates from api/proxy/irc |
+| api, proxy, irc, agentmail | tcp | 53 | RFC 2136 dyn updates from api/proxy/irc/agentmail |
 | ns2 | tcp | 53 | AXFR from ns2 (v6) |
 | ns2 (v4) | tcp (v4) | 53 | AXFR from ns2 (v4) |
 | ops-prefix | tcp | 53 | AXFR from ops-prefix (v6) |
@@ -268,6 +291,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | mon | tcp | 3100 | Loki HTTP API from Grafana on mon |
+| agentmail | tcp | 6000 | Vector ingest from agentmail |
 | api | tcp | 6000 | Vector ingest from api |
 | ci | tcp | 6000 | Vector ingest from ci |
 | cr1-de1 loopback | tcp | 6000 | Vector ingest from cr1-de1 (over WG mesh) |
@@ -539,6 +563,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 
 | From | To | Proto | Port | Purpose |
 |---|---|---|---|---|
+| agentmail | dns | tcp | 53 | RFC 2136 updates for Agent Mail DNS and ACME DNS-01 (TSIG hyrule-dns) |
 | all (except extmon, ns2, cr1-nl1, cr1-de1, cr1-ch1) | rtr | tcp+udp | 53 | DNS recursion via Unbound (incl. DNS64 synthesis) |
 | all-infra | log | tcp | 6000 | Vector agent to aggregator (Loki ingest) |
 | all-linux | debian-mirrors | tcp | 80 | apt / unattended-upgrades |
@@ -553,6 +578,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | irc | dns | tcp | 53 | RFC 2136 dynamic updates for ACME DNS-01 (TSIG hyrule-dns) |
 | loop | vault | tcp | 8200 | vault-agent secret render |
 | mail | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
+| mon | agentmail | tcp | 443 | Stalwart readiness and Prometheus metrics scrape |
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
 | mon | all (except extmon) | tcp | 9100 | node_exporter scrape |
 | mon | api | tcp | 9187 | postgres_exporter scrape |
@@ -589,7 +615,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
+| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop, agentmail. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
 | `all-linux` | every Linux host | all Debian VMs (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |

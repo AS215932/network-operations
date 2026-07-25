@@ -26,3 +26,4 @@ network_flows_outbound:
   - { to: dns, proto: tcp, port: 8453, purpose: "HMAC-authenticated managed customer DNS control" }
   - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
   - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }
+  - { to: agentmail, proto: tcp, port: 443, purpose: "Agent Mail management JMAP and mailbox data plane" }
