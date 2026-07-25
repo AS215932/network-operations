@@ -30,6 +30,7 @@ on:
           - web
           - noc
           - network-proxy
+          - prober
           - vault
           - ci
           - ci-runner-key
