@@ -162,8 +162,9 @@ groups:
 
       - alert: HyrulePublicDNSDegraded
         # A zone is "degraded" when exactly one of its two authoritative
-        # nameservers answers (sum == 1 of 2) while the other zone still has at
-        # least one server up. Serial-freshness detection is deliberately NOT
+        # nameservers answers on either monitored address family, or when a
+        # probe series is missing, while the other zone still has at least one
+        # server up. Serial-freshness detection is deliberately NOT
         # here: blackbox_exporter exposes no SOA-serial metric, so a cross-NS
         # serial comparison cannot be expressed with these probes. Tracked for a
         # dedicated exporter in the follow-up issue.
@@ -196,13 +197,13 @@ groups:
             sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) > 0
           )
             or on()
-          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 1
+          sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) != 2
             or on()
-          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 1
+          (count(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) != 2
             or on()
-          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 1
+          sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) != 2
             or on()
-          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 1
+          (count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) != 2
         for: 2m
         labels:
           severity: warning
@@ -225,7 +226,7 @@ groups:
               and on()
             (sum(probe_success{job="blackbox-dns-hyrule-ipv4"}) or vector(0)) == 0
               and on()
-            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 1
+            count(probe_success{job="blackbox-dns-hyrule-ipv4"}) == 2
           )
             or on()
           (
@@ -235,7 +236,7 @@ groups:
               and on()
             (sum(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) or vector(0)) == 0
               and on()
-            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 1
+            count(probe_success{job="blackbox-dns-hyrule-deploy-ipv4"}) == 2
           )
         for: 2m
         labels:
