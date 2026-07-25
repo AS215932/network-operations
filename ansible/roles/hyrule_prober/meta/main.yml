@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: hyrule_prober
+  author: AS215932
+  description: Internal Hyrule Prober sidecar (AS215932 looking-glass) deployment
+  license: MIT
+  min_ansible_version: "2.14"
+
+dependencies: []

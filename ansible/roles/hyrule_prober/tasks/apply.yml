@@ -1,0 +1,108 @@
+---
+- name: Assert prober auth token is available for apply
+  ansible.builtin.assert:
+    that:
+      - hyrule_prober_auth_token | length >= 32
+    fail_msg: >-
+      HYRULE_PROBER_TOKEN must be available to the apply run and at least 32
+      characters. Store prober_token in kv/ci-runner for the runner and (the
+      same value) in kv/hyrule-cloud for the api VM.
+
+- name: Ensure base packages are installed
+  ansible.builtin.apt:
+    name: "{{ hyrule_prober_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure hyrule-prober group exists
+  ansible.builtin.group:
+    name: "{{ hyrule_prober_group }}"
+    system: true
+
+- name: Ensure hyrule-prober user exists
+  ansible.builtin.user:
+    name: "{{ hyrule_prober_user }}"
+    group: "{{ hyrule_prober_group }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(hyrule_prober_user) }}"
+    group: "{{ item.group | default(hyrule_prober_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hyrule_prober_install_dir }}", owner: root, mode: "0755" }
+    - { path: "{{ hyrule_prober_src_dir }}", mode: "0755" }
+    - { path: "{{ hyrule_prober_etc_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ hyrule_prober_state_dir }}", mode: "0750" }
+
+- name: Checkout hyrule-prober at the requested ref
+  ansible.builtin.git:
+    repo: "{{ hyrule_prober_repo }}"
+    dest: "{{ hyrule_prober_src_dir }}"
+    version: "{{ hyrule_prober_version }}"
+    update: true
+  become: true
+  become_user: "{{ hyrule_prober_user }}"
+  notify: restart hyrule-prober
+
+- name: Create the prober virtualenv
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ hyrule_prober_venv_dir }}
+    creates: "{{ hyrule_prober_venv_dir }}/bin/python"
+  become: true
+  become_user: "{{ hyrule_prober_user }}"
+
+# Editable install: the venv imports from the checkout, so a git update + a
+# restart picks up new code without a reinstall (idempotent after first run).
+- name: Install hyrule-prober into the virtualenv (editable)
+  ansible.builtin.pip:
+    name: "{{ hyrule_prober_src_dir }}"
+    virtualenv: "{{ hyrule_prober_venv_dir }}"
+    editable: true
+  become: true
+  become_user: "{{ hyrule_prober_user }}"
+  notify: restart hyrule-prober
+
+- name: Render hyrule-prober env
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ hyrule_prober_env_file }}"
+    owner: root
+    group: "{{ hyrule_prober_group }}"
+    mode: "0640"
+  notify: restart hyrule-prober
+
+- name: Install hyrule-prober systemd unit
+  ansible.builtin.template:
+    src: hyrule-prober.service.j2
+    dest: /etc/systemd/system/hyrule-prober.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart hyrule-prober
+
+- name: Ensure hyrule-prober is enabled and started
+  ansible.builtin.systemd:
+    name: "{{ hyrule_prober_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Restart the prober before probing its health
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for hyrule-prober liveness endpoint
+  ansible.builtin.uri:
+    url: "{{ hyrule_prober_health_url }}"
+    method: GET
+    status_code: 200
+  register: hyrule_prober_health
+  retries: 10
+  delay: 2
+  until: hyrule_prober_health.status == 200
