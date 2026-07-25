@@ -1,0 +1,19 @@
+# /etc/systemd/system/vault-agent-health-metrics.timer
+# Managed by ansible/roles/vault_agent.
+#
+# The sample must be fresher than mon's collector staleness threshold
+# (vault_agent_collector_max_age in
+# configs/mon/icinga2/services/vault-agent.conf, default 900s), otherwise the
+# check goes UNKNOWN.
+
+[Unit]
+Description=Refresh Vault Agent health metrics every {{ vault_agent_metrics_interval }}
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ vault_agent_metrics_interval }}
+AccuracySec=30s
+Unit=vault-agent-health-metrics.service
+
+[Install]
+WantedBy=timers.target

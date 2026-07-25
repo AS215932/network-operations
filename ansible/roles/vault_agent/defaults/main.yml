@@ -13,6 +13,42 @@ vault_agent_run_dir_mode: "0750"
 vault_agent_role_id: ""
 vault_agent_secret_id: ""
 vault_agent_secret_id_response_wrapping_path: ""
+
+# --- AppRole credential durability (incident 2026-07-18 → 2026-07-25) ---
+#
+# This role supports two auth shapes:
+#
+#   durable  — vault_agent_secret_id holds a plain, long-lived SecretID and
+#              vault_agent_secret_id_response_wrapping_path is empty. The role
+#              writes the SecretID 0600 to disk and the agent config sets
+#              remove_secret_id_file_after_reading = false, so the credential
+#              survives reboots, package upgrades, OOM kills and deploys.
+#              REQUIRES the AppRole to be created with secret_id_num_uses=0 and
+#              secret_id_ttl=0, and — because a SecretID at rest is weaker than
+#              a wrapped one — bound to the consuming host with
+#              secret_id_bound_cidrs / token_bound_cidrs.
+#
+#   wrapped  — vault_agent_secret_id holds a response-wrapping token and
+#              vault_agent_secret_id_response_wrapping_path names its creation
+#              path. Vault Agent unwraps it once and DELETES the file
+#              (remove_secret_id_file_after_reading = true). Stronger at rest,
+#              but the credential is single-use: the next restart of the agent
+#              has nothing to authenticate with and the agent enters a
+#              permanent 403 backoff loop. Only use it where an operator is
+#              on hand to re-bootstrap after every restart.
+#
+# Set true on consumers that must never lose their credential on restart. It
+# forces the durable shape even if a stale wrapping path is still deployed in
+# the host's .hcl, and refuses a response-wrapping token passed as a plain
+# SecretID. Default false keeps every existing caller on its current shape.
+vault_agent_require_durable_secret_id: false
+
+# In wrapped mode a running agent consumes the wrapping token the instant the
+# file appears (it is in a retry loop), so a subsequent `systemctl restart`
+# finds a spent token: "wrapping token is not valid or does not exist". Stop
+# the agent before installing the new credential so the unwrap happens exactly
+# once, on the start the role performs afterwards.
+vault_agent_stop_before_wrapped_secret_id_install: true
 vault_agent_role_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-role-id"
 vault_agent_secret_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-secret-id"
 vault_agent_token_sink: "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.token"
@@ -69,3 +105,25 @@ vault_agent_templates:
 vault_agent_extra_dirs:
   - { path: /etc/noc-agent, group: noc-agent, mode: "0750" }
   - { path: /run/noc-agent, group: noc-agent, mode: "0750" }
+
+# --- Health metrics (node_exporter textfile collector) ---
+#
+# A week of stale secrets went unnoticed in July 2026 because the agent stayed
+# `active (running)` while failing every AppRole login, so systemd-state checks
+# saw nothing. The collector below stats the token sink, the SecretID file and
+# every rendered destination for EVERY agent configured on the host, counts
+# recent auth errors in the journal, and publishes the result as Prometheus
+# textfile metrics that mon's `vault-agent <name>` Icinga service evaluates
+# (configs/mon/icinga2/services/vault-agent.conf).
+vault_agent_metrics_enabled: true
+vault_agent_metrics_script: /usr/local/sbin/vault-agent-health-metrics
+# Derives from the single shared default (group_vars/infra_vms.yml
+# node_exporter_textfile_dir) so this can never silently drift from
+# monitoring_textfile_dir — node_exporter is pointed at this same directory
+# by ansible/roles/monitoring (--collector.textfile.directory). The literal
+# fallback only matters outside that inventory (e.g. tests, ad-hoc runs).
+vault_agent_metrics_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
+vault_agent_metrics_interval: 5min
+# Journal window scanned for AppRole auth failures. Wider than the interval so
+# a burst is never missed between runs.
+vault_agent_metrics_auth_error_window: 15min
