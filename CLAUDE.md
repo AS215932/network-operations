@@ -27,17 +27,25 @@ Underlay (hosting provider networks) is separate from overlay (AS215932 `2a0c:b6
 |--------|----------|-----|------------------|-------------------|-----------|
 | cr1.nl1 | Servperso NL | FreeBSD + FRRouting | `2a0c:b640:8:69::1` | `::a` | 1.1.1.1 |
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | `2a0c:b640:10::213` | `::b` | 2.2.2.2 |
+| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | `2a09:4c0:100:2d88::8898` | `::c` | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | `2001:41d0:303:48a::2` | `::d` | 0.0.0.13 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
 
+**cr1.ch1 is the preferred core in both directions** — see `docs/bgp-policy.md`.
+
 ### WireGuard mesh
+
+Full mesh, six tunnels.
 
 | Tunnel | Endpoints | Overlay /127 |
 |--------|-----------|--------------|
 | cr1.nl1 wg0 ↔ cr1.de1 wg0 | :1337 ↔ :1337 | `ff00::/127` |
 | cr1.nl1 wg3 ↔ rtr wg0 | :1340 ↔ :1337 | `ff02::/127` |
 | cr1.de1 wg1 ↔ rtr wg1 | :1338 ↔ :1338 | `ff05::/127` |
+| cr1.ch1 wg0 ↔ rtr wg2 | :1339 ↔ :1339 | `ff06::/127` |
+| cr1.nl1 wg4 ↔ cr1.ch1 wg1 | :1341 ↔ :1341 | `ff07::/127` |
+| cr1.de1 wg2 ↔ cr1.ch1 wg2 | :1342 ↔ :1342 | `ff08::/127` |
 
 WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links for traceroute visibility.
 
@@ -92,9 +100,29 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 
 ## BGP policy
 
+**`docs/bgp-policy.md` is the full reference** — read it before touching any
+route-map. Summary:
+
 - **Transit route-maps**: `TRANSIT-IN` (match as-path 1) and `TRANSIT-OUT` (match prefix-list AS215932v6-out) applied to all transit peers.
 - **AS-path filter** (as-path access-list 1): denies own ASN (loop prevention), private 16-bit ASNs (64512-65535), private 32-bit ASNs (4200000000-4294967295), and paths longer than 200 chars.
-- iBGP peers have no transit filters — only `next-hop-self` and `soft-reconfiguration inbound`.
+- **Local-pref ladder on the cores**: IX routes 200 (cr1-ch1 `IXP-IN`) > CDN
+  overrides 150 (Cloudflare `_13335$`, Fastly `_54113$` on cr1-ch1) > default 100 >
+  AS24961-tainted paths 80 (cr1-de1).
+- **Egress**: rtr applies `IBGP-{CH1,NL1,DE1}-IN` on its iBGP sessions (LP 200 / 90 /
+  80) so the whole OVH estate prefers cr1-ch1, with automatic fallback.
+- **Ingress**: cr1-nl1 and cr1-de1 export via `TRANSIT-OUT-PREPEND-3X` (3× prepend);
+  cr1-ch1 exports unprepended **and** is the sole origin of the `2a0c:b641:b50::/48`
+  and `2a0c:b641:b51::/48` more-specifics, which is what deterministically pulls
+  return traffic onto the CH path. The `/44` stays announced from all three cores
+  as failover.
+- **Never announce longer than a /48** — the ROA for `2a0c:b641:b50::/44` has
+  `maxLength 48`; anything longer is RPKI Invalid and gets dropped, not just
+  de-preferred.
+- Any route-map clause that sets local-preference and is not the last clause **must**
+  end with `on-match next`, or matched routes skip the AS-path hygiene filter
+  entirely. Enforced by `tests/iac/test_frr_static.py`.
+- iBGP peers have no transit filters — only `next-hop-self`, `soft-reconfiguration
+  inbound`, and (on rtr) the local-pref maps above.
 
 ## NAT64/DNS64
 
