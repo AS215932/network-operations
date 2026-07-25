@@ -42,6 +42,7 @@ on:
       - ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2
       - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
+      - ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2
 
 permissions:
   contents: read
@@ -104,7 +105,8 @@ jobs:
             ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2 \
             ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2)"
+            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2 \
+            ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import sys
@@ -171,6 +173,10 @@ jobs:
               for path in changed
           )
 
+          github_runner_env_changed = (
+              "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2" in changed
+          )
+
           mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
           extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed
 
@@ -198,6 +204,13 @@ jobs:
               add_once("cloud", "api")
           if "ansible/inventory/host_vars/web.yml" in changed:
               add_once("web", "web")
+          if github_runner_env_changed:
+              # The vault-agent-rendered runner secrets file (ci.yml/github_runner
+              # role) sources CI-driven apply.yml itself. A new key added here
+              # (e.g. HYRULE_TUNNEL_PROXY_TOKEN) isn't live on the runner until
+              # this applies — scheduled before any consumer that would assert
+              # on the new key, so `apply.yml` doesn't source the stale file.
+              add_once("ci", "ci")
           if "ansible/inventory/host_vars/netproxy.yml" in changed:
               # netproxy hosts two app binaries from the hyrule-network-proxy
               # repo (the egress sidecar and the reverse-SSH tunnel daemon), so a
