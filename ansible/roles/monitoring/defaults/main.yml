@@ -35,7 +35,11 @@ monitoring_node_restart_metrics: true
 # AppRole login — the July 2026 hyrule-cloud incident. Directory is created by
 # whichever role writes into it; node_exporter tolerates it being absent.
 monitoring_node_textfile_enabled: true
-monitoring_textfile_dir: /var/lib/node_exporter/textfile_collector
+# Derives from the single shared default (group_vars/infra_vms.yml
+# node_exporter_textfile_dir) so this can never silently drift from
+# vault_agent_metrics_textfile_dir, which writes into this same directory.
+# The literal fallback only matters outside that inventory.
+monitoring_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
 
 # Disks to monitor. Each key is the Icinga service name suffix; mountpoint is
 # read by the prom_disk apply rule on mon. Default = root only.

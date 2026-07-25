@@ -117,9 +117,12 @@ vault_agent_extra_dirs:
 # (configs/mon/icinga2/services/vault-agent.conf).
 vault_agent_metrics_enabled: true
 vault_agent_metrics_script: /usr/local/sbin/vault-agent-health-metrics
-# Must match monitoring_textfile_dir — node_exporter is pointed at this
-# directory by ansible/roles/monitoring (--collector.textfile.directory).
-vault_agent_metrics_textfile_dir: /var/lib/node_exporter/textfile_collector
+# Derives from the single shared default (group_vars/infra_vms.yml
+# node_exporter_textfile_dir) so this can never silently drift from
+# monitoring_textfile_dir — node_exporter is pointed at this same directory
+# by ansible/roles/monitoring (--collector.textfile.directory). The literal
+# fallback only matters outside that inventory (e.g. tests, ad-hoc runs).
+vault_agent_metrics_textfile_dir: "{{ node_exporter_textfile_dir | default('/var/lib/node_exporter/textfile_collector') }}"
 vault_agent_metrics_interval: 5min
 # Journal window scanned for AppRole auth failures. Wider than the interval so
 # a burst is never missed between runs.

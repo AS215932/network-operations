@@ -4,3 +4,12 @@
 firewall_input_policy: drop
 firewall_log_only: false
 firewall_allow_node_exporter_from_mon: true
+
+# node_exporter's textfile-collector directory. Single source of truth for
+# ansible/roles/monitoring (points node_exporter at it) and
+# ansible/roles/vault_agent (writes health metrics into it) — the two roles
+# run in entirely separate playbook invocations (monitoring.yml vs.
+# cloud.yml/noc.yml/engineering-loop.yml/vault.yml), so nothing else keeps
+# them pointed at the same path. Changing this value moves both; a role-level
+# override still works via each role's own var, this is only the default.
+node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
