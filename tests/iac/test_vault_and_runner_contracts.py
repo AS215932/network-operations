@@ -707,7 +707,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             template,
         )
         self.assertIn(
-            '{{ $domainLaunchAllowed := and $domainTldScope $domainSalesCohort }}',
+            '{{ $domainAccountCohort := gt (len (parseJSON $domainAccounts)) 0 }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainLaunchAllowed := and $domainTldScope $domainAccountCohort }}',
             template,
         )
         self.assertIn(
@@ -722,6 +726,23 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             'true{{ else }}false{{ end }}',
             template,
         )
+
+    def test_domain_account_checkout_does_not_piggyback_on_marketplace_toggle(self):
+        # Regression: $domainLaunchAllowed used to fall back to "marketplace
+        # sales enabled" when domain_account_allowlist was empty. That let the
+        # exact canary Vault config the rollout runbook documents — purchases
+        # + marketplace enabled, tld_allowlist=["xyz"], no account allowlist —
+        # silently unlock account-based checkout too, not just the intended
+        # wallet-owned marketplace cohort. DOMAIN_PURCHASES_ENABLED's gate must
+        # depend only on a non-empty account allowlist.
+        template = (
+            REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
+        ).read_text()
+        launch_allowed_line = next(
+            line for line in template.splitlines() if "$domainLaunchAllowed :=" in line
+        )
+        self.assertNotIn("domainMarketplace", launch_allowed_line)
+        self.assertIn("domainAccountCohort", launch_allowed_line)
 
     def test_cloud_role_no_longer_renders_secret_env_from_ansible(self):
         role_text = "\n".join(path.read_text() for path in (REPO / "ansible/roles/hyrule_cloud/tasks").glob("*.yml"))
