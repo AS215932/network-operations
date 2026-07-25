@@ -20,10 +20,15 @@ Monero, renewals, DNS changes, and transfers remain account-scoped.
 ## 1. Converge authoritative DNS
 
 Export the existing `TSIG_SECRET` and `HYRULE_DNS_CONTROL_SECRET`, then run the
-gated Knot play for `dns` followed by `ns2`:
+gated Knot play for `dns` followed by `ns2` **from the `ansible/` directory** —
+`ansible.cfg` (inventory, roles_path) only auto-loads from cwd, so running this
+from the repo root silently loads no inventory and `--limit` matches nothing:
 
 ```sh
-ansible-playbook ansible/playbooks/knot.yml --tags apply --limit dns,ns2
+cd ansible
+TSIG_SECRET='<existing-tsig-secret>' \
+HYRULE_DNS_CONTROL_SECRET='<shared-control-secret>' \
+ansible-playbook playbooks/knot.yml --tags apply --limit dns,ns2 -e knot_apply=true
 ```
 
 The nameserver inventory has `knot_apply: true`, so this installs and starts
@@ -84,13 +89,17 @@ manifest must not yet list `/v1/domains/registrations`.
 
 ## 3. Two real acceptance purchases
 
+`scripts/x402_canary.py` lives in the `hyrule-cloud` repo, not here. From a
+`hyrule-cloud` checkout at the exact SHA promoted in step 2:
+
 Use a unique DNS-safe base label. The canary creates `<label>-api.xyz` directly
 and `<label>-web.xyz` through `https://hyrule.host/api/...`:
 
 ```sh
+git -C hyrule-cloud checkout <promoted-cloud-sha>
 export CANARY_KEY_API=0x<direct-wallet-private-key>
 export CANARY_KEY_WEB=0x<web-wallet-private-key>
-python scripts/x402_canary.py domain --name hyrule-launch-20260719 --yes
+python hyrule-cloud/scripts/x402_canary.py domain --name hyrule-launch-20260719 --yes
 ```
 
 The canary refuses any quote above `$10.00`, passes the reviewed quote total as
@@ -107,8 +116,17 @@ domain appears in the dashboard.
 
 ## 4. Public launch
 
-After both purchases are active and authoritative on both nameservers, change
-only the cohort/TLD scope in Vault:
+**This Vault write is itself the launch action — there is no later apply/approval
+step that gates it.** The active Vault Agent on `api` watches `kv/hyrule-cloud`,
+re-renders the environment within seconds of the write, and its template's
+reload hook restarts the cloud services immediately. This is unrelated to
+`apply.yml`'s `production` environment gate, which only covers app pin/SHA
+promotions (see `AGENTS.md`), not Vault KV writes. Do not run this command
+until you have decided, right now, to open public sales.
+
+After both purchases are active and authoritative on both nameservers, and you
+are ready for the change to take effect within seconds, change only the
+cohort/TLD scope in Vault:
 
 ```text
 domain_tld_allowlist=[]
@@ -116,10 +134,10 @@ domain_allow_all_eligible_tlds=true
 domain_marketplace_payer_allowlist=[]
 ```
 
-Approve the normal production apply. Then verify the registration route is in
-both `/.well-known/x402.json` and `/openapi.json`, its advertised dynamic floor
-is `$3.00`, an unpaid valid request receives an exact 402, and the web checkout
-still sends its reviewed quote total as `max_price_usd`.
+Then verify the registration route is in both `/.well-known/x402.json` and
+`/openapi.json`, its advertised dynamic floor is `$3.00`, an unpaid valid
+request receives an exact 402, and the web checkout still sends its reviewed
+quote total as `max_price_usd`.
 
 ## Rollback
 
