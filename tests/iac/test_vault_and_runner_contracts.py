@@ -92,6 +92,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="hyrule_network_proxy_apply=true"
 \s+expected_apply_var="hyrule_network_proxy_apply=true"
 \s+;;
+\s+tunnel-proxy\)
+\s+apply_var="hyrule_tunnel_proxy_apply=true"
+\s+expected_apply_var="hyrule_tunnel_proxy_apply=true"
+\s+;;
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"

@@ -23,6 +23,20 @@ PIN_TARGETS = {
     ),
 }
 
+# Pins that are slaved to another pin (same repo, same commit) rather than being
+# independently settable. The reverse-SSH tunnel daemon is a second binary in the
+# hyrule-network-proxy repo, so its pin always moves with the sidecar's — it is
+# NOT a PIN_TARGETS entry (so carry-forward / pending-promotions never emit an
+# unsupported --hyrule-tunnel-proxy-sha flag for it); it is written as a
+# side-effect of the network-proxy pin below.
+_SLAVED_PINS: dict[str, tuple[str, str]] = {
+    # slave_key: (driver_key, host_vars_path)
+    "hyrule_tunnel_proxy_version": (
+        "hyrule_network_proxy_version",
+        "ansible/inventory/host_vars/netproxy.yml",
+    ),
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -76,6 +90,13 @@ def main() -> int:
         old_sha = update_pin(path, key, new_sha)
         changes.append((key, repo, playbook, old_sha, new_sha))
 
+        # Move any pins slaved to this one to the same SHA (same repo/commit).
+        for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+            if driver_key != key:
+                continue
+            slave_old = update_pin(REPO / slave_path, slave_key, new_sha)
+            changes.append((slave_key, repo, "tunnel-proxy", slave_old, new_sha))
+
     if args.body_file:
         Path(args.body_file).write_text(render_body(args.title, args.impact, changes))
 
@@ -90,9 +111,18 @@ def find_pin(text: str, key: str) -> str | None:
 
 
 def ref_changes(ref: str) -> list[tuple[str, str, str, str, str]]:
-    """Pin deltas between a git ref (old) and the working tree (new)."""
+    """Pin deltas between a git ref (old) and the working tree (new). Includes
+    slaved pins (e.g. the tunnel daemon) so a promotion PR body shows the full
+    deployment impact even though they aren't independent PIN_TARGETS."""
     changes: list[tuple[str, str, str, str, str]] = []
-    for key, (rel_path, repo, playbook) in PIN_TARGETS.items():
+    # (key, host_vars_path, repo, playbook) for every reportable pin.
+    reportable: list[tuple[str, str, str, str]] = [
+        (key, rel_path, repo, playbook) for key, (rel_path, repo, playbook) in PIN_TARGETS.items()
+    ]
+    for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+        repo = PIN_TARGETS[driver_key][1]
+        reportable.append((slave_key, slave_path, repo, "tunnel-proxy"))
+    for key, rel_path, repo, playbook in reportable:
         new_sha = find_pin((REPO / rel_path).read_text(), key)
         shown = subprocess.run(
             ["git", "show", f"{ref}:{rel_path}"],

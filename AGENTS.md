@@ -22,8 +22,13 @@
 ## Deployment Rules - Read Before Touching App Pins
 
 - Production deploys for `noc-agent`, `hyrule-mcp`, `hyrule-cloud`,
-  `hyrule-web`, and `hyrule-network-proxy` are controlled from this
-  repository, not from app repos.
+  `hyrule-web`, `hyrule-network-proxy`, and `hyrule-tunnel-proxy` are
+  controlled from this repository, not from app repos. `hyrule-tunnel-proxy`
+  is a second binary in the `hyrule-network-proxy` repo, so both pins
+  (`hyrule_network_proxy_version` and `hyrule_tunnel_proxy_version` in
+  `netproxy.yml`) move to the same SHA on promotion. Note netproxy is now a
+  **mixed-posture** host: the tunnel daemon exposes public SSH/STUN/data ports
+  while the egress sidecar API stays internal.
 - App repositories may merge code, but they must not be treated as production
   deployment records.
 - Production app versions are the pinned 40-character SHAs in:

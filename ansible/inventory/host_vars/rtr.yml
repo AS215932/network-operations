@@ -19,9 +19,10 @@ frr_clear_bgp_cmds:
 # --- IPv4 variables for the preserved nat/forward block ---
 rtr_wan_ip:   "46.105.40.223"
 rtr_wan_if:   "enX4"
-rtr_dns_v4:   "10.0.2.10"
-rtr_proxy_v4: "10.0.2.40"
-rtr_vpn_v4:   "10.0.2.60"
+rtr_dns_v4:    "10.0.2.10"
+rtr_proxy_v4:  "10.0.2.40"
+rtr_vpn_v4:    "10.0.2.60"
+rtr_tunnel_v4: "10.0.2.224"
 
 # --- Input chain posture ---
 # Enforced default-deny. Customer forwarding isolation is enforced separately in

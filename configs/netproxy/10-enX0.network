@@ -1,0 +1,25 @@
+# /etc/systemd/network/10-enX0.network — netproxy VM (infra bridge)
+# RFC1918 IPv4 for inbound DNAT from rtr (failover IP → reverse-SSH tunnel).
+# IPv4-only rescue clients reach the tunnel via rtr DNAT to 10.0.2.224; IPv6
+# clients hit the netproxy GUA directly.
+[Match]
+Name=enX0
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:2::e0/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1
+
+[Address]
+Address=10.0.2.224/24
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=10.0.2.1
