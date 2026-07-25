@@ -131,30 +131,61 @@ curl -s "https://stat.ripe.net/data/rpki-roas/data.json?resource=2a0c:b641:b50::
 If the aggregate is ever re-issued with a different maxLength, the more-specifics
 must be re-checked before the next FRR deploy.
 
-**A valid ROA is necessary but not sufficient.** Upstreams build their customer
-prefix-filters from **IRR**, not from RPKI. A prefix with a valid ROA and no
-`route6` object will be accepted by your own router, advertised to the upstream,
-and silently dropped there — it simply never appears in the DFZ.
+**Register an IRR `route6` object too.** RPKI authorises an announcement;
+upstream prefix-filters are generally built from **IRR**. Neither /48 has a
+`route6` object today (only the `/44` does) — that is hygiene worth fixing
+(#480), though it did not turn out to be what limits propagation here.
 
-This is exactly what happened on first deploy: both /48s were RPKI Valid, cr1-ch1
-advertised all three prefixes to Securebit, and RIPEstat showed `0 / 324` RIS
-peers seeing either /48, because only the /44 had a `route6` object. Tracked in
-#480.
+### Verifying propagation — use the real-time source
 
-Check **both** before announcing a new prefix:
+**`routing-status` is a batch snapshot and will lie to you about a change you
+just made.** On the 2026-07-25 deploy it reported `0 / 324` RIS peers seeing
+either /48, which reads as "filtered upstream". The payload's own `query_time`
+was `2026-07-24T16:00:00` — nearly ten hours old, and predating the
+announcement entirely. A conclusion, an issue, and a PR comment were written on
+that false premise before the `query_time` field was noticed.
+
+Use `looking-glass`, which is computed at query time:
 
 ```bash
-# 1. RPKI — is the announcement authorised?
+# 1. RPKI — is the announcement authorised, and within maxLength?
 curl -s "https://stat.ripe.net/data/rpki-roas/data.json?resource=<prefix>"
 
-# 2. IRR — will upstreams' filters actually admit it?
+# 2. IRR — is there a route6 object?
 whois -h whois.ripe.net -- "-T route6 <prefix>"
 # A result showing only the covering aggregate means NO object exists for it.
 
-# 3. After deploying, confirm it actually propagated:
-curl -s "https://stat.ripe.net/data/routing-status/data.json?resource=<prefix>"
-# ris_peers_seeing == 0 means it is being filtered upstream.
+# 3. After deploying — REAL-TIME propagation. Never routing-status here.
+curl -s "https://stat.ripe.net/data/looking-glass/data.json?resource=<prefix>"
+# Count rrcs[].peers[] and read the as_paths. Compare against the /44 as a
+# control: if a more-specific reaches the same peer count as the aggregate does
+# via the same upstream, it is not being filtered — that upstream's reach is
+# simply the ceiling.
 ```
+
+Hyrule Cloud's `/v1/bgp/lookup` exposes this with explicit freshness labelling
+(`live_looking_glass` dataset); see the `hyrule-x402-netintel` skill.
+
+### Propagation reach is a property of the upstream, not the prefix
+
+Measured 2026-07-25, immediately after the deploy:
+
+| prefix | peer-paths via cr1-ch1 (`58057`/`56755`) | via nl1/de1 | total |
+|---|---|---|---|
+| `2a0c:b641:b50::/48` | 6 | — | 6 |
+| `2a0c:b641:b51::/48` | 6 | — | 6 |
+| `2a0c:b641:b50::/44` | 6 | 365 (prepended) | 372 |
+
+The /48s reach **exactly the same six peer-paths** as ch1's own /44. They are
+not being filtered as more-specifics — they propagate as far as anything from
+ch1 propagates. The constraint is that **Securebit (AS58057) accounts for only
+~1.6% of RIS peer-paths to AS215932**, so a more-specific announced only from
+ch1 can never pull in traffic from a network that does not receive ch1's routes
+in the first place.
+
+The practical consequence: prepending nl1/de1 makes them less attractive but
+cannot redirect traffic to a path the remote network does not have. Real
+reach for the CH leg needs IX peering where the CDNs actually are — #138.
 
 ## Transit and IX filters
 
