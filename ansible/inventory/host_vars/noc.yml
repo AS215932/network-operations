@@ -62,6 +62,12 @@ firewall_extra_rules:
 # Monitoring — register on mon (new host, not in legacy infra-vms.conf).
 monitoring_register: true
 monitoring_role: noc
+monitoring_check_vars:
+  # Vault Agent secret delivery — see configs/mon/icinga2/services/vault-agent.conf.
+  # noc-agent already uses the durable (persisted SecretID) shape via
+  # VAULT_NOC_AGENT_SECRET_ID in noc.yml.
+  vault_agents:
+    - noc-agent
 monitoring_extra_services:
   - name: noc-agent-health
     check_command: http

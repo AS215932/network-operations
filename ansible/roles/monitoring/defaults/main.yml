@@ -28,6 +28,15 @@ monitoring_node_listen: ":9100"
 # set false in host_vars on a high-cardinality node to cap scrape cost.
 monitoring_node_restart_metrics: true
 
+# Enable node_exporter's textfile collector so on-host agents can publish
+# metrics no exporter can derive on its own. Added for the Vault Agent health
+# collector (ansible/roles/vault_agent/tasks/metrics.yml), which is the only
+# signal that catches an agent that is `active (running)` but failing every
+# AppRole login — the July 2026 hyrule-cloud incident. Directory is created by
+# whichever role writes into it; node_exporter tolerates it being absent.
+monitoring_node_textfile_enabled: true
+monitoring_textfile_dir: /var/lib/node_exporter/textfile_collector
+
 # Disks to monitor. Each key is the Icinga service name suffix; mountpoint is
 # read by the prom_disk apply rule on mon. Default = root only.
 monitoring_disks:

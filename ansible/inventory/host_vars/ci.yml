@@ -25,6 +25,10 @@ monitoring_register: true
 monitoring_role: ci
 monitoring_check_vars:
   github_runner: true
+  # Vault Agent secret delivery — see configs/mon/icinga2/services/vault-agent.conf.
+  # The ci-runner AppRole is already durable (secret_id_ttl=0, num_uses=0).
+  vault_agents:
+    - github-runner
 
 # Logs — ship journald to log VM.
 logs_register: true
