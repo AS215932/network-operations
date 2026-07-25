@@ -13,8 +13,11 @@ vault_agent_run_dir_mode: "0750"
 vault_agent_role_id: ""
 vault_agent_secret_id: ""
 vault_agent_secret_id_response_wrapping_path: ""
+vault_agent_persist_unwrapped_secret_id: false
 vault_agent_role_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-role-id"
 vault_agent_secret_id_file: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-secret-id"
+vault_agent_wrapped_secret_id_file: "{{ vault_agent_secret_id_file }}.wrapped"
+vault_agent_unwrap_secret_id_script: "{{ vault_agent_config_dir }}/{{ vault_agent_name }}-unwrap-secret-id"
 vault_agent_token_sink: "{{ vault_agent_run_dir }}/{{ vault_agent_name }}.token"
 vault_agent_token_sink_group: root
 vault_agent_token_sink_mode: "0600"

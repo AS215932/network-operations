@@ -17,6 +17,9 @@ ExecStartPre=/bin/mkdir -p {{ d.path }}
 ExecStartPre=/bin/chgrp {{ d.group | default('root') }} {{ d.path }}
 ExecStartPre=/bin/chmod {{ d.mode | default('0750') }} {{ d.path }}
 {% endfor %}
+{% if vault_agent_persist_unwrapped_secret_id | bool %}
+ExecStartPre={{ vault_agent_unwrap_secret_id_script }}
+{% endif %}
 ExecStart=/usr/bin/vault agent -config={{ vault_agent_config_dir }}/{{ vault_agent_name }}.hcl
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always

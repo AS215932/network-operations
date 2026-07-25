@@ -8,6 +8,7 @@ Pinned versions:
 - `hyrule_mcp_version`: unchanged or `<40-char-sha>`
 - `hyrule_cloud_version`: unchanged or `<40-char-sha>`
 - `hyrule_web_version`: unchanged or `<40-char-sha>`
+- `seo_agent_version`: unchanged or `<40-char-sha>`
 
 Deploy impact:
 - Affected playbooks:
@@ -19,6 +20,7 @@ Rollback:
 - Previous `hyrule_mcp_version`:
 - Previous `hyrule_cloud_version`:
 - Previous `hyrule_web_version`:
+- Previous `seo_agent_version`:
 
 Validation:
 - [ ] App CI is green for every promoted SHA.

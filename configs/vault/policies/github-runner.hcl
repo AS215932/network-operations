@@ -74,3 +74,14 @@ path "auth/approle/role/agentic-observatory/role-id" {
 path "auth/approle/role/agentic-observatory/secret-id" {
   capabilities = ["update"]
 }
+
+# The same engineering-loop apply bootstraps the Hyrule Beacon worker's
+# target-side Vault Agent. The runner can mint a wrapped one-use SecretID but
+# cannot read the worker token or any optional evidence-provider credentials.
+path "auth/approle/role/seo-agent/role-id" {
+  capabilities = ["read"]
+}
+
+path "auth/approle/role/seo-agent/secret-id" {
+  capabilities = ["update"]
+}

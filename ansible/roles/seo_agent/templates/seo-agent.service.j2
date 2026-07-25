@@ -1,0 +1,48 @@
+# /etc/systemd/system/{{ seo_agent_service_name }}
+# Hyrule Beacon worker, bound only to loop's management-overlay IPv6 address.
+
+[Unit]
+Description=Hyrule Beacon visibility worker
+After=network-online.target docker.service vault-agent-seo-agent.service
+Wants=network-online.target docker.service vault-agent-seo-agent.service
+ConditionPathIsReadable={{ seo_agent_env_file }}
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+ExecStartPre=/bin/grep -Eq '^BEACON_WORKER_TOKEN=.{20,}$' {{ seo_agent_env_file }}
+ExecStartPre=-/usr/bin/docker rm -f {{ seo_agent_container_name }}
+ExecStart=/usr/bin/docker run \
+    --name {{ seo_agent_container_name }} \
+    --rm \
+    --pull=never \
+    --network=host \
+    --user={{ seo_agent_runtime_uid }}:{{ seo_agent_runtime_gid }} \
+    --read-only \
+    --cap-drop=ALL \
+    --security-opt no-new-privileges \
+    --pids-limit={{ seo_agent_pids_limit }} \
+    --memory={{ seo_agent_memory }} \
+    --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
+    --mount type=bind,source={{ seo_agent_state_dir }},target=/var/lib/seo-agent \
+    --env-file {{ seo_agent_env_file }} \
+    {{ seo_agent_image }}
+ExecStop=/usr/bin/docker stop {{ seo_agent_container_name }}
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=seo-agent
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths=/run /var/run {{ seo_agent_state_dir }}
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -16,15 +16,17 @@ pinning exact app commit SHAs. Safety lives in three layers:
 
 ## App promotion model
 
-`hyrule-noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web` do not own
-normal production applies. Their repositories produce reviewed commits with
-green CI. `network-operations` owns production by pinning those commits in
-inventory:
+`hyrule-noc-agent`, `hyrule-mcp`, `hyrule-cloud`, `hyrule-web`,
+`hyrule-network-proxy`, and `hyrule-seo-agent` do not own normal production
+applies. Their repositories produce reviewed commits with green CI.
+`network-operations` owns production by pinning those commits in inventory:
 
 - `ansible/inventory/host_vars/noc.yml`: `noc_agent_version`,
   `hyrule_mcp_version`
 - `ansible/inventory/host_vars/api.yml`: `hyrule_cloud_version`
 - `ansible/inventory/host_vars/web.yml`: `hyrule_web_version`
+- `ansible/inventory/host_vars/netproxy.yml`: `hyrule_network_proxy_version`
+- `ansible/inventory/host_vars/loop.yml`: `seo_agent_version`
 
 Use the promotion PR template for coordinated deploys. Merge app PRs first,
 then let the app repo request or manually update a promotion PR with the exact

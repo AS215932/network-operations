@@ -22,6 +22,7 @@ class ProductionAppVersionPinsTest(unittest.TestCase):
                 "knowledge_loop_version",
                 "agent_core_collector_version",
                 "agentic_observatory_version",
+                "seo_agent_version",
             ),
         }
 

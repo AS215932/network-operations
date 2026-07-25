@@ -69,8 +69,40 @@
     group: root
     mode: "0600"
   no_log: true
-  when: vault_agent_secret_id | length > 0
+  when:
+    - vault_agent_secret_id | length > 0
+    - >-
+      not (
+        vault_agent_persist_unwrapped_secret_id | bool
+        and vault_agent_secret_id_response_wrapping_path | length > 0
+      )
   register: vault_agent_secret_id_state
+  tags: [apply]
+
+- name: Stage response-wrapped Vault AppRole secret_id for persistent unwrapping
+  copy:
+    content: "{{ vault_agent_secret_id }}"
+    dest: "{{ vault_agent_wrapped_secret_id_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when:
+    - vault_agent_persist_unwrapped_secret_id | bool
+    - vault_agent_secret_id_response_wrapping_path | length > 0
+    - vault_agent_secret_id | length > 0
+  register: vault_agent_wrapped_secret_id_state
+  tags: [apply]
+
+- name: Install restart-safe Vault AppRole SecretID unwrap helper
+  template:
+    src: unwrap-secret-id.sh.j2
+    dest: "{{ vault_agent_unwrap_secret_id_script }}"
+    owner: root
+    group: root
+    mode: "0700"
+  when: vault_agent_persist_unwrapped_secret_id | bool
+  register: vault_agent_unwrap_script_state
   tags: [apply]
 
 - name: Render secret templates for Vault Agent
@@ -110,8 +142,11 @@
       {{
         ''
         if (
-          vault_agent_secret_id | length > 0
-          and vault_agent_secret_id_response_wrapping_path | length == 0
+          vault_agent_persist_unwrapped_secret_id | bool
+          or (
+            vault_agent_secret_id | length > 0
+            and vault_agent_secret_id_response_wrapping_path | length == 0
+          )
         )
         else (
           vault_agent_secret_id_response_wrapping_path
@@ -198,6 +233,8 @@
       {{
         vault_agent_role_id_state is changed
         or vault_agent_secret_id_state is changed
+        or vault_agent_wrapped_secret_id_state is changed
+        or vault_agent_unwrap_script_state is changed
         or vault_agent_templates_state is changed
         or vault_agent_config_state is changed
         or vault_agent_unit_state is changed

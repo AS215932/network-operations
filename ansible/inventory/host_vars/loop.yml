@@ -109,6 +109,18 @@ agentic_observatory_enabled_actions: "feedback,ack,insight_label"
 agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
 
+# Hyrule Beacon managed visibility worker. The pin is deployable only after
+# this revision is published to AS215932/hyrule-seo-agent; until then no apply
+# should be approved. Automatic mutation is staged off for the first rollout.
+seo_agent_version: "dd705c6b50d7f6f3f3053053c264eac5f3778204"
+seo_agent_enabled: true
+seo_agent_host: "{{ peers.loop.ipv6 }}"
+seo_agent_port: 8790
+seo_agent_beacon_control_plane_url: https://beacon.hyrule.host
+seo_agent_beacon_managed_mode: true
+seo_agent_scheduler_enabled: false
+seo_agent_execute_automatic_actions: false
+
 # Dogfood scope: let the loop author the VPS launch-proof wedge in hyrule-cloud
 # (still draft-PR + human-merge gated). All other repos stay docs-only.
 engineering_loop_allowed_paths:
@@ -199,6 +211,21 @@ monitoring_extra_services:
       http_ipv6: true
       http_timeout: 5
       http_expect_body_regex: '"status":"ok"'
+  - name: seo-agent-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    max_check_attempts: 3
+    notes: "Hyrule Beacon managed worker health over the management overlay"
+    vars:
+      http_address: "{{ peers.loop.ipv6 }}"
+      http_port: 8790
+      http_uri: /health
+      http_vhost: seo-agent.loop.as215932.internal
+      http_ssl: false
+      http_ipv6: true
+      http_timeout: 5
+      http_expect_body_regex: '"beacon_managed_mode":true'
 
 firewall_extra_rules:
   # node_exporter scrape from mon only.
@@ -209,6 +236,8 @@ firewall_extra_rules:
   - { proto: tcp, dport: 8781, src: ["{{ peers.loop.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "knowledge read API" }
   # Agentic Observatory: proxy and mon health checks only.
   - { proto: tcp, dport: 8780, src: ["{{ peers.proxy.ipv6 }}", "{{ peers.mon.ipv6 }}"], comment: "agentic observatory" }
+  # Hyrule Beacon worker: no public listener; mon health check only.
+  - { proto: tcp, dport: 8790, src: "{{ peers.mon.ipv6 }}", comment: "seo-agent health" }
 
 firewall_forward_extra_raw_nft: |
   iifname docker0 ip6 saddr {{ loop_docker_subnet }} counter accept comment "loop Docker IPv6 egress"
@@ -220,9 +249,9 @@ logs_role: loop
 # --- Structured flow metadata (read by scripts/render-network-flows.py) ---
 host_meta:
   os: "Debian 13"
-  role: "Engineering Loop operations-lane VM (draft PR automation, no fleet SSH)"
-  summary: "Engineering Loop operations-lane VM: consumes loop:approved issues and stops at draft PRs; hosts the Agent-Core trace collector and a loopback knowledge MCP."
-  notes: "Not an infra deploy source: no fleet SSH key, no app runtime secrets, no Vault breadth. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6. loop does not SSH to the infra fleet."
+  role: "Agent operations-lane VM (governed automation, no fleet SSH)"
+  summary: "Operations-lane VM for the Engineering Loop and Hyrule Beacon worker; also hosts the Agent-Core trace collector, Knowledge services, and Agentic Observatory."
+  notes: "Not an infra deploy source: no fleet SSH key and no broad production Vault access. The Beacon worker receives a worker-only token and no Git or publishing credential. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6."
 network_flows_outbound:
   - { to: github, proto: tcp, port: 443, purpose: "issues, checkouts, branch pushes, draft PRs, knowledge MCP build context" }
   - { to: model-providers, proto: tcp, port: 443, purpose: "selected backend/provider LLM APIs" }
@@ -231,3 +260,4 @@ network_flows_outbound:
   - { to: vault, proto: tcp, port: 8200, purpose: "Vault Agent secret render" }
   - { to: rtr, proto: "tcp+udp", port: 53, purpose: "Docker bridge containers resolve via rtr Unbound (DNS64)" }
   - { to: public, proto: tcp, port: 443, purpose: "Docker container base-image and package downloads over routed IPv6 egress" }
+  - { to: public, proto: tcp, port: 443, purpose: "Hyrule Beacon worker control-plane polling, owned-surface audits, public registry measurements, and optional evidence providers" }
