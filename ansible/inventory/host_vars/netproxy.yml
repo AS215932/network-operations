@@ -9,7 +9,7 @@
 
 hyrule_network_proxy_version: b82dc72bbf382167062bff272606ce84ec20538c
 # Sibling tunnel daemon (same repo, second binary). Promotion updates this SHA.
-hyrule_tunnel_proxy_version: e010725715349b0bdd9529b93087f871b51af253
+hyrule_tunnel_proxy_version: 81d61bd4ca2735d9a383cbfeaee89fd711602fbf
 
 firewall_extra_rules:
   # --- egress sidecar (internal only) ---
