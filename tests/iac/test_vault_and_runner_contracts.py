@@ -106,6 +106,16 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="soc_agent_apply=true"
 \s+expected_apply_var="soc_agent_apply=true"
 \s+;;
+\s+prober\)
+\s+# role gate is hyrule_prober_apply \(role name != playbook name\)
+\s+apply_var="hyrule_prober_apply=true"
+\s+expected_apply_var="hyrule_prober_apply=true"
+\s+;;
+\s+mail_openbsd\)
+\s+# role gate is mail_apply \(role name != playbook name\)
+\s+apply_var="mail_apply=true"
+\s+expected_apply_var="mail_apply=true"
+\s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
 \s+expected_apply_var="\$\{playbook//-/_\}_apply=true"

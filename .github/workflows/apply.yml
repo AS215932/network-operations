@@ -247,6 +247,16 @@ jobs:
               apply_var="soc_agent_apply=true"
               expected_apply_var="soc_agent_apply=true"
               ;;
+            prober)
+              # role gate is hyrule_prober_apply (role name != playbook name)
+              apply_var="hyrule_prober_apply=true"
+              expected_apply_var="hyrule_prober_apply=true"
+              ;;
+            mail_openbsd)
+              # role gate is mail_apply (role name != playbook name)
+              apply_var="mail_apply=true"
+              expected_apply_var="mail_apply=true"
+              ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
               expected_apply_var="${playbook//-/_}_apply=true"
