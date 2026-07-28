@@ -1,3 +1,21 @@
+# /etc/systemd/system/github-runner-docker-prune.service
+# Managed by ansible/roles/github_runner.
+#
+# Image/build-cache cleanup and volume cleanup are two separate ExecStart lines
+# on purpose (network-operations#473). Docker refuses to combine an age filter
+# with volume pruning:
+#
+#   ERROR: The "until" filter is not supported with "--volumes"
+#
+# The single combined command this replaced therefore exited 1 on every daily
+# run from 2026-07-21 onward, so nothing was ever reclaimed and `ci-pr` walked
+# into a disk-space WARNING carrying 6.7 GB of unreferenced images.
+#
+# Volume pruning stays OFF by default and, when enabled, deliberately omits
+# `--all`: plain `docker volume prune` removes only ANONYMOUS volumes and never
+# touches named ones, so no persistent or intentionally retained runner data can
+# disappear without a separate, explicit policy decision.
+
 [Unit]
 Description=Prune unused Docker data on the ci runner host
 After=docker.service
@@ -5,4 +23,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker system prune --all --force --volumes --filter until={{ github_runner_docker_prune_until }}
+ExecStart=/usr/bin/docker system prune --all --force --filter until={{ github_runner_docker_prune_until }}
+{% if github_runner_docker_prune_volumes | bool %}
+ExecStart=/usr/bin/docker volume prune --force
+{% endif %}

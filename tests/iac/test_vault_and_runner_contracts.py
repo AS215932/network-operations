@@ -906,6 +906,34 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("KillMode=mixed", unit)
         self.assertNotIn("KillMode=process", unit)
 
+    def test_docker_prune_never_combines_until_filter_with_volumes(self):
+        # Docker rejects `--volumes` together with `--filter until=`:
+        #   ERROR: The "until" filter is not supported with "--volumes"
+        # The unit that did both exited 1 on every daily run from 2026-07-21, so
+        # `ci-pr` reclaimed nothing and hit a disk WARNING carrying 6.7 GB of
+        # unreferenced images (network-operations#473). Volume pruning must stay
+        # a separate ExecStart, default-off, and anonymous-only (no `--all`).
+        unit = (REPO / "ansible/roles/github_runner/templates/github-runner-docker-prune.service.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/github_runner/defaults/main.yml").read_text())
+
+        for line in unit.splitlines():
+            if not line.startswith("ExecStart="):
+                continue
+            self.assertFalse(
+                "--volumes" in line and "--filter until=" in line,
+                f"docker rejects --volumes with an until filter: {line}",
+            )
+
+        self.assertIn(
+            "ExecStart=/usr/bin/docker system prune --all --force "
+            "--filter until={{ github_runner_docker_prune_until }}",
+            unit,
+        )
+        self.assertIn("ExecStart=/usr/bin/docker volume prune --force", unit)
+        self.assertNotIn("docker volume prune --all", unit)
+        self.assertIn("{% if github_runner_docker_prune_volumes | bool %}", unit)
+        self.assertIs(defaults["github_runner_docker_prune_volumes"], False)
+
     def test_runner_staging_unmount_removes_fstab_entry(self):
         # state: unmounted left the staging mountpoint in /etc/fstab, duplicating
         # the runner-home device entry and racing two mounts of /dev/xvdiN on boot.
