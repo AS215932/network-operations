@@ -127,3 +127,10 @@ vault_agent_metrics_interval: 5min
 # Journal window scanned for AppRole auth failures. Wider than the interval so
 # a burst is never missed between runs.
 vault_agent_metrics_auth_error_window: 15min
+# An agent that looks down on the first read is re-sampled once after this many
+# seconds. `systemctl restart` — which every apply run performs — takes the unit
+# through inactive/activating with no token sink, and mon's check re-reads the
+# same textfile sample on all three of its attempts, so a single straddled
+# sample would be a hard CRITICAL for a full collector interval. Set 0 to
+# publish the first read verbatim.
+vault_agent_metrics_restart_grace_seconds: 3

@@ -485,6 +485,40 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn('secret_id_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
         self.assertIn('token_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
 
+    def test_vault_agent_collector_rides_out_a_restart_in_flight(self):
+        # `systemctl restart` — which every apply run performs — walks the unit
+        # through inactive/activating with the token sink absent. A sample taken
+        # inside that window is indistinguishable from a dead agent, and mon
+        # cannot ride it out: max_check_attempts=3 with retry_interval=2m all
+        # re-read the SAME textfile sample, because the collector only refreshes
+        # every 5m. One straddled sample is therefore a hard CRITICAL. The
+        # collector must re-sample once before publishing a down verdict.
+        collector = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent-health-metrics.py.j2"
+        ).read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())
+
+        self.assertIn(
+            "RESTART_GRACE_SECONDS = {{ vault_agent_metrics_restart_grace_seconds }}",
+            collector,
+        )
+        self.assertIn(
+            "if RESTART_GRACE_SECONDS > 0 and (not active or sink_mtime is None):",
+            collector,
+        )
+        self.assertIn("time.sleep(RESTART_GRACE_SECONDS)", collector)
+        # The published sample must use the re-checked values, never a fresh
+        # inline call that would bypass the grace.
+        self.assertIn(
+            'metric("vault_agent_unit_active", agent_label, "%d" % active)',
+            collector,
+        )
+        self.assertNotIn(
+            'metric("vault_agent_unit_active", agent_label, "%d" % unit_active(unit))',
+            collector,
+        )
+        self.assertGreater(defaults["vault_agent_metrics_restart_grace_seconds"], 0)
+
     def test_vault_agent_staleness_is_monitored(self):
         # The July outage was silent for a week: the unit stayed active, so no
         # existing check saw it. Every Vault Agent host must publish freshness
