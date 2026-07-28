@@ -92,5 +92,43 @@ class ApplyWorkflowTest(unittest.TestCase):
             )
 
 
+    def test_drift_sweep_playbooks_resolve_their_own_gate(self):
+        # check-drift.sh and post-merge-apply.yml both derive the gate as a bare
+        # `${playbook}_apply=true` with no case mapping at all, so the sweep can
+        # only ever carry playbooks whose gate IS their name. Today's list
+        # happens to satisfy that; adding `prober`, `cloud`, `soc` or
+        # `mail_openbsd` to it would silently check-and-apply nothing — and in
+        # the post-merge path that means an approved production auto-apply that
+        # changes nothing while reporting success.
+        sweep = (REPO / "scripts/ci/check-drift.sh").read_text()
+        default_playbooks = re.search(
+            r"default_playbooks=\(([^)]*)\)", sweep
+        ).group(1).split()
+
+        self.assertIn(
+            '-e "${playbook}_apply=true"',
+            sweep,
+            "if check-drift.sh grows a gate mapping, this test needs to read it",
+        )
+
+        for playbook in default_playbooks:
+            path = REPO / f"ansible/playbooks/{playbook}.yml"
+            self.assertTrue(path.exists(), f"drift sweep names a missing playbook: {playbook}")
+
+            gates = set()
+            for role in _playbook_roles(path) - SHARED_ROLES:
+                gates |= _role_gate_variables(role)
+            if not gates:
+                continue
+
+            self.assertIn(
+                playbook.replace("-", "_") + "_apply",
+                gates,
+                f"drift sweep runs {playbook!r} with '{playbook}_apply=true', but its "
+                f"roles gate on {sorted(gates)} — the sweep would report no drift and "
+                f"the post-merge auto-apply would change nothing.",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
