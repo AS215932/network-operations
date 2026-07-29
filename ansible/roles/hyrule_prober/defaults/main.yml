@@ -59,6 +59,11 @@ hyrule_prober_packages:
   - python3
   - python3-venv
   - python3-dev
+  # ansible.builtin.pip imports `packaging` under the TARGET host's interpreter
+  # (/usr/bin/python3), not inside the venv, and Debian 13 does not ship it in a
+  # minimal install. Without it the editable install dies with
+  # "Failed to import the required Python library (packaging)".
+  - python3-packaging
   - git
   - ca-certificates
   - curl
