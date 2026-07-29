@@ -77,6 +77,22 @@ class ProberContractsTest(unittest.TestCase):
                 f"task {task['name']!r} runs as the home-less service user without a HOME override",
             )
 
+    def test_pip_module_dependency_is_installed_on_the_target(self):
+        # ansible.builtin.pip imports `packaging` under the TARGET's interpreter
+        # (/usr/bin/python3), not inside the venv it manages. Debian 13 ships a
+        # minimal python3 without it, so the editable install failed with
+        # "Failed to import the required Python library (packaging)". Any role
+        # reaching for the pip module has to install it explicitly.
+        uses_pip_module = any("ansible.builtin.pip" in task for task in self.tasks)
+        if not uses_pip_module:
+            self.skipTest("role no longer uses ansible.builtin.pip")
+
+        self.assertIn(
+            "python3-packaging",
+            self.defaults["hyrule_prober_packages"],
+            "ansible.builtin.pip needs `packaging` on the target interpreter",
+        )
+
     def test_checkout_never_waits_on_a_credential_prompt(self):
         # hyrule-prober was the only private app repo; the first apply hung its
         # clone on a username prompt. Public now, but a deploy must fail fast
