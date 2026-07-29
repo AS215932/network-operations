@@ -38,6 +38,12 @@
   loop:
     - { path: "{{ hyrule_prober_install_dir }}", owner: root, mode: "0755" }
     - { path: "{{ hyrule_prober_src_dir }}", mode: "0755" }
+    # The venv lives inside the root-owned install dir but is built and pip
+    # installed into as hyrule_prober_user, so it must be pre-created and owned
+    # by that user — same shape as src/. Without this, `python3 -m venv` cannot
+    # mkdir it and the first apply dies with
+    # "Permission denied: '/opt/hyrule-prober/.venv'".
+    - { path: "{{ hyrule_prober_venv_dir }}", mode: "0755" }
     - { path: "{{ hyrule_prober_etc_dir }}", owner: root, mode: "0750" }
     - { path: "{{ hyrule_prober_state_dir }}", mode: "0750" }
 
@@ -49,6 +55,14 @@
     update: true
   become: true
   become_user: "{{ hyrule_prober_user }}"
+  environment:
+    # The service user is created with create_home: false, so $HOME points at a
+    # /home/hyrule-prober that does not exist. Git and pip both want a writable
+    # HOME for config/cache, and Ansible warns it cannot place its tmpdir there.
+    HOME: "{{ hyrule_prober_state_dir }}"
+    # Never sit on an interactive credential prompt: if the repo ever goes
+    # private again, fail the task instead of hanging the deploy.
+    GIT_TERMINAL_PROMPT: "0"
   notify: restart hyrule-prober
 
 - name: Create the prober virtualenv
@@ -57,6 +71,8 @@
     creates: "{{ hyrule_prober_venv_dir }}/bin/python"
   become: true
   become_user: "{{ hyrule_prober_user }}"
+  environment:
+    HOME: "{{ hyrule_prober_state_dir }}"
 
 # Editable install: the venv imports from the checkout, so a git update + a
 # restart picks up new code without a reinstall (idempotent after first run).
@@ -67,6 +83,8 @@
     editable: true
   become: true
   become_user: "{{ hyrule_prober_user }}"
+  environment:
+    HOME: "{{ hyrule_prober_state_dir }}"
   notify: restart hyrule-prober
 
 - name: Render hyrule-prober env
