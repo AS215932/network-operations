@@ -54,6 +54,7 @@
     - role: vault_agent
       vars:
         vault_agent_name: engineering-loop
+        vault_agent_require_durable_secret_id: true
         vault_agent_role_id: "{{ lookup('env', 'VAULT_ENGINEERING_LOOP_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: >-
           {{
@@ -101,6 +102,7 @@
     - role: vault_agent
       vars:
         vault_agent_name: knowledge-loop
+        vault_agent_require_durable_secret_id: true
         vault_agent_role_id: "{{ lookup('env', 'VAULT_KNOWLEDGE_LOOP_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: >-
           {{
@@ -138,6 +140,7 @@
     - role: vault_agent
       vars:
         vault_agent_name: agent-core-collector
+        vault_agent_require_durable_secret_id: true
         vault_agent_role_id: "{{ lookup('env', 'VAULT_AGENT_CORE_COLLECTOR_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: >-
           {{
@@ -168,6 +171,7 @@
     - role: vault_agent
       vars:
         vault_agent_name: agentic-observatory
+        vault_agent_require_durable_secret_id: true
         vault_agent_role_id: "{{ lookup('env', 'VAULT_AGENTIC_OBSERVATORY_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: >-
           {{

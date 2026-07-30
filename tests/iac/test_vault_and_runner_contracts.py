@@ -484,6 +484,28 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             stop["when"],
         )
 
+    def test_every_long_lived_vault_agent_requires_a_durable_secret_id(self):
+        # Wrapped mode hands an agent a single-use SecretID and deletes the file
+        # after unwrapping, so the NEXT restart — reboot, package upgrade, OOM,
+        # deploy — has no credential and the agent 403-loops forever while
+        # systemd still reports it active. That is what happened to all four
+        # loop agents between 2026-07-26 and 2026-07-30 (#494) and to
+        # hyrule-cloud in July. Every consumer that must survive a restart
+        # unattended pins the durable shape, so the role refuses a wrapped
+        # bootstrap and clears any stale wrapping path left in the deployed hcl.
+        for playbook, names in (
+            ("engineering-loop.yml", ("engineering-loop", "knowledge-loop",
+                                      "agent-core-collector", "agentic-observatory")),
+            ("noc.yml", ("noc-agent",)),
+        ):
+            text = (REPO / "ansible/playbooks" / playbook).read_text()
+            for name in names:
+                self.assertRegex(
+                    text,
+                    rf"vault_agent_name: {re.escape(name)}\n\s+vault_agent_require_durable_secret_id: true",
+                    f"{playbook}: {name} must pin durable mode",
+                )
+
     def test_hyrule_cloud_requires_a_durable_secret_id(self):
         defaults = yaml.safe_load(
             (REPO / "ansible/roles/hyrule_cloud/defaults/main.yml").read_text()
