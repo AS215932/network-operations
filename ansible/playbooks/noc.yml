@@ -110,6 +110,7 @@
     - role: vault_agent
       vars:
         vault_agent_name: noc-agent
+        vault_agent_require_durable_secret_id: true
         # vault_agent_vault_addr inherits the role default
         # (http://[{{ peers.vault.ipv6 }}]:8200) so noc's secrets plane
         # survives a Caddy/proxy outage. The public vault.as215932.net route
