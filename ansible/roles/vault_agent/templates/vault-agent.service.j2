@@ -21,7 +21,15 @@ ExecStart=/usr/bin/vault agent -config={{ vault_agent_config_dir }}/{{ vault_age
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
+{# One /run/vault-agent holds the token sink of EVERY agent on the host, so it
+   must outlive any single unit. With the systemd default
+   (RuntimeDirectoryPreserve=no) the directory is deleted whenever any one agent
+   stops, taking every sibling's sink with it — the siblings keep running and
+   stay authenticated, but mon reads the sink and reports them as holding no
+   Vault token. Observed on loop 2026-07-30: restarting all four agents in
+   sequence left only the last one's sink on disk. #}
 RuntimeDirectory=vault-agent
+RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode={{ vault_agent_run_dir_mode }}
 NoNewPrivileges=yes
 PrivateTmp=yes

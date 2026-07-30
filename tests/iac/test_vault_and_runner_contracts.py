@@ -365,6 +365,30 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("map(attribute='stat.exists') | min", apply)
         self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
 
+    def test_vault_agent_units_do_not_wipe_each_others_token_sinks(self):
+        # Every agent on a host writes its token sink into the SAME
+        # /run/vault-agent, and a host runs several (loop runs four). With the
+        # systemd default RuntimeDirectoryPreserve=no, that directory is deleted
+        # whenever ANY one unit stops, destroying the sinks of every sibling that
+        # is still running and still authenticated. mon reads the sink, so the
+        # siblings are reported as holding no Vault token — the exact signature
+        # of the July outage, produced by a healthy restart.
+        #
+        # Observed on loop 2026-07-30: restarting all four agents in sequence
+        # left only the last one's sink on disk, while the journals showed all
+        # four had authenticated and were renewing.
+        unit = (REPO / "ansible/roles/vault_agent/templates/vault-agent.service.j2").read_text()
+        sink = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())["vault_agent_token_sink"]
+
+        self.assertIn("{{ vault_agent_run_dir }}", sink, "sinks are expected to share one run dir")
+        self.assertIn("RuntimeDirectory=vault-agent", unit)
+        self.assertIn(
+            "RuntimeDirectoryPreserve=yes",
+            unit,
+            "a shared RuntimeDirectory must survive a single unit stopping, or one "
+            "agent's restart deletes every other agent's token sink",
+        )
+
     def test_vault_agent_restarts_in_role_not_via_shared_handler(self):
         handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
         tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
