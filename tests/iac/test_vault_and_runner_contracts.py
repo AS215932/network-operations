@@ -1015,10 +1015,26 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             )
 
         self.assertIn(
-            "ExecStart=/usr/bin/docker system prune --all --force "
+            "ExecStart=/usr/bin/docker system prune --force "
             "--filter until={{ github_runner_docker_prune_until }}",
             unit,
         )
+
+        # No `--all` on the image prune. `--filter until=` keys on an image's
+        # CREATED (build) time, not its pull time, so every upstream image the
+        # CI labs pin (frr, batfish — both built ~12 months ago) matches on
+        # every run and would be evicted nightly. The next lab job then re-pulls
+        # from quay.io, and that pull has twice stalled past containerlab-frr's
+        # 15-minute timeout with zero layers completed.
+        for line in unit.splitlines():
+            if line.startswith("ExecStart=") and "image prune" not in line and "system prune" not in line:
+                continue
+            if line.startswith("ExecStart="):
+                self.assertNotIn(
+                    "--all",
+                    line,
+                    "pruning tagged images evicts the pinned lab images every night",
+                )
         self.assertIn("ExecStart=/usr/bin/docker volume prune --force", unit)
         self.assertNotIn("docker volume prune --all", unit)
         self.assertIn("{% if github_runner_docker_prune_volumes | bool %}", unit)
