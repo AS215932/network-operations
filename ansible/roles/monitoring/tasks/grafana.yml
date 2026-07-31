@@ -24,6 +24,20 @@
     label: "{{ item | basename }}"
   tags: [validate, diff, apply]
 
+# One list, used three times: to render review artifacts, to publish to mon,
+# and to reconcile both directories. Deriving them separately is how the
+# artifact copy would drift from what the live reconciler actually keeps.
+- name: Resolve the provisioning filenames this role owns
+  ansible.builtin.set_fact:
+    monitoring_grafana_managed_ds_files: "{{ _monitoring_grafana_ds_files }}"
+    monitoring_grafana_artifact_files: "{{ _monitoring_grafana_ds_files + [monitoring_grafana_provider_artifact] }}"
+  vars:
+    _monitoring_grafana_ds_files: "{{
+      (monitoring_grafana_datasources | map(attribute='file') | list)
+      + ([monitoring_grafana_absent_file] if monitoring_grafana_absent_datasources | length > 0 else [])
+    }}"
+  tags: [validate, diff, apply]
+
 - name: Ensure controller-side Grafana artifact dir exists
   delegate_to: localhost
   become: false
@@ -50,7 +64,7 @@
   become: false
   ansible.builtin.template:
     src: grafana-datasources-absent.yaml.j2
-    dest: "{{ playbook_dir }}/../generated/mon/grafana/zz-absent.yaml"
+    dest: "{{ playbook_dir }}/../generated/mon/grafana/{{ monitoring_grafana_absent_file }}"
     mode: "0644"
   when: monitoring_grafana_absent_datasources | length > 0
   tags: [validate, diff, apply]
@@ -60,8 +74,35 @@
   become: false
   ansible.builtin.template:
     src: grafana-dashboard-provider.yaml.j2
-    dest: "{{ playbook_dir }}/../generated/mon/grafana/dashboards-hyrule.yaml"
+    dest: "{{ playbook_dir }}/../generated/mon/grafana/{{ monitoring_grafana_provider_artifact }}"
     mode: "0644"
+  tags: [validate, diff, apply]
+
+# Reconcile the review artifacts too, not just the live files. A datasource
+# dropped from the inventory otherwise leaves its YAML committed under
+# ansible/generated/mon/grafana/ forever: render-check.yml only fails on a Git
+# *diff*, and a file nobody rewrites produces none. The checked-in review copy
+# would then keep advertising a datasource the live reconciler deletes — the
+# generated tree lying about the host is worse than not having it.
+- name: Find rendered Grafana artifacts on the controller
+  delegate_to: localhost
+  become: false
+  ansible.builtin.find:
+    paths: "{{ playbook_dir }}/../generated/mon/grafana"
+    patterns: "*.yaml"
+  register: monitoring_grafana_rendered_artifacts
+  tags: [validate, diff, apply]
+
+- name: Prune controller artifacts no longer configured
+  delegate_to: localhost
+  become: false
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ monitoring_grafana_rendered_artifacts.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename not in monitoring_grafana_artifact_files
   tags: [validate, diff, apply]
 
 - name: Publish Grafana datasource provisioning
@@ -103,14 +144,6 @@
 # Removing the file stops Grafana *managing* the datasource; it does not delete
 # it from grafana.db. To actually remove one, add its name to
 # monitoring_grafana_absent_datasources.
-- name: Resolve the datasource filenames this role should own
-  ansible.builtin.set_fact:
-    monitoring_grafana_managed_ds_files: "{{
-      (monitoring_grafana_datasources | map(attribute='file') | list)
-      + ([monitoring_grafana_absent_file] if monitoring_grafana_absent_datasources | length > 0 else [])
-    }}"
-  tags: [apply]
-
 - name: Find role-managed datasource files on mon
   ansible.builtin.find:
     paths: "{{ monitoring_grafana_provisioning_dir }}/datasources"
