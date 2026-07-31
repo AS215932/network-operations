@@ -1,0 +1,31 @@
+---
+# {{ ansible_managed }}
+# Deploy to: {{ monitoring_grafana_provisioning_dir }}/datasources/{{ item.file }} on mon
+# Source: ansible/roles/monitoring/templates/grafana-datasource.yaml.j2
+#
+# The uid is pinned deliberately: file-provisioned dashboards in
+# configs/mon/grafana-dashboards/ reference it, and Grafana's generated uid is
+# not reproducible across a rebuild.
+#
+# deleteDatasources runs before the datasources block on every start, so
+# provisioning owns this datasource outright. It is load-bearing, not cleanup:
+# Grafana 13 looks an already-provisioned datasource up by uid, and a
+# same-named datasource carrying a different uid (the hash it generated when
+# this file had no uid — PBFA97CFB590B2093 on mon) makes the whole provisioning
+# module fail to start with "Datasource provisioning error: data source not
+# found", taking Grafana down with it. Dropping and recreating changes the
+# datasource's internal id, which nothing references — dashboards key off uid.
+apiVersion: 1
+
+deleteDatasources:
+  - name: {{ item.name }}
+    orgId: 1
+
+datasources:
+  - name: {{ item.name }}
+    type: {{ item.type }}
+    uid: {{ item.uid }}
+    access: proxy
+    url: {{ item.url }}
+    isDefault: {{ item.is_default | bool | lower }}
+    editable: true

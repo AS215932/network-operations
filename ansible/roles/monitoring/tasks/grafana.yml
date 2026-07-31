@@ -1,0 +1,130 @@
+---
+# Grafana provisioning on mon — datasources + the repo's dashboards.
+#
+# Only runs for monitoring_mon_host (guarded at the include in main.yml).
+# Validate/diff runs render review artifacts to ansible/generated/mon/grafana/;
+# nothing touches the host unless monitoring_apply is true.
+#
+# The dashboard JSON is validated controller-side before publish, mirroring the
+# prometheus role's promtool gate: a malformed file that reached
+# /var/lib/grafana/dashboards would be silently skipped by the provisioner and
+# the panel would just be missing, with no failed task to notice.
+
+- name: Verify each dashboard is valid JSON carrying a uid and title
+  delegate_to: localhost
+  become: false
+  ansible.builtin.assert:
+    that:
+      - (lookup('file', item) | from_json).get('uid', '') | length > 0
+      - (lookup('file', item) | from_json).get('title', '') | length > 0
+    fail_msg: "{{ item | basename }} is not a provisionable dashboard (needs uid + title)"
+    quiet: true
+  loop: "{{ query('ansible.builtin.fileglob', monitoring_grafana_dashboards_repo ~ '/*.json') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  tags: [validate, diff, apply]
+
+- name: Ensure controller-side Grafana artifact dir exists
+  delegate_to: localhost
+  become: false
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../generated/mon/grafana"
+    state: directory
+    mode: "0755"
+  tags: [validate, diff, apply]
+
+- name: Render Grafana datasource provisioning to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.template:
+    src: grafana-datasource.yaml.j2
+    dest: "{{ playbook_dir }}/../generated/mon/grafana/{{ item.file }}"
+    mode: "0644"
+  loop: "{{ monitoring_grafana_datasources }}"
+  loop_control:
+    label: "{{ item.file }}"
+  tags: [validate, diff, apply]
+
+- name: Render Grafana dashboard provider to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.template:
+    src: grafana-dashboard-provider.yaml.j2
+    dest: "{{ playbook_dir }}/../generated/mon/grafana/dashboards-hyrule.yaml"
+    mode: "0644"
+  tags: [validate, diff, apply]
+
+- name: Publish Grafana datasource provisioning
+  ansible.builtin.template:
+    src: grafana-datasource.yaml.j2
+    dest: "{{ monitoring_grafana_provisioning_dir }}/datasources/{{ item.file }}"
+    owner: root
+    group: grafana
+    mode: "0640"
+  loop: "{{ monitoring_grafana_datasources }}"
+  loop_control:
+    label: "{{ item.file }}"
+  when: monitoring_apply | bool
+  notify: restart grafana
+  tags: [apply]
+
+- name: Ensure the provisioned dashboard directory exists
+  ansible.builtin.file:
+    path: "{{ monitoring_grafana_dashboard_dir }}"
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0750"
+  when: monitoring_apply | bool
+  tags: [apply]
+
+- name: Publish dashboard JSON
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ monitoring_grafana_dashboard_dir }}/{{ item | basename }}"
+    owner: root
+    group: grafana
+    mode: "0640"
+  loop: "{{ query('ansible.builtin.fileglob', monitoring_grafana_dashboards_repo ~ '/*.json') | sort }}"
+  loop_control:
+    label: "{{ item | basename }}"
+  when: monitoring_apply | bool
+  tags: [apply]
+
+- name: Find published dashboards
+  ansible.builtin.find:
+    paths: "{{ monitoring_grafana_dashboard_dir }}"
+    patterns: "*.json"
+  register: monitoring_grafana_live_dashboards
+  when: monitoring_apply | bool
+  tags: [apply]
+
+# The repo is the source of truth: a dashboard deleted from
+# configs/mon/grafana-dashboards/ must stop being provisioned, or it lingers on
+# mon forever (disableDeletion is false, so removing the file removes the
+# dashboard from Grafana too).
+- name: Prune dashboards no longer in the repo
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ monitoring_grafana_live_dashboards.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - monitoring_apply | bool
+    - item.path | basename not in (query('ansible.builtin.fileglob', monitoring_grafana_dashboards_repo ~ '/*.json') | map('basename') | list)
+  tags: [apply]
+
+# Datasource provisioning is read once at startup, so the handler restart is
+# what actually activates a uid change. Publish the provider last: it is only
+# useful once the datasources it points at resolve.
+- name: Publish Grafana dashboard provider
+  ansible.builtin.template:
+    src: grafana-dashboard-provider.yaml.j2
+    dest: "{{ monitoring_grafana_provisioning_dir }}/dashboards/hyrule.yaml"
+    owner: root
+    group: grafana
+    mode: "0640"
+  when: monitoring_apply | bool
+  notify: restart grafana
+  tags: [apply]
