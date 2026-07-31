@@ -15,6 +15,15 @@
   when: monitoring_register | bool
   tags: [validate, diff, apply]
 
+# mon-only: Grafana datasources + the dashboards under
+# configs/mon/grafana-dashboards/. Kept in this role (rather than per-host)
+# because it configures the monitoring host itself, like the icinga2
+# registration above.
+- name: Provision Grafana datasources and dashboards
+  include_tasks: grafana.yml
+  when: inventory_hostname == monitoring_mon_host
+  tags: [validate, diff, apply]
+
 # Per-host by_ssh check scripts installed under /usr/local/lib/nagios/plugins/.
 # Only hosts that opt in via `monitoring_check_scripts` get them. The
 # CheckCommand on mon references the absolute path.

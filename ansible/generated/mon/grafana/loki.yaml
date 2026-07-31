@@ -1,0 +1,31 @@
+---
+# Ansible managed
+# Deploy to: /etc/grafana/provisioning/datasources/loki.yaml on mon
+# Source: ansible/roles/monitoring/templates/grafana-datasource.yaml.j2
+#
+# The uid is pinned deliberately: file-provisioned dashboards in
+# configs/mon/grafana-dashboards/ reference it, and Grafana's generated uid is
+# not reproducible across a rebuild.
+#
+# deleteDatasources runs before the datasources block on every start, so
+# provisioning owns this datasource outright. It is load-bearing, not cleanup:
+# Grafana 13 looks an already-provisioned datasource up by uid, and a
+# same-named datasource carrying a different uid (the hash it generated when
+# this file had no uid — PBFA97CFB590B2093 on mon) makes the whole provisioning
+# module fail to start with "Datasource provisioning error: data source not
+# found", taking Grafana down with it. Dropping and recreating changes the
+# datasource's internal id, which nothing references — dashboards key off uid.
+apiVersion: 1
+
+deleteDatasources:
+  - name: Loki
+    orgId: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://[2a0c:b641:b50:2::b0]:3100
+    isDefault: false
+    editable: true

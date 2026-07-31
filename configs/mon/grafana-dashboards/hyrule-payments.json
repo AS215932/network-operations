@@ -1,20 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "description": "Prometheus on mon"
-    },
-    {
-      "name": "DS_LOKI",
-      "label": "Loki",
-      "type": "datasource",
-      "pluginId": "loki",
-      "description": "Loki on log"
-    }
-  ],
   "title": "Hyrule Cloud — x402 Payments",
   "uid": "hyrule-payments",
   "tags": ["hyrule-cloud", "x402", "payments"],
@@ -29,7 +13,7 @@
       "id": 1,
       "type": "stat",
       "title": "Revenue (all time)",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 5, "x": 0, "y": 0 },
       "targets": [
         {
@@ -52,7 +36,7 @@
       "id": 2,
       "type": "stat",
       "title": "Revenue (24h)",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 5, "x": 5, "y": 0 },
       "targets": [
         {
@@ -75,7 +59,7 @@
       "id": 3,
       "type": "stat",
       "title": "Unique payer wallets",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 10, "y": 0 },
       "targets": [
         { "refId": "A", "expr": "max(hyrule_payment_unique_payers)", "instant": true }
@@ -90,7 +74,7 @@
       "id": 4,
       "type": "stat",
       "title": "Unique payers (24h)",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
       "targets": [
         { "refId": "A", "expr": "max(hyrule_payment_unique_payers_24h)", "instant": true }
@@ -106,7 +90,7 @@
       "type": "stat",
       "title": "402 → settle conversion (24h)",
       "description": "Settled payments divided by 402 challenges issued. Low is normal (agents browse prices); watch the trend, not the level.",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
       "targets": [
         {
@@ -125,7 +109,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "Settlements per hour, by service",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 4 },
       "targets": [
         {
@@ -164,7 +148,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Revenue per hour, by service (USD)",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 4 },
       "targets": [
         {
@@ -202,7 +186,7 @@
       "type": "timeseries",
       "title": "Payment funnel per hour, by outcome",
       "description": "402 challenges issued vs verified/settled vs failures. dev_bypass must stay at zero in production (alert fires otherwise).",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 13 },
       "targets": [
         {
@@ -241,7 +225,7 @@
       "type": "timeseries",
       "title": "VM provisioning outcomes per hour",
       "description": "Refunds are manual: every 'failed' is a paying agent owed money. The >20% failure-ratio alert pages.",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 9, "w": 6, "x": 12, "y": 13 },
       "targets": [
         {
@@ -274,7 +258,7 @@
       "id": 22,
       "type": "timeseries",
       "title": "Active VMs by status",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 9, "w": 6, "x": 18, "y": 13 },
       "targets": [
         {
@@ -312,7 +296,7 @@
       "id": 30,
       "type": "stat",
       "title": "Exporter health",
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "gridPos": { "h": 8, "w": 6, "x": 0, "y": 22 },
       "targets": [
         {
@@ -346,7 +330,7 @@
       "type": "logs",
       "title": "Payment errors (Loki)",
       "description": "payment_settlement_failed / payment_verification_failed / payment_ledger_write_failed events from the app's structlog stream.",
-      "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
+      "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 18, "x": 6, "y": 22 },
       "targets": [
         {

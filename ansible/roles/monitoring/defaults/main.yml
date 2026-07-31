@@ -60,3 +60,59 @@ monitoring_remove_legacy_root_by_ssh_key: false
 # `nagios` user with HOME=/var/lib/nagios, so OpenSSH reads this file when
 # check_by_ssh runs from Icinga.
 monitoring_by_ssh_known_hosts_path: /var/lib/nagios/.ssh/known_hosts
+
+# --- Grafana (mon only) -----------------------------------------------------
+# Dashboards are provisioned from files in configs/mon/grafana-dashboards/ so a
+# rebuilt mon comes back with the same panels. A hand-imported dashboard lives
+# only in grafana.db and is invisible to the repo — which is exactly how the
+# x402 payments dashboard sat unimported from 2026-07-10 until 2026-07-31
+# despite its JSON, scrape job, and alert rules all being live.
+monitoring_grafana_service: grafana-server
+monitoring_grafana_provisioning_dir: /etc/grafana/provisioning
+monitoring_grafana_dashboard_dir: /var/lib/grafana/dashboards
+monitoring_grafana_dashboards_repo: "{{ playbook_dir }}/../../configs/mon/grafana-dashboards"
+
+# Grafana file-provisioned dashboards reference datasources by uid, so the uid
+# must be config rather than the hash Grafana invents on first start (mon had
+# PBFA97CFB590B2093 for Prometheus). Provisioning these files with an explicit
+# uid rewrites the existing datasources in place — safe here because nothing
+# referenced the old uids, and from now on the dashboard JSON pins these.
+monitoring_grafana_prometheus_uid: prometheus
+monitoring_grafana_loki_uid: loki
+monitoring_grafana_datasources:
+  - file: prometheus.yaml
+    name: Prometheus
+    type: prometheus
+    uid: "{{ monitoring_grafana_prometheus_uid }}"
+    url: http://localhost:9090
+    is_default: true
+  - file: loki.yaml
+    name: Loki
+    type: loki
+    uid: "{{ monitoring_grafana_loki_uid }}"
+    # Loki's HTTP API on the log VM; firewalled to mon by host_vars/log.yml.
+    url: "http://[{{ peers.log.ipv6 }}]:3100"
+    is_default: false
+
+# Datasources Grafana created on its own that we want gone. mon shipped with
+# example opentsdb/graphite/influxdb entries — nothing listens on those
+# endpoints here, so they are dead options in every datasource picker and a
+# plausible way to build a panel that silently queries nothing. They are not
+# provisioned by any file, so deleteDatasources is the only declarative way to
+# remove them; listing them here also keeps them from coming back.
+monitoring_grafana_absent_datasources:
+  - opentsdb
+  - graphite
+  - influxdb
+
+# Filename for the delete-only provisioning file. Named so it is obvious in a
+# directory listing that it creates nothing; Grafana applies every file's
+# deletes before any file's creates, so the name does not affect ordering.
+monitoring_grafana_absent_file: zz-absent.yaml
+
+# Filename of the dashboard-provider review artifact under
+# ansible/generated/mon/grafana/. It is published to mon as
+# <provisioning_dir>/dashboards/hyrule.yaml; the artifact name is prefixed so
+# the review directory shows at a glance which files are datasources and which
+# is the dashboard provider.
+monitoring_grafana_provider_artifact: dashboards-hyrule.yaml

@@ -1,0 +1,16 @@
+---
+# {{ ansible_managed }}
+# Deploy to: {{ monitoring_grafana_provisioning_dir }}/datasources/zz-absent.yaml on mon
+# Source: ansible/roles/monitoring/templates/grafana-datasources-absent.yaml.j2
+#
+# Delete-only provisioning file: datasources that exist in grafana.db but that
+# no provisioning file creates. Grafana runs every file's deleteDatasources
+# before any file's datasources block, so the filename does not order this
+# against the real datasource files.
+apiVersion: 1
+
+deleteDatasources:
+{% for name in monitoring_grafana_absent_datasources %}
+  - name: {{ name }}
+    orgId: 1
+{% endfor %}

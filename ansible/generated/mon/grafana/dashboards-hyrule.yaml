@@ -1,0 +1,25 @@
+---
+# Ansible managed
+# Deploy to: /etc/grafana/provisioning/dashboards/hyrule.yaml on mon
+# Source: ansible/roles/monitoring/templates/grafana-dashboard-provider.yaml.j2
+#
+# Loads every dashboard JSON the role publishes into
+# /var/lib/grafana/dashboards. Grafana re-reads that directory every
+# updateIntervalSeconds, so a dashboard change needs no Grafana restart.
+#
+# allowUiUpdates: false means the UI cannot *save* over a provisioned dashboard.
+# Editing and exploring still work — to keep a change, use Export → JSON and
+# commit it to configs/mon/grafana-dashboards/, which is the source of truth.
+apiVersion: 1
+
+providers:
+  - name: hyrule
+    orgId: 1
+    folder: Hyrule
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

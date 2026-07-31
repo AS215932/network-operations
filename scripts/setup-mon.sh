@@ -45,29 +45,16 @@ systemctl enable --now prometheus-node-exporter
 
 echo "=== Configuring Grafana ==="
 # Grafana listens on [::]:3000 by default.
-# Configure Prometheus as the default datasource.
-cat > /etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://localhost:9090
-    isDefault: true
-    editable: true
-EOF
-
-# Loki on the log VM. HTTP API is firewalled to mon by host_vars/log.yml.
-cat > /etc/grafana/provisioning/datasources/loki.yaml <<'EOF'
-apiVersion: 1
-datasources:
-  - name: Loki
-    type: loki
-    access: proxy
-    url: http://[2a0c:b641:b50:2::b0]:3100
-    isDefault: false
-    editable: true
-EOF
+#
+# Datasources (Prometheus, Loki) and dashboards are NOT written here — the
+# monitoring role owns /etc/grafana/provisioning/{datasources,dashboards} and
+# /var/lib/grafana/dashboards. Duplicating them in this script drifted once
+# already (the script's datasources had no pinned uid, which is why the x402
+# payments dashboard could not be file-provisioned). After this bootstrap, run
+# from the workstation:
+#
+#   cd ansible && ansible-playbook playbooks/monitoring.yml --tags apply \
+#       -e '{"monitoring_apply":true}' --limit mon
 
 # Set root URL for reverse proxy
 sed -i 's|;root_url = .*|root_url = https://grafana.servify.network/|' /etc/grafana/grafana.ini
@@ -179,9 +166,12 @@ echo ""
 echo "Next steps:"
 echo "  1. Open https://mon.servify.network/ and complete Icinga Web setup wizard"
 echo "     Setup token: $(icingacli setup token show 2>/dev/null || echo 'run: icingacli setup token show')"
-echo "  2. Open https://grafana.servify.network/ (default: admin/admin)"
-echo "  3. Import Grafana dashboards:"
-echo "     - Node Exporter Full: dashboard ID 1860"
-echo "     - FRR: search community dashboards for FRRouting"
+echo "  2. Provision Grafana datasources + repo dashboards (from the workstation):"
+echo "     cd ansible && ansible-playbook playbooks/monitoring.yml --tags apply \\"
+echo "         -e '{\"monitoring_apply\":true}' --limit mon"
+echo "  3. Open https://grafana.servify.network/ (default: admin/admin)"
+echo "     Community dashboards still get imported by hand (Node Exporter Full:"
+echo "     ID 1860; FRRouting: search community dashboards). Anything we want to"
+echo "     survive a rebuild belongs in configs/mon/grafana-dashboards/."
 echo "  4. Deploy exporters to target hosts: run scripts/deploy-exporters.sh"
 echo "  5. Configure notification targets in /etc/icinga2/conf.d/notifications.conf"
