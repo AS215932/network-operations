@@ -20,12 +20,37 @@ REPO = Path(__file__).resolve().parents[2]
 DASHBOARD_DIR = REPO / "configs" / "mon" / "grafana-dashboards"
 MONITORING_DEFAULTS = REPO / "ansible" / "roles" / "monitoring" / "defaults" / "main.yml"
 
-# Panel types that render without querying a datasource. Deliberately an
-# allowlist of known-inert types rather than "anything without targets" — the
-# latter would excuse a timeseries panel that forgot its query, which is the
-# defect these contracts exist to catch.
-NON_QUERY_PANEL_TYPES = frozenset(
-    {"row", "text", "dashlist", "news", "welcome", "alertlist", "annolist"}
+# Panel types that are meaningless without a query, so a missing `targets` is a
+# defect rather than a style. Everything else — text, dashlist, datagrid,
+# whatever Grafana ships next — is simply not required to carry one.
+#
+# Enumerating the *inert* types instead was tried and is a trap: that list has
+# to be exhaustive against every panel type Grafana has or will ever add, and a
+# single omission turns a legitimate dashboard into a CI failure. This list only
+# has to cover the panel types we actually build with, and anything missing from
+# it still gets its datasource checked the moment it declares a query.
+QUERY_PANEL_TYPES = frozenset(
+    {
+        "timeseries",
+        "stat",
+        "table",
+        "gauge",
+        "bargauge",
+        "barchart",
+        "piechart",
+        "heatmap",
+        "histogram",
+        "logs",
+        "state-timeline",
+        "status-history",
+        "trend",
+        "xychart",
+        "candlestick",
+        "geomap",
+        "nodeGraph",
+        "traces",
+        "flamegraph",
+    }
 )
 
 # `uid: "{{ monitoring_grafana_prometheus_uid }}"` in the role defaults — a
@@ -43,35 +68,33 @@ def _resolve(value, defaults):
     return defaults[match.group(1)] if match else value
 
 
-def _provisioned_uids(defaults):
-    """The uids the role publishes, straight from its datasource list.
+def _provisioned_uid_list(defaults):
+    """The uids the role publishes, in declaration order, duplicates intact.
 
     Read from monitoring_grafana_datasources rather than named one by one, so
     adding a third datasource to the role does not also require editing a
-    hidden allowlist here to keep dashboards referencing it legal.
+    hidden allowlist here to keep dashboards referencing it legal. Returned as
+    a list because collapsing to a set first would swallow a uid collision,
+    which is precisely the thing Grafana cannot provision.
     """
-    return {_resolve(ds["uid"], defaults) for ds in defaults["monitoring_grafana_datasources"]}
+    return [_resolve(ds["uid"], defaults) for ds in defaults["monitoring_grafana_datasources"]]
 
 
-def _query_panels(dashboard):
-    """Every panel that actually runs a query, rows flattened away.
+def _provisioned_uids(defaults):
+    return set(_provisioned_uid_list(defaults))
 
-    A row is a layout container: it legitimately has no datasource and no
-    targets, and when collapsed it carries its children in its own `panels`
-    key where a naive top-level loop would never see them. Yield the children
-    and drop the row itself, so a nested panel cannot smuggle in a bad
-    datasource reference. Other inert panel types (text, dashlist, …) are
-    dropped outright — they have no children and no query.
+
+def _panels(dashboard):
+    """Every real panel, rows flattened away.
+
+    A row is a layout container with no datasource and no targets of its own,
+    and when collapsed it carries its children in its own `panels` key where a
+    naive top-level loop would never see them. Yield the children and drop the
+    row, so a nested panel cannot smuggle in a bad datasource reference.
     """
     for panel in dashboard.get("panels", []):
         if panel.get("type") == "row":
-            yield from (
-                child
-                for child in panel.get("panels", [])
-                if child.get("type") not in NON_QUERY_PANEL_TYPES
-            )
-            continue
-        if panel.get("type") in NON_QUERY_PANEL_TYPES:
+            yield from panel.get("panels", [])
             continue
         yield panel
 
@@ -110,9 +133,17 @@ class GrafanaDashboardContracts(unittest.TestCase):
                 self.assertNotIn("__inputs", raw)
 
     def test_panel_datasources_match_provisioned_uids(self):
+        """Anything that declares a query must name a datasource we provision.
+
+        Keyed on the panel *having* targets rather than on its type: a panel
+        type nobody anticipated still gets checked the moment it queries, and a
+        panel that queries nothing has no datasource to get wrong.
+        """
         for path in _dashboards():
             data = json.loads(path.read_text(encoding="utf-8"))
-            for panel in _query_panels(data):
+            for panel in _panels(data):
+                if not panel.get("targets"):
+                    continue
                 with self.subTest(dashboard=path.name, panel=panel.get("title")):
                     datasource = panel.get("datasource")
                     self.assertIsInstance(
@@ -125,10 +156,18 @@ class GrafanaDashboardContracts(unittest.TestCase):
                         "not provision",
                     )
 
-    def test_panels_have_targets(self):
+    def test_query_panels_have_targets(self):
+        """A graph with no query renders an empty box and alerts nobody.
+
+        Scoped to the panel types we actually build with, so an inert panel
+        (text, dashlist, datagrid, whatever ships next) is never required to
+        carry a query it has no use for.
+        """
         for path in _dashboards():
             data = json.loads(path.read_text(encoding="utf-8"))
-            for panel in _query_panels(data):
+            for panel in _panels(data):
+                if panel.get("type") not in QUERY_PANEL_TYPES:
+                    continue
                 with self.subTest(dashboard=path.name, panel=panel.get("title")):
                     targets = panel.get("targets")
                     self.assertTrue(targets, "panel has no query")
@@ -150,19 +189,28 @@ class QueryPanelFlattening(unittest.TestCase):
                 "title": "collapsed row",
                 "panels": [
                     {"type": "stat", "title": "nested"},
-                    {"type": "text", "title": "nested note"},
+                    {"type": "datagrid", "title": "nested grid"},
                 ],
             },
             {"type": "row", "title": "expanded row"},
         ]
     }
 
-    def test_only_query_panels_survive_the_walk(self):
-        """Rows and inert panels out, their queryable children in."""
+    def test_rows_are_dropped_and_every_other_panel_kept(self):
+        """Rows out, their children in, inert panels left for the contracts to
+        skip on their own terms — the walker no longer decides what is inert."""
         self.assertEqual(
-            [p["title"] for p in _query_panels(self.DASHBOARD)],
-            ["top-level", "nested"],
+            [p["title"] for p in _panels(self.DASHBOARD)],
+            ["top-level", "runbook note", "nested", "nested grid"],
         )
+
+    def test_inert_panels_are_exempt_from_both_contracts(self):
+        """The regression the enumerated-inert-types approach kept producing:
+        a valid dashboard carrying a non-query panel must stay committable."""
+        for panel in _panels(self.DASHBOARD):
+            if panel["type"] in ("text", "datagrid"):
+                self.assertNotIn(panel["type"], QUERY_PANEL_TYPES)
+                self.assertFalse(panel.get("targets"))
 
 
 class GrafanaProvisioningDefaults(unittest.TestCase):
@@ -181,6 +229,22 @@ class GrafanaProvisioningDefaults(unittest.TestCase):
                 for key in ("file", "name", "type", "uid", "url"):
                     self.assertTrue(entry.get(key), f"missing {key}")
                 self.assertTrue(entry["file"].endswith(".yaml"))
+
+    def test_datasource_identifiers_are_unique(self):
+        """Grafana cannot hold two datasources on one uid in an org — the second
+        provisioning entry conflicts with or replaces the first. Checked on the
+        raw list: the membership set used elsewhere would have absorbed the
+        collision and reported nothing. Names and filenames collide just as
+        destructively, so they are checked here too."""
+        datasources = self.defaults["monitoring_grafana_datasources"]
+        for field, values in (
+            ("uid", _provisioned_uid_list(self.defaults)),
+            ("name", [ds["name"] for ds in datasources]),
+            ("file", [ds["file"] for ds in datasources]),
+        ):
+            with self.subTest(field=field):
+                duplicates = sorted({v for v in values if values.count(v) > 1})
+                self.assertEqual(duplicates, [], f"duplicate {field}: {duplicates}")
 
     def test_every_datasource_uid_resolves_to_a_literal(self):
         """A uid the resolver cannot flatten would be compared as raw Jinja,
