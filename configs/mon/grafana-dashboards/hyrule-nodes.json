@@ -1,0 +1,439 @@
+{
+  "title": "AS215932 — Nodes",
+  "uid": "hyrule-nodes",
+  "tags": ["as215932", "nodes", "node-exporter"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "Job",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(node_uname_info, job)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Nodes scraping",
+      "description": "node_exporter targets Prometheus can currently reach.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(up{job=~\"node-.*\", job=~\"$job\"})",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Nodes down",
+      "description": "Targets scraped but unreachable. `or vector(0)` so an all-healthy fleet reads 0 instead of N/A.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(up{job=~\"node-.*\", job=~\"$job\"} == 0) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "text", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Root disks over 80%",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count((100 - node_filesystem_avail_bytes{job=~\"$job\", mountpoint=\"/\"} / node_filesystem_size_bytes{job=~\"$job\", mountpoint=\"/\"} * 100) > 80) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "text", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Service restarts (1h)",
+      "description": "node_systemd_service_restart_total across the fleet — a crash loop shows up here before it shows up anywhere else. Linux only; the FreeBSD cores have no systemd collector.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 5, "x": 13, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(node_systemd_service_restart_total{job=~\"$job\"}[1h])) or vector(0)",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Most recent boot",
+      "description": "Shortest uptime in the selection — catches a reboot you did not order.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min(time() - node_boot_time_seconds{job=~\"$job\"})",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "value",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "CPU busy % by host",
+      "description": "Joined to node_uname_info so the legend reads hostnames rather than [v6]:9100 instances.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(100 - avg by (instance) (rate(node_cpu_seconds_total{job=~\"$job\", mode=\"idle\"}[5m])) * 100) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "fillOpacity": 5, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Memory used % by host",
+      "description": "Two queries by necessity: Linux reports MemAvailable, the FreeBSD cores report free/inactive/cache against node_memory_size_bytes. The metric sets are disjoint, so both can run without double-counting a host.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(100 * (1 - node_memory_MemAvailable_bytes{job=~\"$job\"} / node_memory_MemTotal_bytes{job=~\"$job\"})) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}}"
+        },
+        {
+          "refId": "B",
+          "expr": "(100 * (1 - (node_memory_free_bytes{job=~\"$job\"} + node_memory_inactive_bytes{job=~\"$job\"} + node_memory_cache_bytes{job=~\"$job\"}) / node_memory_size_bytes{job=~\"$job\"})) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": { "fillOpacity": 5, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Load average (1m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_load1{job=~\"$job\"} * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "fillOpacity": 0, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Root filesystem used %",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(100 - node_filesystem_avail_bytes{job=~\"$job\", mountpoint=\"/\"} / node_filesystem_size_bytes{job=~\"$job\", mountpoint=\"/\"} * 100) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "text", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 0,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "dashed" }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Root filesystems predicted to fill within 4 days",
+      "description": "predict_linear over a 6h window. Empty is the healthy state — a row here means the disk fills before anyone gets back from a weekend.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(node_filesystem_avail_bytes{job=~\"$job\", mountpoint=\"/\"} and predict_linear(node_filesystem_avail_bytes{job=~\"$job\", mountpoint=\"/\"}[6h], 4 * 24 * 3600) < 0) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" },
+        "overrides": []
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "device": true,
+              "fstype": true,
+              "instance": true,
+              "job": true,
+              "mountpoint": true,
+              "role": true
+            },
+            "renameByName": { "Value": "bytes free", "nodename": "host", "site": "site" }
+          }
+        }
+      ],
+      "options": { "showHeader": true }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Network throughput (bits/s)",
+      "description": "Physical and tunnel interfaces; loopback excluded on both Linux (lo) and FreeBSD (lo0). Receive positive, transmit negative.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (instance) (rate(node_network_receive_bytes_total{job=~\"$job\", device!~\"lo|lo0\"}[5m])) * 8) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}} rx"
+        },
+        {
+          "refId": "B",
+          "expr": "(sum by (instance) (rate(node_network_transmit_bytes_total{job=~\"$job\", device!~\"lo|lo0\"}[5m])) * -8) * on (instance) group_left (nodename) node_uname_info{job=~\"$job\"}",
+          "legendFormat": "{{nodename}} tx"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": { "fillOpacity": 5, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "systemd service restarts per hour (top 10)",
+      "description": "Units restarting repeatedly. A unit that is `active (running)` but relaunching every few minutes looks healthy to every other check.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (instance, name) (increase(node_systemd_service_restart_total{job=~\"$job\"}[1h])) > 0)",
+          "legendFormat": "{{instance}} {{name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "custom": { "fillOpacity": 10, "lineWidth": 1, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "calcs": ["max"] },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Scrape health",
+      "description": "up per target. A gap here invalidates every other panel for that host — read this before concluding a metric went quiet.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=~\"node-.*\", job=~\"$job\"}",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "decimals": 0,
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "lineInterpolation": "stepAfter"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ]
+}

@@ -64,6 +64,8 @@ class GrafanaDashboardContracts(unittest.TestCase):
         for path in _dashboards():
             data = json.loads(path.read_text(encoding="utf-8"))
             for panel in data.get("panels", []):
+                if panel.get("type") == "row":
+                    continue
                 with self.subTest(dashboard=path.name, panel=panel.get("title")):
                     datasource = panel.get("datasource")
                     self.assertIsInstance(
