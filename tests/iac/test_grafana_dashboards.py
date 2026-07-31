@@ -9,6 +9,7 @@ import time have to happen here.
 """
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -19,9 +20,37 @@ REPO = Path(__file__).resolve().parents[2]
 DASHBOARD_DIR = REPO / "configs" / "mon" / "grafana-dashboards"
 MONITORING_DEFAULTS = REPO / "ansible" / "roles" / "monitoring" / "defaults" / "main.yml"
 
+# Panel types that render without querying a datasource. Deliberately an
+# allowlist of known-inert types rather than "anything without targets" — the
+# latter would excuse a timeseries panel that forgot its query, which is the
+# defect these contracts exist to catch.
+NON_QUERY_PANEL_TYPES = frozenset(
+    {"row", "text", "dashlist", "news", "welcome", "alertlist", "annolist"}
+)
+
+# `uid: "{{ monitoring_grafana_prometheus_uid }}"` in the role defaults — a
+# whole-value reference to another default, which is all this needs to resolve.
+_VAR_REFERENCE = re.compile(r"^\{\{\s*([a-zA-Z0-9_]+)\s*\}\}$")
+
 
 def _dashboards():
     return sorted(DASHBOARD_DIR.glob("*.json"))
+
+
+def _resolve(value, defaults):
+    """Resolve a bare `{{ var }}` reference against the role defaults."""
+    match = _VAR_REFERENCE.match(str(value))
+    return defaults[match.group(1)] if match else value
+
+
+def _provisioned_uids(defaults):
+    """The uids the role publishes, straight from its datasource list.
+
+    Read from monitoring_grafana_datasources rather than named one by one, so
+    adding a third datasource to the role does not also require editing a
+    hidden allowlist here to keep dashboards referencing it legal.
+    """
+    return {_resolve(ds["uid"], defaults) for ds in defaults["monitoring_grafana_datasources"]}
 
 
 def _query_panels(dashboard):
@@ -31,11 +60,18 @@ def _query_panels(dashboard):
     targets, and when collapsed it carries its children in its own `panels`
     key where a naive top-level loop would never see them. Yield the children
     and drop the row itself, so a nested panel cannot smuggle in a bad
-    datasource reference.
+    datasource reference. Other inert panel types (text, dashlist, …) are
+    dropped outright — they have no children and no query.
     """
     for panel in dashboard.get("panels", []):
         if panel.get("type") == "row":
-            yield from panel.get("panels", [])
+            yield from (
+                child
+                for child in panel.get("panels", [])
+                if child.get("type") not in NON_QUERY_PANEL_TYPES
+            )
+            continue
+        if panel.get("type") in NON_QUERY_PANEL_TYPES:
             continue
         yield panel
 
@@ -45,10 +81,7 @@ class GrafanaDashboardContracts(unittest.TestCase):
     def setUpClass(cls):
         with MONITORING_DEFAULTS.open(encoding="utf-8") as handle:
             cls.defaults = yaml.safe_load(handle)
-        cls.datasource_uids = {
-            cls.defaults["monitoring_grafana_prometheus_uid"],
-            cls.defaults["monitoring_grafana_loki_uid"],
-        }
+        cls.datasource_uids = _provisioned_uids(cls.defaults)
 
     def test_dashboard_dir_is_not_empty(self):
         self.assertTrue(_dashboards(), f"no dashboards under {DASHBOARD_DIR}")
@@ -111,16 +144,21 @@ class QueryPanelFlattening(unittest.TestCase):
     DASHBOARD = {
         "panels": [
             {"type": "timeseries", "title": "top-level"},
+            {"type": "text", "title": "runbook note"},
             {
                 "type": "row",
                 "title": "collapsed row",
-                "panels": [{"type": "stat", "title": "nested"}],
+                "panels": [
+                    {"type": "stat", "title": "nested"},
+                    {"type": "text", "title": "nested note"},
+                ],
             },
             {"type": "row", "title": "expanded row"},
         ]
     }
 
-    def test_rows_are_dropped_and_their_children_kept(self):
+    def test_only_query_panels_survive_the_walk(self):
+        """Rows and inert panels out, their queryable children in."""
         self.assertEqual(
             [p["title"] for p in _query_panels(self.DASHBOARD)],
             ["top-level", "nested"],
@@ -143,6 +181,16 @@ class GrafanaProvisioningDefaults(unittest.TestCase):
                 for key in ("file", "name", "type", "uid", "url"):
                     self.assertTrue(entry.get(key), f"missing {key}")
                 self.assertTrue(entry["file"].endswith(".yaml"))
+
+    def test_every_datasource_uid_resolves_to_a_literal(self):
+        """A uid the resolver cannot flatten would be compared as raw Jinja,
+        silently making every dashboard reference invalid (or, worse, making
+        the literal string `{{ ... }}` a legal uid)."""
+        for uid in _provisioned_uids(self.defaults):
+            with self.subTest(uid=uid):
+                self.assertIsInstance(uid, str)
+                self.assertNotIn("{{", uid)
+                self.assertTrue(uid)
 
     def test_exactly_one_default_datasource(self):
         datasources = self.defaults["monitoring_grafana_datasources"]
