@@ -81,13 +81,55 @@
 - name: Publish Grafana datasource removals
   ansible.builtin.template:
     src: grafana-datasources-absent.yaml.j2
-    dest: "{{ monitoring_grafana_provisioning_dir }}/datasources/zz-absent.yaml"
+    dest: "{{ monitoring_grafana_provisioning_dir }}/datasources/{{ monitoring_grafana_absent_file }}"
     owner: root
     group: grafana
     mode: "0640"
   when:
     - monitoring_apply | bool
     - monitoring_grafana_absent_datasources | length > 0
+  notify: restart grafana
+  tags: [apply]
+
+# Reconcile, like the dashboards below: dropping a datasource from
+# monitoring_grafana_datasources (or renaming its `file`) must stop it being
+# provisioned, otherwise the stale YAML keeps recreating it on every Grafana
+# start and a rename leaves two files fighting over one name.
+#
+# Matched by the template's own `# Source:` header rather than by filename, so
+# reconciliation only ever touches files this role wrote — Grafana's packaged
+# sample.yaml, and anything an operator dropped in by hand, are left alone.
+#
+# Removing the file stops Grafana *managing* the datasource; it does not delete
+# it from grafana.db. To actually remove one, add its name to
+# monitoring_grafana_absent_datasources.
+- name: Resolve the datasource filenames this role should own
+  ansible.builtin.set_fact:
+    monitoring_grafana_managed_ds_files: "{{
+      (monitoring_grafana_datasources | map(attribute='file') | list)
+      + ([monitoring_grafana_absent_file] if monitoring_grafana_absent_datasources | length > 0 else [])
+    }}"
+  tags: [apply]
+
+- name: Find role-managed datasource files on mon
+  ansible.builtin.find:
+    paths: "{{ monitoring_grafana_provisioning_dir }}/datasources"
+    patterns: "*.yaml"
+    contains: "^# Source: ansible/roles/monitoring/templates/grafana-datasource"
+  register: monitoring_grafana_live_ds_files
+  when: monitoring_apply | bool
+  tags: [apply]
+
+- name: Prune role-managed datasource files no longer configured
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ monitoring_grafana_live_ds_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - monitoring_apply | bool
+    - item.path | basename not in monitoring_grafana_managed_ds_files
   notify: restart grafana
   tags: [apply]
 

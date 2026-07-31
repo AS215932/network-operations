@@ -104,3 +104,8 @@ monitoring_grafana_absent_datasources:
   - opentsdb
   - graphite
   - influxdb
+
+# Filename for the delete-only provisioning file. Named so it is obvious in a
+# directory listing that it creates nothing; Grafana applies every file's
+# deletes before any file's creates, so the name does not affect ordering.
+monitoring_grafana_absent_file: zz-absent.yaml

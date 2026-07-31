@@ -24,6 +24,22 @@ def _dashboards():
     return sorted(DASHBOARD_DIR.glob("*.json"))
 
 
+def _query_panels(dashboard):
+    """Every panel that actually runs a query, rows flattened away.
+
+    A row is a layout container: it legitimately has no datasource and no
+    targets, and when collapsed it carries its children in its own `panels`
+    key where a naive top-level loop would never see them. Yield the children
+    and drop the row itself, so a nested panel cannot smuggle in a bad
+    datasource reference.
+    """
+    for panel in dashboard.get("panels", []):
+        if panel.get("type") == "row":
+            yield from panel.get("panels", [])
+            continue
+        yield panel
+
+
 class GrafanaDashboardContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -63,9 +79,7 @@ class GrafanaDashboardContracts(unittest.TestCase):
     def test_panel_datasources_match_provisioned_uids(self):
         for path in _dashboards():
             data = json.loads(path.read_text(encoding="utf-8"))
-            for panel in data.get("panels", []):
-                if panel.get("type") == "row":
-                    continue
+            for panel in _query_panels(data):
                 with self.subTest(dashboard=path.name, panel=panel.get("title")):
                     datasource = panel.get("datasource")
                     self.assertIsInstance(
@@ -81,9 +95,7 @@ class GrafanaDashboardContracts(unittest.TestCase):
     def test_panels_have_targets(self):
         for path in _dashboards():
             data = json.loads(path.read_text(encoding="utf-8"))
-            for panel in data.get("panels", []):
-                if panel.get("type") == "row":
-                    continue
+            for panel in _query_panels(data):
                 with self.subTest(dashboard=path.name, panel=panel.get("title")):
                     targets = panel.get("targets")
                     self.assertTrue(targets, "panel has no query")
@@ -91,6 +103,28 @@ class GrafanaDashboardContracts(unittest.TestCase):
                         self.assertTrue(
                             target.get("expr"), "target has no expr"
                         )
+
+
+class QueryPanelFlattening(unittest.TestCase):
+    """The panel walk itself, since the contracts above are only as good as it."""
+
+    DASHBOARD = {
+        "panels": [
+            {"type": "timeseries", "title": "top-level"},
+            {
+                "type": "row",
+                "title": "collapsed row",
+                "panels": [{"type": "stat", "title": "nested"}],
+            },
+            {"type": "row", "title": "expanded row"},
+        ]
+    }
+
+    def test_rows_are_dropped_and_their_children_kept(self):
+        self.assertEqual(
+            [p["title"] for p in _query_panels(self.DASHBOARD)],
+            ["top-level", "nested"],
+        )
 
 
 class GrafanaProvisioningDefaults(unittest.TestCase):
