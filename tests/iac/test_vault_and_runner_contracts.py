@@ -154,9 +154,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertIn("role: knowledge_loop", playbook)
         self.assertIn("vault_agent_name: knowledge-loop", playbook)
-        self.assertIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint knowledge-loop Vault bootstrap", workflow)
-        self.assertIn('auth/approle/role/knowledge-loop/role-id', workflow)
+        # Durable-only: a wrapped bootstrap is single-use and is what stranded
+        # this agent for four days (#494), so neither the playbook nor CI may
+        # reintroduce one.
+        self.assertNotIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint knowledge-loop Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/knowledge-loop/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/knowledge-loop/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/knowledge-loop"', env_template)
@@ -180,9 +182,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertIn("role: agent_core_collector", playbook)
         self.assertIn("vault_agent_name: agent-core-collector", playbook)
-        self.assertIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint agent-core-collector Vault bootstrap", workflow)
-        self.assertIn("auth/approle/role/agent-core-collector/role-id", workflow)
+        self.assertNotIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint agent-core-collector Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/agent-core-collector/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/agent-core-collector/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/agent-core-collector"', env_template)
@@ -259,9 +260,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("when: agentic_observatory_apply | default(false) | bool", playbook)
         self.assertIn("role: agentic_observatory", playbook)
         self.assertIn("vault_agent_name: agentic-observatory", playbook)
-        self.assertIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint agentic-observatory Vault bootstrap", workflow)
-        self.assertIn("auth/approle/role/agentic-observatory/role-id", workflow)
+        self.assertNotIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint agentic-observatory Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/agentic-observatory/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/agentic-observatory/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/agentic-observatory"', env_template)
