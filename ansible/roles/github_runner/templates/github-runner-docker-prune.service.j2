@@ -11,6 +11,18 @@
 # run from 2026-07-21 onward, so nothing was ever reclaimed and `ci-pr` walked
 # into a disk-space WARNING carrying 6.7 GB of unreferenced images.
 #
+# No `--all` on the image prune, deliberately. `--filter until=` keys on an
+# image's CREATED (build) timestamp, not on when it was pulled, so every
+# upstream image the CI labs pin — quay.io/frrouting/frr:10.4.1 and
+# batfish/allinone, both built ~12 months ago — matches `until=168h` on every
+# single run and would be evicted nightly. The next lab job then has to re-pull
+# from quay.io, and that pull intermittently stalls past containerlab-frr's
+# 15-minute job timeout (observed 2026-07-29 17:11 and 2026-07-31 05:01, both
+# cancelled with zero layers completed). Without `--all` only DANGLING images
+# are removed, so the pinned lab images stay cached and the labs stay at their
+# normal ~43s. Stopped containers, unused networks and build cache are still
+# reclaimed, which is where the churn actually is.
+#
 # Volume pruning stays OFF by default and, when enabled, deliberately omits
 # `--all`: plain `docker volume prune` removes only ANONYMOUS volumes and never
 # touches named ones, so no persistent or intentionally retained runner data can
@@ -23,7 +35,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/docker system prune --all --force --filter until={{ github_runner_docker_prune_until }}
+ExecStart=/usr/bin/docker system prune --force --filter until={{ github_runner_docker_prune_until }}
 {% if github_runner_docker_prune_volumes | bool %}
 ExecStart=/usr/bin/docker volume prune --force
 {% endif %}
