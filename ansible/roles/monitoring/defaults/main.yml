@@ -93,3 +93,14 @@ monitoring_grafana_datasources:
     # Loki's HTTP API on the log VM; firewalled to mon by host_vars/log.yml.
     url: "http://[{{ peers.log.ipv6 }}]:3100"
     is_default: false
+
+# Datasources Grafana created on its own that we want gone. mon shipped with
+# example opentsdb/graphite/influxdb entries — nothing listens on those
+# endpoints here, so they are dead options in every datasource picker and a
+# plausible way to build a panel that silently queries nothing. They are not
+# provisioned by any file, so deleteDatasources is the only declarative way to
+# remove them; listing them here also keeps them from coming back.
+monitoring_grafana_absent_datasources:
+  - opentsdb
+  - graphite
+  - influxdb

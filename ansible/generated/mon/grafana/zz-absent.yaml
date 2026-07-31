@@ -1,0 +1,18 @@
+---
+# Ansible managed
+# Deploy to: /etc/grafana/provisioning/datasources/zz-absent.yaml on mon
+# Source: ansible/roles/monitoring/templates/grafana-datasources-absent.yaml.j2
+#
+# Delete-only provisioning file: datasources that exist in grafana.db but that
+# no provisioning file creates. Grafana runs every file's deleteDatasources
+# before any file's datasources block, so the filename does not order this
+# against the real datasource files.
+apiVersion: 1
+
+deleteDatasources:
+  - name: opentsdb
+    orgId: 1
+  - name: graphite
+    orgId: 1
+  - name: influxdb
+    orgId: 1

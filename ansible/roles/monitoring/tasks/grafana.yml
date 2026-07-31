@@ -45,6 +45,16 @@
     label: "{{ item.file }}"
   tags: [validate, diff, apply]
 
+- name: Render Grafana datasource removals to controller (review artifact)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.template:
+    src: grafana-datasources-absent.yaml.j2
+    dest: "{{ playbook_dir }}/../generated/mon/grafana/zz-absent.yaml"
+    mode: "0644"
+  when: monitoring_grafana_absent_datasources | length > 0
+  tags: [validate, diff, apply]
+
 - name: Render Grafana dashboard provider to controller (review artifact)
   delegate_to: localhost
   become: false
@@ -65,6 +75,19 @@
   loop_control:
     label: "{{ item.file }}"
   when: monitoring_apply | bool
+  notify: restart grafana
+  tags: [apply]
+
+- name: Publish Grafana datasource removals
+  ansible.builtin.template:
+    src: grafana-datasources-absent.yaml.j2
+    dest: "{{ monitoring_grafana_provisioning_dir }}/datasources/zz-absent.yaml"
+    owner: root
+    group: grafana
+    mode: "0640"
+  when:
+    - monitoring_apply | bool
+    - monitoring_grafana_absent_datasources | length > 0
   notify: restart grafana
   tags: [apply]
 

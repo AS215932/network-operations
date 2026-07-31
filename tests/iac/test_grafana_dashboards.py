@@ -114,6 +114,13 @@ class GrafanaProvisioningDefaults(unittest.TestCase):
         self.assertEqual(len(defaults), 1)
         self.assertEqual(defaults[0]["type"], "prometheus")
 
+    def test_absent_datasources_do_not_collide_with_provisioned_ones(self):
+        """deleteDatasources runs before every create — a name in both lists
+        would drop and recreate the datasource on every start."""
+        provisioned = {d["name"] for d in self.defaults["monitoring_grafana_datasources"]}
+        absent = set(self.defaults.get("monitoring_grafana_absent_datasources", []))
+        self.assertEqual(provisioned & absent, set())
+
     def test_dashboards_repo_path_points_at_the_committed_dashboards(self):
         self.assertTrue(
             self.defaults["monitoring_grafana_dashboards_repo"].endswith(
