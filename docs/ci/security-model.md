@@ -45,9 +45,12 @@ of:
    `pull_request` job uses a privileged label without that if-gate, and
    (`test_privileged_deploy_workflows_stay_on_ci_runner`) that apply/drift stay
    on `ci` and never leak onto `ci-pr`.
-4. **CODEOWNERS** (`.github/CODEOWNERS` → `@AS215932/ops`) on workflows + the
-   high-blast-radius router/firewall configs.
-5. **Branch protection** (`docs/ci/branch-protection.md`).
+4. **CODEOWNERS** (`.github/CODEOWNERS` → `@AS215932/ops`) documents ownership
+   of workflows and high-blast-radius router/firewall configs. It is advisory;
+   approving reviews are not a merge requirement.
+5. **Status-only branch protection** requires strict green CI, blocks force
+   pushes/deletion, and lets agents use the normal merge action without a human
+   approval (`docs/ci/branch-protection.md`).
 6. **Semgrep** flags `pull_request_target`, `permissions: write-all`, unpinned
    third-party actions, and privileged-runner use in PR workflows.
 

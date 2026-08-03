@@ -13,10 +13,11 @@
 
 ## Pull Request Hygiene - Do Not Hand Off Red PRs
 
-- After opening or updating a PR, wait for automated CI and AI agent reviews to complete before leaving it for a human reviewer.
+- After opening or updating a PR, wait for automated CI and AI agent reviews to complete before merging.
 - Inspect failing checks, AI review comments, and normal review comments; fix real issues in follow-up commits on the same PR branch.
 - Respond to review comments that you address, and briefly explain if a comment is intentionally not changed.
-- Re-run or wait for CI after fixes, then confirm the required checks are green before asking for human review or saying the PR is ready.
+- Re-run or wait for CI after fixes, then confirm every required check is green before merging.
+- AI agents may use the normal merge action once required checks are green and review feedback is resolved. Branch protection intentionally requires no approving review; native GitHub auto-merge remains disabled.
 - If CI or an AI review is still pending when you must stop, say so explicitly and include the PR URL plus the pending/failing contexts.
 
 ## Deployment Rules - Read Before Touching App Pins
@@ -39,10 +40,12 @@
 - Normal promotion path:
   1. Merge app PRs after app CI is green.
   2. Run the `promote-apps` workflow in this repo with the merged app SHAs.
-  3. Review and merge the generated promotion PR.
+  3. Inspect and merge the generated promotion PR after its required checks pass.
   4. Let `app-promotion-deploy` start automatically from `main`.
-  5. The only intended manual step is approving the `production` environment
-     gate before `apply.yml` touches live hosts.
+  5. Monitor the automatic `apply.yml` run and its post-deploy validation.
+- The `production` environments have no required reviewers and accept
+  deployments only from the `main` branch. Do not broaden that deployment
+  branch policy.
 - Do not manually edit app pins unless the automation is unavailable. If you
   must, use the promotion PR template and keep rollback SHAs in the PR body.
 - `apply.yml` runs only when explicitly dispatched or called by another

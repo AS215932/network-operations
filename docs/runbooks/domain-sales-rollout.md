@@ -14,8 +14,8 @@ Monero, renewals, DNS changes, and transfers remain account-scoped.
   run therefore cannot authorize more than `$20.00` total.
 - Never reuse a canary label or `client_order_id` after an ambiguous response;
   poll its public status URL and let settlement recovery converge.
-- Production app pins are changed only by `promote-apps`; the final apply still
-  requires approval of the `production` environment.
+- Production app pins are changed only by `promote-apps`; the automatic final
+  apply is accepted by the `production` environment only from `main`.
 
 ## 1. Converge authoritative DNS
 
@@ -57,7 +57,7 @@ systemctl is-enabled knot-online-backup.timer
 ## 2. Canary configuration
 
 After the cloud and web changes are merged, promote their exact merged SHAs.
-Set these fields in `kv/hyrule-cloud` before approving the production apply:
+Set these fields in `kv/hyrule-cloud` before the production apply:
 
 ```text
 domain_purchases_enabled=true
@@ -116,11 +116,11 @@ domain appears in the dashboard.
 
 ## 4. Public launch
 
-**This Vault write is itself the launch action — there is no later apply/approval
-step that gates it.** The active Vault Agent on `api` watches `kv/hyrule-cloud`,
+**This Vault write is itself the launch action — no later apply step gates it.**
+The active Vault Agent on `api` watches `kv/hyrule-cloud`,
 re-renders the environment within seconds of the write, and its template's
 reload hook restarts the cloud services immediately. This is unrelated to
-`apply.yml`'s `production` environment gate, which only covers app pin/SHA
+`apply.yml`'s `production` environment, which only covers app pin/SHA
 promotions (see `AGENTS.md`), not Vault KV writes. Do not run this command
 until you have decided, right now, to open public sales.
 

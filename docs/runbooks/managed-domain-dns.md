@@ -82,9 +82,9 @@ absent control plane.
      -e knot_apply=true
    ```
 
-3. Promote a pinned `hyrule-cloud` commit through the normal app-promotion PR,
-   then approve its production deployment. The cloud role runs Alembic before
-   restarting both the API and the dedicated worker.
+3. Promote a pinned `hyrule-cloud` commit through the normal app-promotion PR.
+   Its production deployment starts automatically from `main`; the cloud role
+   runs Alembic before restarting both the API and the dedicated worker.
 
 4. Keep purchases disabled and verify the read-only surface first:
 

@@ -2,14 +2,13 @@
 name: apply
 run-name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
 
-# Manual gated deployment. Run with:
+# Manual or workflow-called deployment. Run with:
 #   gh workflow run apply.yml -F playbook=firewall -F limit=cr1-de1 -F dry_run=true
 #
-# The first invocation each session must be approved via the `production`
-# environment protection rule (set up once: settings → environments).
-# A required reviewer (the user) approves; the workflow then renders/applies
-# the playbook and runs post-deploy Goss validation. Regressions surface
-# through live Icinga / the hyrule MCP, not a pre/post snapshot bracket.
+# The `production` environment accepts only runs from `main` and has no
+# required reviewers. The workflow renders/applies the playbook and runs
+# post-deploy Goss validation. Regressions surface through live Icinga / the
+# hyrule MCP, not a pre/post snapshot bracket.
 
 on:
   workflow_dispatch:
@@ -95,8 +94,8 @@ jobs:
   apply:
     name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    # Real applies pause on the protected `production` environment. Dry-runs
-    # must stay ungated so promotion PR validation can be automated.
+    # Real applies use the main-only `production` environment. Dry-runs use
+    # their separate environment so promotion PR validation remains automated.
     environment: ${{ inputs.dry_run && 'dry-run' || 'production' }}
     timeout-minutes: 30
     env:
