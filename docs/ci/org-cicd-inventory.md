@@ -77,7 +77,12 @@ Runner groups (org Actions settings):
 | `hyrule-ci` | 3 | selected | `hyrule-cloud`, `hyrule-web`, `network-operations` | `ci-runner` |
 | `public-pr` | org-scoped | selected | AS215932 repos with untrusted PR jobs | `ci-pr-runner-recovery2` |
 
-**Consequence**: untrusted `pull_request` jobs run on the isolated `ci-pr` runner, while deploy/apply/lab work stays on the privileged `ci` runner. Each VM still runs a single GitHub Actions runner process, so resizing improves per-job runtime and memory headroom without increasing job concurrency.
+**Consequence**: untrusted `pull_request` jobs that use org self-hosted
+capacity run on isolated `ci-pr`, while deploy/apply/lab work stays on
+privileged `ci`. Secret-free public jobs may use GitHub-hosted runners instead
+(`hyrule-seo-agent` does so for reliable package-index egress). Each VM still
+runs a single GitHub Actions runner process, so resizing improves per-job
+runtime and memory headroom without increasing job concurrency.
 
 ## Secrets & credentials
 
@@ -104,8 +109,9 @@ Code Scanning, free for these public repos.
   `hyrule-infra`, group `hyrule-ci`) runs deploy/apply/Vault/labs only. The
   unprivileged `ci-pr` runner (label `hyrule-public-pr`, `public-pr` runner
   group) has no Vault, no `id_ci`, no `secrets.env`, and no management-overlay
-  reachability. All untrusted-PR-code jobs (PR-Agent, Semgrep,
-  lint/test/build/static checks) run on `ci-pr`.
+  reachability. All org-self-hosted untrusted-PR-code jobs (PR-Agent, Semgrep,
+  lint/test/build/static checks) run on `ci-pr`; secret-free public jobs may
+  use GitHub-hosted runners.
 - **PR-Agent** replaces Sourcery: advisory, read/comment-only, OpenRouter
   primary `openrouter/deepseek/deepseek-v4-flash`, fallback
   `openrouter/minimax/minimax-m2.7`, pinned `The-PR-Agent/pr-agent` Docker

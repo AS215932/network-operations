@@ -15,7 +15,7 @@ splitting work across two runner classes.
 | Vault / `id_ci` / `secrets.env` | yes | **no** |
 | Reach to infra mgmt | yes | **no** (customer-isolated) |
 | Docker / Containerlab | yes | Docker only |
-| Runs | deploy/apply, Vault-backed Ansible, `production` jobs, Batfish/Containerlab labs | PR-Agent, Semgrep, all untrusted-PR test/lint jobs |
+| Runs | deploy/apply, Vault-backed Ansible, `production` jobs, Batfish/Containerlab labs | org-hosted PR-Agent, Semgrep, and untrusted-PR test/lint jobs |
 
 `ci-pr` is treated as **disposable and potentially attacker-controlled**: it
 runs untrusted PR code and keeps Docker, so a malicious PR may be able to root
@@ -24,6 +24,11 @@ it — and that must not matter. Nothing of value lives there (no Vault, no
 inventory schema gate (`tests/iac/test_inventory_schema.py`) pins the data-layer
 half of this invariant: `ci-pr` must be in `customer_subnet` and never in
 `infra_subnet`.
+
+Secret-free public CI may use GitHub-hosted runners instead. Those jobs remain
+outside the production network and receive no deployment credentials; for
+example, `hyrule-seo-agent` uses GitHub-hosted egress because the self-hosted
+public runner's PyPI path is unreliable.
 
 ## Enforcement is layered (runner groups are necessary but not sufficient)
 

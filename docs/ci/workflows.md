@@ -1,7 +1,8 @@
 # CI workflows
 
-Untrusted PR checks run on the isolated `ci-pr` runner. Trusted deploy, apply,
-and lab work runs on the privileged `ci` runner; see
+Self-hosted untrusted PR checks run on the isolated `ci-pr` runner. Secret-free
+public checks may instead use GitHub-hosted runners. Trusted deploy, apply, and
+lab work runs on the privileged `ci` runner; see
 [security-model.md](./security-model.md) and [provision.md](./provision.md).
 
 ## Workflows
