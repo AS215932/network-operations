@@ -81,3 +81,18 @@ def test_rtr_forward_state_handling_runs_before_customer_isolation():
     v6_drop = ruleset.index("customer→infra/router v6 isolation")
     assert v6_established < v6_drop
     assert v6_invalid < v6_drop
+
+
+def test_xoa_allows_api_direct_capacity_websocket():
+    """Checkout admission reaches XO directly, without the public proxy path."""
+    ruleset = (REPO / "ansible/generated/xoa/nftables.conf").read_text()
+
+    assert _ruleset_has_line_with_parts(
+        ruleset,
+        [
+            "ip6 saddr",
+            "2a0c:b641:b50:2::20",
+            "tcp dport 80",
+            'comment "XO HTTP/WebSocket from proxy/api"',
+        ],
+    )

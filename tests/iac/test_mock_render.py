@@ -81,6 +81,8 @@ class MockRenderTest(unittest.TestCase):
         ):
             self.assertIn(f".Data.data.{key}", rendered)
         for setting in (
+            "XCPNG_XO_URL=ws://[2a0c:b641:b50:2::70]:80/api/",
+            "XCPNG_XO_VERIFY_SSL=false",
             "XCPNG_VCPU_OVERCOMMIT_RATIO=2.0",
             "XCPNG_MEMORY_HEADROOM_MB=2048",
             "XCPNG_STORAGE_HEADROOM_GB=20",

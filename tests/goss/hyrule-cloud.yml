@@ -14,6 +14,8 @@ file:
     mode: "0640"
     group: hyrule
     contains:
+      - /^XCPNG_XO_URL=ws:\/\/\[2a0c:b641:b50:2::70\]:80\/api\/$/
+      - /^XCPNG_XO_VERIFY_SSL=false$/
       - /^XCPNG_XO_TOKEN=.+/
       - /^XCPNG_VCPU_OVERCOMMIT_RATIO=2\.0$/
       - /^XCPNG_MEMORY_HEADROOM_MB=2048$/

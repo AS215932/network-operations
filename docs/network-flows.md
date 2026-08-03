@@ -86,6 +86,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | To | Proto | Port | Purpose |
 |---|---|---|---|
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
+| xoa | tcp | 80 | authenticated XO WebSocket for VM capacity admission and lifecycle operations |
 | openprovider | tcp | 443 | domain registration API |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
 | netproxy | tcp | 8452 | authenticated reverse-SSH tunnel control API (create/extend/revoke leases) |
@@ -528,8 +529,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | mgmt v4 | tcp (v4) | 80 | XAPI from dom0 (mgmt v4) |
-| proxy | tcp | 80, 443 | XO UI from proxy |
+| proxy, api | tcp | 80 | XO HTTP/WebSocket from proxy/api |
 | mgmt v4 | tcp (v4) | 443 | XAPI HTTPS from dom0 (mgmt v4) |
+| proxy | tcp | 443 | XO HTTPS from proxy |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**
