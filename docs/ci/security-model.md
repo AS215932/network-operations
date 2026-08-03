@@ -15,7 +15,7 @@ splitting work across two runner classes.
 | Vault / `id_ci` / `secrets.env` | yes | **no** |
 | Reach to infra mgmt | yes | **no** (customer-isolated) |
 | Docker / Containerlab | yes | Docker only |
-| Runs | deploy/apply, Vault-backed Ansible, `production` jobs, Batfish/Containerlab labs | PR-Agent, Semgrep, all untrusted-PR test/lint jobs |
+| Runs | deploy/apply, Vault-backed Ansible, `production` jobs, Batfish/Containerlab labs | org-hosted PR-Agent, Semgrep, and untrusted-PR test/lint jobs |
 
 `ci-pr` is treated as **disposable and potentially attacker-controlled**: it
 runs untrusted PR code and keeps Docker, so a malicious PR may be able to root
@@ -24,6 +24,11 @@ it — and that must not matter. Nothing of value lives there (no Vault, no
 inventory schema gate (`tests/iac/test_inventory_schema.py`) pins the data-layer
 half of this invariant: `ci-pr` must be in `customer_subnet` and never in
 `infra_subnet`.
+
+Secret-free public CI may use GitHub-hosted runners instead. Those jobs remain
+outside the production network and receive no deployment credentials; for
+example, `hyrule-seo-agent` uses GitHub-hosted egress because the self-hosted
+public runner's PyPI path is unreliable.
 
 ## Enforcement is layered (runner groups are necessary but not sufficient)
 
@@ -45,9 +50,12 @@ of:
    `pull_request` job uses a privileged label without that if-gate, and
    (`test_privileged_deploy_workflows_stay_on_ci_runner`) that apply/drift stay
    on `ci` and never leak onto `ci-pr`.
-4. **CODEOWNERS** (`.github/CODEOWNERS` → `@AS215932/ops`) on workflows + the
-   high-blast-radius router/firewall configs.
-5. **Branch protection** (`docs/ci/branch-protection.md`).
+4. **CODEOWNERS** (`.github/CODEOWNERS` → `@AS215932/ops`) documents ownership
+   of workflows and high-blast-radius router/firewall configs. It is advisory;
+   approving reviews are not a merge requirement.
+5. **Status-only branch protection** requires strict green CI, blocks force
+   pushes/deletion, and lets agents use the normal merge action without a human
+   approval (`docs/ci/branch-protection.md`).
 6. **Semgrep** flags `pull_request_target`, `permissions: write-all`, unpinned
    third-party actions, and privileged-runner use in PR workflows.
 
