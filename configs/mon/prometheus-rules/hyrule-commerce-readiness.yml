@@ -17,11 +17,17 @@
 # /v1/status, so an operator page and the customer-facing page cannot disagree
 # about whether Hyrule is open for business.
 #
-# Deliberately NOT labelled `public_status: "true"`. That namespace is a closed
-# contract: hyrule_cloud/api/status.py validates the exact set of public rules
-# in _REQUIRED_PUBLIC_RULES and reports UNKNOWN if it does not match, so adding
-# a rule there without a matching code change would blank the status page.
-# These are operator alerts; customer impact is already on the status page.
+# These rules deliberately carry no public-status label. That namespace is a
+# closed contract: hyrule_cloud/api/status.py validates the exact set of public
+# rules in _REQUIRED_PUBLIC_RULES and reports UNKNOWN if it does not match, so
+# publishing a rule there without a matching code change would blank the
+# customer status page. These are operator alerts; customer impact is already
+# covered on the status page.
+#
+# (Do not write the public-status label as a literal key/value anywhere in this
+# file, including in a comment. tests/iac/test_public_service_status.py finds
+# published rules by scanning the raw text for it, so a prose mention makes the
+# preamble look like an alert block and fails the suite.)
 
 groups:
   - name: hyrule-commerce-readiness
