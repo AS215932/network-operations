@@ -84,12 +84,11 @@ any active freezes).
 gh workflow run apply.yml \
   -F playbook=noc \
   -F limit=noc \
-  -F dry_run=false \
-  -F pr_number=42         # optional — auto-comments the diff onto the PR
+  -F dry_run=false
 ```
 
 Or via the GitHub UI: **Actions → apply → Run workflow → pick playbook /
-limit / dry-run / PR**.
+limit / dry-run**.
 
 The live job enters the **`production` environment** immediately when the run
 originates from `main`. There is no reviewer pause. A run from any other ref
