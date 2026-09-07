@@ -1,0 +1,20 @@
+---
+# Prevent disposable APT binary metadata from consuming router disk headroom.
+# Normal workflow: apply.yml, playbook=rtr-apt-cache, limit=rtr.
+- name: Configure router APT binary cache policy
+  hosts: rtr
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Disable persistent binary metadata caches on the small router disk
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/99-router-binary-cache
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          // Save router disk space; package lists and archives remain managed by APT.
+          Dir::Cache::pkgcache "";
+          Dir::Cache::srcpkgcache "";
+      when: rtr_apt_cache_apply | default(false) | bool
+      tags: [apply]

@@ -37,6 +37,7 @@ on:
           - knot
           - extmon
           - retire-loop
+          - rtr-apt-cache
           - soc
           - frr
           - rtr_routing
