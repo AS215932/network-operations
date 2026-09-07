@@ -1,0 +1,7 @@
+# Managed by Ansible: IPv4 backend for the router's public DNAT.
+[Network]
+Address={{ networkd_service_ipv4_address }}
+
+[Route]
+Destination=0.0.0.0/0
+Gateway={{ networkd_service_ipv4_gateway }}
