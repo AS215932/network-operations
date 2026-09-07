@@ -10,7 +10,7 @@
 # grant/no-op-guard substrate ships dark. Everything is default-off until the
 # env promotions in docs/runbooks/noc-standing-grant-rollout.md
 # (NOC_INSIGHT_RECORDS_ENABLED first).
-noc_agent_version: 94cd6d5cf22fa92f8327358770fd709bcb963c2c
+noc_agent_version: 2b85cbd491f92ce9789a50f4c07d921ecafbdca0
 hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
 
 # hyrule-prober — AS215932 looking-glass backing Hyrule Cloud /v1/path/* (ping +
