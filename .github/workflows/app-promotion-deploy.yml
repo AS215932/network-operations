@@ -140,11 +140,14 @@ jobs:
               "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2" in changed
           )
 
+          noc_firewall_changed = "ansible/inventory/host_vars/noc.yml" in changed
           mon_firewall_changed = "ansible/inventory/host_vars/mon.yml" in changed
           extmon_firewall_changed = "ansible/inventory/host_vars/extmon.yml" in changed
 
           # Firewalls run in a dedicated prerequisite job. Consumer applies do
           # not start unless every same-promotion firewall succeeds.
+          if noc_firewall_changed:
+              add_firewall_once("noc")
           if mon_firewall_changed:
               add_firewall_once("mon")
           if extmon_firewall_changed:

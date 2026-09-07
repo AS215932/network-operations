@@ -1,4 +1,10 @@
+import contextlib
+import io
+import json
+import re
+import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import yaml
@@ -8,6 +14,21 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class AppPromotionDeployTest(unittest.TestCase):
+    def test_retirement_selects_noc_firewall_prerequisite(self):
+        workflow = yaml.safe_load((REPO / ".github/workflows/app-promotion-deploy.yml").read_text())
+        step = next(step for step in workflow["jobs"]["detect"]["steps"] if step.get("id") == "detect")
+        code = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY", step["run"], re.S).group(1)
+        output = io.StringIO()
+        changed = "ansible/inventory/host_vars/noc.yml\nansible/inventory/host_vars/loop.yml"
+        with patch.object(sys, "argv", ["detect", changed]), contextlib.redirect_stdout(output):
+            exec(compile(code, "workflow-detector", "exec"), {})
+        values = dict(line.split("=", 1) for line in output.getvalue().splitlines())
+        self.assertIn({"playbook": "firewall", "limit": "noc"}, json.loads(values["firewall_matrix"])["include"])
+        consumers = json.loads(values["matrix"])["include"]
+        self.assertIn({"playbook": "noc", "limit": "noc"}, consumers)
+        self.assertIn({"playbook": "retire-loop", "limit": "loop"}, consumers)
+        self.assertEqual(workflow["jobs"]["apply"]["needs"], ["detect", "firewall"])
+
     def test_apply_matrix_is_serialized(self):
         workflow = yaml.safe_load(
             (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
