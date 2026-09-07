@@ -44,4 +44,7 @@ noc_agent_redis_repo_suite: "{{ (ansible_facts.distribution_release | default(an
 noc_agent_redis_repo_key_source: /usr/share/keyrings/redis-archive-key.asc
 noc_agent_redis_repo_keyring: /usr/share/keyrings/redis-archive-keyring.gpg
 noc_agent_redis_repo_key_url: https://packages.redis.io/gpg
+# Verified against the official HTTPS endpoint, 2026-09-07.
+# Review key fingerprint/checksum together when rotating the repository key.
+noc_agent_redis_repo_key_checksum: sha256:817b5a78358d00ed6b71884d70ad5d2eab9934badca1a34299fdc6a2e4a8ad20
 noc_agent_redis_repo_url: https://packages.redis.io/deb

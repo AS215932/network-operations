@@ -37,3 +37,34 @@ class LoopRetirementTest(unittest.TestCase):
         for task in play["tasks"]:
             self.assertNotIn("ansible.builtin.file", task)
             self.assertNotIn("ansible.builtin.shell", task)
+
+    def test_runtime_controls_override_stale_vault_retirement_flags(self):
+        host = yaml.safe_load((REPO / "ansible/inventory/host_vars/noc.yml").read_text())
+        environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        environment.filters["bool"] = bool
+        text = environment.from_string(
+            (REPO / "ansible/roles/noc_agent/templates/runtime.env.j2").read_text()
+        ).render(**host)
+        values = dict(line.split("=", 1) for line in text.splitlines() if line and not line.startswith("#"))
+        for key in [
+            "NOC_ENGINEERING_HANDOFF_DELIVERY_ENABLED", "NOC_DISK_ALERT_HANDOFF_ENABLED",
+            "HYRULE_NOC_AGENT_CORE_TRACE", "NOC_PROACTIVE_HANDOFF_ENABLED", "NOC_INSIGHT_RECORDS_ENABLED",
+        ]:
+            self.assertEqual(values[key], "0")
+        self.assertEqual(values["HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL"], '""')
+        self.assertFalse(any("SECRET" in key or "TOKEN" in key or "PASSWORD" in key for key in values))
+        for name in ["noc-agent.service", "noc-agent-bot.service"]:
+            unit = (REPO / "configs" / name).read_text()
+            self.assertLess(unit.index("EnvironmentFile=/opt/noc-agent/.env"),
+                            unit.index("EnvironmentFile=/etc/noc-agent/runtime.env"))
+
+    def test_runtime_controls_are_installed_before_units_for_both_secret_backends(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/noc_agent/tasks/main.yml").read_text())
+        runtime = next(task for task in tasks if task.get("template", {}).get("src") == "runtime.env.j2")
+        self.assertNotIn("when", runtime)
+        self.assertEqual(runtime["template"]["owner"], "root")
+        self.assertEqual(runtime["template"]["mode"], "0644")
+        self.assertIn("restart noc-agent", runtime["notify"])
+        self.assertIn("restart noc-agent-bot", runtime["notify"])
+        unit = next(task for task in tasks if task.get("copy", {}).get("dest") == "/etc/systemd/system/noc-agent.service")
+        self.assertLess(tasks.index(runtime), tasks.index(unit))

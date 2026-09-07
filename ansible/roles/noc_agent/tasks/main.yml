@@ -20,6 +20,7 @@
 - name: Download Redis apt signing key
   get_url:
     url: "{{ noc_agent_redis_repo_key_url }}"
+    checksum: "{{ noc_agent_redis_repo_key_checksum }}"
     dest: "{{ noc_agent_redis_repo_key_source }}"
     owner: root
     group: root
@@ -331,6 +332,27 @@
     group: "{{ noc_agent_group }}"
     mode: "0640"
   when: noc_agent_google_wif_enabled | bool
+  notify:
+    - restart noc-agent
+    - restart noc-agent-bot
+  tags: [apply]
+
+- name: Ensure non-secret NOC runtime configuration directory
+  file:
+    path: /etc/noc-agent
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [apply]
+
+- name: Render non-secret NOC runtime controls independently of Vault
+  template:
+    src: runtime.env.j2
+    dest: /etc/noc-agent/runtime.env
+    owner: root
+    group: root
+    mode: "0644"
   notify:
     - restart noc-agent
     - restart noc-agent-bot
