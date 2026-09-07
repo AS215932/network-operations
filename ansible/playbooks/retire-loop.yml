@@ -3,7 +3,7 @@
 # Invoked through apply.yml with playbook=retire-loop and limit=loop.
 - name: Retire the deprecated loop VM services
   hosts: loop
-  gather_facts: true
+  gather_facts: false
   become: true
   vars:
     retired_loop_units:
@@ -36,11 +36,9 @@
     - name: Remove obsolete monitoring objects before stopping services
       ansible.builtin.include_role:
         name: monitoring
-        apply:
-          tags: [apply]
       vars:
         monitoring_apply: "{{ retire_loop_apply | default(false) | bool }}"
-      tags: [apply]
+      tags: [validate, diff, apply]
 
     - name: Validate and reload monitoring before stopping retired services
       ansible.builtin.meta: flush_handlers
