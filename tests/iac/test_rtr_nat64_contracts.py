@@ -1,3 +1,5 @@
+import json
+import re
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,31 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class RtrNat64ContractsTest(unittest.TestCase):
+    def test_pool_excludes_dnat_and_host_ephemeral_ports(self):
+        config = json.loads((REPO / "configs/rtr/jool/jool.conf").read_text())
+        nft = (REPO / "configs/rtr/nftables.conf").read_text()
+        reserved = {"TCP": set(), "UDP": set()}
+        for proto, expression in re.findall(
+            r"\b(tcp|udp) dport (\{[^}]+\}|[0-9-]+) dnat", nft
+        ):
+            for part in expression.strip("{} ").split(","):
+                bounds = [int(value) for value in part.strip().split("-")]
+                reserved[proto.upper()].update(range(bounds[0], bounds[-1] + 1))
+        self.assertTrue(reserved["TCP"])
+        self.assertTrue(reserved["UDP"])
+        sysctl = (REPO / "configs/rtr/sysctl.conf").read_text()
+        low, high = map(int, re.search(
+            r"net.ipv4.ip_local_port_range=(\d+) (\d+)", sysctl
+        ).groups())
+        for entry in config["pool4"]:
+            proto = entry["protocol"]
+            if proto == "ICMP":
+                continue
+            bounds = list(map(int, entry["port range"].split("-")))
+            ports = set(range(bounds[0], bounds[-1] + 1))
+            self.assertFalse(ports & reserved[proto], entry)
+            self.assertFalse(ports & set(range(low, high + 1)), entry)
+
     def test_nat64_vrf_leak_routes_returns_to_overlay_clients(self):
         unit = (REPO / "configs/rtr/jool/nat64-vrf-leak.service").read_text()
 
