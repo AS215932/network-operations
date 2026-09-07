@@ -1,5 +1,9 @@
 import configparser
 import ipaddress
+import os
+import tempfile
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -43,3 +47,20 @@ class PublicIPv4BackendContracts(unittest.TestCase):
         self.assertEqual(enabled, {"dns", "proxy"})
         defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
         self.assertEqual(defaults["networkd_service_ipv4_address"], "")
+
+    @unittest.skipUnless(shutil.which("ansible-playbook"), "ansible-playbook is not installed")
+    def test_supported_apply_selects_ipv4_enable_and_disable_tasks(self):
+        with tempfile.TemporaryDirectory(prefix="ipv4-ansible-") as local_tmp:
+            result = subprocess.run(
+                ["ansible-playbook", "--list-tasks", "--tags", "apply",
+                 "playbooks/networkd_resolved.yml", "--limit", "dns,proxy"],
+                cwd=REPO / "ansible", text=True, capture_output=True, check=False,
+                env=os.environ | {"ANSIBLE_LOCAL_TEMP": local_tmp},
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for name in (
+            "Ensure drop-in directory exists",
+            "Render public DNAT backend IPv4 drop-in",
+            "Remove disabled public DNAT backend IPv4 drop-in",
+        ):
+            self.assertIn(name, result.stdout)

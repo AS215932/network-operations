@@ -6,4 +6,4 @@
   become: true
   roles:
     - networkd_resolved
-  tags: [networkd_resolved]
+  tags: [networkd_resolved, apply]
