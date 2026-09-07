@@ -283,10 +283,31 @@
     update: true
   become: true
   become_user: "{{ noc_agent_user }}"
-  ignore_errors: true  # First run will fail until the deploy key is registered on GitHub.
+  register: noc_agent_checkout
+  retries: 3
+  delay: 5
+  until: noc_agent_checkout is succeeded
   notify:
     - restart noc-agent
     - restart noc-agent-bot
+  tags: [apply]
+
+- name: Read deployed noc-agent revision
+  command: git rev-parse HEAD
+  args:
+    chdir: "{{ noc_agent_install_dir }}"
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  register: noc_agent_deployed_revision
+  changed_when: false
+  tags: [apply]
+
+- name: Require pinned noc-agent revision before continuing deployment
+  assert:
+    that:
+      - noc_agent_deployed_revision.stdout | trim == noc_agent_version
+    fail_msg: "noc-agent checkout does not match its approved production SHA"
+  when: noc_agent_version is match('^[0-9a-f]{40}$')
   tags: [apply]
 
 - name: Check for noc-agent pyproject.toml (set after a successful clone)
