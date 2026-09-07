@@ -8,6 +8,11 @@ noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
 noc_agent_version: main
 noc_agent_secret_backend: vault
 
+# Enable only after promoting and validating the compatible attention worker.
+noc_case_reactive_report_enabled: false
+noc_case_attention_enabled: false
+noc_case_outbox_enabled: true
+
 noc_knowledge_repo: https://github.com/AS215932/knowledge.git
 noc_knowledge_version: main
 noc_knowledge_install_dir: /opt/noc-knowledge/repo
