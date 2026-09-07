@@ -1,3 +1,6 @@
+{% if monitoring_retired | default(false) %}
+// Retired host {{ inventory_hostname }}: no active monitoring objects. Data retained.
+{% else %}
 // /etc/icinga2/conf.d/hosts/ansible/{{ inventory_hostname }}.conf
 // Managed by ansible/roles/monitoring — do not edit by hand.
 // Source of truth: ansible/inventory/host_vars/{{ inventory_hostname }}.yml
@@ -112,4 +115,5 @@ object Service "{{ svc.name }}" {
 }
 
 {% endfor %}
+{% endif %}
 {% endif %}

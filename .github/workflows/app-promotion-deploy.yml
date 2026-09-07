@@ -15,14 +15,8 @@ on:
       - ansible/playbooks/noc.yml
       - ansible/playbooks/prober.yml
       - ansible/roles/hyrule_prober/**
-      - ansible/playbooks/engineering-loop.yml
+      - ansible/playbooks/retire-loop.yml
       - ansible/roles/noc_agent/**
-      - ansible/roles/engineering_loop/**
-      - ansible/roles/knowledge_mcp/**
-      - ansible/roles/knowledge_loop/**
-      - ansible/roles/knowledge_api/**
-      - ansible/roles/agent_core_collector/**
-      - ansible/roles/agentic_observatory/**
       - configs/mon/icinga2/**
       - configs/mon/prometheus-rules/**
       - configs/mon/prometheus.yml
@@ -37,11 +31,6 @@ on:
       - configs/noc-agent.service
       - configs/noc-agent-bot.service
       - ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2
-      - ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2
-      - ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2
-      - ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2
-      - ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2
-      - ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2
 
 permissions:
@@ -79,14 +68,8 @@ jobs:
             ansible/playbooks/noc.yml \
             ansible/playbooks/prober.yml \
             ansible/roles/hyrule_prober \
-            ansible/playbooks/engineering-loop.yml \
+            ansible/playbooks/retire-loop.yml \
             ansible/roles/noc_agent \
-            ansible/roles/engineering_loop \
-            ansible/roles/knowledge_mcp \
-            ansible/roles/knowledge_loop \
-            ansible/roles/knowledge_api \
-            ansible/roles/agent_core_collector \
-            ansible/roles/agentic_observatory \
             configs/mon/icinga2 \
             configs/mon/prometheus-rules \
             configs/mon/prometheus.yml \
@@ -101,11 +84,6 @@ jobs:
             configs/noc-agent.service \
             configs/noc-agent-bot.service \
             ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2 \
-            ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
           import json
@@ -153,25 +131,10 @@ jobs:
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/prober.yml",
           }) or any(path.startswith("ansible/roles/hyrule_prober/") for path in changed)
-          engineering_loop_changed = any(path in changed for path in {
+          loop_retirement_changed = any(path in changed for path in {
               "ansible/inventory/host_vars/loop.yml",
-              "ansible/playbooks/engineering-loop.yml",
-              "ansible/roles/vault_agent/templates/engineering-loop.env.ctmpl.j2",
-              "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2",
-              "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
-              "ansible/roles/vault_agent/templates/agent-core-collector.env.ctmpl.j2",
-              "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
-          }) or any(
-              path.startswith((
-                  "ansible/roles/engineering_loop/",
-                  "ansible/roles/knowledge_mcp/",
-                  "ansible/roles/knowledge_loop/",
-                  "ansible/roles/knowledge_api/",
-                  "ansible/roles/agent_core_collector/",
-                  "ansible/roles/agentic_observatory/",
-              ))
-              for path in changed
-          )
+              "ansible/playbooks/retire-loop.yml",
+          })
 
           github_runner_env_changed = (
               "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2" in changed
@@ -194,8 +157,8 @@ jobs:
           if noc_changed:
               add_once("monitoring", "noc")
               add_once("noc", "noc")
-          if engineering_loop_changed:
-              add_once("engineering-loop", "loop")
+          if loop_retirement_changed:
+              add_once("retire-loop", "loop")
           if prometheus_changed:
               add_once("prometheus", "mon")
           if alertmanager_changed:

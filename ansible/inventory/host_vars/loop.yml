@@ -1,5 +1,7 @@
 ---
-# loop — dedicated Engineering Loop operations-lane VM.
+# loop — retired VM. Keep data and history; do not deploy runtime services.
+loop_retired: true
+monitoring_retired: true
 # Runs one budgeted, issue-driven agent cycle at a time. It is deliberately
 # not a deploy source for the infra fleet: no fleet SSH key, no production
 # Vault breadth, and no public listener beyond node_exporter for mon.
@@ -9,29 +11,29 @@
 # Tier-2 governor path. Emission is live via
 # engineering_loop_insight_records_enabled below.
 engineering_loop_version: "c393d005f9aea18ecc8bd54427f07257673a63d0"
-engineering_loop_timer_enabled: true
-engineering_loop_governor_timer_enabled: true
+engineering_loop_timer_enabled: false
+engineering_loop_governor_timer_enabled: false
 engineering_loop_noc_lhp_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
-engineering_loop_lhp_callback_enabled: true
+engineering_loop_lhp_callback_enabled: false
 # Turn agent-core TraceEvent/CostUsage emission on for the live loop cycles.
-engineering_loop_agent_core_trace_enabled: true
+engineering_loop_agent_core_trace_enabled: false
 engineering_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 # Emit governor/daemon/intake decisions as InsightDecisionRecords to the
 # collector (loop_decision_envelope events, open past the label-scoped ingest
 # guard). Read-only; the second producer after NOC (#419) into the IDQ/CGS
 # stream, and the data source for the Governor Tier-2-with-history gate.
-engineering_loop_insight_records_enabled: true
+engineering_loop_insight_records_enabled: false
 
 # Local read-only knowledge MCP server for Engineering Loop context. It is
 # deployed as a Docker container and bound to host loopback only. Pinned to
 # the grounding-aware build (#35): grounding.jsonl/sqlite grounding table in
 # exports, insight metrics CLI; A0 issue + A1 routing context unchanged.
 knowledge_mcp_version: "a68f974e7ed093d8f4195a15dc5b1afc636999f4"
-knowledge_mcp_enabled: true
+knowledge_mcp_enabled: false
 knowledge_mcp_host: 127.0.0.1
 knowledge_mcp_port: 8767
 knowledge_mcp_transport: streamable-http
-knowledge_mcp_agent_core_trace_enabled: true
+knowledge_mcp_agent_core_trace_enabled: false
 knowledge_mcp_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 # Docker uses routed IPv6 for egress: containers receive GUA addresses from
 # this /64, and rtr has a static/iBGP return route via loop's infra address.
@@ -47,7 +49,7 @@ knowledge_mcp_docker_dns:
 # trace + insight-record ingest stays open so the token can't 401 producers
 # (network-operations#422). Required before minting the token (#420/#421).
 agent_core_collector_version: "5cf30cbf3729d41874262c49fb70552a311b1b4b"
-agent_core_collector_enabled: true
+agent_core_collector_enabled: false
 agent_core_collector_bind: "{{ peers.loop.ipv6 }}"
 agent_core_collector_port: 8770
 
@@ -57,7 +59,7 @@ agent_core_collector_port: 8770
 # still written solely by the reviewed nightly sync. Binds the loop overlay
 # (mon health-checks it; observatory calls it same-host).
 knowledge_api_version: "5da5e30d88c037d0a3055973b05999c68f310844"
-knowledge_api_enabled: true
+knowledge_api_enabled: false
 knowledge_api_bind: "{{ peers.loop.ipv6 }}"
 knowledge_api_port: 8781
 knowledge_api_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770"
@@ -71,8 +73,8 @@ knowledge_api_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770"
 # insight_sync_enabled=false). The canary runs daily, opens at most one
 # reviewed PR/day, and keeps live OpenRouter calls disabled.
 knowledge_loop_version: "a68f974e7ed093d8f4195a15dc5b1afc636999f4"
-knowledge_loop_timer_enabled: true
-knowledge_loop_agent_core_trace_enabled: true
+knowledge_loop_timer_enabled: false
+knowledge_loop_agent_core_trace_enabled: false
 knowledge_loop_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
 # Phase-2 nightly insight sync: pull collector decisions/labels into
 # ledger/insights/ on the reviewed nightly PR (durable, git-tracked archival —
@@ -92,11 +94,11 @@ agentic_observatory_group: agentic-observatory
 agentic_observatory_config_dir: /etc/agentic-observatory
 agentic_observatory_env_file: /etc/agentic-observatory/observatory.env
 agentic_observatory_state_dir: /var/lib/agentic-observatory
-agentic_observatory_enabled: true
+agentic_observatory_enabled: false
 agentic_observatory_host: "{{ peers.loop.ipv6 }}"
 agentic_observatory_port: 8780
-agentic_observatory_read_only: false
-agentic_observatory_actions_enabled: true
+agentic_observatory_read_only: true
+agentic_observatory_actions_enabled: false
 # Staged write rollout, stage 1 (LIVE): low-risk case actions only. The gated
 # revision (af4dff6) was installed first (PR #329) so this flip restarts on
 # allowlist-aware code. Expand the allowlist (suppress, artifact_review,
@@ -122,6 +124,8 @@ engineering_loop_allowed_paths:
     - hyrule_web
     - tests
 
+# Keep registration enabled to replace the old host file with a retirement
+# marker. Turning registration off alone would leave live Icinga objects behind.
 monitoring_register: true
 monitoring_role: loop
 monitoring_check_vars:
@@ -225,7 +229,7 @@ firewall_forward_extra_raw_nft: |
   iifname docker0 ip6 saddr {{ loop_docker_subnet }} counter accept comment "loop Docker IPv6 egress"
 
 # --- Logs --- (ships journald to log VM via Vector)
-logs_register: true
+logs_register: false
 logs_role: loop
 
 # --- Structured flow metadata (read by scripts/render-network-flows.py) ---

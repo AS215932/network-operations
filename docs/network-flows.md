@@ -396,7 +396,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | extmon | tcp | 8000 | noc-agent webhook from extmon Alertmanager |
-| loop | tcp | 8000 | LHP-v1 Engineering Loop fetch/callback to noc-agent |
 | mon | tcp | 8000 | noc-agent webhook from mon (Alertmanager + Icinga) |
 | proxy | tcp | 8000 | noc-agent control dashboard via Caddy (proxy) |
 | api | tcp | 8460 | hyrule-cloud API to hyrule-prober (path probes) |

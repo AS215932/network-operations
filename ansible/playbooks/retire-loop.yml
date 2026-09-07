@@ -1,0 +1,89 @@
+---
+# Retire automation without deleting the VM, credentials, databases, or disks.
+# Invoked through apply.yml with playbook=retire-loop and limit=loop.
+- name: Retire the deprecated loop VM services
+  hosts: loop
+  gather_facts: true
+  become: true
+  vars:
+    retired_loop_units:
+      - hyrule-engineering-loop.timer
+      - hyrule-reliability-governor.timer
+      - hyrule-knowledge-loop.timer
+      - vault-agent-health-metrics.timer
+      - hyrule-engineering-loop.service
+      - hyrule-reliability-governor.service
+      - hyrule-knowledge-loop.service
+      - vault-agent-engineering-loop.service
+      - vault-agent-knowledge-loop.service
+      - vault-agent-agent-core-collector.service
+      - vault-agent-agentic-observatory.service
+      - vault-agent-health-metrics.service
+      - hyrule-knowledge-mcp.service
+      - hyrule-knowledge-api.service
+      - agentic-observatory.service
+      - agent-core-collector.service
+      - vector.service
+      - prometheus-node-exporter.service
+  pre_tasks:
+    - name: Require explicit retirement inventory
+      ansible.builtin.assert:
+        that:
+          - loop_retired | default(false) | bool
+          - monitoring_retired | default(false) | bool
+      tags: [always]
+  tasks:
+    - name: Remove obsolete monitoring objects before stopping services
+      ansible.builtin.include_role:
+        name: monitoring
+        apply:
+          tags: [apply]
+      vars:
+        monitoring_apply: "{{ retire_loop_apply | default(false) | bool }}"
+      tags: [apply]
+
+    - name: Validate and reload monitoring before stopping retired services
+      ansible.builtin.meta: flush_handlers
+      tags: [apply]
+
+    - name: Inspect installed retired units
+      ansible.builtin.command:
+        argv: [systemctl, show, --property=LoadState, --value, "{{ item }}"]
+      loop: "{{ retired_loop_units }}"
+      register: retired_loop_load_states
+      changed_when: false
+      when: retire_loop_apply | default(false) | bool
+      tags: [apply]
+
+    - name: Stop and disable installed retired units
+      ansible.builtin.systemd_service:
+        name: "{{ item.item }}"
+        state: stopped
+        enabled: false
+      loop: "{{ retired_loop_load_states.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - retire_loop_apply | default(false) | bool
+        - item.stdout | default('') == 'loaded'
+      tags: [apply]
+
+    - name: Verify retired units are inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ retired_loop_units }}"
+      register: retired_loop_active
+      failed_when: retired_loop_active.stdout in ['active', 'activating', 'reloading']
+      changed_when: false
+      when: retire_loop_apply | default(false) | bool
+      tags: [apply]
+
+    - name: Verify retired units are not enabled at boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ retired_loop_units }}"
+      register: retired_loop_enabled
+      failed_when: retired_loop_enabled.stdout not in ['disabled', 'static', 'masked', 'not-found', '']
+      changed_when: false
+      when: retire_loop_apply | default(false) | bool
+      tags: [apply]
