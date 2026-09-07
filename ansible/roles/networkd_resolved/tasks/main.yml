@@ -32,3 +32,12 @@
     - ansible_os_family != 'FreeBSD'
     - networkd_service_ipv4_address | length > 0
   notify: networkd reload
+
+- name: Remove disabled public DNAT backend IPv4 drop-in
+  ansible.builtin.file:
+    path: "/etc/systemd/network/{{ networkd_primary_unit }}.network.d/20-service-ipv4.conf"
+    state: absent
+  when:
+    - ansible_os_family != 'FreeBSD'
+    - networkd_service_ipv4_address | length == 0
+  notify: networkd reload
