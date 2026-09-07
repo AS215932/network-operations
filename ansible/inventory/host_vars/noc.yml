@@ -31,20 +31,19 @@ noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepsee
 # case-context retriever reads; A0 issue + A1 routing context unchanged.
 noc_knowledge_version: a68f974e7ed093d8f4195a15dc5b1afc636999f4
 
-# LHP-v1 rollout: coordinate the current proactive disk condition through
-# CaseService + Engineering Loop + Knowledge. The observed disk fingerprint is
-# 8fb421ff94bb1285; this config intentionally does not create persistent alert
-# suppression for it.
+# Keep local CaseService verification and knowledge context. Engineering Loop
+# handoffs and collector emissions are disabled because the loop VM is retired.
+# The existing disk condition remains an active incident, without suppression.
 noc_lhp_enabled: true
-noc_engineering_handoff_delivery_enabled: true
+noc_engineering_handoff_delivery_enabled: false
 noc_knowledge_context_enabled: true
 noc_case_verification_enabled: true
 noc_case_verification_dry_run: false
 noc_case_auto_resolve_enabled: false
-noc_disk_alert_handoff_enabled: true
+noc_disk_alert_handoff_enabled: false
 noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
-noc_agent_core_trace_enabled: true
-noc_agent_core_trace_collector_url: "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace"
+noc_agent_core_trace_enabled: false
+noc_agent_core_trace_collector_url: ""
 
 # XO MCP occasionally takes >5s to answer tools/list via supergateway during
 # streamable-HTTP session churn. Keep Icinga + app health probes below their
@@ -58,9 +57,6 @@ firewall_extra_rules:
 
   # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
   - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }
-
-  # Internal Loop Handoff Protocol fetch/callback traffic from Engineering Loop.
-  - { proto: tcp, dport: 8000, src: "{{ peers.loop.ipv6 }}", comment: "LHP-v1 Engineering Loop fetch/callback to noc-agent" }
 
   # hyrule-prober (:8460): x402-gated path probes from the api VM; liveness
   # check from Icinga on mon.

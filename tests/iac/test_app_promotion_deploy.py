@@ -1,4 +1,10 @@
+import contextlib
+import io
+import json
+import re
+import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import yaml
@@ -8,6 +14,21 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class AppPromotionDeployTest(unittest.TestCase):
+    def test_retirement_selects_noc_firewall_prerequisite(self):
+        workflow = yaml.safe_load((REPO / ".github/workflows/app-promotion-deploy.yml").read_text())
+        step = next(step for step in workflow["jobs"]["detect"]["steps"] if step.get("id") == "detect")
+        code = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY", step["run"], re.S).group(1)
+        output = io.StringIO()
+        changed = "ansible/inventory/host_vars/noc.yml\nansible/inventory/host_vars/loop.yml"
+        with patch.object(sys, "argv", ["detect", changed]), contextlib.redirect_stdout(output):
+            exec(compile(code, "workflow-detector", "exec"), {})
+        values = dict(line.split("=", 1) for line in output.getvalue().splitlines())
+        self.assertIn({"playbook": "firewall", "limit": "noc"}, json.loads(values["firewall_matrix"])["include"])
+        consumers = json.loads(values["matrix"])["include"]
+        self.assertIn({"playbook": "noc", "limit": "noc"}, consumers)
+        self.assertIn({"playbook": "retire-loop", "limit": "loop"}, consumers)
+        self.assertEqual(workflow["jobs"]["apply"]["needs"], ["detect", "firewall"])
+
     def test_apply_matrix_is_serialized(self):
         workflow = yaml.safe_load(
             (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
@@ -32,35 +53,13 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn("needs.firewall.result == 'success'", apply["if"])
         self.assertIn("needs.firewall.result == 'skipped'", apply["if"])
 
-    def test_agentic_observatory_changes_trigger_loop_apply(self):
-        workflow_text = (
-            REPO / ".github/workflows/app-promotion-deploy.yml"
-        ).read_text()
-
-        self.assertIn("ansible/roles/agentic_observatory/**", workflow_text)
-        self.assertIn("ansible/roles/agentic_observatory \\", workflow_text)
-        self.assertIn(
-            "ansible/roles/vault_agent/templates/agentic-observatory.env.ctmpl.j2",
-            workflow_text,
-        )
-        self.assertIn('"ansible/roles/agentic_observatory/"', workflow_text)
-
-    def test_knowledge_loop_role_changes_trigger_loop_apply(self):
-        workflow_text = (
-            REPO / ".github/workflows/app-promotion-deploy.yml"
-        ).read_text()
-
-        self.assertIn("ansible/roles/knowledge_loop/**", workflow_text)
-        self.assertIn("ansible/roles/knowledge_loop \\", workflow_text)
-        self.assertIn(
-            "ansible/roles/vault_agent/templates/knowledge-loop.env.ctmpl.j2",
-            workflow_text,
-        )
-        self.assertIn(
-            "ansible/roles/vault_agent/templates/knowledge-loop-github-app-key.pem.ctmpl.j2",
-            workflow_text,
-        )
-        self.assertIn('"ansible/roles/knowledge_loop/"', workflow_text)
+    def test_retired_loop_cannot_be_automatically_redeployed(self):
+        workflow_text = (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        self.assertNotIn('add_once("engineering-loop", "loop")', workflow_text)
+        self.assertNotIn("ansible/roles/agentic_observatory/**", workflow_text)
+        self.assertNotIn("ansible/roles/knowledge_loop/**", workflow_text)
+        self.assertIn('add_once("retire-loop", "loop")', workflow_text)
+        self.assertIn("ansible/playbooks/retire-loop.yml", workflow_text)
 
     def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
         workflow_text = (
@@ -90,9 +89,7 @@ class AppPromotionDeployTest(unittest.TestCase):
             workflow_text,
         )
         firewall = workflow_text.index('add_firewall_once("mon")')
-        engineering_loop = workflow_text.index('add_once("engineering-loop", "loop")')
         prometheus = workflow_text.index('add_once("prometheus", "mon")')
-        self.assertLess(firewall, engineering_loop)
         self.assertLess(firewall, prometheus)
 
     def test_extmon_firewall_changes_apply_before_prometheus(self):
