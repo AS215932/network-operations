@@ -73,6 +73,9 @@ vault_agent_env_reload_command: "{{ vault_agent_reload_command }}"
 vault_agent_jwt_reload_command: /bin/true
 vault_agent_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
 vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
+# Verified official package key, 2026-09-07. Rotate URL/checksum together; see
+# docs/runbooks/package-signing-keys.md. Matching installed keys need no network.
+vault_agent_hashicorp_gpg_checksum: sha256:cafb01beac341bf2a9ba89793e6dd2468110291adfbb6c62ed11a0cde6c09029
 
 # Secret templates Vault Agent renders. Each entry: src (Jinja2 template in
 # this role's templates/), name (ctmpl filename written into the template
