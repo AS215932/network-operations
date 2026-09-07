@@ -1,0 +1,207 @@
+rule_files:
+- ../../configs/mon/prometheus-rules/noc-tripwire.yml
+evaluation_interval: 30s
+tests:
+- name: unused provider defaults
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: configured but failed probe
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts:
+    - exp_labels:
+        instance: noc:8000
+        job: noc-agent
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: NOC Agent Gemini quota probe failed
+        description: The NOC Agent is configured for Gemini quota monitoring but the Cloud Monitoring probe has failed for
+          10 minutes.
+- name: unknown quota
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: -1x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: healthy quota
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: 100x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: low quota
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: 10x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts:
+    - exp_labels:
+        instance: noc:8000
+        job: noc-agent
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: NOC Agent Gemini quota is low
+        description: Gemini quota remaining estimate is 10 requests. Verify fallback model credentials before the primary
+          quota is exhausted.
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: empty quota has no duplicate low
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts:
+    - exp_labels:
+        instance: noc:8000
+        job: noc-agent
+        severity: critical
+        source: prometheus
+      exp_annotations:
+        summary: NOC Agent Gemini quota is exhausted
+        description: Gemini quota remaining estimate is 0. The NOC Agent must rely on fallback models or human triage.
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: missing configured metric
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: probe must match target
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_configured{instance="other:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="other:8000",job="noc-agent"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: quota recovery resolves empty alert
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: 0x4 100x16
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 3m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts:
+    - exp_labels:
+        instance: noc:8000
+        job: noc-agent
+        severity: critical
+        source: prometheus
+      exp_annotations:
+        summary: NOC Agent Gemini quota is exhausted
+        description: Gemini quota remaining estimate is 0. The NOC Agent must rely on fallback models or human triage.
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
