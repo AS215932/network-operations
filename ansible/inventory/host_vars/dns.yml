@@ -46,3 +46,7 @@ host_meta:
   ipv4: "via rtr DNAT (46.105.40.223)"
 network_flows_outbound:
   - { to: ns2, proto: "tcp+udp", port: 53, purpose: "NOTIFY plus serve AXFR pull to the off-net secondary (TSIG hyrule-dns)" }
+
+# Required destination for rtr public IPv4 DNAT; retain IPv6 management.
+networkd_service_ipv4_address: "10.0.2.10/24"
+networkd_service_ipv4_gateway: "10.0.2.1"

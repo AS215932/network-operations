@@ -20,3 +20,15 @@
     mode: "0644"
   when: ansible_os_family != 'FreeBSD'
   notify: networkd reload
+
+- name: Render public DNAT backend IPv4 drop-in
+  ansible.builtin.template:
+    src: 20-service-ipv4.conf.j2
+    dest: "/etc/systemd/network/{{ networkd_primary_unit }}.network.d/20-service-ipv4.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - ansible_os_family != 'FreeBSD'
+    - networkd_service_ipv4_address | length > 0
+  notify: networkd reload
