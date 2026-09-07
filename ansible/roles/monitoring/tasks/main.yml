@@ -7,6 +7,7 @@
   include_tasks: node_exporter.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - inventory_hostname != monitoring_mon_host    # mon scrapes itself; package present
   tags: [apply]
 

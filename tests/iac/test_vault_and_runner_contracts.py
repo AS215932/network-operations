@@ -211,7 +211,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         runbook = (REPO / "docs/runbooks/bootstrap-engineering-loop-vault.md").read_text()
 
         self.assertEqual(defaults["engineering_loop_governor_timer_enabled"], False)
-        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], True)
+        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], False)
         self.assertEqual(
             defaults["engineering_loop_governor_state_dir"],
             "{{ engineering_loop_state_dir }}/reliability-governor",
@@ -287,8 +287,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         # this flip. Expanding the allowlist further (suppress, artifact_review,
         # verification_result) must be a deliberate change that also updates this
         # guardrail.
-        self.assertEqual(host_vars["agentic_observatory_read_only"], False)
-        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], True)
+        self.assertEqual(host_vars["agentic_observatory_read_only"], True)
+        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], False)
         self.assertEqual(
             host_vars["agentic_observatory_enabled_actions"], "feedback,ack,insight_label"
         )
@@ -305,10 +305,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         # checkout must be a reviewed 40-char commit, never floating `main`. The
         # live host may enable the reviewed daily canary, but role defaults remain off.
         self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
-        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], False)
         self.assertEqual(host_vars["knowledge_loop_max_openrouter_calls_per_day"], 0)
         self.assertEqual(host_vars["knowledge_loop_max_prs_per_day"], 1)
-        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], False)
         self.assertIn("/v1/trace", host_vars["knowledge_loop_agent_core_trace_collector_url"])
 
         runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
@@ -877,10 +877,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertFalse(defaults["noc_agent_core_trace_enabled"])
         self.assertEqual(defaults["noc_agent_core_trace_collector_url"], "")
-        self.assertTrue(host_vars["noc_agent_core_trace_enabled"])
+        self.assertFalse(host_vars["noc_agent_core_trace_enabled"])
         self.assertEqual(
             host_vars["noc_agent_core_trace_collector_url"],
-            "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace",
+            "",
         )
 
     def test_freebsd_playbooks_can_opt_into_become(self):

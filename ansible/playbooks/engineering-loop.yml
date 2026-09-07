@@ -1,4 +1,6 @@
 ---
+# DEPRECATED: this entrypoint ends without applying. Use retire-loop.yml to
+# disable the retained VM's services; legacy role definitions below are history.
 # Engineering Loop rollout — installs the dedicated operations-lane daemon on
 # the loop VM. The daemon consumes human-approved GitHub issues and stops at a
 # draft PR. It never merges or applies production changes.
@@ -28,6 +30,9 @@
   gather_facts: true
   become: true
   pre_tasks:
+    - name: Retired entrypoint cannot redeploy the loop VM
+      ansible.builtin.meta: end_play
+      tags: [always]
     - name: Ensure Agentic Observatory group exists before Vault Agent
       ansible.builtin.group:
         name: "{{ agentic_observatory_group }}"
