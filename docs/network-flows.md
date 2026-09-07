@@ -284,6 +284,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | proxy | tcp | 6000 | Vector ingest from proxy |
 | rtr | tcp | 6000 | Vector ingest from rtr |
 | rtr underlay | tcp | 6000 | Vector ingest from rtr underlay |
+| vault | tcp | 6000 | Vector ingest from vault |
 | vpn | tcp | 6000 | Vector ingest from vpn |
 | web | tcp | 6000 | Vector ingest from web |
 | xoa | tcp | 6000 | Vector ingest from xoa |

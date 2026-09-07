@@ -22,6 +22,7 @@ firewall_extra_rules:
   - { proto: tcp, dport: 6000, src: "{{ peers.xoa.ipv6 }}",   comment: "Vector ingest from xoa" }
   - { proto: tcp, dport: 6000, src: "{{ peers.irc.ipv6 }}",   comment: "Vector ingest from irc" }
   - { proto: tcp, dport: 6000, src: "{{ peers.noc.ipv6 }}",   comment: "Vector ingest from noc" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.vault.ipv6 }}", comment: "Vector ingest from vault" }
   - { proto: tcp, dport: 6000, src: "{{ peers.ci.ipv6 }}",    comment: "Vector ingest from ci" }
   - { proto: tcp, dport: 6000, src: "{{ peers.netproxy.ipv6 }}", comment: "Vector ingest from netproxy" }
   - { proto: tcp, dport: 6000, src: "{{ peers.loop.ipv6 }}",  comment: "Vector ingest from loop" }
