@@ -71,3 +71,20 @@ class LoopRetirementTest(unittest.TestCase):
         self.assertIn("restart noc-agent-bot", runtime["notify"])
         unit = next(task for task in tasks if task.get("copy", {}).get("dest") == "/etc/systemd/system/noc-agent.service")
         self.assertLess(tasks.index(runtime), tasks.index(unit))
+
+    def test_noc_outbox_validation_matches_configured_worker_state(self):
+        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
+        conditions = play["post_tasks"][0]["block"][0]["until"]
+        environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        environment.filters["bool"] = bool
+        for enabled in (False, True):
+            for running in (False, True):
+                for reported_enabled in (False, True):
+                    health = {"status": 200, "json": {"status": "ok", "backend": "PostgresCaseStore",
+                        "outbox_worker": {"enabled": reported_enabled, "running": running}}}
+                    matches = all(environment.compile_expression(condition)(
+                        noc_case_outbox_enabled=enabled, noc_agent_case_health=health) for condition in conditions)
+                    self.assertEqual(matches, enabled == running == reported_enabled)
+        health["json"]["outbox_worker"] = {}
+        self.assertFalse(all(environment.compile_expression(condition)(
+            noc_case_outbox_enabled=False, noc_agent_case_health=health) for condition in conditions))
