@@ -433,7 +433,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### proxy — Terminates public TLS and reverse-proxies to web, api, and other backends; ACME DNS-01 via RFC 2136 to dns.
 
-> Most proxy outbound is the mirror of a backend's inbound rule (web :8080/:8081, api :8402, mon :3000, xoa :80/:443, irc :6697, noc :8000, vault :8200, loop :8780); only the noteworthy external/DNS flows are listed below.
+> Most proxy outbound is the mirror of a backend's inbound rule (web :8080/:8081, api :8402, mon :3000, xoa :80/:443, irc :6697, noc :8000, vault :8200); only the noteworthy external/DNS flows are listed below.
 
 **Inbound**
 
