@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parents[2]
 class RtrNat64ContractsTest(unittest.TestCase):
     def test_pool_excludes_dnat_and_host_ephemeral_ports(self):
         config = json.loads((REPO / "configs/rtr/jool/jool.conf").read_text())
-        nft = (REPO / "configs/rtr/nftables.conf").read_text()
+        nft = (REPO / "ansible/roles/firewall/templates/nftables-rtr.conf.j2").read_text()
         reserved = {"TCP": set(), "UDP": set()}
         for proto, expression in re.findall(
             r"\b(tcp|udp) dport (\{[^}]+\}|[0-9-]+) dnat", nft
@@ -34,6 +34,22 @@ class RtrNat64ContractsTest(unittest.TestCase):
             ports = set(range(bounds[0], bounds[-1] + 1))
             self.assertFalse(ports & reserved[proto], entry)
             self.assertFalse(ports & set(range(low, high + 1)), entry)
+
+    def test_jool_config_is_rendered_and_installed_with_existing_handler_chain(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/firewall/tasks/nftables.yml").read_text())
+        stages = {task["name"]: task for task in tasks if "name" in task}
+        stage = stages["Stage Jool configuration to controller (review artifact)"]
+        install = stages["Install Jool configuration on rtr"]
+        self.assertEqual(stage["copy"]["src"], install["copy"]["src"])
+        self.assertEqual(stage["delegate_to"], "localhost")
+        self.assertFalse(stage["become"])
+        self.assertIn("validate", stage["tags"])
+        self.assertEqual(install["copy"]["dest"], "/etc/jool/jool.conf")
+        self.assertTrue(install["copy"]["backup"])
+        self.assertIn("firewall_apply | default(false) | bool", install["when"])
+        self.assertIn('inventory_hostname == "rtr"', install["when"])
+        self.assertEqual(install["tags"], ["apply"])
+        self.assertEqual(install["notify"], "reload nftables")
 
     def test_nat64_vrf_leak_routes_returns_to_overlay_clients(self):
         unit = (REPO / "configs/rtr/jool/nat64-vrf-leak.service").read_text()
