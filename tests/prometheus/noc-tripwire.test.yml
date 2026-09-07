@@ -205,3 +205,50 @@ tests:
   - eval_time: 10m
     alertname: NOCAgentGeminiQuotaLow
     exp_alerts: []
+- name: low quota suppressed when unconfigured
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: 10x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts: []
+- name: low quota suppressed when probe fails
+  interval: 1m
+  input_series:
+  - series: noc_agent_gemini_quota_configured{instance="noc:8000",job="noc-agent"}
+    values: 1x20
+  - series: noc_agent_gemini_quota_probe_ok{instance="noc:8000",job="noc-agent"}
+    values: '0x20'
+  - series: noc_agent_gemini_quota_remaining{instance="noc:8000",job="noc-agent"}
+    values: 10x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaLow
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaEmpty
+    exp_alerts: []
+  - eval_time: 10m
+    alertname: NOCAgentGeminiQuotaProbeFailed
+    exp_alerts:
+    - exp_labels:
+        instance: noc:8000
+        job: noc-agent
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: NOC Agent Gemini quota probe failed
+        description: The NOC Agent is configured for Gemini quota monitoring but the Cloud Monitoring probe has failed for
+          10 minutes.

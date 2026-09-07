@@ -128,10 +128,11 @@ class PrometheusConfigContracts(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("promtool"), "promtool is not installed")
     def test_noc_quota_alert_semantics(self):
-        subprocess.run(
+        result = subprocess.run(
             ["promtool", "test", "rules", str(REPO / "tests/prometheus/noc-tripwire.test.yml")],
-            cwd=REPO, check=True, capture_output=True, text=True,
+            cwd=REPO, check=False, capture_output=True, text=True,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_rule_files_have_valid_group_and_rule_structure(self):
         alert_names = []
