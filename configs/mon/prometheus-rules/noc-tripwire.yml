@@ -52,7 +52,11 @@ groups:
           public_message: "Live network proxy health checks are unavailable. Requests may still succeed, but some modes could be affected."
 
       - alert: NOCAgentGeminiQuotaLow
-        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 25
+        # Unused providers export default-zero gauges; require a real quota probe.
+        expr: >-
+          (noc_agent_gemini_quota_remaining > 0 and noc_agent_gemini_quota_remaining <= 25)
+          and on (instance, job) (noc_agent_gemini_quota_configured == 1)
+          and on (instance, job) (noc_agent_gemini_quota_probe_ok == 1)
         for: 5m
         labels:
           severity: warning
@@ -62,7 +66,10 @@ groups:
           description: "Gemini quota remaining estimate is {{ $value }} requests. Verify fallback model credentials before the primary quota is exhausted."
 
       - alert: NOCAgentGeminiQuotaEmpty
-        expr: noc_agent_gemini_quota_remaining >= 0 and noc_agent_gemini_quota_remaining <= 0
+        expr: >-
+          (noc_agent_gemini_quota_remaining == 0)
+          and on (instance, job) (noc_agent_gemini_quota_configured == 1)
+          and on (instance, job) (noc_agent_gemini_quota_probe_ok == 1)
         for: 2m
         labels:
           severity: critical
