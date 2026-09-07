@@ -56,9 +56,11 @@
       # Override ExecStart so Vector loads only our TOML, not the
       # default search path that picks up /etc/vector/vector.yaml.
       ExecStartPre=
-      ExecStartPre=/usr/bin/vector validate --config-toml {{ logs_vector_config_path }}
+      # A temporary Loki outage must not prevent Vector from starting and retrying.
+      ExecStartPre=/usr/bin/vector validate --skip-healthchecks --config-toml {{ logs_vector_config_path }}
       ExecStart=
       ExecStart=/usr/bin/vector --config-toml {{ logs_vector_config_path }}
+      RestartSec=30s
   notify:
     - reload systemd for vector
     - restart vector
