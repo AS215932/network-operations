@@ -44,13 +44,16 @@ class LoopRetirementTest(unittest.TestCase):
         environment.filters["bool"] = bool
         text = environment.from_string(
             (REPO / "ansible/roles/noc_agent/templates/runtime.env.j2").read_text()
-        ).render(**host)
+        ).render(**{**yaml.safe_load((REPO / "ansible/roles/noc_agent/defaults/main.yml").read_text()), **host})
         values = dict(line.split("=", 1) for line in text.splitlines() if line and not line.startswith("#"))
         for key in [
             "NOC_ENGINEERING_HANDOFF_DELIVERY_ENABLED", "NOC_DISK_ALERT_HANDOFF_ENABLED",
             "HYRULE_NOC_AGENT_CORE_TRACE", "NOC_PROACTIVE_HANDOFF_ENABLED", "NOC_INSIGHT_RECORDS_ENABLED",
         ]:
             self.assertEqual(values[key], "0")
+        self.assertEqual(values["NOC_CASESERVICE_REACTIVE_REPORT"], "0")
+        self.assertEqual(values["NOC_CASE_ATTENTION_ENABLED"], "0")
+        self.assertEqual(values["NOC_CASE_OUTBOX_ENABLED"], "1")
         self.assertEqual(values["HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL"], '""')
         self.assertFalse(any("SECRET" in key or "TOKEN" in key or "PASSWORD" in key for key in values))
         for name in ["noc-agent.service", "noc-agent-bot.service"]:
