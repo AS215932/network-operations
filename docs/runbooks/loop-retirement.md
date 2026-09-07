@@ -29,3 +29,19 @@ services, monitoring and consumers together; enabling a timer alone is insuffici
 
 Existing failed alerts for active hosts, including Vault, mail, routers and the
 logging aggregator, are independent incidents and must remain visible.
+
+NOC's retirement controls also live in the non-secret
+`/etc/noc-agent/runtime.env`, loaded by both systemd services after the
+Vault-rendered `/opt/noc-agent/.env`. This lets a reviewed deployment disable
+retired integrations even while Vault is sealed and the credential file is stale.
+The override contains no credentials. Keep it installed with the service units;
+after deployment, verify effective process flags, not only the Vault template.
+Rollback uses the previous units and inventory through the normal apply workflow.
+
+The NOC role pins the Redis repository key checksum. A matching installed key
+is verified locally without another download; a missing or changed key must be
+downloaded and match the reviewed checksum. The 2026-09-07 key from
+https://packages.redis.io/gpg has primary fingerprint
+`54318FA4052D1E61A6B6F7BB5F4349D6BF53AA0C`. Key rotation must review the official
+key and update the checksum together; never disable verification to recover an
+app deployment. The CDN reachability incident remains separate routing work.
