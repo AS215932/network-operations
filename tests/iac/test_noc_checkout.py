@@ -51,12 +51,12 @@ class NocCheckoutTest(unittest.TestCase):
         self.git("-C", str(self.source), "-c", "user.name=Checkout test", "-c",
                  "user.email=checkout@example.invalid", "commit", "-qm", message)
 
-    def run_tasks(self, *, source=None, omit_checkout=False):
+    def run_tasks(self, *, source=None, omit_checkout=False, pin=None):
         marker = self.root / "continued"
         tasks = self.tasks[1:] if omit_checkout else self.tasks
         play = [{"hosts": "localhost", "connection": "local", "gather_facts": False,
                  "vars": {"noc_agent_repo": str(source or self.source),
-                          "noc_agent_install_dir": str(self.checkout), "noc_agent_version": self.new},
+                          "noc_agent_install_dir": str(self.checkout), "noc_agent_version": pin or self.new},
                  "tasks": tasks + [{"name": "Mark dependent work", "copy": {"content": "done", "dest": str(marker)}}]}]
         path = self.root / "play.yml"
         path.write_text(yaml.safe_dump(play))
@@ -82,6 +82,19 @@ class NocCheckoutTest(unittest.TestCase):
 
     def test_mismatched_live_revision_stops_dependent_work(self):
         result, continued = self.run_tasks(omit_checkout=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(continued)
+        self.assertIn("does not match its approved production SHA", result.stdout)
+
+    def test_uppercase_pin_is_validated_and_matches_same_commit(self):
+        self.git("-C", str(self.checkout), "fetch", "origin")
+        self.git("-C", str(self.checkout), "checkout", "-q", self.new)
+        result, continued = self.run_tasks(omit_checkout=True, pin=self.new.upper())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(continued)
+
+    def test_uppercase_pin_cannot_skip_mismatch_validation(self):
+        result, continued = self.run_tasks(omit_checkout=True, pin=self.new.upper())
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(continued)
         self.assertIn("does not match its approved production SHA", result.stdout)
