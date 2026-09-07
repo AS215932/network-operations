@@ -23,3 +23,7 @@ host_meta:
 network_flows_outbound:
   - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates for ACME DNS-01 (TSIG hyrule-dns)" }
   - { to: acme-providers, proto: tcp, port: 443, purpose: "ACME certificate issuance (Let's Encrypt / ZeroSSL)" }
+
+# Required destination for rtr public IPv4 DNAT; retain IPv6 management.
+networkd_service_ipv4_address: "10.0.2.40/24"
+networkd_service_ipv4_gateway: "10.0.2.1"
