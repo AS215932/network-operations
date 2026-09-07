@@ -89,6 +89,17 @@ monitoring_extra_services:
       http_timeout: 10
       http_expect_body_regex: '"status":"ok"'
 
+  # Deploy only after noc-agent delivery-health support (app PR82) is live.
+  - name: noc-agent-delivery-health
+    check_command: noc_agent_delivery_health
+    interval: 1m
+    retry: 30s
+    max_check_attempts: 3
+    notes: "Independent detection of stalled NOC delivery and overdue report intents"
+    vars:
+      noc_delivery_host: "{{ peers.noc.ipv6 }}"
+      noc_delivery_port: 8000
+
   - name: noc-agent-mcp-health
     # Custom check: surfaces /health/mcp's per-source JSON state instead of
     # the generic check_http "503 + pattern not found" output.
