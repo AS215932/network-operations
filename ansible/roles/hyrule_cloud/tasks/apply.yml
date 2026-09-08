@@ -64,6 +64,10 @@
 - name: Bootstrap per-app deploy key and SSH config
   ansible.builtin.import_tasks: bootstrap_key.yml
 
+- name: Quiesce API and worker before changing application code
+  ansible.builtin.import_tasks: quiesce.yml
+  when: not ansible_check_mode
+
 - name: Checkout hyrule-cloud at the requested ref
   ansible.builtin.import_tasks: checkout.yml
 
