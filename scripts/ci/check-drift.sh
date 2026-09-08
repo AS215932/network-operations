@@ -8,7 +8,7 @@
 #   ../scripts/ci/check-drift.sh <log-dir> [playbook ...]
 #
 # With no playbook arguments the canonical sweep below runs. The limit can be
-# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr) — used by the post-merge
+# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr; retirement registration remains covered) — used by the post-merge
 # verify pass to re-check only the hosts it just applied.
 #
 # ci-pr lives on the customer-isolated segment and is managed from the ops
@@ -32,6 +32,7 @@ if [ "${#playbooks[@]}" -eq 0 ]; then
   playbooks=("${default_playbooks[@]}")
 fi
 
+# Monitoring must still reconcile retired-host tombstones on mon.
 limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr}"
 
 mkdir -p "$logdir"
@@ -39,10 +40,14 @@ status=0
 for playbook in "${playbooks[@]}"; do
   echo "::group::drift ${playbook}"
   log="${logdir}/${playbook}.log"
+  play_limit="${limit}:!retired"
+  if [ "$playbook" = monitoring ]; then
+    play_limit="$limit"
+  fi
   if ! ansible-playbook "playbooks/${playbook}.yml" \
       --check --diff \
       --tags apply \
-      --limit "$limit" \
+      --limit "$play_limit" \
       -e ansible_user=ci \
       -e "${playbook}_apply=true" 2>&1 | tee "${log}"; then
     status=1

@@ -9,13 +9,11 @@ on:
       - ansible/inventory/host_vars/api.yml
       - ansible/inventory/host_vars/web.yml
       - ansible/inventory/host_vars/netproxy.yml
-      - ansible/inventory/host_vars/loop.yml
       - ansible/inventory/host_vars/mon.yml
       - ansible/inventory/host_vars/extmon.yml
       - ansible/playbooks/noc.yml
       - ansible/playbooks/prober.yml
       - ansible/roles/hyrule_prober/**
-      - ansible/playbooks/retire-loop.yml
       - ansible/roles/noc_agent/**
       - configs/mon/icinga2/**
       - configs/mon/prometheus-rules/**
@@ -62,13 +60,11 @@ jobs:
             ansible/inventory/host_vars/api.yml \
             ansible/inventory/host_vars/web.yml \
             ansible/inventory/host_vars/netproxy.yml \
-            ansible/inventory/host_vars/loop.yml \
             ansible/inventory/host_vars/mon.yml \
             ansible/inventory/host_vars/extmon.yml \
             ansible/playbooks/noc.yml \
             ansible/playbooks/prober.yml \
             ansible/roles/hyrule_prober \
-            ansible/playbooks/retire-loop.yml \
             ansible/roles/noc_agent \
             configs/mon/icinga2 \
             configs/mon/prometheus-rules \
@@ -131,11 +127,6 @@ jobs:
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/prober.yml",
           }) or any(path.startswith("ansible/roles/hyrule_prober/") for path in changed)
-          loop_retirement_changed = any(path in changed for path in {
-              "ansible/inventory/host_vars/loop.yml",
-              "ansible/playbooks/retire-loop.yml",
-          })
-
           github_runner_env_changed = (
               "ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2" in changed
           )
@@ -160,8 +151,6 @@ jobs:
           if noc_changed:
               add_once("monitoring", "noc")
               add_once("noc", "noc")
-          if loop_retirement_changed:
-              add_once("retire-loop", "loop")
           if prometheus_changed:
               add_once("prometheus", "mon")
           if alertmanager_changed:
