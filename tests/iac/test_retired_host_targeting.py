@@ -19,7 +19,7 @@ class RetiredHostTargetingTest(unittest.TestCase):
         )
 
     def test_routine_plays_preserve_active_hosts_and_exclude_retired(self):
-        for name in ('firewall', 'networkd_resolved', 'monitoring', 'logs',
+        for name in ('firewall', 'networkd_resolved', 'logs',
                      'ci-runner-key', 'noc_mcp_key'):
             plays = yaml.safe_load((REPO / f'ansible/playbooks/{name}.yml').read_text())
             for play in plays:
@@ -42,13 +42,26 @@ class RetiredHostTargetingTest(unittest.TestCase):
             executable.chmod(0o755)
             result = subprocess.run(
                 ['bash', str(REPO / 'scripts/ci/check-drift.sh'),
-                 str(root / 'logs'), 'firewall'],
+                 str(root / 'logs'), 'firewall', 'monitoring'],
                 env={**os.environ, 'PATH': f'{root}:' + os.environ['PATH'],
                      'CHECK_DRIFT_LIMIT': 'loop:rtr'},
                 text=True, capture_output=True, check=True,
             )
             self.assertIn('--limit\nloop:rtr:!retired\n', result.stdout)
+            self.assertIn('--limit\nloop:rtr\n', result.stdout)
 
     def test_narrowed_verification_cannot_select_retired_host(self):
         for pattern in ('all:!ci-pr:!retired', 'loop:rtr:!retired', 'loop:!retired'):
             self.assertNotIn('loop', {h.name for h in self.inventory.get_hosts(pattern)})
+
+
+    def test_monitoring_retains_tombstones_but_never_contacts_retired_host(self):
+        play = yaml.safe_load((REPO / 'ansible/playbooks/monitoring.yml').read_text())[0]
+        self.assertIn('loop', {h.name for h in self.inventory.get_hosts(play['hosts'])})
+        tasks = yaml.safe_load((REPO / 'ansible/roles/monitoring/tasks/main.yml').read_text())
+        for task in tasks:
+            conditions = task.get('when', [])
+            if 'monitoring_apply | default(false) | bool' in conditions:
+                self.assertIn('not (monitoring_retired | default(false) | bool)', conditions, task['name'])
+        registration = next(t for t in tasks if t.get('include_tasks') == 'register.yml')
+        self.assertEqual(registration['when'], 'monitoring_register | bool')
