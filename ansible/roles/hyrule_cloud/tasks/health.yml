@@ -10,6 +10,23 @@
 - name: Flush handlers (reload systemd if the unit changed) before restart
   ansible.builtin.meta: flush_handlers
 
+- name: Require application checkout before releasing deployment barriers
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_pyproject.stat.exists
+    fail_msg: "Application checkout is incomplete; cloud deployment barriers remain in place."
+
+- name: Recheck provisioning with the deployment runtime before migration
+  ansible.builtin.script:
+    cmd: provisioning-preflight.py
+    executable: "{{ hyrule_cloud_install_dir }}/.venv/bin/python"
+    chdir: "{{ hyrule_cloud_install_dir }}"
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  environment:
+    PYTHONPATH: "{{ hyrule_cloud_install_dir }}"
+  changed_when: false
+
 - name: Run hyrule-cloud database migrations
   ansible.builtin.command:
     cmd: /usr/local/bin/uv run alembic upgrade head
@@ -21,15 +38,14 @@
   changed_when: false
   when: hyrule_cloud_pyproject.stat.exists
 
+- name: Release API start barrier after successful migration
+  ansible.builtin.file:
+    path: "{{ hyrule_cloud_etc_dir }}/{{ hyrule_cloud_service_name }}.deployment-pending"
+    state: absent
+
 - name: Restart hyrule-cloud (deterministic on every apply)
   ansible.builtin.systemd:
     name: "{{ hyrule_cloud_service_name }}"
-    state: restarted
-    enabled: true
-
-- name: Restart dedicated hyrule-cloud worker (deterministic on every apply)
-  ansible.builtin.systemd:
-    name: "{{ hyrule_cloud_worker_service_name }}"
     state: restarted
     enabled: true
 
@@ -46,6 +62,28 @@
       hyrule-cloud.service is {{ hyrule_cloud_service.status.ActiveState }};
       expected "active". Check journalctl -u hyrule-cloud on the target.
 
+- name: HTTP health check (local loopback)
+  ansible.builtin.uri:
+    url: "{{ hyrule_cloud_listen_url }}"
+    status_code: 200
+    return_content: false
+    timeout: 5
+  register: hyrule_cloud_http
+  retries: 10
+  delay: 3
+  until: hyrule_cloud_http.status == 200
+
+- name: Release worker start barrier after API health succeeds
+  ansible.builtin.file:
+    path: "{{ hyrule_cloud_etc_dir }}/{{ hyrule_cloud_worker_service_name }}.deployment-pending"
+    state: absent
+
+- name: Restart dedicated hyrule-cloud worker (deterministic on every apply)
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_worker_service_name }}"
+    state: restarted
+    enabled: true
+
 - name: Check hyrule-cloud worker systemd state
   ansible.builtin.systemd:
     name: "{{ hyrule_cloud_worker_service_name }}"
@@ -59,17 +97,6 @@
       hyrule-cloud-worker.service is
       {{ hyrule_cloud_worker_service.status.ActiveState }}; expected "active".
       Check journalctl -u hyrule-cloud-worker on the target.
-
-- name: HTTP health check (local loopback)
-  ansible.builtin.uri:
-    url: "{{ hyrule_cloud_listen_url }}"
-    status_code: 200
-    return_content: false
-    timeout: 5
-  register: hyrule_cloud_http
-  retries: 10
-  delay: 3
-  until: hyrule_cloud_http.status == 200
 
 - name: Keep Monero wallet RPC stopped after cloud restart when native rails are disabled
   ansible.builtin.systemd:
