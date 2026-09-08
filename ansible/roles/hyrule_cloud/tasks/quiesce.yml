@@ -1,0 +1,53 @@
+---
+# Persistent conditions cover Vault callbacks, automatic restarts and reboot.
+# Separate markers keep the worker stopped until the new API passes health.
+- name: Ensure cloud deployment barrier directories exist
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ hyrule_cloud_service_name }}"
+    - "{{ hyrule_cloud_worker_service_name }}"
+
+- name: Install persistent cloud deployment start conditions
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item }}.service.d/90-deployment-barrier.conf"
+    content: |
+      [Unit]
+      ConditionPathExists=!{{ hyrule_cloud_etc_dir }}/{{ item }}.deployment-pending
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - "{{ hyrule_cloud_service_name }}"
+    - "{{ hyrule_cloud_worker_service_name }}"
+
+- name: Hold cloud services until migration and validation succeed
+  ansible.builtin.copy:
+    dest: "{{ hyrule_cloud_etc_dir }}/{{ item }}.deployment-pending"
+    content: "Deployment incomplete; rerun the reviewed deployment to recover.\n"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - "{{ hyrule_cloud_service_name }}"
+    - "{{ hyrule_cloud_worker_service_name }}"
+
+- name: Load deployment barriers before stopping cloud services
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Discover existing cloud services for first-install compatibility
+  ansible.builtin.service_facts:
+
+- name: Stop existing cloud worker and API before checkout
+  ansible.builtin.systemd:
+    name: "{{ item }}.service"
+    state: stopped
+  loop:
+    - "{{ hyrule_cloud_worker_service_name }}"
+    - "{{ hyrule_cloud_service_name }}"
+  when: (item ~ '.service') in ansible_facts.services
