@@ -29,6 +29,19 @@
   when: inventory_hostname == 'rtr'
   listen: reload nftables
 
+# Only successful completion of the full handler chain advances the stamp.
+- name: Record successfully applied Jool configuration
+  copy:
+    dest: /etc/jool/managed-config.sha256
+    content: "{{ _jool_desired_checksum }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - inventory_hostname == 'rtr'
+    - _jool_desired_checksum is defined
+  listen: reload nftables
+
 - name: validate pf
   command: "pfctl -nf {{ firewall_conf_path }}"
   changed_when: false

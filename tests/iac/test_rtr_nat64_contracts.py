@@ -1,9 +1,12 @@
+import base64
 import json
 import re
 import unittest
 from pathlib import Path
 
 import yaml
+from jinja2 import StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -50,6 +53,29 @@ class RtrNat64ContractsTest(unittest.TestCase):
         self.assertIn('inventory_hostname == "rtr"', install["when"])
         self.assertEqual(install["tags"], ["apply"])
         self.assertEqual(install["notify"], "reload nftables")
+
+    def test_retry_reconciles_unchanged_file_until_success_stamp_advances(self):
+        tasks = yaml.safe_load((REPO / "ansible/roles/firewall/tasks/nftables.yml").read_text())
+        retry = next(t for t in tasks if t.get("name") == "Reconcile Jool configuration after interrupted applies")
+        self.assertEqual(retry["notify"], "reload nftables")
+        self.assertEqual(retry["tags"], ["apply"])
+        env = NativeEnvironment(undefined=StrictUndefined)
+        env.filters["b64decode"] = lambda value: base64.b64decode(value).decode()
+        condition = env.from_string("{{ " + retry["changed_when"] + " }}")
+        for stored, expected in [(None, True), ("old-checksum", True), ("desired-checksum\n", False)]:
+            with self.subTest(stored=stored):
+                stamp = {} if stored is None else {"content": base64.b64encode(stored.encode()).decode()}
+                self.assertEqual(condition.render(
+                    _jool_applied_config=stamp, _jool_desired_checksum="desired-checksum"
+                ), expected)
+        handlers = yaml.safe_load((REPO / "ansible/roles/firewall/handlers/main.yml").read_text())
+        names = [h["name"] for h in handlers]
+        record = next(h for h in handlers if h["name"] == "Record successfully applied Jool configuration")
+        self.assertGreater(names.index(record["name"]), names.index("restart nat64-vrf-leak after jool"))
+        self.assertEqual(record["listen"], "reload nftables")
+        self.assertEqual(record["copy"]["dest"], "/etc/jool/managed-config.sha256")
+        for handler in handlers[:names.index(record["name"]) + 1]:
+            self.assertFalse(handler.get("ignore_errors", False))
 
     def test_nat64_vrf_leak_routes_returns_to_overlay_clients(self):
         unit = (REPO / "configs/rtr/jool/nat64-vrf-leak.service").read_text()

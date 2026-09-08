@@ -23,6 +23,45 @@
   notify: reload nftables
   tags: [apply]
 
+# A failed play discards deferred notifications. The durable success stamp
+# keeps a retry from mistaking an unchanged on-disk file for applied state.
+- name: Compute desired Jool configuration checksum
+  set_fact:
+    _jool_desired_checksum: "{{ lookup('file', playbook_dir + '/../../configs/rtr/jool/jool.conf', rstrip=False) | hash('sha256') }}"
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+  tags: [apply]
+
+- name: Inspect last successfully applied Jool configuration stamp
+  stat:
+    path: /etc/jool/managed-config.sha256
+  register: _jool_stamp
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+  tags: [apply]
+
+- name: Read last successfully applied Jool configuration stamp
+  slurp:
+    src: /etc/jool/managed-config.sha256
+  register: _jool_applied_config
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+    - _jool_stamp.stat.exists
+  tags: [apply]
+
+- name: Reconcile Jool configuration after interrupted applies
+  debug:
+    msg: Jool configuration requires successful reload and route restoration
+  changed_when: (_jool_applied_config.content | default('') | b64decode | trim) != _jool_desired_checksum
+  when:
+    - inventory_hostname == "rtr"
+    - firewall_apply | default(false) | bool
+  notify: reload nftables
+  tags: [apply]
+
 - name: Stage nat64-vrf-leak unit to controller (review artifact)
   delegate_to: localhost
   become: false
