@@ -216,11 +216,11 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Inbound**
 
-_No current inbound flow is modelled for this excluded host._
+_No host-specific inbound rules (SSH-only via the standard allow set)._
 
 **Outbound**
 
-_No current outbound flow is modelled for this excluded host._
+_No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### extmon — Off-net external monitor (Vultr London, different ASN) probing AS215932 public services from the outside and posting alerts directly.
 

@@ -138,6 +138,9 @@ class RetiredHostTargetingTest(unittest.TestCase):
         self.assertIn('No current inbound flow is modelled', loop_section)
         self.assertIn('No current outbound flow is modelled', loop_section)
         self.assertNotIn('SSH-only', loop_section)
+        dom0_section = rendered.split('### dom0 ', 1)[1].split('\n### ', 1)[0]
+        self.assertNotIn('No current inbound flow is modelled', dom0_section)
+        self.assertNotIn('No current outbound flow is modelled', dom0_section)
 
 
     def test_monitoring_retains_tombstones_but_never_contacts_retired_host(self):

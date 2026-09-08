@@ -449,6 +449,9 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     lines.append("")
     for host in hosts:
         globally_excluded = host in all_excludes
+        retired_excluded = globally_excluded and bool(
+            host_vars[host].get("loop_retired", False)
+        )
         meta = host_vars[host]["host_meta"]
         summary = str(meta.get("summary", "")).strip()
         heading = f"### {host}"
@@ -465,7 +468,7 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if rules:
             lines.extend(render_inbound_table(resolver, rules))
-        elif globally_excluded:
+        elif retired_excluded:
             lines.append("_No current inbound flow is modelled for this excluded host._")
         else:
             lines.append("_No host-specific inbound rules (SSH-only via the standard allow set)._")
@@ -475,7 +478,7 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if outbound:
             lines.extend(render_outbound_table(resolver, outbound))
-        elif globally_excluded:
+        elif retired_excluded:
             lines.append("_No current outbound flow is modelled for this excluded host._")
         else:
             lines.append("_No noteworthy host-specific outbound beyond the cross-cutting flows._")
