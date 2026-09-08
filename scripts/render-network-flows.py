@@ -487,7 +487,7 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     if all_excludes:
         lines.append("")
         lines.append(f"> `all` in the table below excludes {', '.join(str(t) for t in all_excludes)} "
-                     "(firewall-unmanaged; their real flows are modelled explicitly).")
+                     "(firewall-unmanaged; any current flows are modelled explicitly).")
     lines.append("")
     lines.extend(render_cross_cutting_table(
         resolver, flows.get("cross_cutting_flows", []) or [], valid_hosts=valid_flow_hosts))

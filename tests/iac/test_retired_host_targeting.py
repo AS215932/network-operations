@@ -1,4 +1,5 @@
 """Resolve real Ansible host patterns without connecting to infrastructure."""
+import json
 import os
 import subprocess
 import tempfile
@@ -53,6 +54,85 @@ class RetiredHostTargetingTest(unittest.TestCase):
     def test_narrowed_verification_cannot_select_retired_host(self):
         for pattern in ('all:!ci-pr:!retired', 'loop:rtr:!retired', 'loop:!retired'):
             self.assertNotIn('loop', {h.name for h in self.inventory.get_hosts(pattern)})
+
+    def test_ci_host_key_seeding_skips_retired_inventory(self):
+        inventory = {
+            '_meta': {'hostvars': {
+                'loop': {'ansible_host': '2a0c:b641:b50:2::f0'},
+                'rtr': {'ansible_host': '2a0c:b641:b50:2::1'},
+            }},
+            'retired': {'hosts': ['loop']},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'ansible-inventory').write_text(
+                '#!/bin/sh\nprintf \'%s\\n\' ' + repr(json.dumps(inventory)) + '\n'
+            )
+            (root / 'ssh-keygen').write_text('#!/bin/sh\nexit 1\n')
+            (root / 'ssh-keyscan').write_text(
+                '#!/bin/sh\ntarget=""\nfor arg in "$@"; do target="$arg"; done\n'
+                'printf \'%s\\n\' "$target" >> "$SCAN_LOG"\n'
+                'printf \'%s ssh-ed25519 AAAATEST\\n\' "$target"\n'
+            )
+            for executable in ('ansible-inventory', 'ssh-keygen', 'ssh-keyscan'):
+                (root / executable).chmod(0o755)
+            scan_log = root / 'scans'
+            known_hosts = root / 'known_hosts'
+            result = subprocess.run(
+                ['bash', str(REPO / 'scripts/ci/seed-missing-host-keys.sh')],
+                env={
+                    **os.environ,
+                    'PATH': f'{root}:' + os.environ['PATH'],
+                    'KNOWN_HOSTS_FILE': str(known_hosts),
+                    'SCAN_LOG': str(scan_log),
+                },
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(scan_log.read_text().splitlines(), ['2a0c:b641:b50:2::1'])
+            self.assertNotIn('2a0c:b641:b50:2::f0', known_hosts.read_text())
+            self.assertIn('1 new host', result.stdout)
+
+    def test_runner_role_key_seeding_filters_retired_hosts_and_peers(self):
+        tasks = yaml.safe_load(
+            (REPO / 'ansible/roles/github_runner/tasks/main.yml').read_text()
+        )
+        seed = next(
+            task for task in tasks
+            if task.get('name') == 'Seed runner known_hosts with the infra fleet host keys'
+        )
+        command = seed['shell']['cmd']
+        self.assertIn("groups['retired'] | default([])", command)
+        self.assertIn('host not in retired_hosts', command)
+        self.assertIn('for peer_name, p in peers.items()', command)
+        self.assertIn('peer_name not in retired_hosts', command)
+
+    def test_retired_host_has_no_current_network_flows(self):
+        flows = yaml.safe_load(
+            (REPO / 'ansible/inventory/network_flows.yml').read_text()
+        )
+        self.assertIn('loop', flows['all_excludes'])
+        for flow in flows['cross_cutting_flows']:
+            self.assertNotEqual(flow['from'], 'loop', flow)
+            self.assertNotEqual(flow['to'], 'loop', flow)
+        self.assertIn('retired loop', flows['network_externals']['all-infra']['note'])
+        self.assertIn('excluding retired loop', flows['network_externals']['all-linux']['note'])
+
+        for host in ('log', 'mon', 'vault'):
+            text = (REPO / f'ansible/inventory/host_vars/{host}.yml').read_text()
+            self.assertNotIn('peers.loop', text, host)
+        rtr_text = (REPO / 'ansible/inventory/host_vars/rtr.yml').read_text()
+        self.assertNotIn('loop_docker_subnet', rtr_text)
+
+        loop_vars = yaml.safe_load(
+            (REPO / 'ansible/inventory/host_vars/loop.yml').read_text()
+        )
+        self.assertTrue(loop_vars['loop_retired'])
+        self.assertEqual(loop_vars['firewall_extra_rules'], [])
+        self.assertEqual(loop_vars['firewall_forward_extra_raw_nft'], '')
+        self.assertEqual(loop_vars['network_flows_outbound'], [])
+        self.assertIn('Retired', loop_vars['host_meta']['role'])
 
 
     def test_monitoring_retains_tombstones_but_never_contacts_retired_host(self):

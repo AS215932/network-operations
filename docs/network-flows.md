@@ -33,7 +33,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | extmon | Debian 13 | `2001:19f0:7402:0cd5:5400:06ff:fe40:7112` | `45.32.179.134` | External monitoring host (off-net) |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0` | `10.0.0.60` (mgmt) | Vector aggregator + Loki (centralized logs) |
-| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
+| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Retired loop VM |
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data) |
@@ -275,7 +275,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | cr1-nl1 loopback | tcp | 6000 | Vector ingest from cr1-nl1 (over WG mesh) |
 | dns | tcp | 6000 | Vector ingest from dns |
 | irc | tcp | 6000 | Vector ingest from irc |
-| loop | tcp | 6000 | Vector ingest from loop |
 | mgmt v4 | tcp (v4) | 6000 | Vector ingest from dom0 over mgmt v4 |
 | mon | tcp | 6000 | Vector ingest from mon |
 | netproxy | tcp | 6000 | Vector ingest from netproxy |
@@ -298,30 +297,17 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
-### loop — Engineering Loop operations-lane VM: consumes loop:approved issues and stops at draft PRs; hosts the Agent-Core trace collector and a loopback knowledge MCP.
+### loop — Retired loop VM, preserved with runtime services disabled.
 
-> Not an infra deploy source: no fleet SSH key, no app runtime secrets, no Vault breadth. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6. loop does not SSH to the infra fleet.
+> Inventory identity, disks, configuration, and data are retained. Routine fleet maintenance and current network-flow expansions exclude this host.
 
 **Inbound**
 
-| From | Proto | Port | Purpose |
-|---|---|---|---|
-| loop, noc, mon | tcp | 8770 | agent-core collector |
-| proxy, mon | tcp | 8780 | agentic observatory |
-| loop, mon | tcp | 8781 | knowledge read API |
-| mon | tcp | 9100 | node_exporter scrape |
+_No host-specific inbound rules (SSH-only via the standard allow set)._
 
 **Outbound**
 
-| To | Proto | Port | Purpose |
-|---|---|---|---|
-| rtr | tcp+udp | 53 | Docker bridge containers resolve via rtr Unbound (DNS64) |
-| github | tcp | 443 | issues, checkouts, branch pushes, draft PRs, knowledge MCP build context |
-| model-providers | tcp | 443 | selected backend/provider LLM APIs |
-| public | tcp | 443 | Docker container base-image and package downloads over routed IPv6 egress |
-| mon | tcp | 5665 | Icinga passive check submission |
-| log | tcp | 6000 | Vector agent to aggregator |
-| vault | tcp | 8200 | Vault Agent secret render |
+_No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### mail — Mail server for as215932.net and hyrule.host: OpenSMTPD, Rspamd, and Dovecot IMAPS, public over a dedicated failover IPv4.
 
@@ -353,7 +339,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | proxy | tcp | 3000 | Grafana from proxy |
-| loop | tcp | 5665 | Icinga2 passive check from engineering-loop |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
 | api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
 | noc | tcp | 9090 | Prometheus API from noc-agent |
@@ -458,7 +443,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| infra subnet, customer subnet, vpn-clients, loop Docker subnet, rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
+| infra subnet, customer subnet, vpn-clients, rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
 | cr1-nl1 loopback, cr1-de1 loopback, cr1-ch1 loopback | tcp | 179 | iBGP from cr1-* loopbacks |
 | cr1-nl1 underlay | udp | 1337 | WG to cr1-nl1 |
 | cr1-de1 underlay | udp | 1338 | WG to cr1-de1 |
@@ -474,13 +459,13 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
 
-> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
+> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| noc, mon, api, web, ci, loop | tcp | 8200 | Vault API from internal agents/checks |
+| noc, mon, api, web, ci | tcp | 8200 | Vault API from internal agents/checks |
 | ops-prefix | tcp | 8200 | Vault API from ops prefix |
 | proxy | tcp | 8200 | Vault API from Caddy proxy |
 | vpn-clients | tcp | 8200 | Vault API from VPN operators |
@@ -544,7 +529,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 N-to-M flows that are not a single host's inbound rule (DNS recursion, monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, and routine host egress).
 
-> `all` in the table below excludes dom0 (firewall-unmanaged; their real flows are modelled explicitly).
+> `all` in the table below excludes dom0, loop (firewall-unmanaged; any current flows are modelled explicitly).
 
 | From | To | Proto | Port | Purpose |
 |---|---|---|---|---|
@@ -560,7 +545,6 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | dns | ns2 | tcp+udp | 53 | NOTIFY to the off-net secondary (TSIG hyrule-dns) |
 | dom0 | log | tcp | 6000 | hypervisor Vector agent to aggregator over mgmt v4 |
 | irc | dns | tcp | 53 | RFC 2136 dynamic updates for ACME DNS-01 (TSIG hyrule-dns) |
-| loop | vault | tcp | 8200 | vault-agent secret render |
 | mail | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
 | mon | all (except extmon) | tcp | 9100 | node_exporter scrape |
@@ -598,8 +582,8 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
-| `all-linux` | every Linux host | all Debian VMs (routine apt / NTP egress) |
+| `all-infra` | log-shipping infra hosts | active infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy. Excludes retired loop, mail (ships syslog to log:6514, not 6000), and log itself (the aggregator). |
+| `all-linux` | active Linux hosts | active Debian VMs, excluding retired loop (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |
 | `github` | github.com | GitHub API, Actions runner queue, checkouts, PRs, action/image pulls |
@@ -622,4 +606,5 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 - FreeBSD core routers cr1-nl1 and cr1-de1 forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule (log host_vars) and appears in log's per-host inbound table. cr1-ch1 also sets logs_use_freebsd_syslogd but log.yml has no cr1-ch1 6000/6514 allow yet — tracked in issue #431; it is deliberately NOT claimed here until the rule lands.
 - Prometheus scrape on FreeBSD routers: the live pf rulesets historically relied on 'pass quick on wg all no state' over the WireGuard mesh rather than explicit 9100/9342-from-mon rules. The Ansible-rendered configs now add explicit rules for cr1-nl1/de1/ch1, so a future wg-pass lockdown is already covered.
 - dom0 is firewall-unmanaged (playbook targets all:!dom0) so it is excluded from every `all` expansion via all_excludes; its real flows (mon->dom0:9100 scrape and dom0->log:6000 shipping over mgmt v4, xoa->dom0 XAPI) are modelled explicitly.
+- loop is retired and preserved. Routine firewall and fleet maintenance exclude it, its services are disabled, and the current flow model gives it no inherited or explicit active traffic.
 - mon also runs blackbox_exporter ICMPv6 reachability probes against internal targets (all routers, dns/api/web/proxy/vpn/vault, and every WireGuard link endpoint) in addition to the public ICMP probes in mon's outbound table; these internal reachability probes are a monitoring implementation detail not expanded per-host here.
