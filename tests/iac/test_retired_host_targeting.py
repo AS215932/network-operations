@@ -128,6 +128,7 @@ class RetiredHostTargetingTest(unittest.TestCase):
         loop_vars = yaml.safe_load(
             (REPO / 'ansible/inventory/host_vars/loop.yml').read_text()
         )
+        self.assertFalse((REPO / 'ansible/generated/loop/vector-agent.toml').exists())
         self.assertTrue(loop_vars['loop_retired'])
         self.assertEqual(loop_vars['firewall_extra_rules'], [])
         self.assertEqual(loop_vars['firewall_forward_extra_raw_nft'], '')
