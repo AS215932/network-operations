@@ -1,0 +1,288 @@
+rule_files:
+- ../../configs/mon/prometheus-rules/hyrule-retention.yml
+- ../../configs/mon/prometheus-rules/hyrule-payments.yml
+evaluation_interval: 30s
+tests:
+- name: healthy zero retained VMs
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: protection drift
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: critical
+        source: prometheus
+      exp_annotations:
+        summary: Retained VM protection verification failed
+        description: At least one retained VM failed its protection or inventory check.
+          Inspect the private admin retention verification status and reconcile the
+          recorded evidence before any recovery or deletion.
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: worker stalled while API healthy
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: 2x20
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: Retained VM protection verification is overdue
+        description: Retained VM verification is more than five minutes overdue. Check
+          the cloud worker and its retention-verification task; a healthy API does
+          not prove the worker is checking preserved guests.
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: both gauges absent
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: &id001
+        summary: Cloud retention verification telemetry is missing
+        description: The cloud metrics scrape succeeds but one or both retention verification
+          gauges are absent. Verify the promoted application version and exporter.
+          Retention protection cannot be assessed from missing telemetry.
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: only failure gauge absent
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: *id001
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: only overdue gauge absent
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: *id001
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: scrape failure uses existing alert only
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: &id002
+        summary: hyrule-cloud /metrics unreachable from mon
+        description: Prometheus cannot scrape the hyrule-cloud payments exporter.
+          Either the app is down (blackbox /health will also fire) or the metrics
+          bearer token is wrong.
+- name: removed scrape job uses existing alert
+  interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        severity: warning
+        source: prometheus
+      exp_annotations: *id002
+- name: other target cannot hide missing gauge
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="other:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: *id001
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: drift recovery clears alert
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: 1x4 0x16
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 12m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
+- name: transient missing telemetry stays pending
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 9m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 9m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 9m
+    alertname: HyruleRetentionTelemetryMissing
+    exp_alerts: []
+  - eval_time: 9m
+    alertname: HyruleCloudMetricsDown
+    exp_alerts: []
