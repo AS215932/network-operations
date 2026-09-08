@@ -189,3 +189,20 @@
     - not ansible_check_mode
     - _firewall_at_job.stdout | default('') | length > 0
   tags: [apply]
+
+# Record success only after handlers and rollback cancellation both succeed.
+# Otherwise an interrupted apply could certify a configuration that the
+# watchdog subsequently rolls back.
+- name: Record successfully applied Jool configuration
+  copy:
+    dest: /etc/jool/managed-config.sha256
+    content: "{{ _jool_desired_checksum }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - inventory_hostname == 'rtr'
+    - firewall_apply | default(false) | bool
+    - not ansible_check_mode
+    - _jool_desired_checksum is defined
+  tags: [apply]

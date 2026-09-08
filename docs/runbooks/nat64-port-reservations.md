@@ -2,7 +2,7 @@
 
 Jool and inbound DNAT share the router public IPv4 address. A translated source port must not also be reserved for an inbound service. Maintain disjoint TCP and UDP pools in `configs/rtr/jool/jool.conf`; ICMP identifiers are a separate namespace. Keep both transport pools below the host ephemeral range declared in `configs/rtr/sysctl.conf`.
 
-The regression test in `tests/iac/test_rtr_nat64_contracts.py` reads reservations from the deployed firewall template. Run it whenever a public DNAT service or a NAT64 pool changes. The firewall render stages `ansible/generated/rtr/jool.conf` for review; the apply-gated task installs the same source at `/etc/jool/jool.conf` with a backup. `/etc/jool/managed-config.sha256` records the desired configuration only after the reload, Jool restart and VRF restoration handlers succeed. A missing or stale stamp requests reconciliation even when a retry finds the configuration file unchanged. The stamp is not a substitute for live health checks.
+The regression test in `tests/iac/test_rtr_nat64_contracts.py` reads reservations from the deployed firewall template. Run it whenever a public DNAT service or a NAT64 pool changes. The firewall render stages `ansible/generated/rtr/jool.conf` for review; the apply-gated task installs the same source at `/etc/jool/jool.conf` with a backup. `/etc/jool/managed-config.sha256` records the desired configuration only after the reload, Jool restart and VRF restoration handlers succeed and rollback-watchdog cancellation completes. A missing or stale stamp requests reconciliation even when a retry finds the configuration file unchanged. The stamp is not a substitute for live health checks.
 
 ## Normal deployment
 

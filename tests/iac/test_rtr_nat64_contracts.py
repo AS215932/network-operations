@@ -68,14 +68,16 @@ class RtrNat64ContractsTest(unittest.TestCase):
                 self.assertEqual(condition.render(
                     _jool_applied_config=stamp, _jool_desired_checksum="desired-checksum"
                 ), expected)
-        handlers = yaml.safe_load((REPO / "ansible/roles/firewall/handlers/main.yml").read_text())
-        names = [h["name"] for h in handlers]
-        record = next(h for h in handlers if h["name"] == "Record successfully applied Jool configuration")
-        self.assertGreater(names.index(record["name"]), names.index("restart nat64-vrf-leak after jool"))
-        self.assertEqual(record["listen"], "reload nftables")
+        names = [t["name"] for t in tasks]
+        record = next(t for t in tasks if t["name"] == "Record successfully applied Jool configuration")
+        self.assertGreater(names.index(record["name"]), names.index("Cancel rollback watchdog"))
+        self.assertGreater(names.index("Cancel rollback watchdog"), names.index("Flush handlers now (so watchdog cancellation reflects current state)"))
         self.assertEqual(record["copy"]["dest"], "/etc/jool/managed-config.sha256")
-        for handler in handlers[:names.index(record["name"]) + 1]:
-            self.assertFalse(handler.get("ignore_errors", False))
+        self.assertIn("not ansible_check_mode", record["when"])
+        self.assertIn("firewall_apply | default(false) | bool", record["when"])
+        for task in tasks[:names.index(record["name"]) + 1]:
+            self.assertFalse(task.get("ignore_errors", False))
+
 
     def test_nat64_vrf_leak_routes_returns_to_overlay_clients(self):
         unit = (REPO / "configs/rtr/jool/nat64-vrf-leak.service").read_text()
