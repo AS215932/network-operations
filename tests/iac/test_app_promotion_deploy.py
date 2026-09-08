@@ -62,6 +62,10 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertNotIn("ansible/playbooks/retire-loop.yml", workflow_text)
         manual_apply = (REPO / ".github/workflows/apply.yml").read_text()
         self.assertIn("- retire-loop", manual_apply)
+        runbook = (REPO / "docs/runbooks/loop-retirement.md").read_text()
+        self.assertIn("manual `apply.yml` dispatch from\n`main`", runbook)
+        self.assertIn("Never dispatch that playbook while the\nVM is halted", runbook)
+        self.assertNotIn("changes to retirement inventory select", runbook)
 
     def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
         workflow_text = (
