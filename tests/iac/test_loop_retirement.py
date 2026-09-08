@@ -44,13 +44,16 @@ class LoopRetirementTest(unittest.TestCase):
         environment.filters["bool"] = bool
         text = environment.from_string(
             (REPO / "ansible/roles/noc_agent/templates/runtime.env.j2").read_text()
-        ).render(**host)
+        ).render(**{**yaml.safe_load((REPO / "ansible/roles/noc_agent/defaults/main.yml").read_text()), **host})
         values = dict(line.split("=", 1) for line in text.splitlines() if line and not line.startswith("#"))
         for key in [
             "NOC_ENGINEERING_HANDOFF_DELIVERY_ENABLED", "NOC_DISK_ALERT_HANDOFF_ENABLED",
             "HYRULE_NOC_AGENT_CORE_TRACE", "NOC_PROACTIVE_HANDOFF_ENABLED", "NOC_INSIGHT_RECORDS_ENABLED",
         ]:
             self.assertEqual(values[key], "0")
+        self.assertEqual(values["NOC_CASESERVICE_REACTIVE_REPORT"], "0")
+        self.assertEqual(values["NOC_CASE_ATTENTION_ENABLED"], "0")
+        self.assertEqual(values["NOC_CASE_OUTBOX_ENABLED"], "1")
         self.assertEqual(values["HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL"], '""')
         self.assertFalse(any("SECRET" in key or "TOKEN" in key or "PASSWORD" in key for key in values))
         for name in ["noc-agent.service", "noc-agent-bot.service"]:
@@ -68,3 +71,20 @@ class LoopRetirementTest(unittest.TestCase):
         self.assertIn("restart noc-agent-bot", runtime["notify"])
         unit = next(task for task in tasks if task.get("copy", {}).get("dest") == "/etc/systemd/system/noc-agent.service")
         self.assertLess(tasks.index(runtime), tasks.index(unit))
+
+    def test_noc_outbox_validation_matches_configured_worker_state(self):
+        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
+        conditions = play["post_tasks"][0]["block"][0]["until"]
+        environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        environment.filters["bool"] = bool
+        for enabled in (False, True):
+            for running in (False, True):
+                for reported_enabled in (False, True):
+                    health = {"status": 200, "json": {"status": "ok", "backend": "PostgresCaseStore",
+                        "outbox_worker": {"enabled": reported_enabled, "running": running}}}
+                    matches = all(environment.compile_expression(condition)(
+                        noc_case_outbox_enabled=enabled, noc_agent_case_health=health) for condition in conditions)
+                    self.assertEqual(matches, enabled == running == reported_enabled)
+        health["json"]["outbox_worker"] = {}
+        self.assertFalse(all(environment.compile_expression(condition)(
+            noc_case_outbox_enabled=False, noc_agent_case_health=health) for condition in conditions))

@@ -55,7 +55,10 @@
             - noc_agent_case_health.status == 200
             - (noc_agent_case_health.json.status | default('')) == 'ok'
             - (noc_agent_case_health.json.backend | default('')) == 'PostgresCaseStore'
-            - (noc_agent_case_health.json.outbox_worker.running | default(false)) | bool
+            - noc_agent_case_health.json.outbox_worker.enabled is defined
+            - noc_agent_case_health.json.outbox_worker.running is defined
+            - (noc_agent_case_health.json.outbox_worker.enabled | bool) == (noc_case_outbox_enabled | default(true) | bool)
+            - (noc_agent_case_health.json.outbox_worker.running | bool) == (noc_case_outbox_enabled | default(true) | bool)
 
         - name: Show noc-agent CaseService health
           debug:
