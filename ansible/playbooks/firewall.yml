@@ -1,6 +1,6 @@
 ---
 - name: Firewall — apply
-  hosts: all:!dom0
+  hosts: all:!dom0:!retired
   serial: 1
   # Facts come from group_vars (ansible_os_family preset), so render-only runs
   # don't require connectivity to the hosts.

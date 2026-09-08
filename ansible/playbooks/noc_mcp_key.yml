@@ -9,7 +9,7 @@
 #   ansible-playbook playbooks/noc_mcp_key.yml --tags apply
 
 - name: noc-mcp key distribution — all hosts except noc itself
-  hosts: linux:freebsd:openbsd:!noc
+  hosts: linux:freebsd:openbsd:!noc:!retired
   gather_facts: false
   become: true
   vars:

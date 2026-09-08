@@ -8,7 +8,7 @@
 #   ../scripts/ci/check-drift.sh <log-dir> [playbook ...]
 #
 # With no playbook arguments the canonical sweep below runs. The limit can be
-# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr) — used by the post-merge
+# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr; retired always excluded) — used by the post-merge
 # verify pass to re-check only the hosts it just applied.
 #
 # ci-pr lives on the customer-isolated segment and is managed from the ops
@@ -32,7 +32,8 @@ if [ "${#playbooks[@]}" -eq 0 ]; then
   playbooks=("${default_playbooks[@]}")
 fi
 
-limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr}"
+# A narrowed verification limit must never re-enable a retired host.
+limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr}:!retired"
 
 mkdir -p "$logdir"
 status=0

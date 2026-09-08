@@ -1,6 +1,6 @@
 ---
 - name: networkd_resolved — apply search domain + DNS drop-in
-  hosts: linux
+  hosts: linux:!retired
   serial: 1
   gather_facts: true
   become: true
