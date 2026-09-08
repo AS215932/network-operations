@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class AppPromotionDeployTest(unittest.TestCase):
-    def test_retirement_selects_noc_firewall_prerequisite(self):
+    def test_retired_host_metadata_does_not_schedule_halted_vm(self):
         workflow = yaml.safe_load((REPO / ".github/workflows/app-promotion-deploy.yml").read_text())
         step = next(step for step in workflow["jobs"]["detect"]["steps"] if step.get("id") == "detect")
         code = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY", step["run"], re.S).group(1)
@@ -26,7 +26,7 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertIn({"playbook": "firewall", "limit": "noc"}, json.loads(values["firewall_matrix"])["include"])
         consumers = json.loads(values["matrix"])["include"]
         self.assertIn({"playbook": "noc", "limit": "noc"}, consumers)
-        self.assertIn({"playbook": "retire-loop", "limit": "loop"}, consumers)
+        self.assertNotIn({"playbook": "retire-loop", "limit": "loop"}, consumers)
         self.assertEqual(workflow["jobs"]["apply"]["needs"], ["detect", "firewall"])
 
     def test_apply_matrix_is_serialized(self):
@@ -58,8 +58,14 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertNotIn('add_once("engineering-loop", "loop")', workflow_text)
         self.assertNotIn("ansible/roles/agentic_observatory/**", workflow_text)
         self.assertNotIn("ansible/roles/knowledge_loop/**", workflow_text)
-        self.assertIn('add_once("retire-loop", "loop")', workflow_text)
-        self.assertIn("ansible/playbooks/retire-loop.yml", workflow_text)
+        self.assertNotIn('add_once("retire-loop", "loop")', workflow_text)
+        self.assertNotIn("ansible/playbooks/retire-loop.yml", workflow_text)
+        manual_apply = (REPO / ".github/workflows/apply.yml").read_text()
+        self.assertIn("- retire-loop", manual_apply)
+        runbook = (REPO / "docs/runbooks/loop-retirement.md").read_text()
+        self.assertIn("manual `apply.yml` dispatch from\n`main`", runbook)
+        self.assertIn("Never dispatch that playbook while the\nVM is halted", runbook)
+        self.assertNotIn("changes to retirement inventory select", runbook)
 
     def test_prometheus_config_and_rules_changes_trigger_mon_apply(self):
         workflow_text = (

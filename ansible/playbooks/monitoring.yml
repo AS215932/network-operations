@@ -13,6 +13,7 @@
   # (node_exporter via pkg, dedicated `monitoring` by_ssh user from #69).
   # `linux:openbsd` alone silently no-ops on cr1.* (hosts: pattern doesn't
   # match → "skipping: no hosts matched"), which masked the missing user.
+  # Retired hosts retain delegated registration on mon; host tasks skip them.
   hosts: linux:openbsd:freebsd
   serial: 1
   gather_facts: false
