@@ -390,6 +390,11 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     inv_hosts = inventory_hostnames(hosts_yml)
     hosts = sorted(h for h, hv in host_vars.items() if isinstance(hv, dict) and "host_meta" in hv)
     resolver = Resolver(group_vars, externals, host_names=inv_hosts or set(hosts))
+    valid_flow_hosts = frozenset(inv_hosts) if inv_hosts else frozenset(hosts)
+    all_excludes = flows.get("all_excludes") or []
+    for token in all_excludes:
+        if str(token) not in valid_flow_hosts:
+            raise ValueError(f"all_excludes token {token!r} is not an inventory host")
     for host in hosts:
         if inv_hosts and host not in inv_hosts:
             raise ValueError(f"host_vars/{host}.yml has host_meta but is not in hosts.yml")
@@ -443,6 +448,7 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
                  "the cross-cutting section below, not repeated per host.")
     lines.append("")
     for host in hosts:
+        globally_excluded = host in all_excludes
         meta = host_vars[host]["host_meta"]
         summary = str(meta.get("summary", "")).strip()
         heading = f"### {host}"
@@ -459,6 +465,8 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if rules:
             lines.extend(render_inbound_table(resolver, rules))
+        elif globally_excluded:
+            lines.append("_No current inbound flow is modelled for this excluded host._")
         else:
             lines.append("_No host-specific inbound rules (SSH-only via the standard allow set)._")
         lines.append("")
@@ -467,6 +475,8 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if outbound:
             lines.extend(render_outbound_table(resolver, outbound))
+        elif globally_excluded:
+            lines.append("_No current outbound flow is modelled for this excluded host._")
         else:
             lines.append("_No noteworthy host-specific outbound beyond the cross-cutting flows._")
         lines.append("")
@@ -479,11 +489,6 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     lines.append("N-to-M flows that are not a single host's inbound rule (DNS recursion, "
                  "monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, "
                  "and routine host egress).")
-    valid_flow_hosts = frozenset(inv_hosts) if inv_hosts else frozenset(hosts)
-    all_excludes = flows.get("all_excludes") or []
-    for tok in all_excludes:
-        if str(tok) not in valid_flow_hosts:
-            raise ValueError(f"all_excludes token {tok!r} is not an inventory host")
     if all_excludes:
         lines.append("")
         lines.append(f"> `all` in the table below excludes {', '.join(str(t) for t in all_excludes)} "

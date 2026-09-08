@@ -133,6 +133,11 @@ class RetiredHostTargetingTest(unittest.TestCase):
         self.assertEqual(loop_vars['firewall_forward_extra_raw_nft'], '')
         self.assertEqual(loop_vars['network_flows_outbound'], [])
         self.assertIn('Retired', loop_vars['host_meta']['role'])
+        rendered = (REPO / 'docs/network-flows.md').read_text()
+        loop_section = rendered.split('### loop ', 1)[1].split('\n### ', 1)[0]
+        self.assertIn('No current inbound flow is modelled', loop_section)
+        self.assertIn('No current outbound flow is modelled', loop_section)
+        self.assertNotIn('SSH-only', loop_section)
 
 
     def test_monitoring_retains_tombstones_but_never_contacts_retired_host(self):

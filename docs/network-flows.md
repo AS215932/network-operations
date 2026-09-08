@@ -216,11 +216,11 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Inbound**
 
-_No host-specific inbound rules (SSH-only via the standard allow set)._
+_No current inbound flow is modelled for this excluded host._
 
 **Outbound**
 
-_No noteworthy host-specific outbound beyond the cross-cutting flows._
+_No current outbound flow is modelled for this excluded host._
 
 ### extmon — Off-net external monitor (Vultr London, different ASN) probing AS215932 public services from the outside and posting alerts directly.
 
@@ -303,11 +303,11 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 **Inbound**
 
-_No host-specific inbound rules (SSH-only via the standard allow set)._
+_No current inbound flow is modelled for this excluded host._
 
 **Outbound**
 
-_No noteworthy host-specific outbound beyond the cross-cutting flows._
+_No current outbound flow is modelled for this excluded host._
 
 ### mail — Mail server for as215932.net and hyrule.host: OpenSMTPD, Rspamd, and Dovecot IMAPS, public over a dedicated failover IPv4.
 
