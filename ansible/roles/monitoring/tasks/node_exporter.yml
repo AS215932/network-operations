@@ -1,11 +1,29 @@
 ---
+# Existing exporters must remain configurable when an unrelated APT source is
+# unavailable. Fresh installations still refresh the package indexes normally.
+- name: Inspect installed packages (Debian)
+  command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}'
+      - "{{ monitoring_pkg }}"
+  register: monitoring_package_state
+  changed_when: false
+  failed_when: monitoring_package_state.rc not in [0, 1]
+  check_mode: false
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
 - name: Install node_exporter (Debian)
   apt:
     name: "{{ monitoring_pkg }}"
     state: present
-    update_cache: true
-    cache_valid_time: 3600
-  when: ansible_os_family == "Debian"
+    update_cache: "{{ monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' }}"
+    cache_valid_time: "{{ 3600 if monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' else 0 }}"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed'
   tags: [apply]
 
 - name: Ensure node_exporter textfile collector dir exists (Debian)
