@@ -21,7 +21,9 @@
     state: present
     update_cache: "{{ monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' }}"
     cache_valid_time: "{{ 3600 if monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' else 0 }}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed'
   tags: [apply]
 
 - name: Ensure node_exporter textfile collector dir exists (Debian)
