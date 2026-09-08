@@ -51,3 +51,29 @@
     - "{{ hyrule_cloud_worker_service_name }}"
     - "{{ hyrule_cloud_service_name }}"
   when: (item ~ '.service') in ansible_facts.services
+
+- name: Discover the pre-deployment Python runtime
+  ansible.builtin.stat:
+    path: "{{ hyrule_cloud_install_dir }}/.venv/bin/python"
+  register: hyrule_cloud_previous_python
+
+- name: Require an existing runtime when cloud services already exist
+  ansible.builtin.assert:
+    that:
+      - hyrule_cloud_previous_python.stat.exists
+    fail_msg: "Existing cloud runtime missing; services remain held for operator recovery."
+  when: >-
+    (hyrule_cloud_service_name ~ '.service') in ansible_facts.services
+    or (hyrule_cloud_worker_service_name ~ '.service') in ansible_facts.services
+
+- name: Check provisioning after quiescence before changing the checkout
+  ansible.builtin.script:
+    cmd: provisioning-preflight.py
+    executable: "{{ hyrule_cloud_install_dir }}/.venv/bin/python"
+    chdir: "{{ hyrule_cloud_install_dir }}"
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  environment:
+    PYTHONPATH: "{{ hyrule_cloud_install_dir }}"
+  changed_when: false
+  when: hyrule_cloud_previous_python.stat.exists

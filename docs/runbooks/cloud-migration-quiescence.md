@@ -7,6 +7,22 @@ The role creates these files, reloads systemd, and stops the existing worker
 and API. Vault rendering can continue, but restart callbacks cannot start the
 held services. The files also survive a host reboot and an interrupted apply.
 
+After both services stop, a bounded read-only PostgreSQL query using the existing
+runtime must find zero provisioning VMs before checkout changes. This includes
+tracked and untracked attempts; a pre-deployment snapshot taken while the API
+accepts orders is insufficient. Missing runtime on an existing installation,
+database errors, timeouts, or an unexpected schema fail closed. A second check
+with the deployment runtime runs before migration, including first installation
+where no previous runtime exists. Only a genuinely empty public schema is accepted
+as a new installation; an existing schema without the VM table is rejected.
+
+If in-flight attempts block the first check, the old checkout and schema are still
+intact and both services remain held. Review the attempts through the existing
+operational recovery procedure before proceeding. Resuming the old services to
+finish them requires a deliberate maintenance recovery; rerunning deployment alone
+cannot drain jobs while both services are held. Never mark a guest complete or
+delete its row just to pass this gate. No automatic barrier release occurs on failure.
+
 After dependency sync and secret rendering, migrations must succeed before
 the API marker is removed. The API must then start and pass its local HTTP
 health check before the worker marker is removed and the worker starts.

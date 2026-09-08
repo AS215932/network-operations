@@ -16,6 +16,17 @@
       - hyrule_cloud_pyproject.stat.exists
     fail_msg: "Application checkout is incomplete; cloud deployment barriers remain in place."
 
+- name: Recheck provisioning with the deployment runtime before migration
+  ansible.builtin.script:
+    cmd: provisioning-preflight.py
+    executable: "{{ hyrule_cloud_install_dir }}/.venv/bin/python"
+    chdir: "{{ hyrule_cloud_install_dir }}"
+  become: true
+  become_user: "{{ hyrule_cloud_app_user }}"
+  environment:
+    PYTHONPATH: "{{ hyrule_cloud_install_dir }}"
+  changed_when: false
+
 - name: Run hyrule-cloud database migrations
   ansible.builtin.command:
     cmd: /usr/local/bin/uv run alembic upgrade head

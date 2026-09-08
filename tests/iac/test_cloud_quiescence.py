@@ -20,14 +20,18 @@ class CloudQuiescenceTests(unittest.TestCase):
         barrier = yaml.safe_load((TASKS / "quiesce.yml").read_text())
         kinds = [next(k for k in t if k.startswith("ansible.builtin.")) for t in barrier]
         self.assertLess(kinds.index("ansible.builtin.copy"), kinds.index("ansible.builtin.systemd"))
-        self.assertEqual(barrier[-1]["ansible.builtin.systemd"]["state"], "stopped")
-        self.assertNotIn("failed_when", barrier[-1])
+        stop = next(t for t in barrier if t.get("ansible.builtin.systemd", {}).get("state") == "stopped")
+        preflight = next(t for t in barrier if "ansible.builtin.script" in t)
+        self.assertLess(barrier.index(stop), barrier.index(preflight))
+        self.assertNotIn("failed_when", stop)
+        self.assertNotIn("failed_when", preflight)
 
     def test_worker_remains_held_until_api_is_healthy(self):
         tasks = yaml.safe_load((TASKS / "health.yml").read_text())
         names = [t["name"] for t in tasks]
         ordered = [
             "Require application checkout before releasing deployment barriers",
+            "Recheck provisioning with the deployment runtime before migration",
             "Run hyrule-cloud database migrations",
             "Release API start barrier after successful migration",
             "Restart hyrule-cloud (deterministic on every apply)",
