@@ -56,6 +56,20 @@
     - { path: "{{ hyrule_network_proxy_etc_dir }}", owner: root, mode: "0750" }
     - { path: "{{ hyrule_network_proxy_state_dir }}", mode: "0750" }
 
+# Repair caches left by older root-run builds without touching application data.
+- name: Ensure build directories belong to the service user
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ hyrule_network_proxy_user }}"
+    group: "{{ hyrule_network_proxy_group }}"
+    recurse: true
+    follow: false
+  loop:
+    - "{{ hyrule_network_proxy_state_dir }}/go-build"
+    - "{{ hyrule_network_proxy_state_dir }}/go-mod"
+    - "{{ hyrule_network_proxy_state_dir }}/build"
+
 - name: Checkout hyrule-network-proxy at requested ref
   ansible.builtin.git:
     repo: "{{ hyrule_network_proxy_repo }}"
@@ -75,20 +89,27 @@
       - -ldflags
       - "-X github.com/AS215932/hyrule-network-proxy/internal/version.Version={{ hyrule_network_proxy_version }}"
       - -o
-      - "{{ hyrule_network_proxy_bin_path }}"
+      - "{{ hyrule_network_proxy_state_dir }}/build/hyrule-network-proxy"
       - ./cmd/hyrule-network-proxy
     chdir: "{{ hyrule_network_proxy_src_dir }}"
+  become: true
+  become_user: "{{ hyrule_network_proxy_user }}"
   environment:
     GOCACHE: "{{ hyrule_network_proxy_state_dir }}/go-build"
     GOMODCACHE: "{{ hyrule_network_proxy_state_dir }}/go-mod"
   notify: restart hyrule-network-proxy
 
-- name: Ensure binary ownership/mode
-  ansible.builtin.file:
-    path: "{{ hyrule_network_proxy_bin_path }}"
+- name: Install built binary
+  ansible.builtin.copy:
+    src: "{{ hyrule_network_proxy_state_dir }}/build/hyrule-network-proxy"
+    dest: "{{ hyrule_network_proxy_bin_path }}"
+    remote_src: true
     owner: root
     group: root
     mode: "0755"
+  become: true
+  become_user: root
+  notify: restart hyrule-network-proxy
 
 - name: Render hyrule-network-proxy env
   ansible.builtin.template:
