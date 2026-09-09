@@ -851,8 +851,12 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
     def test_noc_agent_uses_one_process_for_coherent_runtime_state(self):
         noc_service = (REPO / "configs/noc-agent.service").read_text()
 
-        self.assertIn("--workers 1", noc_service)
-        self.assertNotIn("--workers 2", noc_service)
+        worker_lines = [
+            line.strip()
+            for line in noc_service.splitlines()
+            if line.strip().startswith("--workers ")
+        ]
+        self.assertEqual(worker_lines, ["--workers 1 \\"])
 
     def test_noc_agent_model_defaults_come_from_toml_not_env(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
