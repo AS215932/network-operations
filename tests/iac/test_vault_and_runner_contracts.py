@@ -858,6 +858,26 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         ]
         self.assertEqual(worker_lines, ["--workers 1 \\"])
 
+    def test_noc_post_deploy_health_matches_ipv6_listener(self):
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
+        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
+        health_block = next(
+            task
+            for task in play["post_tasks"]
+            if task["name"] == "Verify noc-agent CaseService health"
+        )
+        health_wait = next(
+            task
+            for task in health_block["block"]
+            if task["name"] == "Wait for noc-agent CaseService health endpoint"
+        )
+
+        self.assertIn("--host :: \\", noc_service)
+        self.assertEqual(
+            health_wait["uri"]["url"],
+            "http://[::1]:8000/health/cases",
+        )
+
     def test_noc_agent_model_defaults_come_from_toml_not_env(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
         noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
