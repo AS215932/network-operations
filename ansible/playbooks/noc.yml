@@ -44,7 +44,7 @@
       block:
         - name: Wait for noc-agent CaseService health endpoint
           uri:
-            url: http://127.0.0.1:8000/health/cases
+            url: http://[::1]:8000/health/cases
             return_content: true
             status_code: 200
             timeout: 10
