@@ -32,16 +32,20 @@ class RetiredHostTargetingTest(unittest.TestCase):
 
     def test_hashicorp_key_rotation_cannot_target_unrelated_hosts(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/hashicorp-key.yml').read_text())[0]
-        for limit in (None, 'all', 'linux', 'loop', 'rtr', 'noc'):
+        for limit in (None, 'all', 'linux', 'loop', 'rtr', 'noc', 'api', 'web'):
             inventory = InventoryManager(
                 loader=DataLoader(), sources=[str(REPO / 'ansible/inventory/hosts.yml')]
             )
             if limit:
                 inventory.subset(limit)
             selected = {h.name for h in inventory.get_hosts(play['hosts'])}
-            self.assertLessEqual(selected, {'noc'}, limit)
-            if limit in (None, 'all', 'noc'):
-                self.assertEqual(selected, {'noc'}, limit)
+            self.assertLessEqual(selected, {'noc', 'api'}, limit)
+            if limit in (None, 'all'):
+                self.assertEqual(selected, {'noc', 'api'}, limit)
+            elif limit in ('noc', 'api'):
+                self.assertEqual(selected, {limit}, limit)
+            elif limit in ('loop', 'rtr', 'web'):
+                self.assertEqual(selected, set(), limit)
 
     def test_retirement_entrypoint_still_resolves_preserved_host(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/retire-loop.yml').read_text())[0]

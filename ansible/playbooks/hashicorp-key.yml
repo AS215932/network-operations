@@ -1,8 +1,8 @@
 ---
-# Explicit maintenance only: apply.yml playbook=hashicorp-key, limit=noc.
+# Explicit maintenance only: apply.yml playbook=hashicorp-key, limit=noc or limit=api.
 # Repairs an existing repository before application roles refresh APT.
 - name: Rotate the verified HashiCorp package signing key
-  hosts: noc:!retired
+  hosts: noc:api:!retired
   gather_facts: false
   become: true
   vars_files:
