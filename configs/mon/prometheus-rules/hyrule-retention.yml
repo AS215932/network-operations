@@ -1,0 +1,39 @@
+# Deploy only after hyrule-cloud PR119 metrics and migration 025 are live.
+groups:
+- name: hyrule-retention
+  interval: 30s
+  rules:
+  - alert: HyruleRetentionVerificationFailed
+    expr: hyrule_retention_verification_failures{job="hyrule-cloud"} > 0
+    for: 2m
+    labels:
+      severity: critical
+      source: prometheus
+    annotations:
+      summary: Retained VM protection verification failed
+      description: At least one retained VM failed its protection or inventory check.
+        Inspect the private admin retention verification status and reconcile the
+        recorded evidence before any recovery or deletion.
+  - alert: HyruleRetentionVerificationOverdue
+    expr: hyrule_retention_verification_overdue{job="hyrule-cloud"} > 0
+    for: 5m
+    labels:
+      severity: warning
+      source: prometheus
+    annotations:
+      summary: Retained VM protection verification is overdue
+      description: Retained VM verification is more than five minutes overdue. Check
+        the cloud worker and its retention-verification task; a healthy API does not
+        prove the worker is checking preserved guests.
+  - alert: HyruleRetentionTelemetryMissing
+    expr: (up{job="hyrule-cloud"} == 1) unless on (job, instance) (hyrule_retention_verification_failures{job="hyrule-cloud"}
+      and on (job, instance) hyrule_retention_verification_overdue{job="hyrule-cloud"})
+    for: 10m
+    labels:
+      severity: warning
+      source: prometheus
+    annotations:
+      summary: Cloud retention verification telemetry is missing
+      description: The cloud metrics scrape succeeds but one or both retention verification
+        gauges are absent. Verify the promoted application version and exporter. Retention
+        protection cannot be assessed from missing telemetry.

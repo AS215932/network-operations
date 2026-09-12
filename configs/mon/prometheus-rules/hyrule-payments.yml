@@ -86,7 +86,7 @@ groups:
           public_message: "New VM builds are failing more often than normal. Existing VMs are unaffected."
 
       - alert: HyruleCloudMetricsDown
-        expr: up{job="hyrule-cloud"} == 0
+        expr: (up{job="hyrule-cloud"} == 0) or absent(up{job="hyrule-cloud"})
         for: 5m
         labels:
           severity: warning
