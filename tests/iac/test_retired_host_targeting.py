@@ -65,6 +65,17 @@ class RetiredHostTargetingTest(unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0, limit)
                     self.assertIn('Use exactly --limit noc or --limit api', result.stdout + result.stderr)
 
+    def test_workflow_rejects_zero_match_key_repair_targets(self):
+        workflow = yaml.safe_load((REPO / '.github/workflows/apply.yml').read_text())
+        step = workflow['jobs']['apply']['steps'][0]
+        self.assertEqual(step['if'], "${{ inputs.playbook == 'hashicorp-key' }}")
+        self.assertEqual(step['env']['LIMIT'], '${{ inputs.limit }}')
+        for limit in ('', 'all', 'linux', 'noc:api', 'web', 'loop', 'appi', 'noc', 'api'):
+            result = subprocess.run(['bash', '-c', step['run']],
+                                    env={**os.environ, 'LIMIT': limit},
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode == 0, limit in ('noc', 'api'), limit)
+
     def test_retirement_entrypoint_still_resolves_preserved_host(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/retire-loop.yml').read_text())[0]
         self.assertEqual([h.name for h in self.inventory.get_hosts(play['hosts'])], ['loop'])
