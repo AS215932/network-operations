@@ -8,6 +8,13 @@
   vars_files:
     - ../roles/vault_agent/defaults/main.yml
   tasks:
+    - name: Require an explicit single-host repair limit
+      ansible.builtin.assert:
+        that:
+          - ansible_limit | default('') in ['noc', 'api']
+        fail_msg: "Use exactly --limit noc or --limit api for this maintenance play"
+      tags: [validate, apply]
+
     - name: Validate the reviewed package key pin
       ansible.builtin.assert:
         that:

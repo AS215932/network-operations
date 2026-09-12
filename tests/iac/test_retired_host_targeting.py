@@ -47,6 +47,24 @@ class RetiredHostTargetingTest(unittest.TestCase):
             elif limit in ('loop', 'rtr', 'web'):
                 self.assertEqual(selected, set(), limit)
 
+    def test_hashicorp_key_requires_single_host_limit_before_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for limit in (None, 'all', 'linux', 'noc:api', 'noc', 'api'):
+                command = ['ansible-playbook', 'playbooks/hashicorp-key.yml',
+                           '--tags', 'validate', '--connection', 'local']
+                if limit is not None:
+                    command.extend(['--limit', limit])
+                result = subprocess.run(
+                    command, cwd=REPO / 'ansible', capture_output=True, text=True,
+                    env={**os.environ, 'ANSIBLE_LOCAL_TEMP': directory},
+                    timeout=30,
+                )
+                if limit in ('noc', 'api'):
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0, limit)
+                    self.assertIn('Use exactly --limit noc or --limit api', result.stdout + result.stderr)
+
     def test_retirement_entrypoint_still_resolves_preserved_host(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/retire-loop.yml').read_text())[0]
         self.assertEqual([h.name for h in self.inventory.get_hosts(play['hosts'])], ['loop'])
