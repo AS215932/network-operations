@@ -276,9 +276,14 @@ The overlay network is IPv6-only. NAT64 + DNS64 provides IPv4 reachability for o
 22. Deploy `configs/rtr/jool/jool.conf` → `/etc/jool/jool.conf`:
     - instance name: `nat64` (netfilter framework)
     - pool6: `64:ff9b::/96`
-    - pool4: `<failover-ipv4>` entries for TCP/UDP (1024-65535) **and ICMP** (0-65535)
-      — all three protocols are required; without the ICMP entry, ping-based
-      reachability checks silently fail even though TCP/UDP work.
+    - pool4: use the protocol-specific ranges in the checked-in configuration:
+      TCP `1024-2221`, `2223-9999`, `10500-60999`; UDP `1024-3477`,
+      `3479-51819`, `51821-60999`; **ICMP** `0-65535`.
+      The gaps reserve inbound DNAT services; TCP/UDP must stop at 60999 to
+      remain below the router's ephemeral range. All three protocols are
+      required; without ICMP, ping-based checks fail while TCP/UDP can work.
+      Follow [NAT64 port reservations and recovery](runbooks/nat64-port-reservations.md)
+      when changing these ranges or recovering the service.
     - Enable the stock `jool.service` shipped by `jool-tools` (it runs
       `jool file handle /etc/jool/jool.conf` on start).
 23. Deploy `configs/rtr/jool/nat64-vrf-leak.service` → `/etc/systemd/system/`
