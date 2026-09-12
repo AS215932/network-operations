@@ -32,16 +32,49 @@ class RetiredHostTargetingTest(unittest.TestCase):
 
     def test_hashicorp_key_rotation_cannot_target_unrelated_hosts(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/hashicorp-key.yml').read_text())[0]
-        for limit in (None, 'all', 'linux', 'loop', 'rtr', 'noc'):
+        for limit in (None, 'all', 'linux', 'loop', 'rtr', 'noc', 'api', 'web'):
             inventory = InventoryManager(
                 loader=DataLoader(), sources=[str(REPO / 'ansible/inventory/hosts.yml')]
             )
             if limit:
                 inventory.subset(limit)
             selected = {h.name for h in inventory.get_hosts(play['hosts'])}
-            self.assertLessEqual(selected, {'noc'}, limit)
-            if limit in (None, 'all', 'noc'):
-                self.assertEqual(selected, {'noc'}, limit)
+            self.assertLessEqual(selected, {'noc', 'api'}, limit)
+            if limit in (None, 'all'):
+                self.assertEqual(selected, {'noc', 'api'}, limit)
+            elif limit in ('noc', 'api'):
+                self.assertEqual(selected, {limit}, limit)
+            elif limit in ('loop', 'rtr', 'web'):
+                self.assertEqual(selected, set(), limit)
+
+    def test_hashicorp_key_requires_single_host_limit_before_apply(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for limit in (None, 'all', 'linux', 'noc:api', 'noc', 'api'):
+                command = ['ansible-playbook', 'playbooks/hashicorp-key.yml',
+                           '--tags', 'validate', '--connection', 'local']
+                if limit is not None:
+                    command.extend(['--limit', limit])
+                result = subprocess.run(
+                    command, cwd=REPO / 'ansible', capture_output=True, text=True,
+                    env={**os.environ, 'ANSIBLE_LOCAL_TEMP': directory},
+                    timeout=30,
+                )
+                if limit in ('noc', 'api'):
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                else:
+                    self.assertNotEqual(result.returncode, 0, limit)
+                    self.assertIn('Use exactly --limit noc or --limit api', result.stdout + result.stderr)
+
+    def test_workflow_rejects_zero_match_key_repair_targets(self):
+        workflow = yaml.safe_load((REPO / '.github/workflows/apply.yml').read_text())
+        step = workflow['jobs']['apply']['steps'][0]
+        self.assertEqual(step['if'], "${{ inputs.playbook == 'hashicorp-key' }}")
+        self.assertEqual(step['env']['LIMIT'], '${{ inputs.limit }}')
+        for limit in ('', 'all', 'linux', 'noc:api', 'web', 'loop', 'appi', 'noc', 'api'):
+            result = subprocess.run(['bash', '-c', step['run']],
+                                    env={**os.environ, 'LIMIT': limit},
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode == 0, limit in ('noc', 'api'), limit)
 
     def test_retirement_entrypoint_still_resolves_preserved_host(self):
         play = yaml.safe_load((REPO / 'ansible/playbooks/retire-loop.yml').read_text())[0]

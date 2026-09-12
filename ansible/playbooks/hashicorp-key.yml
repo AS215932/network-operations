@@ -1,13 +1,20 @@
 ---
-# Explicit maintenance only: apply.yml playbook=hashicorp-key, limit=noc.
+# Explicit maintenance only: apply.yml playbook=hashicorp-key, limit=noc or limit=api.
 # Repairs an existing repository before application roles refresh APT.
 - name: Rotate the verified HashiCorp package signing key
-  hosts: noc:!retired
+  hosts: noc:api:!retired
   gather_facts: false
   become: true
   vars_files:
     - ../roles/vault_agent/defaults/main.yml
   tasks:
+    - name: Require an explicit single-host repair limit
+      ansible.builtin.assert:
+        that:
+          - ansible_limit | default('') in ['noc', 'api']
+        fail_msg: "Use exactly --limit noc or --limit api for this maintenance play"
+      tags: [validate, apply]
+
     - name: Validate the reviewed package key pin
       ansible.builtin.assert:
         that:

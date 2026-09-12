@@ -110,6 +110,16 @@ jobs:
       # target hosts. In apply.yml runs the key already exists on the runner.
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
+      - name: Validate HashiCorp repair target
+        if: ${{ inputs.playbook == 'hashicorp-key' }}
+        env:
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          case "$LIMIT" in
+            noc|api) ;;
+            *) echo '::error::HashiCorp key repair requires exactly limit=noc or limit=api'; exit 1 ;;
+          esac
+
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2

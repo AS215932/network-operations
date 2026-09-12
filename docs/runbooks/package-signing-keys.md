@@ -35,9 +35,11 @@ The public key from `https://apt.releases.hashicorp.com/gpg` has SHA256
 The previous key ended September 10; do not disable signature verification.
 
 If old-key rejection blocks a role's prerequisite APT refresh, use the reviewed
-`hashicorp-key` maintenance playbook through `apply.yml`, limited to `noc`. The play itself targets only `noc:!retired`, so an empty or
-broad workflow limit cannot include other machines. Extending this repair to
-another host requires a separate reviewed scope change. It replaces only the existing scoped keyring, retains
+`hashicorp-key` maintenance playbook through `apply.yml`, limited to `noc` or `api`. Both hosts independently failed strict APT verification
+after the September 10 rotation. The play itself targets only `noc:api:!retired`,
+so an empty or broad workflow limit cannot include other machines. Use a single
+host limit for each repair and verify its backup, key identity and strict APT result.
+Extending this repair to another host requires a separate reviewed scope change. It replaces only the existing scoped keyring, retains
 an Ansible backup, and requires strict all-repository APT verification. It installs
 no packages and restarts no services. The agent role pin is updated so subsequent
 rollouts cannot restore the obsolete key. A dry-run does not prove live APT health.
