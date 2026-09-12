@@ -29,6 +29,50 @@ class AppPromotionDeployTest(unittest.TestCase):
         self.assertNotIn({"playbook": "retire-loop", "limit": "loop"}, consumers)
         self.assertEqual(workflow["jobs"]["apply"]["needs"], ["detect", "firewall"])
 
+    def test_ui_waits_for_successful_backend_and_supports_ui_only_promotions(self):
+        workflow = yaml.safe_load(
+            (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
+        )
+        step = next(s for s in workflow["jobs"]["detect"]["steps"] if s.get("id") == "detect")
+        code = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY", step["run"], re.S).group(1)
+        web = workflow["jobs"]["web"]
+        self.assertEqual(web["needs"], ["detect", "firewall", "apply"])
+        self.assertEqual(web["uses"], "./.github/workflows/apply.yml")
+        self.assertEqual(web["with"], {"playbook": "web", "limit": "web", "dry_run": False})
+        for api, ui in ((True, True), (False, True), (True, False), (False, False)):
+            changed = "\n".join(
+                f"ansible/inventory/host_vars/{host}.yml"
+                for host, enabled in (("api", api), ("web", ui)) if enabled
+            )
+            output = io.StringIO()
+            with patch.object(sys, "argv", ["detect", changed]), contextlib.redirect_stdout(output):
+                exec(compile(code, "workflow-detector", "exec"), {})
+            values = dict(line.split("=", 1) for line in output.getvalue().splitlines())
+            self.assertEqual(json.loads(values["matrix"])["include"],
+                             [{"playbook": "cloud", "limit": "api"}] if api else [])
+            self.assertEqual(values["has_web"], str(ui).lower())
+            # Evaluate the workflow's actual limited boolean expression for
+            # success/failure/cancellation/skips, including a failed detector.
+            for detect in ("success", "failure", "cancelled"):
+                for firewall in ("success", "failure", "cancelled", "skipped"):
+                    for apply in ("success", "failure", "cancelled", "skipped"):
+                        expression = web["if"].strip()[3:-2].replace("always()", "True")
+                        context = {
+                            "needs.detect.result": detect,
+                            "needs.detect.outputs.has_web": values["has_web"],
+                            "needs.detect.outputs.has_changes": values["has_changes"],
+                            "needs.firewall.result": firewall,
+                            "needs.apply.result": apply,
+                        }
+                        for key, value in context.items():
+                            expression = expression.replace(key, repr(value))
+                        expression = " ".join(expression.split()).replace("&&", "and").replace("||", "or")
+                        actual = eval(expression, {"__builtins__": {}})
+                        expected = (ui and detect == "success" and
+                                    firewall in ("success", "skipped") and
+                                    (apply == "success" or (not api and apply == "skipped")))
+                        self.assertEqual(actual, expected, (api, ui, detect, firewall, apply))
+
     def test_apply_matrix_is_serialized(self):
         workflow = yaml.safe_load(
             (REPO / ".github/workflows/app-promotion-deploy.yml").read_text()
