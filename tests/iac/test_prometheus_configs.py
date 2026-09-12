@@ -134,6 +134,14 @@ class PrometheusConfigContracts(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    @unittest.skipUnless(shutil.which("promtool"), "promtool is not installed")
+    def test_retention_alert_semantics(self):
+        result = subprocess.run(
+            ["promtool", "test", "rules", str(REPO / "tests/prometheus/hyrule-retention.test.yml")],
+            cwd=REPO, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_rule_files_have_valid_group_and_rule_structure(self):
         alert_names = []
         paths = sorted((MON / "prometheus-rules").glob("*.yml"))

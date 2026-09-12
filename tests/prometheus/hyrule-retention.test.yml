@@ -1,0 +1,138 @@
+rule_files:
+- ../../configs/mon/prometheus-rules/hyrule-retention.yml
+evaluation_interval: 30s
+tests:
+- name: healthy empty inventory is quiet
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x30
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x30'
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 20m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts: []
+- name: failures and overdue require persistence then recover
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x30
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: 1x10 0x20
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: 1x10 0x20
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 6m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: Retained VM protection verification failed
+        description: Inspect the authenticated retention status and recorded verification
+          error. Preserve retained data and protection; reconcile provider identity
+          or availability before recovery. Do not delete data to clear this alert.
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationFailed
+    exp_alerts: []
+  - eval_time: 4m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+  - eval_time: 6m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations:
+        summary: Retained VM protection verification is overdue
+        description: The persisted verification schedule is overdue. Check the retention
+          verifier worker and provider availability; preserve manifests and retained
+          data while restoring verification.
+  - eval_time: 12m
+    alertname: HyruleRetentionVerificationOverdue
+    exp_alerts: []
+- name: missing only one gauge loses coverage
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x30
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 14m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: &id001
+        summary: Retention monitoring coverage is missing
+        description: The Cloud scrape target is absent, or a healthy target omits
+          a required retention gauge. Verify the deployed backend version and scrape
+          configuration. A failed scrape is covered by HyruleCloudMetricsDown.
+- name: failed scrape has separate target-down owner
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: '0x30'
+  alert_rule_test:
+  - eval_time: 20m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts: []
+- name: missing target loses coverage
+  interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 16m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        severity: warning
+        source: prometheus
+      exp_annotations: *id001
+- name: restored metrics clear missing coverage
+  interval: 1m
+  input_series:
+  - series: up{job="hyrule-cloud",instance="api:8402"}
+    values: 1x30
+  - series: hyrule_retention_verification_failures{job="hyrule-cloud",instance="api:8402"}
+    values: '0x30'
+  - series: hyrule_retention_verification_overdue{job="hyrule-cloud",instance="api:8402"}
+    values: _x17 0x13
+  alert_rule_test:
+  - eval_time: 16m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts:
+    - exp_labels:
+        job: hyrule-cloud
+        instance: api:8402
+        severity: warning
+        source: prometheus
+      exp_annotations: *id001
+  - eval_time: 19m
+    alertname: HyruleRetentionMetricsMissing
+    exp_alerts: []

@@ -1,0 +1,40 @@
+# Deploy only after the retention backend metrics are live. See retention-monitoring runbook.
+groups:
+- name: hyrule-retention
+  interval: 30s
+  rules:
+  - alert: HyruleRetentionVerificationFailed
+    expr: hyrule_retention_verification_failures{job="hyrule-cloud"} > 0
+    for: 5m
+    labels:
+      severity: warning
+      source: prometheus
+    annotations:
+      summary: Retained VM protection verification failed
+      description: Inspect the authenticated retention status and recorded verification
+        error. Preserve retained data and protection; reconcile provider identity
+        or availability before recovery. Do not delete data to clear this alert.
+  - alert: HyruleRetentionVerificationOverdue
+    expr: hyrule_retention_verification_overdue{job="hyrule-cloud"} > 0
+    for: 5m
+    labels:
+      severity: warning
+      source: prometheus
+    annotations:
+      summary: Retained VM protection verification is overdue
+      description: The persisted verification schedule is overdue. Check the retention
+        verifier worker and provider availability; preserve manifests and retained
+        data while restoring verification.
+  - alert: HyruleRetentionMetricsMissing
+    expr: ((up{job="hyrule-cloud"} == 1) unless on(job, instance) (hyrule_retention_verification_failures{job="hyrule-cloud"}
+      and on(job, instance) hyrule_retention_verification_overdue{job="hyrule-cloud"}))
+      or absent(up{job="hyrule-cloud"})
+    for: 15m
+    labels:
+      severity: warning
+      source: prometheus
+    annotations:
+      summary: Retention monitoring coverage is missing
+      description: The Cloud scrape target is absent, or a healthy target omits a
+        required retention gauge. Verify the deployed backend version and scrape configuration.
+        A failed scrape is covered by HyruleCloudMetricsDown.
