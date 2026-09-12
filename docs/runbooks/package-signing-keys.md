@@ -24,3 +24,24 @@ The Redis key follows the same pattern in the NOC role; its fingerprint and
 rotation notes are in [loop retirement](loop-retirement.md). These checks do not
 solve the underlying IPv6 CDN reachability incident, nor do they bypass package
 repository signature validation.
+
+
+## HashiCorp rotation, September 10, 2026
+
+Verified September 12 against https://www.hashicorp.com/en/official-packaging-guide:
+primary fingerprint `D55C0D1AC78A8D8126CB631CFC9CA96ACA026560`.
+The public key from `https://apt.releases.hashicorp.com/gpg` has SHA256
+`1df7d66b79352bab45388511079f74987568672a8ed6395053a050b61f6c5430`.
+The previous key ended September 10; do not disable signature verification.
+
+If old-key rejection blocks a role's prerequisite APT refresh, use the reviewed
+`hashicorp-key` maintenance playbook through `apply.yml`, limited to the affected
+host (initial repair: `noc`). It replaces only the existing scoped keyring, retains
+an Ansible backup, and requires strict all-repository APT verification. It installs
+no packages and restarts no services. The agent role pin is updated so subsequent
+rollouts cannot restore the obsolete key. A dry-run does not prove live APT health.
+
+If validation fails, preserve the failure and backup; do not retry the app deploy.
+Restore the recorded backup to the same keyring path if the replacement itself
+must be rolled back; the old key cannot validate newly signed repository indexes,
+so rollback preserves prior state rather than claiming restored repository health.

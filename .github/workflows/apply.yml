@@ -38,6 +38,7 @@ on:
           - extmon
           - retire-loop
           - rtr-apt-cache
+          - hashicorp-key
           - soc
           - frr
           - rtr_routing

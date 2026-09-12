@@ -1,0 +1,47 @@
+---
+# Explicit maintenance only: apply.yml playbook=hashicorp-key, limit=noc.
+# Repairs an existing repository before application roles refresh APT.
+- name: Rotate the verified HashiCorp package signing key
+  hosts: all
+  gather_facts: false
+  become: true
+  vars_files:
+    - ../roles/vault_agent/defaults/main.yml
+  tasks:
+    - name: Validate the reviewed package key pin
+      ansible.builtin.assert:
+        that:
+          - vault_agent_hashicorp_gpg_url == 'https://apt.releases.hashicorp.com/gpg'
+          - vault_agent_hashicorp_gpg_checksum == 'sha256:1df7d66b79352bab45388511079f74987568672a8ed6395053a050b61f6c5430'
+      tags: [validate, apply]
+
+    - name: Install the checksum-verified replacement with rollback backup
+      ansible.builtin.get_url:
+        url: "{{ vault_agent_hashicorp_gpg_url }}"
+        checksum: "{{ vault_agent_hashicorp_gpg_checksum }}"
+        dest: /usr/share/keyrings/hashicorp-archive-keyring.asc
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      when: hashicorp_key_apply | default(false) | bool
+      tags: [apply]
+
+    - name: Require successful signature verification for every APT repository
+      ansible.builtin.command:
+        argv:
+          - apt-get
+          - -o
+          - APT::Update::Error-Mode=any
+          - -o
+          - Acquire::Retries=1
+          - -o
+          - Acquire::http::Timeout=20
+          - -o
+          - Acquire::https::Timeout=20
+          - update
+      changed_when: false
+      when:
+        - hashicorp_key_apply | default(false) | bool
+        - not ansible_check_mode
+      tags: [apply]
