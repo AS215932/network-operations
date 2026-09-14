@@ -23,8 +23,9 @@ class VPNClientTest(unittest.TestCase):
     def test_networkmanager_uses_a_real_ipv4_blackhole(self):
         text = README.read_text()
 
-        self.assertIn('ipv4.routes "0.0.0.0/0 type=blackhole"', text)
-        self.assertIn("not fwmark 0x51820 table 333856", text)
+        self.assertIn("0.0.0.0/0 type=blackhole", text)
+        self.assertIn("46.105.40.223/32 type=throw", text)
+        self.assertIn("priority 31021 from all table 333856", text)
         self.assertIn("wireguard.fwmark 0x51820", text)
         self.assertIn("allowed-ips=::/0", text)
         self.assertNotIn("allowed-ips=::/0;0.0.0.0/0", text)
