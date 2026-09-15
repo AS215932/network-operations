@@ -901,6 +901,14 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             [template["name"] for template in vault_agent_defaults["vault_agent_templates"]],
             ["noc-agent.env.ctmpl", "noc-agent-github-app-key.pem.ctmpl"],
         )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_static_secret_reload_command"],
+            "/bin/true",
+        )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_templates"][1]["reload_command"],
+            "{{ vault_agent_static_secret_reload_command }}",
+        )
 
         vault_template = (REPO / paths[0]).read_text()
         noc_env = (REPO / paths[1]).read_text()
