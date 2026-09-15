@@ -64,7 +64,10 @@ Behavior (enforced in `app/graph/nodes.py`, covered by
 
 **Promotion criterion**: step-1 burn-in complete **and** NOC IDQ ≥ 0.70 over
 ≥ 25 labeled insights (`hyrule-knowledge insights metrics --loop noc`), with
-the labels accumulated via the Observatory insight inbox.
+the labels accumulated via the Observatory insight inbox. Before any expansion
+beyond `acknowledge_icinga`, LL ≥ 0 on ≥ 1 recurring NOC scenario family with
+the grant-relevant action class in the labels (≥ 5 labels, ≥ 7 days; see
+`docs/runbooks/learning-lift-replay-harness.md`).
 
 Rollback for any step: revert the env promotion PR, re-apply, verify via live
 Icinga (`icinga_list_problems`). Kill switches: `NOC_STANDING_GRANT_ACTION_CLASSES=`
