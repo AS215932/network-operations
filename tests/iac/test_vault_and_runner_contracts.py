@@ -894,6 +894,14 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             self.assertNotIn("google_wif", text, path)
             self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", text, path)
 
+        vault_agent_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertEqual(
+            [template["name"] for template in vault_agent_defaults["vault_agent_templates"]],
+            ["noc-agent.env.ctmpl", "noc-agent-github-app-key.pem.ctmpl"],
+        )
+
         vault_template = (REPO / paths[0]).read_text()
         noc_env = (REPO / paths[1]).read_text()
         vault_put = (REPO / paths[2]).read_text()
