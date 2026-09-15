@@ -5,10 +5,11 @@ the local ISP. Do not put `0.0.0.0/0` in WireGuard `AllowedIPs`: that is
 cryptokey routing to a peer which accepts no IPv4, not a null route.
 
 For NetworkManager, keep `AllowedIPs = ::/0` and install a native IPv4
-`blackhole` route in a policy table. A more-specific `throw` route for the
-WireGuard endpoint makes that one lookup continue to the current ISP default;
-every other IPv4 destination is dropped. This avoids a fixed local gateway and
-does not depend on the WireGuard socket mark for IPv4 leak prevention.
+`blackhole` route in a policy table. The WireGuard transport uses the vpn VM's
+globally routed IPv6 address, so IPv4 needs no endpoint exception: every IPv4
+destination is dropped. NetworkManager's native IPv6 auto-default-route logic
+keeps the marked WireGuard transport on the current IPv6 underlay without a
+fixed local gateway.
 
 ## Disable NetworkManager connectivity-route penalties
 
@@ -59,8 +60,7 @@ nmcli connection modify as215932 \
   ipv4.addresses "" \
   ipv4.gateway "" \
   ipv4.route-table 333856 \
-  ipv4.routes \
-    "0.0.0.0/0 type=blackhole,46.105.40.223/32 type=throw" \
+  ipv4.routes "0.0.0.0/0 type=blackhole" \
   ipv4.routing-rules "priority 31021 from all table 333856" \
   ipv4.never-default yes \
   ipv4.ignore-auto-routes yes \
@@ -72,20 +72,21 @@ nmcli connection modify as215932 \
   wireguard.ip6-auto-default-route yes \
   wireguard.peer-routes yes \
   wireguard.peers \
-    "h4AjH9BV72VJEZhiUMZANfIdrzKxX1NQ8JaBJYFH71U= allowed-ips=::/0 endpoint=46.105.40.223:51820 persistent-keepalive=25"
+    "h4AjH9BV72VJEZhiUMZANfIdrzKxX1NQ8JaBJYFH71U= allowed-ips=::/0 endpoint=[2a0c:b641:b50:2::60]:51820 persistent-keepalive=25"
 ```
 
 NetworkManager persists those properties in the connection profile and adds
-and removes the routes and rule with the VPN. No dispatcher, `PostUp`, fixed
-local gateway, manually managed unicast endpoint route, or connectivity-probe
-exception is required.
+and removes the routes and rule with the VPN. No dispatcher, `PostUp`, IPv4
+exception, fixed local gateway, manually managed endpoint route, or
+connectivity-probe exception is required.
 
 Verify after connecting:
 
 ```bash
 ip -4 rule show
 ip -4 route show table 333856
-ip -4 route get 46.105.40.223
+ip -4 route get 46.105.40.223     # must fail; there are no IPv4 exceptions
+ip -6 route get 2a0c:b641:b50:2::60 mark 0x51820 # must use the underlay
 ping -4 -c 1 1.1.1.1             # must fail
 ping -6 -c 1 2001:4860:4860::64  # must pass
 journalctl -u NetworkManager --since '-10 min' | \
@@ -96,6 +97,5 @@ Expected IPv4 state:
 
 ```text
 31021: from all lookup 333856
-throw 46.105.40.223
 blackhole default
 ```
