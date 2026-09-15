@@ -10,6 +10,46 @@ WireGuard endpoint makes that one lookup continue to the current ISP default;
 every other IPv4 destination is dropped. This avoids a fixed local gateway and
 does not depend on the WireGuard socket mark for IPv4 leak prevention.
 
+## Disable NetworkManager connectivity-route penalties
+
+NetworkManager's optional connectivity check must be disabled on the client.
+Arch Linux enables an HTTP probe of `ping.archlinux.org`. The IPv4 blackhole
+correctly blocks that probe, but NetworkManager then treats the underlay as
+degraded and adds 20000 to its default-route metric. Reconfiguring that route
+can strand the WireGuard endpoint and take down the fail-closed tunnel.
+Allowing the probe through would create an IPv4 leak, so disable the probe
+instead:
+
+```bash
+sudo install -m 0644 configs/vpn/90-as215932-client.conf \
+  /etc/NetworkManager/conf.d/90-as215932-client.conf
+sudo nmcli general reload conf
+```
+
+For an immediate change without restarting NetworkManager, its supported D-Bus
+property can also be set directly. NetworkManager persists this setting in its
+internal state:
+
+```bash
+busctl set-property org.freedesktop.NetworkManager \
+  /org/freedesktop/NetworkManager \
+  org.freedesktop.NetworkManager ConnectivityCheckEnabled b false
+```
+
+Confirm that the live setting is disabled:
+
+```bash
+busctl get-property org.freedesktop.NetworkManager \
+  /org/freedesktop/NetworkManager \
+  org.freedesktop.NetworkManager ConnectivityCheckEnabled
+# b false
+```
+
+Disabling the check removes NetworkManager's automatic captive-portal
+detection. It does not disable networking or WireGuard health checks.
+
+## Configure the WireGuard profile
+
 Apply these persistent connection properties to the existing `as215932`
 profile while it is disconnected:
 
@@ -37,7 +77,8 @@ nmcli connection modify as215932 \
 
 NetworkManager persists those properties in the connection profile and adds
 and removes the routes and rule with the VPN. No dispatcher, `PostUp`, fixed
-local gateway, or manually managed unicast endpoint route is required.
+local gateway, manually managed unicast endpoint route, or connectivity-probe
+exception is required.
 
 Verify after connecting:
 
@@ -47,6 +88,8 @@ ip -4 route show table 333856
 ip -4 route get 46.105.40.223
 ping -4 -c 1 1.1.1.1             # must fail
 ping -6 -c 1 2001:4860:4860::64  # must pass
+journalctl -u NetworkManager --since '-10 min' | \
+  grep 'unable to configure IPv4 route' # must have no output
 ```
 
 Expected IPv4 state:

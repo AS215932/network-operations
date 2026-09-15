@@ -8,6 +8,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 CLIENT = REPO / "configs/vpn/client.conf"
 README = REPO / "configs/vpn/README.md"
+NETWORKMANAGER = REPO / "configs/vpn/90-as215932-client.conf"
 
 
 class VPNClientTest(unittest.TestCase):
@@ -29,6 +30,15 @@ class VPNClientTest(unittest.TestCase):
         self.assertIn("wireguard.fwmark 0x51820", text)
         self.assertIn("allowed-ips=::/0", text)
         self.assertNotIn("allowed-ips=::/0;0.0.0.0/0", text)
+
+    def test_networkmanager_does_not_penalize_the_underlay_route(self):
+        config = NETWORKMANAGER.read_text()
+        readme = README.read_text()
+
+        self.assertRegex(config, r"(?m)^\[connectivity\]$")
+        self.assertRegex(config, r"(?m)^enabled=false$")
+        self.assertIn("ConnectivityCheckEnabled b false", readme)
+        self.assertNotIn("ping.archlinux.org/32 type=throw", readme)
 
 
 if __name__ == "__main__":
