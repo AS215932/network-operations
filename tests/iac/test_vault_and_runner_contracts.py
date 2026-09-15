@@ -878,22 +878,41 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             "http://[::1]:8000/health/cases",
         )
 
-    def test_noc_agent_model_defaults_come_from_toml_not_env(self):
-        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
-        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
-        vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
-        playbook = (REPO / "ansible/playbooks/noc.yml").read_text()
+    def test_noc_agent_has_no_gemini_or_google_wif_configuration(self):
+        paths = [
+            "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
+            "configs/noc-agent.env.j2",
+            "scripts/vault-put-noc-agent-secrets.sh",
+            "ansible/playbooks/noc.yml",
+            "ansible/roles/noc_agent/defaults/main.yml",
+            "ansible/roles/noc_agent/tasks/main.yml",
+            "ansible/roles/vault_agent/defaults/main.yml",
+        ]
+        for path in paths:
+            text = (REPO / path).read_text()
+            self.assertNotIn("GEMINI", text, path)
+            self.assertNotIn("google_wif", text, path)
+            self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", text, path)
 
+        vault_template = (REPO / paths[0]).read_text()
+        noc_env = (REPO / paths[1]).read_text()
+        vault_put = (REPO / paths[2]).read_text()
+        playbook = (REPO / paths[3]).read_text()
         for text in (vault_template, noc_env):
-            self.assertNotIn("google-gla:gemini-3.1-pro-preview", text)
-            self.assertNotIn("google-gla:gemini-2.5-flash", text)
             self.assertIn("OPENROUTER_API_KEY", text)
             self.assertIn("OPENROUTER_MANAGEMENT_API_KEY", text)
-
         self.assertIn("OPENROUTER_API_KEY is required", vault_put)
         self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
         self.assertIn("openrouter_api_key", playbook)
         self.assertIn("openrouter_management_api_key", playbook)
+
+    def test_vault_health_accepts_pretty_printed_unsealed_json(self):
+        vault = yaml.safe_load((REPO / "ansible/inventory/host_vars/vault.yml").read_text())
+        health = vault["monitoring_extra_services"][0]["vars"]
+        self.assertEqual(
+            health["http_expect_body_regex"],
+            '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false',
+        )
 
     def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()

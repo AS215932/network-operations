@@ -237,6 +237,13 @@ fi
         self.assertIn('pkill -x {{ monitoring_node_service }}', handlers)
         self.assertIn('service {{ monitoring_node_service }} onestart', handlers)
 
+    def test_node_exporter_is_started_on_debian_and_openbsd(self):
+        task_file = (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text()
+        self.assertIn('Ensure node_exporter is enabled and running (Debian)', task_file)
+        self.assertIn('state: started', task_file)
+        self.assertIn('Start node_exporter when stopped (OpenBSD)', task_file)
+        self.assertIn('rcctl check {{ monitoring_node_service }}', task_file)
+
 
 if __name__ == "__main__":
     unittest.main()
