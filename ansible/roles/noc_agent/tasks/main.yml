@@ -222,19 +222,6 @@
     - manifest.json
   tags: [apply]
 
-- name: Ensure noc-agent root-owned config/runtime dirs exist
-  file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: root
-    group: "{{ noc_agent_group }}"
-    mode: "{{ item.mode }}"
-  loop:
-    - { path: /etc/noc-agent, mode: "0750" }
-    - { path: /run/noc-agent, mode: "0750" }
-  when: noc_agent_google_wif_enabled | bool
-  tags: [apply]
-
 - name: Generate per-repo deploy key for noc-agent (idempotent)
   command: ssh-keygen -t ed25519 -N "" -C "noc-agent@noc deploy:noc-agent" -f /var/lib/noc-agent/.ssh/id_noc-agent
   args:
@@ -341,19 +328,6 @@
   no_log: true
   notify:
     - restart xo-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
-  tags: [apply]
-
-- name: Install Google external-account WIF config for noc-agent
-  template:
-    src: "{{ playbook_dir }}/../../configs/noc-agent-google-wif.json.j2"
-    dest: "{{ noc_agent_google_wif_config_path }}"
-    owner: root
-    group: "{{ noc_agent_group }}"
-    mode: "0640"
-  when: noc_agent_google_wif_enabled | bool
-  notify:
     - restart noc-agent
     - restart noc-agent-bot
   tags: [apply]

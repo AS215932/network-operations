@@ -89,7 +89,6 @@
             msg: noc-agent /health/cases did not become healthy after deploy
 
   vars:
-    gemini_api_key: "{{ lookup('env', 'GEMINI_API_KEY') | default('', true) }}"
     openrouter_api_key: "{{ lookup('env', 'OPENROUTER_API_KEY') | default('', true) }}"
     openrouter_management_api_key: "{{ lookup('env', 'OPENROUTER_MANAGEMENT_API_KEY') | default('', true) }}"
     noc_discord_webhook: "{{ lookup('env', 'NOC_DISCORD_WEBHOOK') }}"
@@ -103,9 +102,7 @@
     noc_control_token: "{{ lookup('env', 'NOC_CONTROL_TOKEN') | default('', true) }}"
     noc_approval_signing_secret: "{{ lookup('env', 'NOC_APPROVAL_SIGNING_SECRET') | default('', true) }}"
     noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
-    gemini_quota_project_id: "{{ lookup('env', 'GEMINI_QUOTA_PROJECT_ID') | default('project-73d4ac43-0c8a-4ec0-ac5', true) }}"
     noc_agent_secret_backend: "{{ lookup('env', 'NOC_AGENT_SECRET_BACKEND') | default('vault', true) }}"
-    noc_agent_google_wif_enabled: "{{ noc_agent_secret_backend == 'vault' }}"
   roles:
     - hyrule_mcp
     - noc_agent
@@ -121,7 +118,6 @@
         vault_agent_role_id: "{{ lookup('env', 'VAULT_NOC_AGENT_ROLE_ID') | default('', true) }}"
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
-        vault_agent_google_subject_token_destination: "{{ noc_agent_google_subject_token_path }}"
         vault_agent_env_reload_command: >-
           /bin/grep -Eq ^NOC_APPROVAL_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
           /bin/grep -Eq ^HYRULE_MCP_ACTION_SIGNING_SECRET=................................ /opt/noc-agent/.env &&

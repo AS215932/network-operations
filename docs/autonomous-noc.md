@@ -139,35 +139,17 @@ keeps running the old agent, so nothing starts. Correct order:
 
 Merging this PR on its own is therefore safe: it cannot start the loop early.
 
-### Deployed state and safety rails
+### Deployed state
 
-The loop ships **enabled and autonomous** (`noc-agent.env.ctmpl.j2`):
-`NOC_PROACTIVE_ENABLED=1`, `NOC_PROACTIVE_SHADOW=0`, `NOC_PROACTIVE_HANDOFF_ENABLED=1`.
-The standing safety rails are the budgets, which stay conservative:
+The proactive loop is **disabled** (`NOC_PROACTIVE_ENABLED=0`). Reactive
+alerting and case handling remain active. It must not be re-enabled until its
+findings are deduplicated and explicitly approved by an operator; investigation
+budgets alone do not make recurring Discord digests useful.
 
-- 1 investigation per cycle, 12 per day, $10/day, `MEDIUM` severity floor;
-- heavy read-only probes (`tcpdump_capture`, `dns_probe_burst`,
-  `multi_source_probe`) are **proposed, not auto-run** (`NOC_PROACTIVE_AUTO_HEAVY_PROBES=0`);
-- nothing mutates infrastructure — the loop reports and hands off only.
-
-Handoff (`loop:candidate` issues) is a no-op until GitHub auth is present in
-`kv/noc-agent`. Preferred is an org-owned **GitHub App** (Issues: RW + Metadata:
-R on `network-operations`): store `noc_github_app_id` and the PEM as
-`noc_github_app_private_key`. Vault Agent renders the key to
-`/etc/noc-agent/github-app.pem` and the app mints short-lived installation
-tokens at call time. A fine-grained PAT in `noc_github_token` works as a
-fallback. Keep these in `secrets.local.sh` (`NOC_GITHUB_APP_ID`,
-`NOC_GITHUB_APP_PRIVATE_KEY_FILE`) so `vault-put-noc-agent-secrets.sh` rotations
-don't drop them.
-
-To **canary cheaply**, set `NOC_PROACTIVE_SHADOW=1` (scan-and-report only) and
-re-apply; flip back to `0` once the scanners look right. To **pause**, set
-`NOC_PROACTIVE_ENABLED=0` and re-apply, or `POST /control/proactive/pause`.
-Operators can also drive a single cycle or inspect status via the loopback
-control API: `GET /control/proactive/status`, `POST /control/proactive/run-once`,
-`POST /control/proactive/pause|resume` (all require `X-NOC-Control-Token`).
-All flag changes deploy via promotion + `apply.yml playbook=noc` (human
-`production` gate).
+If it is reintroduced, start in shadow mode, keep heavy probes disabled, and
+require a tested deduplication policy before permitting notification delivery.
+All flag changes deploy through `apply.yml playbook=noc` (human `production`
+gate).
 
 ### Optional Icinga heartbeat
 

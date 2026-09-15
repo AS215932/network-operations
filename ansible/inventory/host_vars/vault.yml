@@ -22,7 +22,7 @@ monitoring_extra_services:
       http_uri: "/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"
       http_ipv6: true
       http_timeout: 10
-      http_expect_body_regex: '"sealed":false|"initialized":false'
+      http_expect_body_regex: '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false'
 
 logs_register: true
 logs_role: vault

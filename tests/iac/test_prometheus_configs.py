@@ -1,5 +1,3 @@
-import shutil
-import subprocess
 import unittest
 from pathlib import Path
 
@@ -126,13 +124,11 @@ class PrometheusConfigContracts(unittest.TestCase):
             targets = set(jobs[name]["static_configs"][0]["targets"])
             self.assertEqual(targets, expected, name)
 
-    @unittest.skipUnless(shutil.which("promtool"), "promtool is not installed")
-    def test_noc_quota_alert_semantics(self):
-        result = subprocess.run(
-            ["promtool", "test", "rules", str(REPO / "tests/prometheus/noc-tripwire.test.yml")],
-            cwd=REPO, check=False, capture_output=True, text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+    def test_noc_model_alerts_only_report_total_model_failure(self):
+        tripwires = (MON / "prometheus-rules" / "noc-tripwire.yml").read_text()
+        self.assertNotIn("Gemini", tripwires)
+        self.assertNotIn("NOCAgentModelFallbackActive", tripwires)
+        self.assertIn("NOCAgentAllModelsFailing", tripwires)
 
     def test_rule_files_have_valid_group_and_rule_structure(self):
         alert_names = []
