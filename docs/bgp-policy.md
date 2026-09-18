@@ -132,9 +132,10 @@ If the aggregate is ever re-issued with a different maxLength, the more-specific
 must be re-checked before the next FRR deploy.
 
 **Register an IRR `route6` object too.** RPKI authorises an announcement;
-upstream prefix-filters are generally built from **IRR**. Neither /48 has a
-`route6` object today (only the `/44` does) — that is hygiene worth fixing
-(#480), though it did not turn out to be what limits propagation here.
+upstream prefix-filters are generally built from **IRR**. All three prefixes now
+have `route6` objects in RIPE (`mnt-by: SERVIFY-MNT, SERVPERSO-MNT`); the two
+/48s were registered 2026-08-03 under #480. Registering them changed propagation
+by exactly nothing, which was itself the clue — see below.
 
 ### Verifying propagation — use the real-time source
 
@@ -157,35 +158,98 @@ whois -h whois.ripe.net -- "-T route6 <prefix>"
 
 # 3. After deploying — REAL-TIME propagation. Never routing-status here.
 curl -s "https://stat.ripe.net/data/looking-glass/data.json?resource=<prefix>"
-# Count rrcs[].peers[] and read the as_paths. Compare against the /44 as a
-# control: if a more-specific reaches the same peer count as the aggregate does
-# via the same upstream, it is not being filtered — that upstream's reach is
-# simply the ceiling.
+# Count rrcs[].peers[] and read the as_paths. Read the ASN immediately BEFORE
+# ours in each path — that is the upstream actually carrying us, and its absence
+# is the signal.
+
+# 4. If reach via one upstream looks low, do NOT conclude "that upstream is
+#    small". Establish the upstream's real ceiling first:
+#    a. their own prefixes  — announced-prefixes for their ASN, then looking-glass
+#    b. their SINGLE-HOMED customers, expanded from their as-set
+# Multi-homed customers are useless as a control: RIS returns each peer's best
+# path only, so their path via this upstream is routinely masked by a preferred
+# one and they will show the same low count as a genuinely filtered prefix.
 ```
+
+Comparing a more-specific against our own covering aggregate is **not** a
+sufficient control — that is the mistake made on 2026-07-25. Both were equally
+filtered, the numbers matched, and the matching numbers were read as proof of
+"no filtering, just narrow reach." The control has to be a prefix that is
+*known to be unfiltered* through the same upstream.
 
 Hyrule Cloud's `/v1/bgp/lookup` exposes this with explicit freshness labelling
 (`live_looking_glass` dataset); see the `hyrule-x402-netintel` skill.
 
-### Propagation reach is a property of the upstream, not the prefix
+### Inbound reach via cr1-ch1 now matches Securebit's cone
 
-Measured 2026-07-25, immediately after the deploy:
+**Resolved 2026-09-10.** Securebit added `AS215932` to `AS-SBAG:AS-CH-ZUR`
+(`last-modified: 2026-09-10T00:48:56Z`). That set nests into `AS-SECUREBIT`,
+which nests into `AS-SBAG` — the as-set Securebit announces to all thirteen of
+its transit/peer ASNs. Their upstreams build IRR prefix-filters from it.
 
-| prefix | peer-paths via cr1-ch1 (`58057`/`56755`) | via nl1/de1 | total |
+Re-measured 2026-09-14 via RIS real-time looking-glass (23 collectors):
+
+| prefix | peer-paths via cr1-ch1 (`58057`/`56755`) | via nl1/de1 (`34872`) | total |
+|---|---|---|---|
+| `2a0c:b641:b50::/48` | 360 | — | 360 |
+| `2a0c:b641:b51::/48` | 360 | — | 360 |
+| `2a0c:b641:b50::/44` | 293 | 77 (prepended) | 368 |
+
+The /48 AS-paths now run through Securebit's transit: AS6939 sits immediately
+upstream of 58057 on 245 peer-paths, AS174 on 34. That is the success criterion
+from #517 (move from 6 toward ~350, with Hurricane Electric and Cogent
+appearing). The /48 more-specific strategy from #477 is therefore live —
+longest-prefix-match can now steer infra and customer return traffic onto
+cr1-ch1 instead of the degraded Servperso links.
+
+The /44 still has 77 Servperso paths because it is announced from all three
+cores; that is the failover, not a leak of the more-specifics. Membership is
+visible directly:
+
+```bash
+whois -h whois.ripe.net -- "AS-SBAG:AS-CH-ZUR" | grep AS215932
+```
+
+#### Why it was six peer-paths for six weeks
+
+> **Corrected 2026-08-06.** This section previously concluded that cr1-ch1's
+> reach was capped because "Securebit accounts for only ~1.6% of RIS peer-paths."
+> That was wrong. The 6-peer-path measurement was real, but it measured *our own
+> filtered footprint* and attributed it to Securebit's DFZ presence. Securebit's
+> cone reaches ~360 peer-paths for any customer registered in their as-set. We
+> were not registered in it. See #517.
+
+Measured 2026-07-25 and re-measured 2026-08-06 — identical, no drift:
+
+| prefix | peer-paths via cr1-ch1 (`58057`/`56755`) | via nl1/de1 (`34872`) | total |
 |---|---|---|---|
 | `2a0c:b641:b50::/48` | 6 | — | 6 |
 | `2a0c:b641:b51::/48` | 6 | — | 6 |
-| `2a0c:b641:b50::/44` | 6 | 365 (prepended) | 372 |
+| `2a0c:b641:b50::/44` | 6 | 368 (prepended) | 374 |
 
-The /48s reach **exactly the same six peer-paths** as ch1's own /44. They are
-not being filtered as more-specifics — they propagate as far as anything from
-ch1 propagates. The constraint is that **Securebit (AS58057) accounts for only
-~1.6% of RIS peer-paths to AS215932**, so a more-specific announced only from
-ch1 can never pull in traffic from a network that does not receive ch1's routes
-in the first place.
+The /48 AS-paths stopped dead at Securebit's own network — `58057 215932` (×3),
+`49544 58057 215932` (×2), `56755 215932` (×1). Nothing appeared behind AS6939,
+AS174 or AS1836. We were registered only in `AS-SBIX-RS`, which feeds the SBIX
+route servers and nothing else. That single membership was the lone
+`56755 215932` path.
 
-The practical consequence: prepending nl1/de1 makes them less attractive but
-cannot redirect traffic to a path the remote network does not have. Real
-reach for the CH leg needs IX peering where the CDNs actually are — #138.
+Two controls established that this was filtering and not reach:
+
+1. **Securebit's own prefixes** (`2a09:4c0:f00::/48`, `2a09:4c0:e00::/48`,
+   `2a04:ccc4::/32`) reached 360–362 peer-paths, via AS6939 and AS20473.
+2. **Their single-homed customers who were in `AS-SBAG`** reached 322–365
+   peer-paths through the same session — e.g. AS61218 `2a0e:97c0:4b44::/48` at
+   357 (290 via AS6939), AS206330 `2a10:1646::/32` at 365.
+
+Single-homed customers are the correct control, not multi-homed ones. RIS
+returns each peer's *best* path only, so a multi-homed customer's Securebit path
+is routinely masked by a preferred one. Our /48s are cr1-ch1-only and had no
+alternative path, so their 6 was a true ceiling.
+
+Until the as-set update, longest-prefix-match could not steer a network that
+never received the route, and prepending nl1/de1 could not redirect traffic onto
+a path the remote network did not have. IX peering (#138) remains worth doing on
+its own merits, but it was not the diagnosis for that particular failure.
 
 ## Transit and IX filters
 
@@ -225,9 +289,16 @@ botched push self-heals without operator action.
 
 - **No throughput monitoring.** Existing checks watch BGP session state, prefix
   visibility and ICMP — all of which stayed green throughout this incident, because
-  the failure mode is clean pings with crushed bulk TCP. Tracked in #351.
-- **Single preferred upstream.** Concentrating on cr1-ch1 means Securebit carries
-  most traffic. The structural fix is IX peering where the CDNs actually are
-  (AMS-IX / NL-ix / FrysIX) — tracked in #138.
+  the failure mode is clean pings with crushed bulk TCP. Looking-glass now shows
+  the /48s in the DFZ via Securebit; whether return *bytes* actually moved off
+  Servperso still needs a capture on rtr (`src net 2a04:4e42::/32 and inbound`)
+  and a native-IPv6 download against the 52.7 KB/s baseline. Tracked in #351.
+- **Single preferred upstream.** #517 landing means Securebit now carries most
+  inbound traffic, with no diversity. The structural fix is IX peering where the
+  CDNs actually are (AMS-IX / NL-ix / FrysIX) — tracked in #138.
+- **Our aut-num does not document the Securebit session.** `AS215932`'s
+  `import`/`export` lines cover AS34872, AS210233 and AS35661 only. Upstream
+  filters key off Securebit's as-set rather than ours, so this is hygiene, not a
+  blocker.
 - The Batfish snapshot under `tests/iac/batfish/snapshot/` is a simplified 3-node
   model that predates cr1-ch1 and does not reflect this policy.
