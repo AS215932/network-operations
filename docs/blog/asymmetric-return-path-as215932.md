@@ -2,6 +2,8 @@
 
 *How AS215932 spent three months fixing the wrong direction, and what the traffic engineering could and couldn't buy.*
 
+*Addendum 2026-09-14: the 1.6% reach conclusion was wrong — it was IRR filtering. See the end of this post.*
+
 ---
 
 ## The symptom
@@ -172,6 +174,16 @@ The actual fix is reach: peering at the exchanges where the CDNs we depend on ac
 Until then, NAT64 remains our fastest path to a large chunk of the IPv6 internet — which is a genuinely strange sentence to write about an IPv6-first network, and a precise measure of how much reach matters.
 
 We're also adding throughput probes, because the entire incident lived in the gap between "the network is up" and "the network is usable," and for three months we only measured the first one.
+
+## Addendum, 2026-09-14 — it was filtering, not reach
+
+The 1.6% conclusion above is wrong. The six-peer-path measurement was real, but it measured *our own filtered footprint* and attributed it to Securebit's DFZ presence. Securebit's cone is ~360 peer-paths for any customer in `AS-SBAG`. We were not in that set — only in `AS-SBIX-RS`, which feeds the SBIX route servers and nothing else. Their upstreams (Hurricane Electric, Cogent, …) build IRR prefix-filters from `AS-SBAG` and dropped us. The covering aggregate was the wrong control: both prefixes were equally filtered, so the matching counts looked like proof of "no filtering, just a small upstream."
+
+The control has to be a prefix *known to be unfiltered* through that upstream, and it has to be single-homed. RIS returns each peer's best path only, so a multi-homed customer's masked Securebit path is indistinguishable from a filtered one.
+
+Securebit added `AS215932` to `AS-SBAG:AS-CH-ZUR` on 2026-09-10. Re-measured 2026-09-14, both /48s reach 360 peer-paths via Zurich, with AS6939 immediately upstream of 58057 on 245 of them and AS174 on 34. The /48 more-specific strategy is therefore live. Policy, the corrected verification recipe, and the historical table live in [`docs/bgp-policy.md`](../bgp-policy.md); the tracking issue was #517.
+
+The second methodology note is also wrong in the same way: "always measure against a control" is right, "the aggregate is the control" is not, when the aggregate is filtered too. That mistake is what produced this post's original ending.
 
 ---
 
