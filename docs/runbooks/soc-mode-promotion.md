@@ -20,8 +20,11 @@ cd ~/Dev/knowledge
 uv run hyrule-knowledge insights metrics --loop soc
 ```
 
-Read `idq`, `label_count`, `cgs`, and the per-loop breakdown. IDQ counts
-deliberate silence; CGS covers surfaced, labeled decisions with gold evidence.
+Read `idq`, `label_count`, `cgs`, `learning_lift`, and the per-loop breakdown.
+IDQ counts deliberate silence; CGS covers surfaced, labeled decisions with gold
+evidence. `learning_lift` (LL) is the evidence that feedback on earlier rounds
+of a recurring scenario improves later decisions (see
+`docs/runbooks/learning-lift-replay-harness.md`).
 
 ## Criteria
 
@@ -29,14 +32,14 @@ deliberate silence; CGS covers surfaced, labeled decisions with gold evidence.
 |-----------|------------------|
 | shadow → case_only | ≥ 25 labeled SOC insights spanning ≥ 14 days; IDQ ≥ 0.70; zero `unsupported` faithfulness verdicts among surfaced insights |
 | case_only → handoff_dry | ≥ 40 labeled insights; IDQ ≥ 0.75; accept rate on surfaced insights ≥ 0.60 |
-| handoff_dry → handoff_live | Everything above, plus ≥ 10 dry-built handoffs labeled well-formed with accept ≥ 0.80 |
+| handoff_dry → handoff_live | Everything above, plus ≥ 10 dry-built handoffs labeled well-formed with accept ≥ 0.80; LL ≥ 0 on ≥ 1 recurring SOC scenario family (≥ 5 labels, ≥ 7 days) |
 
 Regression rule: if IDQ over the trailing 25 labels drops below the rung's
 threshold, demote one rung in a fast-follow PR and note why.
 
 ## Promotion PR checklist
 
-1. `insights metrics --loop soc` output pasted (or linked) in the PR body.
+1. `insights metrics --loop soc` output pasted (or linked) in the PR body. Include the `learning_lift` line.
 2. `soc_mode` bumped exactly one rung in host_vars; `soc_lhp_enabled` and
    friends adjusted per `docs/soc-agent/rollout.md` in the soc-agent repo.
 3. Re-render + validate: `ansible-playbook playbooks/soc.yml --tags validate
