@@ -27,7 +27,7 @@ Underlay (hosting provider networks) is separate from overlay (AS215932 `2a0c:b6
 |--------|----------|-----|------------------|-------------------|-----------|
 | cr1.nl1 | Servperso NL | FreeBSD + FRRouting | `2a0c:b640:8:69::1` | `::a` | 1.1.1.1 |
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | `2a0c:b640:10::213` | `::b` | 2.2.2.2 |
-| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | `2a09:4c0:100:2d88::8898` | `::c` | 3.3.3.3 |
+| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | `2a09:4c0:100:c768::eae` | `::c` | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | `2001:41d0:303:48a::2` | `::d` | 0.0.0.13 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
