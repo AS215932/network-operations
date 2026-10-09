@@ -959,6 +959,36 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertEqual(defaults["ci_runner_user_shell"], "/bin/sh")
 
+    def test_kim_ops_user_is_dedicated_and_portable(self):
+        # Kim owns AS215932 operations: the account must be its own dedicated
+        # user (never root, never the legacy operator's svag) with a portable
+        # shell so the role works on Linux and the BSD routers alike.
+        defaults = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/defaults/main.yml").read_text())
+        tasks = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/tasks/main.yml").read_text())
+        play = yaml.safe_load((REPO / "ansible/playbooks/kim-ops-key.yml").read_text())[0]
+
+        self.assertEqual(defaults["kim_ops_user"], "kim")
+        self.assertEqual(defaults["kim_ops_user_shell"], "/bin/sh")
+
+        authorize = _task_by_name(tasks, "Authorize Kim's operator key for the kim user")
+        self.assertEqual(authorize["authorized_key"]["user"], "{{ kim_ops_user }}")
+        self.assertEqual(authorize["authorized_key"]["state"], "present")
+        self.assertNotIn("key_options", authorize["authorized_key"])
+
+        sudo = _task_by_name(tasks, "Grant the kim operator user NOPASSWD sudo (Linux)")
+        self.assertEqual(sudo["copy"]["dest"], "/etc/sudoers.d/kim-ops")
+        self.assertIn("NOPASSWD", sudo["copy"]["content"])
+
+        doas = _task_by_name(tasks, "Grant the kim operator user NOPASSWD doas (BSD)")
+        self.assertIn("permit nopass", doas["lineinfile"]["line"])
+
+        self.assertIn("linux", play["hosts"])
+        self.assertIn("freebsd", play["hosts"])
+        self.assertIn("openbsd", play["hosts"])
+        self.assertIn("external", play["hosts"])
+        self.assertIn("!retired", play["hosts"])
+        self.assertEqual(play["roles"], ["kim_ops_key"])
+
     def test_freebsd_router_inventory_uses_loopback_addresses(self):
         inventory = yaml.safe_load((REPO / "ansible/inventory/hosts.yml").read_text())
         freebsd_hosts = inventory["all"]["children"]["freebsd"]["hosts"]

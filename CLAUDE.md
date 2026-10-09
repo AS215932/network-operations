@@ -278,6 +278,25 @@ ansible-playbook playbooks/monitoring.yml --tags apply \
     -e '{"monitoring_apply":true}' --limit <host>
 ```
 
+## Kim operator access — dedicated `kim` user, fleet-wide
+
+Kim owns AS215932 operations: `ansible/playbooks/kim-ops-key.yml` creates the
+dedicated `kim` operator user with NOPASSWD root (sudo on Linux, doas on BSD)
+and authorizes Kim's pubkey for it, mirroring the `ci` deploy user's privilege
+shape. Unlike `id_ci` the key carries no `from=` restriction — an operator
+connects from wherever they work, and SSH transport sources stay gated by the
+firewall role's `ssh_allow_sources_*`. The pubkey itself is never committed:
+the playbook reads it from the controller path in `KIM_KEY_PATH` (sibling
+`ci-runner-key.yml` reads `CI_KEY_PATH` the same way).
+
+```bash
+KIM_KEY_PATH=<id_kim> ansible-playbook playbooks/kim-ops-key.yml --tags apply
+```
+
+A follow-up wires `kim-ops-key` into the `apply.yml` playbook choices so the
+rollout can also run from the workflow (needs a token with `workflow` scope —
+deferred from this change).
+
 ## hyrule MCP — live-state queries via tools, not raw SSH
 
 This repo ships an MCP server entry in `.mcp.json` that points at hyrule-mcp

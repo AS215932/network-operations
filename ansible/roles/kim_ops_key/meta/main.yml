@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: kim_ops_key
+  author: AS215932 ops
+  description: Set up the kim operator user + Kim's SSH pubkey on all AS215932 hosts
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: ["13"]
+    - name: FreeBSD
+      versions: ["14", "15"]
+    - name: OpenBSD
+      versions: ["7"]
+dependencies: []
