@@ -50,6 +50,7 @@ CONSTANT_LABELS = {
     "infra_subnet": "infra subnet",
     "customer_subnet": "customer subnet",
     "vpn_clients_subnet": "vpn-clients",
+    "vpn_transit_subnet": "vpn transit (rtr<->vpn)",
     "loop_docker_subnet": "loop Docker subnet",
     "ops_prefix_v6": "ops-prefix",
     "ops_prefix_v4": "ops-prefix (v4)",
@@ -67,6 +68,7 @@ SUBNET_ROWS = [
     ("router_loopback_subnet", "Router loopbacks (::a cr1-nl1, ::b cr1-de1, ::c cr1-ch1, ::d rtr)"),
     ("infra_subnet", "Infra subnet (rtr ::1, VMs ::10-::f0)"),
     ("vpn_clients_subnet", "VPN clients (routed via the vpn VM)"),
+    ("vpn_transit_subnet", "Dedicated rtr<->vpn transit (xenbr-transit)"),
     ("loop_docker_subnet", "loop VM Docker bridge containers (routed GUA /64)"),
     ("wg_link_prefix", "WireGuard tunnel /127s (mesh links)"),
     ("customer_subnet", "Customer VM allocations (::c1 = ci-pr, the unprivileged PR runner)"),
@@ -390,6 +392,11 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     inv_hosts = inventory_hostnames(hosts_yml)
     hosts = sorted(h for h, hv in host_vars.items() if isinstance(hv, dict) and "host_meta" in hv)
     resolver = Resolver(group_vars, externals, host_names=inv_hosts or set(hosts))
+    valid_flow_hosts = frozenset(inv_hosts) if inv_hosts else frozenset(hosts)
+    all_excludes = flows.get("all_excludes") or []
+    for token in all_excludes:
+        if str(token) not in valid_flow_hosts:
+            raise ValueError(f"all_excludes token {token!r} is not an inventory host")
     for host in hosts:
         if inv_hosts and host not in inv_hosts:
             raise ValueError(f"host_vars/{host}.yml has host_meta but is not in hosts.yml")
@@ -443,6 +450,10 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
                  "the cross-cutting section below, not repeated per host.")
     lines.append("")
     for host in hosts:
+        globally_excluded = host in all_excludes
+        retired_excluded = globally_excluded and bool(
+            host_vars[host].get("loop_retired", False)
+        )
         meta = host_vars[host]["host_meta"]
         summary = str(meta.get("summary", "")).strip()
         heading = f"### {host}"
@@ -459,6 +470,8 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if rules:
             lines.extend(render_inbound_table(resolver, rules))
+        elif retired_excluded:
+            lines.append("_No current inbound flow is modelled for this excluded host._")
         else:
             lines.append("_No host-specific inbound rules (SSH-only via the standard allow set)._")
         lines.append("")
@@ -467,6 +480,8 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
         lines.append("")
         if outbound:
             lines.extend(render_outbound_table(resolver, outbound))
+        elif retired_excluded:
+            lines.append("_No current outbound flow is modelled for this excluded host._")
         else:
             lines.append("_No noteworthy host-specific outbound beyond the cross-cutting flows._")
         lines.append("")
@@ -479,15 +494,10 @@ def render_document(group_vars, hosts_yml, flows, host_vars) -> str:
     lines.append("N-to-M flows that are not a single host's inbound rule (DNS recursion, "
                  "monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, "
                  "and routine host egress).")
-    valid_flow_hosts = frozenset(inv_hosts) if inv_hosts else frozenset(hosts)
-    all_excludes = flows.get("all_excludes") or []
-    for tok in all_excludes:
-        if str(tok) not in valid_flow_hosts:
-            raise ValueError(f"all_excludes token {tok!r} is not an inventory host")
     if all_excludes:
         lines.append("")
         lines.append(f"> `all` in the table below excludes {', '.join(str(t) for t in all_excludes)} "
-                     "(firewall-unmanaged; their real flows are modelled explicitly).")
+                     "(firewall-unmanaged; any current flows are modelled explicitly).")
     lines.append("")
     lines.extend(render_cross_cutting_table(
         resolver, flows.get("cross_cutting_flows", []) or [], valid_hosts=valid_flow_hosts))

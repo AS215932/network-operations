@@ -68,8 +68,8 @@ class NetworkFlowsRenderTest(unittest.TestCase):
         self.assertIn("all (except extmon, ns2, cr1-nl1, cr1-de1, cr1-ch1) | rtr", doc)  # DNS recursion
         self.assertIn("all (except extmon) | tcp | 9100", doc)  # node_exporter
         self.assertIn("all (except mail) | tcp | 22", doc)  # noc SSH
-        # dom0 is globally excluded from `all` (firewall-unmanaged).
-        self.assertIn("`all` in the table below excludes dom0", doc)
+        # dom0 and the retired loop host are globally excluded from `all`.
+        self.assertIn("`all` in the table below excludes dom0, loop", doc)
 
     def test_committed_doc_carries_router_bgp_wg_inbound(self):
         """Router BGP/WG inbound (pf_bgp_peers/pf_wg_ports) must be rendered."""

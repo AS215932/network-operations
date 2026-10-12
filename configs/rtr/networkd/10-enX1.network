@@ -1,0 +1,30 @@
+# /etc/systemd/network/10-enX1.network — vpn transit (overlay VRF)
+# Dedicated L2 segment (Xen network xenbr-transit) between rtr and the vpn VM.
+# 2a0c:b641:b50:1::/64: rtr ::1, vpn ::60. 10.0.1.0/24: rtr .1, vpn .60
+# (IPv4 only for the WireGuard DNAT from the WAN IP).
+# IPv4 routing-policy rules mirror 10-enX2.network: symmetric VRF leak for the
+# DNAT path. To=10.0.1.0/24 -> overlay (forward), From=10.0.1.0/24 -> main (return).
+[Match]
+Name=enX1
+
+[Network]
+VRF=overlay
+LinkLocalAddressing=ipv6
+IPv6AcceptRA=false
+KeepConfiguration=static
+
+[Address]
+Address=2a0c:b641:b50:1::1/64
+
+[Address]
+Address=10.0.1.1/24
+
+[RoutingPolicyRule]
+To=10.0.1.0/24
+Table=200
+Priority=996
+
+[RoutingPolicyRule]
+From=10.0.1.0/24
+Table=main
+Priority=997

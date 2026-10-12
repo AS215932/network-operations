@@ -21,7 +21,12 @@ mkdir -p "$(dirname "$known_hosts")"
 touch "$known_hosts"
 
 targets="$(cd "$repo_root/ansible" && ansible-inventory --list 2>/dev/null \
-  | jq -r '._meta.hostvars | to_entries[] | .value.ansible_host // .key' \
+  | jq -r '. as $inventory
+    | ($inventory.retired.hosts // []) as $retired
+    | $inventory._meta.hostvars
+    | to_entries[]
+    | select(.key as $host | ($retired | index($host) | not))
+    | .value.ansible_host // .key' \
   | sort -u)"
 
 added=0

@@ -1,0 +1,25 @@
+---
+# hyrule-tunnel-proxy — apply the public reverse-SSH tunnel daemon on netproxy.
+#
+# Validate (no live changes):
+#   ansible-playbook playbooks/tunnel-proxy.yml --tags validate \
+#     --connection=local --limit netproxy
+#
+# Apply (live deploy):
+#   ansible-playbook playbooks/tunnel-proxy.yml --tags apply \
+#     -e hyrule_tunnel_proxy_apply=true \
+#     --limit netproxy
+#
+# Production deploys use hyrule_tunnel_proxy_version from inventory host_vars.
+# NOTE: apply the netproxy firewall + IPv4 (playbooks/firewall.yml) and the rtr
+# DNAT first, or the public SSH/STUN/data ports will not be reachable.
+
+- name: hyrule-tunnel-proxy — apply
+  hosts: netproxy
+  serial: 1
+  gather_facts: false
+  become: true
+  roles:
+    - role: hyrule_tunnel_proxy
+      tags: [hyrule_tunnel_proxy]
+  tags: [hyrule_tunnel_proxy]

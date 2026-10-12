@@ -2,14 +2,13 @@
 name: apply
 run-name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
 
-# Manual gated deployment. Run with:
+# Manual or workflow-called deployment. Run with:
 #   gh workflow run apply.yml -F playbook=firewall -F limit=cr1-de1 -F dry_run=true
 #
-# The first invocation each session must be approved via the `production`
-# environment protection rule (set up once: settings → environments).
-# A required reviewer (the user) approves; the workflow then renders/applies
-# the playbook and runs post-deploy Goss validation. Regressions surface
-# through live Icinga / the hyrule MCP, not a pre/post snapshot bracket.
+# The `production` environment accepts only runs from `main` and has no
+# required reviewers. The workflow renders/applies the playbook and runs
+# post-deploy Goss validation. Regressions surface through live Icinga / the
+# hyrule MCP, not a pre/post snapshot bracket.
 
 on:
   workflow_dispatch:
@@ -30,12 +29,16 @@ on:
           - web
           - noc
           - network-proxy
+          - tunnel-proxy
+          - prober
           - vault
           - ci
           - ci-runner-key
           - knot
           - extmon
-          - engineering-loop
+          - retire-loop
+          - rtr-apt-cache
+          - hashicorp-key
           - soc
           - frr
           - rtr_routing
@@ -84,17 +87,17 @@ permissions:
 concurrency:
   # Live applies remain strictly serialized. Dry-runs are render/check only and
   # must not get stuck behind, or block, the production apply lane. The live
-  # key is versioned because the original production-infra key produced
-  # jobless pending workflow_dispatch runs after cancelled attempts.
-  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra-live-v2' }}
+  # key is versioned because cancelled attempts can leave GitHub's previous
+  # concurrency lane producing jobless pending workflow_dispatch runs.
+  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra-live-v3' }}
   cancel-in-progress: false
 
 jobs:
   apply:
     name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    # Real applies pause on the protected `production` environment. Dry-runs
-    # must stay ungated so promotion PR validation can be automated.
+    # Real applies use the main-only `production` environment. Dry-runs use
+    # their separate environment so promotion PR validation remains automated.
     environment: ${{ inputs.dry_run && 'dry-run' || 'production' }}
     timeout-minutes: 30
     env:
@@ -107,7 +110,17 @@ jobs:
       # target hosts. In apply.yml runs the key already exists on the runner.
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v7
+      - name: Validate HashiCorp repair target
+        if: ${{ inputs.playbook == 'hashicorp-key' }}
+        env:
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          case "$LIMIT" in
+            noc|api) ;;
+            *) echo '::error::HashiCorp key repair requires exactly limit=noc or limit=api'; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2
 
@@ -142,7 +155,7 @@ jobs:
           fi
 
       - name: Summarize app version pins
-        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy"]'), inputs.playbook) }}
+        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy","tunnel-proxy"]'), inputs.playbook) }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
         run: |
@@ -168,6 +181,10 @@ jobs:
             network-proxy)
               host_vars="ansible/inventory/host_vars/netproxy.yml"
               entries="hyrule_network_proxy_version|AS215932/hyrule-network-proxy"
+              ;;
+            tunnel-proxy)
+              host_vars="ansible/inventory/host_vars/netproxy.yml"
+              entries="hyrule_tunnel_proxy_version|AS215932/hyrule-network-proxy"
               ;;
           esac
 
@@ -227,6 +244,10 @@ jobs:
               apply_var="hyrule_network_proxy_apply=true"
               expected_apply_var="hyrule_network_proxy_apply=true"
               ;;
+            tunnel-proxy)
+              apply_var="hyrule_tunnel_proxy_apply=true"
+              expected_apply_var="hyrule_tunnel_proxy_apply=true"
+              ;;
             engineering-loop)
               apply_var="engineering_loop_apply=true"
               expected_apply_var="engineering_loop_apply=true"
@@ -236,6 +257,16 @@ jobs:
               # role gate is soc_agent_apply (role name != playbook name)
               apply_var="soc_agent_apply=true"
               expected_apply_var="soc_agent_apply=true"
+              ;;
+            prober)
+              # role gate is hyrule_prober_apply (role name != playbook name)
+              apply_var="hyrule_prober_apply=true"
+              expected_apply_var="hyrule_prober_apply=true"
+              ;;
+            mail_openbsd)
+              # role gate is mail_apply (role name != playbook name)
+              apply_var="mail_apply=true"
+              expected_apply_var="mail_apply=true"
               ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
@@ -294,162 +325,6 @@ jobs:
 
           {
             echo "## hyrule-cloud Vault bootstrap"
-            echo
-            echo "Minted response-wrapped AppRole SecretID for this apply run."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Mint engineering-loop Vault bootstrap
-        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${VAULT_ENGINEERING_LOOP_ROLE_ID:-}" ] && { [ -n "${VAULT_ENGINEERING_LOOP_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_ENGINEERING_LOOP_SECRET_ID:-}" ]; }; then
-            echo "engineering-loop Vault bootstrap already provided by environment"
-            exit 0
-          fi
-
-          token_file="/run/vault-agent/github-runner.token"
-          if [ ! -r "$token_file" ]; then
-            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
-            exit 1
-          fi
-          vault_token="$(cat "$token_file")"
-
-          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
-          export VAULT_TOKEN="$vault_token"
-
-          role_id="$(vault read -field=role_id auth/approle/role/engineering-loop/role-id)"
-          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/engineering-loop/secret-id)"
-
-          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
-            echo "::error::failed to mint engineering-loop Vault bootstrap credentials"
-            exit 1
-          fi
-
-          echo "::add-mask::$role_id"
-          echo "::add-mask::$wrapped_secret_id"
-          printf 'VAULT_ENGINEERING_LOOP_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
-          printf 'VAULT_ENGINEERING_LOOP_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
-
-          {
-            echo "## engineering-loop Vault bootstrap"
-            echo
-            echo "Minted response-wrapped AppRole SecretID for this apply run."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Mint knowledge-loop Vault bootstrap
-        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${VAULT_KNOWLEDGE_LOOP_ROLE_ID:-}" ] && { [ -n "${VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_KNOWLEDGE_LOOP_SECRET_ID:-}" ]; }; then
-            echo "knowledge-loop Vault bootstrap already provided by environment"
-            exit 0
-          fi
-
-          token_file="/run/vault-agent/github-runner.token"
-          if [ ! -r "$token_file" ]; then
-            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
-            exit 1
-          fi
-          vault_token="$(cat "$token_file")"
-
-          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
-          export VAULT_TOKEN="$vault_token"
-
-          role_id="$(vault read -field=role_id auth/approle/role/knowledge-loop/role-id)"
-          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/knowledge-loop/secret-id)"
-
-          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
-            echo "::error::failed to mint knowledge-loop Vault bootstrap credentials"
-            exit 1
-          fi
-
-          echo "::add-mask::$role_id"
-          echo "::add-mask::$wrapped_secret_id"
-          printf 'VAULT_KNOWLEDGE_LOOP_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
-          printf 'VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
-
-          {
-            echo "## knowledge-loop Vault bootstrap"
-            echo
-            echo "Minted response-wrapped AppRole SecretID for this apply run."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Mint agent-core-collector Vault bootstrap
-        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${VAULT_AGENT_CORE_COLLECTOR_ROLE_ID:-}" ] && { [ -n "${VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_AGENT_CORE_COLLECTOR_SECRET_ID:-}" ]; }; then
-            echo "agent-core-collector Vault bootstrap already provided by environment"
-            exit 0
-          fi
-
-          token_file="/run/vault-agent/github-runner.token"
-          if [ ! -r "$token_file" ]; then
-            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
-            exit 1
-          fi
-          vault_token="$(cat "$token_file")"
-
-          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
-          export VAULT_TOKEN="$vault_token"
-
-          role_id="$(vault read -field=role_id auth/approle/role/agent-core-collector/role-id)"
-          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/agent-core-collector/secret-id)"
-
-          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
-            echo "::error::failed to mint agent-core-collector Vault bootstrap credentials"
-            exit 1
-          fi
-
-          echo "::add-mask::$role_id"
-          echo "::add-mask::$wrapped_secret_id"
-          printf 'VAULT_AGENT_CORE_COLLECTOR_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
-          printf 'VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
-
-          {
-            echo "## agent-core-collector Vault bootstrap"
-            echo
-            echo "Minted response-wrapped AppRole SecretID for this apply run."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Mint agentic-observatory Vault bootstrap
-        if: ${{ !inputs.dry_run && inputs.playbook == 'engineering-loop' }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${VAULT_AGENTIC_OBSERVATORY_ROLE_ID:-}" ] && { [ -n "${VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID:-}" ] || [ -n "${VAULT_AGENTIC_OBSERVATORY_SECRET_ID:-}" ]; }; then
-            echo "agentic-observatory Vault bootstrap already provided by environment"
-            exit 0
-          fi
-
-          token_file="/run/vault-agent/github-runner.token"
-          if [ ! -r "$token_file" ]; then
-            echo "::error::${token_file} is not readable by the runner user; re-apply playbooks/ci.yml to refresh Vault Agent token sink permissions"
-            exit 1
-          fi
-          vault_token="$(cat "$token_file")"
-
-          export VAULT_ADDR="${VAULT_ADDR:-http://[2a0c:b641:b50:2::c0]:8200}"
-          export VAULT_TOKEN="$vault_token"
-
-          role_id="$(vault read -field=role_id auth/approle/role/agentic-observatory/role-id)"
-          wrapped_secret_id="$(vault write -wrap-ttl=10m -field=wrapping_token -f auth/approle/role/agentic-observatory/secret-id)"
-
-          if [ -z "$role_id" ] || [ -z "$wrapped_secret_id" ]; then
-            echo "::error::failed to mint agentic-observatory Vault bootstrap credentials"
-            exit 1
-          fi
-
-          echo "::add-mask::$role_id"
-          echo "::add-mask::$wrapped_secret_id"
-          printf 'VAULT_AGENTIC_OBSERVATORY_ROLE_ID=%s\n' "$role_id" >> "$GITHUB_ENV"
-          printf 'VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID=%s\n' "$wrapped_secret_id" >> "$GITHUB_ENV"
-
-          {
-            echo "## agentic-observatory Vault bootstrap"
             echo
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"

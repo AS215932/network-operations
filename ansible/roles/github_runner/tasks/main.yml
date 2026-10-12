@@ -454,18 +454,23 @@
       set -euo pipefail
       tmp="$(mktemp)"
       {% set ns = namespace(targets=[]) %}
+      {% set retired_hosts = groups['retired'] | default([]) %}
       {% for host in groups['all'] | default([]) %}
+      {% if host not in retired_hosts %}
       {% set target = hostvars[host].ansible_host | default(host) %}
       {% if target not in ['0.0.0.0', '::'] %}
       {% set _ = ns.targets.append(target) %}
       {% endif %}
+      {% endif %}
       {% endfor %}
-      {% for p in peers.values() %}
+      {% for peer_name, p in peers.items() %}
+      {% if peer_name not in retired_hosts and (peer_name | replace('_', '-')) not in retired_hosts %}
       {% for attr in ['ipv6', 'loopback', 'underlay'] %}
       {% if p[attr] is defined and p[attr] not in ['0.0.0.0', '::'] %}
       {% set _ = ns.targets.append(p[attr]) %}
       {% endif %}
       {% endfor %}
+      {% endif %}
       {% endfor %}
       {% for target in ns.targets | unique %}
       ssh-keyscan -T 5 {{ target | quote }} >> "$tmp" 2>/dev/null || true

@@ -55,6 +55,14 @@ github_runner_docker_prune_enabled: true
 github_runner_docker_prune_interval: daily
 github_runner_docker_prune_randomized_delay: 15m
 github_runner_docker_prune_until: 168h
+# Volume pruning is a separate ExecStart line from the age-filtered system
+# prune, because Docker rejects `--volumes` combined with `--filter until=`
+# ("The \"until\" filter is not supported with \"--volumes\"") and fails the
+# whole unit (network-operations#473). Off by default: the runners keep no
+# named volumes, and unbounded volume deletion is not something to switch on
+# implicitly while fixing an unrelated flag conflict. When enabled the unit
+# prunes ANONYMOUS volumes only — see the template comment.
+github_runner_docker_prune_volumes: false
 
 # Labels the workflows match against. With scope=org these are shared across
 # every repo in the runner group; pick a generic namespace (`hyrule`) and let

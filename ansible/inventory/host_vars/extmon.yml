@@ -20,9 +20,19 @@ ansible_distribution: Debian
 # install packages or restart services. Mirrors the other roles' apply gates.
 extmon_apply: false
 
-# Discord webhook for Alertmanager. Will move to Vault in Phase C/L4 — for
-# now sourced from secrets.local.sh on the operator's workstation:
-#   export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+# Discord webhook for Alertmanager. Two supply paths set the same-named
+# env var, so this lookup works unchanged either way:
+#   - Manual: export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+#     on the operator's workstation before running playbooks/extmon.yml directly.
+#   - CI (post-merge-apply / apply.yml): Vault Agent renders it into
+#     /etc/github-runner/secrets.env from kv/data/ci-runner's
+#     extmon_discord_webhook_url field (ansible/roles/vault_agent/templates/
+#     github-runner.env.ctmpl.j2), which the workflow sources into $GITHUB_ENV.
+# If neither path has set it, the value is empty and the alertmanager
+# template renders the discord receiver with zero configs (see
+# roles/extmon/templates/alertmanager.yml.j2) rather than a config
+# Alertmanager rejects at load — so an unset webhook degrades to
+# "alerts silently drop" instead of "alertmanager crash-loops".
 # Use discord.com (v4 + v6) instead of discordapp.com (v4-only) so future
 # redeploys to v6-preferred providers stay clean.
 extmon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_DISCORD_WEBHOOK_URL') | default('') }}"

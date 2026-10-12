@@ -149,7 +149,8 @@ Use the production workflow after the policies and KV entry exist:
    `dry_run=true`.
 2. Run `apply.yml` with `playbook=engineering-loop`, `limit=loop`,
    `dry_run=false`.
-3. Approve the GitHub `production` environment gate.
+3. Confirm the run entered the main-only `production` environment without a
+   reviewer pause.
 4. Confirm `/opt/engineering-loop/.env` exists on `loop` with owner/root and
    group access for the `loop` service only.
 5. Confirm `/etc/engineering-loop/github-app.private-key.pem` exists with

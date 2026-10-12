@@ -1,7 +1,7 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
-hyrule_cloud_version: a8677707db803f603464852295cae7cf161ca0e8
+hyrule_cloud_version: 4543c7d0ac61a128e98e2275634eb03abceeb210
 hyrule_cloud_monero_wallet_rpc_enabled: true
 
 firewall_extra_rules:
@@ -23,5 +23,7 @@ host_meta:
   summary: "hyrule-cloud VM-lifecycle API on :8402 backed by PostgreSQL, with postgres_exporter for monitoring."
 network_flows_outbound:
   - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates (TSIG hyrule-dns)" }
+  - { to: dns, proto: tcp, port: 8453, purpose: "HMAC-authenticated managed customer DNS control" }
   - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
+  - { to: netproxy, proto: tcp, port: 8452, purpose: "authenticated reverse-SSH tunnel control API (create/extend/revoke leases)" }
   - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }

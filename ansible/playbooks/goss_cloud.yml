@@ -1,0 +1,39 @@
+---
+- name: Validate deployed Hyrule Cloud with Goss
+  hosts: api
+  gather_facts: false
+  become: true
+  vars:
+    hyrule_cloud_goss_source: "{{ playbook_dir }}/../../tests/goss/hyrule-cloud.yml"
+    hyrule_cloud_goss_remote: /tmp/hyrule-cloud-goss.yml
+  tasks:
+    - name: Run Hyrule Cloud target-side Goss validation
+      block:
+        - name: Copy Hyrule Cloud Goss specification to the target
+          ansible.builtin.copy:
+            src: "{{ hyrule_cloud_goss_source }}"
+            dest: "{{ hyrule_cloud_goss_remote }}"
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Validate Hyrule Cloud on the target
+          ansible.builtin.command:
+            argv:
+              - goss
+              - -g
+              - "{{ hyrule_cloud_goss_remote }}"
+              - validate
+              - --format
+              - documentation
+          register: hyrule_cloud_goss_result
+          changed_when: false
+
+        - name: Report Hyrule Cloud Goss results
+          ansible.builtin.debug:
+            var: hyrule_cloud_goss_result.stdout_lines
+      always:
+        - name: Remove Hyrule Cloud Goss specification from the target
+          ansible.builtin.file:
+            path: "{{ hyrule_cloud_goss_remote }}"
+            state: absent

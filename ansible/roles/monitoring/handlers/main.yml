@@ -25,6 +25,26 @@
   listen: restart node_exporter
   when: ansible_os_family == "FreeBSD"
 
+# Dashboard JSON changes are picked up by the file provisioner on its own
+# interval; datasource provisioning is only read at startup, so this handler is
+# what activates those.
+# A bad provisioning file makes Grafana exit at startup, and systemd's restart
+# limit then latches the unit into failed/start-limit. Without this, the very
+# apply that fixes the bad file cannot restart the service ("Start request
+# repeated too quickly") and the run reports failure with Grafana still down.
+- name: clear grafana start-limit
+  command: "systemctl reset-failed {{ monitoring_grafana_service }}"
+  changed_when: false
+  failed_when: false
+  listen: restart grafana
+
+- name: restart grafana service
+  systemd:
+    name: "{{ monitoring_grafana_service }}"
+    state: restarted
+    enabled: true
+  listen: restart grafana
+
 - name: reload icinga2
   command: icinga2 daemon -C
   changed_when: false

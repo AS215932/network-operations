@@ -1,0 +1,92 @@
+# Deploy to: /etc/prometheus/rules.d/hyrule-commerce-readiness.yml on mon
+# "Can a customer actually buy anything from cloud.hyrule.host right now?"
+#
+# Why this file exists. From 2026-08-01 to 2026-08-05 the XCP-NG hypervisor
+# credential (XCPNG_XO_TOKEN in Vault kv/hyrule-cloud) expired. XO rejected
+# every call with `invalid credentials`, so POST /v1/vm/create returned 503 for
+# five days and expired VMs stopped being reclaimed. Not one alert fired: the
+# only compute rule, HyrulePublicComputeControlPlaneUnavailable, blackbox-probes
+# https://cloud.hyrule.host/health, which stayed 200 the entire time. The API
+# was perfectly healthy. It was the credential behind it that was dead.
+#
+# Liveness of the API is not the same question as whether the product can be
+# sold, and only the first was ever measured. These rules measure the second.
+#
+# Metrics come from the hyrule-cloud /metrics exporter (job: hyrule-cloud). Both
+# gauges are produced by the same probes that drive the public status page at
+# /v1/status, so an operator page and the customer-facing page cannot disagree
+# about whether Hyrule is open for business.
+#
+# These rules deliberately carry no public-status label. That namespace is a
+# closed contract: hyrule_cloud/api/status.py validates the exact set of public
+# rules in _REQUIRED_PUBLIC_RULES and reports UNKNOWN if it does not match, so
+# publishing a rule there without a matching code change would blank the
+# customer status page. These are operator alerts; customer impact is already
+# covered on the status page.
+#
+# (Do not write the public-status label as a literal key/value anywhere in this
+# file, including in a comment. tests/iac/test_public_service_status.py finds
+# published rules by scanning the raw text for it, so a prose mention makes the
+# preamble look like an alert block and fails the suite.)
+
+groups:
+  - name: hyrule-commerce-readiness
+    interval: 30s
+    rules:
+      # Fires on the exact 2026-08 outage shape. The exporter probes admission
+      # for the smallest sellable VM, so a 0 means checkout would reject a real
+      # order — whether the cause is a dead XO token, an unreachable
+      # hypervisor, or genuinely exhausted capacity.
+      #
+      # 10m of `for` rides out an XO restart or a transient websocket drop
+      # without paging, while still catching a five-day outage on day zero.
+      - alert: HyruleVMAdmissionUnavailable
+        expr: hyrule_vm_admission_ready == 0
+        for: 10m
+        labels:
+          severity: critical
+          source: prometheus
+        annotations:
+          summary: "cloud.hyrule.host cannot accept new VM orders"
+          description: "The VM admission probe has failed for 10 minutes: POST /v1/vm/create is returning 503 and no new compute can be sold. Note that /health stays 200 in this state. Start with `journalctl -u hyrule-cloud | grep -E 'vm_capacity_check_failed|status_vm_admission_probe_failed'` — a rejected XCPNG_XO_TOKEN surfaces there as `session.signInWithToken: invalid credentials`. XO tokens default to a 30-day life, so an expiry is the first thing to rule out."
+
+      # Assumes the domains product is launched, which it has been since
+      # 2026-08-05. A 0 here means discovery is failing closed: /v1/domains/tlds
+      # and /v1/domains/check 503, so nothing can be quoted or bought. The usual
+      # cause is a stale registrar catalog — the worker refreshes it every 6h and
+      # DOMAIN_CATALOG_MAX_AGE_SECONDS is 24h, so this is a slow failure and 30m
+      # of `for` costs nothing.
+      #
+      # If domains is ever deliberately taken back off sale, silence or delete
+      # this rule rather than letting it page on an intended state.
+      - alert: HyruleDomainsDiscoveryUnavailable
+        expr: hyrule_domains_discovery_ready == 0
+        for: 30m
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "cloud.hyrule.host cannot sell domains"
+          description: "The domains discovery probe has reported not-ready for 30 minutes: /v1/domains/tlds and /v1/domains/check are failing closed, so no domain can be quoted or registered. Check `journalctl -u hyrule-cloud-worker | grep domain_catalog` — a registrar bearer rejected with `[OpenProvider] 196` means the catalog has stopped refreshing and will go stale within 24h."
+
+      # The silent-regression guard. The exporter omits hyrule_vm_admission_ready
+      # entirely when real provisioning is switched off, which is correct for a
+      # simulated environment but would be a serious regression in production:
+      # the VM alert above is an `== 0` comparison, so a missing series can never
+      # fire it, and compute would go unmonitored exactly as it did before this
+      # file existed. mon scrapes only production, so absence here is always wrong.
+      #
+      # Gated on the target being up so a genuine outage pages once, through the
+      # target-down path, instead of also firing this. 1h of `for` covers deploys,
+      # Alembic migrations and service restarts.
+      - alert: HyruleVMAdmissionProbeMissing
+        expr: |
+          absent(hyrule_vm_admission_ready)
+          and on() (max(up{job="hyrule-cloud"}) == 1)
+        for: 1h
+        labels:
+          severity: warning
+          source: prometheus
+        annotations:
+          summary: "hyrule-cloud is scraping but reports no VM admission probe"
+          description: "The hyrule-cloud target is up but is not exporting hyrule_vm_admission_ready. The exporter only omits it when real provisioning is disabled, so production has most likely lost HCP_LAUNCH_PROOF_REAL_XCPNG — which would also mean paying customers are being handed simulated VMs. Verify the rendered /opt/hyrule-cloud/.env and the Vault template."

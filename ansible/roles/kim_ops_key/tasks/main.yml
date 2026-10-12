@@ -1,0 +1,55 @@
+---
+# Set up Kim's operator SSH access on this host: a dedicated `kim` user with
+# NOPASSWD root, and Kim's pubkey authorized for it. Kim owns AS215932
+# operations from now on, so the account mirrors the `ci` deploy user's
+# privilege shape (sudo on Linux, doas on BSD). No from= restriction — an
+# operator connects from wherever they work (ops workstation, VPN), and the
+# firewall role's ssh_allow_sources_* already gates SSH transport sources.
+
+- name: Read Kim's operator public key from controller
+  slurp:
+    src: "{{ kim_ops_key_pub_path }}"
+  register: kim_ops_key_pub
+  delegate_to: localhost
+  run_once: true
+  become: false
+  tags: [apply]
+
+- name: Ensure the kim operator user exists
+  user:
+    name: "{{ kim_ops_user }}"
+    shell: "{{ kim_ops_user_shell }}"
+    create_home: true
+    state: present
+  tags: [apply]
+
+- name: Authorize Kim's operator key for the kim user
+  authorized_key:
+    user: "{{ kim_ops_user }}"
+    key: "{{ kim_ops_key_pub.content | b64decode | trim }}"
+    state: present
+    comment: "kim operator (managed by ansible/roles/kim_ops_key)"
+  tags: [apply]
+
+- name: Grant the kim operator user NOPASSWD sudo (Linux)
+  copy:
+    dest: /etc/sudoers.d/kim-ops
+    content: "{{ kim_ops_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: ansible_os_family not in ["FreeBSD", "OpenBSD"]
+  tags: [apply]
+
+- name: Grant the kim operator user NOPASSWD doas (BSD)
+  lineinfile:
+    path: "{{ '/usr/local/etc/doas.conf' if ansible_os_family == 'FreeBSD' else '/etc/doas.conf' }}"
+    line: "permit nopass {{ kim_ops_user }} as root"
+    create: true
+    owner: root
+    group: wheel
+    mode: "0644"
+    validate: "doas -C %s"
+  when: ansible_os_family in ["FreeBSD", "OpenBSD"]
+  tags: [apply]

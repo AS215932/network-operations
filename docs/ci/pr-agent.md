@@ -5,7 +5,10 @@ uses **our own OpenRouter key**. It is advisory only — read + PR/issue-comment
 permissions, never deploys, never writes code, never auto-merges, and is **not**
 a required check.
 
-- Action: `The-PR-Agent/pr-agent@0bd56c0508504c718cc03d504cd4ceb6725ba3c7` (v0.35.0, Docker-based), SHA-pinned.
+- Action: `The-PR-Agent/pr-agent@8e4d32e5497defd43c023a404f73560c62728961` (v0.39.0, Docker-based), SHA-pinned.
+  (v0.35.0 `0bd56c05…` is retired org-wide: on this org it silently failed the LLM call and stopped posting the
+  Reviewer Guide; v0.39.0 restores it and adds `persistent_comment` re-review-in-place + the `issue_comment`
+  concurrency-group fix.)
 - Runner: `hyrule-public-pr` (unprivileged `ci-pr`) only.
 - Model: primary `openrouter/deepseek/deepseek-v4-flash`, fallback `openrouter/minimax/minimax-m2.7`.
 - Key: `OPENROUTER_API_KEY` org secret (visibility = selected public repos, including `engineering-loop`), delivered per-job as `OPENROUTER__KEY`.

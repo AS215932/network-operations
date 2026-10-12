@@ -23,9 +23,23 @@ auto_auth {
       secret_id_file_path = "{{ vault_agent_secret_id_file }}"
 {% set response_wrapping_path = vault_agent_effective_secret_id_response_wrapping_path | default(vault_agent_secret_id_response_wrapping_path) %}
 {% if response_wrapping_path | length > 0 %}
+      # WRAPPED (single-use) mode. Vault Agent unwraps the token once and then
+      # DELETES {{ vault_agent_secret_id_file }}. The next restart of this unit
+      # — reboot, `apt upgrade vault`, OOM kill, deploy — has no credential and
+      # the agent enters a permanent 403 backoff loop while systemd still
+      # reports the unit active. Re-bootstrapping needs a human with a fresh
+      # wrapped SecretID inside the wrap TTL, and the agent must be STOPPED
+      # before the new token is installed or it consumes it mid-retry-loop.
+      # Prefer the durable shape below: see
+      # docs/runbooks/vault-agent-durable-auth.md.
       secret_id_response_wrapping_path = "{{ response_wrapping_path }}"
       remove_secret_id_file_after_reading = true
 {% else %}
+      # DURABLE mode. The SecretID persists 0600 on disk, so authentication
+      # survives every restart. This is only safe when the AppRole is created
+      # with secret_id_num_uses=0, secret_id_ttl=0 and — as the compensating
+      # control for a credential at rest — secret_id_bound_cidrs /
+      # token_bound_cidrs pinned to this host's address.
       remove_secret_id_file_after_reading = false
 {% endif %}
     }

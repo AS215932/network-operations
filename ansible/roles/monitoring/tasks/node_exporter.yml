@@ -1,11 +1,41 @@
 ---
+# Existing exporters must remain configurable when an unrelated APT source is
+# unavailable. Fresh installations still refresh the package indexes normally.
+- name: Inspect installed packages (Debian)
+  command:
+    argv:
+      - dpkg-query
+      - --show
+      - '--showformat=${db:Status-Status}'
+      - "{{ monitoring_pkg }}"
+  register: monitoring_package_state
+  changed_when: false
+  failed_when: monitoring_package_state.rc not in [0, 1]
+  check_mode: false
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
 - name: Install node_exporter (Debian)
   apt:
     name: "{{ monitoring_pkg }}"
     state: present
-    update_cache: true
-    cache_valid_time: 3600
-  when: ansible_os_family == "Debian"
+    update_cache: "{{ monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' }}"
+    cache_valid_time: "{{ 3600 if monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed' else 0 }}"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_package_state.rc != 0 or monitoring_package_state.stdout != 'installed'
+  tags: [apply]
+
+- name: Ensure node_exporter textfile collector dir exists (Debian)
+  file:
+    path: "{{ monitoring_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - ansible_os_family == "Debian"
+    - monitoring_node_textfile_enabled | bool
   tags: [apply]
 
 - name: Configure node_exporter listen address (Debian)
@@ -20,14 +50,28 @@
     # fleet-wide (the blind spot is not github-runner-specific); it adds one
     # series per systemd unit, so set monitoring_node_restart_metrics: false in
     # host_vars on any high-cardinality node where that scrape cost matters.
+    #
+    # --collector.textfile.directory lets on-host collectors publish state that
+    # node_exporter cannot derive itself. First consumer: the Vault Agent health
+    # collector, which is the only thing that sees an agent stuck in a 403 auth
+    # loop while its unit stays active.
     line: >-
       ARGS="--web.listen-address={{ monitoring_node_listen }} --collector.systemd{{
-      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}"
+      ' --collector.systemd.enable-restarts-metrics' if monitoring_node_restart_metrics | bool else '' }}{{
+      ' --collector.textfile.directory=' ~ monitoring_textfile_dir if monitoring_node_textfile_enabled | bool else '' }}"
     owner: root
     group: root
     mode: "0644"
   when: ansible_os_family == "Debian"
   notify: restart node_exporter
+  tags: [apply]
+
+- name: Ensure node_exporter is enabled and running (Debian)
+  systemd:
+    name: "{{ monitoring_node_service }}"
+    state: started
+    enabled: true
+  when: ansible_os_family == "Debian"
   tags: [apply]
 
 - name: Install node_exporter (FreeBSD)
@@ -78,4 +122,19 @@
   command: "rcctl enable {{ monitoring_node_service }}"
   changed_when: false
   when: ansible_os_family == "OpenBSD"
+  tags: [apply]
+
+- name: Check node_exporter state (OpenBSD)
+  command: "rcctl check {{ monitoring_node_service }}"
+  register: monitoring_openbsd_node_exporter_state
+  changed_when: false
+  failed_when: monitoring_openbsd_node_exporter_state.rc not in [0, 1]
+  when: ansible_os_family == "OpenBSD"
+  tags: [apply]
+
+- name: Start node_exporter when stopped (OpenBSD)
+  command: "rcctl start {{ monitoring_node_service }}"
+  when:
+    - ansible_os_family == "OpenBSD"
+    - monitoring_openbsd_node_exporter_state.rc == 1
   tags: [apply]
