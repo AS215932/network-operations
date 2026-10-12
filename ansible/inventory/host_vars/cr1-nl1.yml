@@ -12,8 +12,8 @@ pf_ext_ifs: ["vtnet0", "vtnet1"]
 pf_antispoof: true
 pf_use_as215932_table: false
 
-# WG underlay listener ports — 1337 (cr1-de1), 1338 (legacy leg b), 1340 (rtr), 1341 (cr1-ch1).
-pf_wg_ports: [1337, 1338, 1340, 1341]
+# WG underlay listener ports — 1337 (cr1-de1), 1338 (legacy leg b), 1340 (rtr), 1341 (cr1-ch1), 1343 (rtr-bsd, issue #14).
+pf_wg_ports: [1337, 1338, 1340, 1341, 1343]
 
 # External BGP peers.
 pf_bgp_peers:

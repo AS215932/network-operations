@@ -1,6 +1,6 @@
 ---
 # rtr — Debian 13 + FRRouting + nftables, dom0-hosted VM at OVH FR.
-# Bridges: enX0 (mgmt), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
+# Bridges: enX0 (mgmt), enX1 (vpn transit), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
 # Carries IPv4 NAT/DNAT for legacy v4 service ingress + customer VM isolation.
 
 # --- networkd_resolved role override: drop-in goes on the overlay infra interface,
@@ -21,7 +21,7 @@ rtr_wan_ip:   "46.105.40.223"
 rtr_wan_if:   "enX4"
 rtr_dns_v4:    "10.0.2.10"
 rtr_proxy_v4:  "10.0.2.40"
-rtr_vpn_v4:    "10.0.2.60"
+rtr_vpn_v4:    "10.0.1.60"  # vpn on the dedicated transit (enX1)
 rtr_tunnel_v4: "10.0.2.224"
 
 # --- Input chain posture ---
@@ -38,7 +38,7 @@ firewall_extra_rules:
   # default-VRF processes (apt, curl, unbound-anchor) therefore query the
   # overlay Unbound with rtr's underlay source — allow it so rtr can resolve.
   # See issue #135. (Goes away with the OpenBSD/rdomain migration, #14.)
-  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}", "{{ peers.rtr.underlay }}"], comment: "DNS recursion from overlay + rtr's own (underlay src, VRF)" }
+  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}", "{{ vpn_transit_subnet }}", "{{ peers.rtr.underlay }}"], comment: "DNS recursion from overlay + rtr's own (underlay src, VRF)" }
 
   # Monitoring scrapes from mon.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }

@@ -1,0 +1,134 @@
+---
+# rtr-bsd — parallel OpenBSD edge router (issue #14). Same dom0, same
+# xenbr-mgmt/infra/vm/wan attachment as rtr; distinct addresses so it runs
+# alongside live rtr without conflicts until the atomic cutover.
+#
+# Phase 1: v6 routing parity (FRR iBGP/OSPF6 over three new WG links to the
+# cores, Unbound DNS64 recursion, customer isolation in pf). NO failover IPv4,
+# NO DNAT, NO NAT64 — the stateful v4 services stay on rtr until cutover
+# (docs/runbooks/rtr-bsd-build.md). At cutover, pf gains rdr/binat rules and
+# the gateway/DNAT/NAT64 addresses move; this file documents the delta inline.
+#
+# Xen PV NIC names on OpenBSD are xnf0..3 (device order = VIF order):
+#   xnf0 mgmt    (xenbr-mgmt, link-local only — underlay SSH from dom0)
+#   xnf1 infra   (xenbr-infra, 2a0c:b641:b50:2::2/64 — standby gateway)
+#   xnf2 vm      (xenbr-vm, 2a0c:b641:b51::2/48 — standby customer aggregate)
+#   xnf3 wan     (xenbr0, 2001:41d0:303:48a::3/64 — distinct OVH underlay;
+#                 NDP-proxied by dom0, see configs/dom0/network-setup.sh)
+
+# --- Firewall: router profile, NOT the OpenBSD service profile ---
+# vars/OpenBSD.yml defaults firewall_pf_template to pf-service.conf.j2 (single
+# service host). rtr-bsd is a router: it needs the WG-mesh transit, AS215932
+# table, and WG-port sections that only pf.conf.j2 renders.
+firewall_pf_template: pf.conf.j2
+pf_ext_if: "xnf3"
+pf_antispoof: false   # burn-in: revisit once the underlay path is proven
+pf_use_as215932_table: true
+
+# WG underlay listeners — 1343 (nl1 link), 1344 (de1 link), 1345 (ch1 link).
+# Cores listen on 1343 for their rtr-bsd peer (see cr1-* host_vars).
+pf_wg_ports: [1343, 1344, 1345]
+
+# No external BGP peers on rtr-bsd (transit-free, like rtr).
+pf_bgp_peers: []
+
+# Input posture: enforced default-deny, same as rtr.
+firewall_input_policy: drop
+firewall_log_only: false
+
+# firewall_extra_rules binds `on $ext_if` (wan) only, so every rule that must
+# land on infra/vm/wg lives in firewall_extra_raw_pf below with an explicit
+# interface. firewall_extra_rules carries just the wan-bound mon scrapes.
+firewall_extra_rules:
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "node_exporter scrape from mon" }
+  - { proto: tcp, dport: 9342, src: "{{ peers.mon.ipv6 }}", family: inet6, comment: "frr_exporter scrape from mon" }
+
+# Router specifics the data model cannot express (interface-scoped DNS,
+# OSPF, isolation, forwarding). Ordering note: the base template emits its
+# `quick` passes (WG no-state, AS215932 transit on $ext_if, WG ports, SSH,
+# ICMP) BEFORE this block. Nothing above passes on xnf1/xnf2 except ICMP,
+# so on infra/vm these rules are the only deciders besides default-block.
+# In particular the customer-isolation drops below cannot be bypassed by an
+# earlier quick-pass: the template's transit passes bind $ext_if (wan) only.
+firewall_extra_raw_pf: |
+  # iBGP from core loopbacks + rtr loopback (arrives over wg tunnels; the
+  # template's `pass quick on wg all no state` already covers forwarding, but
+  # explicit port-179 allows keep the audit trail and survive a future
+  # wg-pass lockdown — same rationale as the cr1 explicit scrape rules).
+  pass in quick on wg inet6 proto tcp from { {{ peers.cr1_nl1.loopback }}, {{ peers.cr1_de1.loopback }}, \
+      {{ peers.cr1_ch1.loopback }}, {{ peers.rtr.loopback }} } to any port = bgp flags S/SA keep state \
+      label "iBGP from mesh loopbacks"
+
+  # OSPFv3 on the WG mesh (proto 89, multicast + link-local).
+  pass in quick on wg inet6 proto ospf keep state label "OSPFv3 on WG mesh"
+
+  # DNS recursion — overlay VMs and customer VMs use rtr-bsd's Unbound during
+  # burn-in (point a test VM at ::2). No VRF split on OpenBSD: unbound binds
+  # the infra/vm addresses directly, so no underlay-source exception is needed
+  # (contrast rtr's VRF-confined unbound, issue #135).
+  pass in quick on xnf1 inet6 proto { tcp, udp } from { {{ infra_subnet }}, {{ customer_subnet }}, {{ vpn_clients_subnet }} } to any port = domain keep state label "DNS recursion from overlay (infra)"
+  pass in quick on xnf2 inet6 proto { tcp, udp } from { {{ infra_subnet }}, {{ customer_subnet }}, {{ vpn_clients_subnet }} } to any port = domain keep state label "DNS recursion from overlay (vm)"
+
+  # Monitoring scrapes + SSH from the overlay side (mon/noc/ci reach rtr-bsd
+  # over infra, not wan).
+  pass in quick on xnf1 inet6 proto tcp from {{ peers.mon.ipv6 }} to any port = 9100 flags S/SA keep state label "node_exporter scrape from mon (infra)"
+  pass in quick on xnf1 inet6 proto tcp from {{ peers.mon.ipv6 }} to any port = 9342 flags S/SA keep state label "frr_exporter scrape from mon (infra)"
+  pass in quick on xnf1 inet6 proto tcp from { {{ ops_prefix_v6 }}, {{ vpn_clients_subnet }}, \
+      {{ peers.ci.ipv6 }}, {{ peers.noc.ipv6 }}, {{ peers.mon.ipv6 }} } to any port = ssh flags S/SA \
+      keep state label "SSH from ops/VPN/ci/noc/mon (infra)"
+
+  # Customer VM isolation — destination-prefix enforced (not oifname), mirroring
+  # rtr's nftables isolation (customer_isolation_block_*). ci-pr
+  # (2a0c:b641:b51::c1) is the acceptance canary: ci-pr → mon:9100 must time
+  # out while DNS to ::2 and public egress still work.
+  block drop in quick log on xnf2 inet6 from {{ customer_subnet }} to { {{ customer_isolation_block_v6 | join(', ') }} } label "customer→infra/router v6 isolation"
+
+  # Forwarding: router forwards between infra/vm/wg/wan. Default policy is
+  # block, so the forwarding path needs explicit passes (rtr's nftables uses
+  # forward policy accept; pf has no separate forward chain — filter rules
+  # cover forwarded packets).
+  pass in quick on xnf1 inet6 from {{ infra_subnet }} to any label "forward: infra egress"
+  pass in quick on xnf2 inet6 from {{ customer_subnet }} to any label "forward: customer egress (post-isolation)"
+  pass out quick on xnf1 inet6 from any to {{ infra_subnet }} label "forward: infra return"
+  pass out quick on xnf2 inet6 from any to {{ customer_subnet }} label "forward: customer return"
+  pass out quick on xnf3 inet6 from any to any label "forward: underlay egress"
+
+  # CUTOVER DELTA (Phase 2, not active): pf rdr/binat for the failover IPv4 +
+  # NAT64 af-to live here. Requires its own OVH failover IP per the #23 lesson
+  # (never share the router's egress IP with the translation pool). See
+  # docs/runbooks/rtr-bsd-build.md.
+
+# --- Monitoring --- (mirrors rtr's router registration; Host object name
+# "rtr-bsd" is fresh — no clash with the hand-curated routers.conf.)
+monitoring_register: true
+monitoring_role: router
+monitoring_display_name: "rtr-bsd (OVH FR, OpenBSD)"
+monitoring_check_vars:
+  has_frr: true
+  underlay_address6: "{{ peers.rtr_bsd.underlay }}"
+  prom_instance_frr: "[{{ peers.rtr_bsd.ipv6 }}]:9342"
+  site: "ovh1"
+monitoring_node_listen: "[{{ peers.rtr_bsd.ipv6 }}]:9100"
+
+# mon's icinga2 by_ssh pubkey, authorized for the dedicated `monitoring`
+# user by the monitoring role (doas privesc on OpenBSD).
+# Set MONITORING_BY_SSH_PUBKEY in secrets.local.sh.
+monitoring_by_ssh_pubkey: "{{ lookup('env', 'MONITORING_BY_SSH_PUBKEY') | default('', true) }}"
+
+# --- Logs --- OpenBSD native syslogd forward (no Vector), like mail.
+logs_register: true
+logs_role: router
+logs_use_openbsd_syslogd: true
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "OpenBSD"
+  role: "router/DNS forwarder (parallel burn-in)"
+  summary: "Parallel OpenBSD edge router running FRR BGP/OSPF, Unbound DNS64, and pf customer isolation alongside live rtr; no public v4 services until atomic cutover."
+  notes: >-
+    OSPF (proto 89) on the wg0/wg1/wg2 mesh and iBGP/179 are allowed via
+    firewall_extra_raw_pf, not firewall_extra_rules. SSH (tcp/22) on wan+infra,
+    DNS recursion on infra/vm, and the customer→infra isolation drops are
+    captured in the cross-cutting flows table.
+network_flows_outbound:
+  - { to: public, proto: any, purpose: "IPv6 egress to the internet via the underlay default route (no NAT64 in Phase 1 — overlay clients keep using rtr for v4)" }
