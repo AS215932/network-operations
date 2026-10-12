@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def required_env(name):
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} is required")
+    return value
+
+
+def main():
+    wallet = Path(required_env("MONERO_WALLET_RPC_WALLET_FILE"))
+    if wallet.exists():
+        return 0
+
+    password_file = Path(required_env("MONERO_WALLET_RPC_WALLET_PASSWORD_FILE"))
+    restore_height_raw = os.environ.get("MONERO_WALLET_RPC_RESTORE_HEIGHT", "0")
+    try:
+        restore_height = int(restore_height_raw)
+    except ValueError as exc:
+        raise SystemExit(f"MONERO_WALLET_RPC_RESTORE_HEIGHT must be an integer: {restore_height_raw}") from exc
+
+    payload = {
+        "version": 1,
+        "filename": str(wallet),
+        "password": password_file.read_text().rstrip("\n"),
+        "address": required_env("MONERO_WALLET_RPC_WALLET_ADDRESS"),
+        "viewkey": required_env("MONERO_WALLET_RPC_VIEW_KEY"),
+        "scan_from_height": restore_height,
+    }
+
+    wallet.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    fd, restore_json = tempfile.mkstemp(prefix=".restore-", suffix=".json", dir=wallet.parent, text=True)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+            handle.write("\n")
+        subprocess.run(["/usr/bin/monero-wallet-cli", "--generate-from-json", restore_json], check=True)
+    finally:
+        try:
+            os.unlink(restore_json)
+        except FileNotFoundError:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

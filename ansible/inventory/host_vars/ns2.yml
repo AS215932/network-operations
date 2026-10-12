@@ -56,3 +56,13 @@ monitoring_extra_services:
 logs_register: true
 logs_role: nameserver
 logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — off-net, low log volume (Vector requires ≥ 256 MiB + 32 B)
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "secondary nameserver (OVH GRA11)"
+  summary: "Off-net authoritative secondary nameserver (different ASN and site) providing DNS resilience for AS215932 zones."
+  notes: "Off-net: not on the AS215932 overlay. NOTIFY from dns and outbound AXFR pull are TSIG-authenticated at the Knot ACL layer, not IP-restricted at the firewall."
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "AXFR pull from the primary on NOTIFY (TSIG hyrule-dns)" }
+  - { to: log, proto: tcp, port: 6000, purpose: "off-net Vector agent to aggregator over public IPv6" }

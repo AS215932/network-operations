@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -15,6 +16,25 @@ PIN_TARGETS = {
     "hyrule_mcp_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/hyrule-mcp", "noc"),
     "hyrule_cloud_version": ("ansible/inventory/host_vars/api.yml", "AS215932/hyrule-cloud", "cloud"),
     "hyrule_web_version": ("ansible/inventory/host_vars/web.yml", "AS215932/hyrule-web", "web"),
+    "hyrule_network_proxy_version": (
+        "ansible/inventory/host_vars/netproxy.yml",
+        "AS215932/hyrule-network-proxy",
+        "network-proxy",
+    ),
+}
+
+# Pins that are slaved to another pin (same repo, same commit) rather than being
+# independently settable. The reverse-SSH tunnel daemon is a second binary in the
+# hyrule-network-proxy repo, so its pin always moves with the sidecar's — it is
+# NOT a PIN_TARGETS entry (so carry-forward / pending-promotions never emit an
+# unsupported --hyrule-tunnel-proxy-sha flag for it); it is written as a
+# side-effect of the network-proxy pin below.
+_SLAVED_PINS: dict[str, tuple[str, str]] = {
+    # slave_key: (driver_key, host_vars_path)
+    "hyrule_tunnel_proxy_version": (
+        "hyrule_network_proxy_version",
+        "ansible/inventory/host_vars/netproxy.yml",
+    ),
 }
 
 
@@ -24,9 +44,16 @@ def main() -> int:
     parser.add_argument("--hyrule-mcp-sha", default="")
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
+    parser.add_argument("--hyrule-network-proxy-sha", default="")
     parser.add_argument("--title", default="Promote app SHAs")
     parser.add_argument("--impact", default="Automated app SHA promotion.")
     parser.add_argument("--body-file", default="")
+    parser.add_argument(
+        "--body-from-ref",
+        default="",
+        help="render the body from the pin diff between this git ref and the "
+        "working tree instead of editing pins; covers carried-forward pins",
+    )
     args = parser.parse_args()
 
     requested = {
@@ -34,8 +61,21 @@ def main() -> int:
         "hyrule_mcp_version": args.hyrule_mcp_sha.strip(),
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),
+        "hyrule_network_proxy_version": args.hyrule_network_proxy_sha.strip(),
     }
     requested = {key: value for key, value in requested.items() if value}
+
+    if args.body_from_ref:
+        if requested:
+            raise SystemExit("--body-from-ref cannot be combined with app SHA inputs")
+        if not args.body_file:
+            raise SystemExit("--body-from-ref requires --body-file")
+        changes = ref_changes(args.body_from_ref)
+        Path(args.body_file).write_text(render_body(args.title, args.impact, changes))
+        for key, _repo, _playbook, old_sha, new_sha in changes:
+            print(f"{key}: {old_sha} -> {new_sha}")
+        return 0
+
     if not requested:
         raise SystemExit("no app SHA inputs provided")
 
@@ -50,12 +90,50 @@ def main() -> int:
         old_sha = update_pin(path, key, new_sha)
         changes.append((key, repo, playbook, old_sha, new_sha))
 
+        # Move any pins slaved to this one to the same SHA (same repo/commit).
+        for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+            if driver_key != key:
+                continue
+            slave_old = update_pin(REPO / slave_path, slave_key, new_sha)
+            changes.append((slave_key, repo, "tunnel-proxy", slave_old, new_sha))
+
     if args.body_file:
         Path(args.body_file).write_text(render_body(args.title, args.impact, changes))
 
     for key, _repo, _playbook, old_sha, new_sha in changes:
         print(f"{key}: {old_sha} -> {new_sha}")
     return 0
+
+
+def find_pin(text: str, key: str) -> str | None:
+    match = re.search(rf"^{re.escape(key)}:\s*([0-9a-fA-F]{{40}})\s*$", text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def ref_changes(ref: str) -> list[tuple[str, str, str, str, str]]:
+    """Pin deltas between a git ref (old) and the working tree (new). Includes
+    slaved pins (e.g. the tunnel daemon) so a promotion PR body shows the full
+    deployment impact even though they aren't independent PIN_TARGETS."""
+    changes: list[tuple[str, str, str, str, str]] = []
+    # (key, host_vars_path, repo, playbook) for every reportable pin.
+    reportable: list[tuple[str, str, str, str]] = [
+        (key, rel_path, repo, playbook) for key, (rel_path, repo, playbook) in PIN_TARGETS.items()
+    ]
+    for slave_key, (driver_key, slave_path) in _SLAVED_PINS.items():
+        repo = PIN_TARGETS[driver_key][1]
+        reportable.append((slave_key, slave_path, repo, "tunnel-proxy"))
+    for key, rel_path, repo, playbook in reportable:
+        new_sha = find_pin((REPO / rel_path).read_text(), key)
+        shown = subprocess.run(
+            ["git", "show", f"{ref}:{rel_path}"],
+            capture_output=True,
+            text=True,
+            cwd=REPO,
+        )
+        old_sha = find_pin(shown.stdout, key) if shown.returncode == 0 else None
+        if new_sha and old_sha and new_sha != old_sha:
+            changes.append((key, repo, playbook, old_sha, new_sha))
+    return changes
 
 
 def update_pin(path: Path, key: str, new_sha: str) -> str:
@@ -106,7 +184,7 @@ def render_body(title: str, impact: str, changes: list[tuple[str, str, str, str,
             "- [ ] `scripts/ci/iac-static.sh` passes.",
             "- [ ] Promotion PR checks are green.",
             "- [ ] Production environment gate approved after merge.",
-            "- [ ] Icinga pre/post snapshot diff reviewed.",
+            "- [ ] Post-deploy Goss passed and live Icinga (`mon`) checked for new problems.",
         ]
     )
     return "\n".join(lines) + "\n"

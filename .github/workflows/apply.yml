@@ -2,14 +2,13 @@
 name: apply
 run-name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
 
-# Manual gated deployment. Run with:
+# Manual or workflow-called deployment. Run with:
 #   gh workflow run apply.yml -F playbook=firewall -F limit=cr1-de1 -F dry_run=true
 #
-# The first invocation each session must be approved via the `production`
-# environment protection rule (set up once: settings → environments).
-# A required reviewer (the user) approves; the workflow then runs the
-# pre-snapshot → render/apply → post-snapshot → diff sequence and posts
-# the diff to the run summary + as a comment on the named PR (if any).
+# The `production` environment accepts only runs from `main` and has no
+# required reviewers. The workflow renders/applies the playbook and runs
+# post-deploy Goss validation. Regressions surface through live Icinga / the
+# hyrule MCP, not a pre/post snapshot bracket.
 
 on:
   workflow_dispatch:
@@ -22,15 +21,25 @@ on:
           - firewall
           - monitoring
           - icinga2
+          - prometheus
+          - alertmanager
           - logs
           - cloud
+          - cloud_reprovision_vm
           - web
           - noc
+          - network-proxy
+          - tunnel-proxy
+          - prober
           - vault
           - ci
           - ci-runner-key
           - knot
           - extmon
+          - retire-loop
+          - rtr-apt-cache
+          - hashicorp-key
+          - soc
           - frr
           - rtr_routing
           - networkd_resolved
@@ -47,11 +56,6 @@ on:
         type: boolean
         required: true
         default: true
-      pr_number:
-        description: PR number to post the diff to (optional)
-        type: string
-        required: false
-        default: ""
       bootstrap_ci_runner_key:
         description: Connect as inventory users for first-time ci-runner-key bootstrap
         type: boolean
@@ -71,11 +75,6 @@ on:
         description: Dry-run only (render + check, no apply)
         type: boolean
         required: true
-      pr_number:
-        description: PR number to post the diff to (optional)
-        type: string
-        required: false
-        default: ""
       bootstrap_ci_runner_key:
         description: Connect as inventory users for first-time ci-runner-key bootstrap
         type: boolean
@@ -84,18 +83,21 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 concurrency:
-  group: production-infra
+  # Live applies remain strictly serialized. Dry-runs are render/check only and
+  # must not get stuck behind, or block, the production apply lane. The live
+  # key is versioned because cancelled attempts can leave GitHub's previous
+  # concurrency lane producing jobless pending workflow_dispatch runs.
+  group: ${{ inputs.dry_run && format('production-infra-dry-run-{0}', github.run_id) || 'production-infra-live-v3' }}
   cancel-in-progress: false
 
 jobs:
   apply:
     name: ${{ inputs.dry_run == true && 'Dry-run' || 'Apply' }} playbook ${{ inputs.playbook }} to target(s) ${{ inputs.limit }}
     runs-on: [self-hosted, linux, x64, hyrule-infra]
-    # Real applies pause on the protected `production` environment. Dry-runs
-    # must stay ungated so promotion PR validation can be automated.
+    # Real applies use the main-only `production` environment. Dry-runs use
+    # their separate environment so promotion PR validation remains automated.
     environment: ${{ inputs.dry_run && 'dry-run' || 'production' }}
     timeout-minutes: 30
     env:
@@ -108,12 +110,27 @@ jobs:
       # target hosts. In apply.yml runs the key already exists on the runner.
       CI_KEY_PATH: /var/lib/github-runner/.ssh/id_ci
     steps:
-      - uses: actions/checkout@v6
+      - name: Validate HashiCorp repair target
+        if: ${{ inputs.playbook == 'hashicorp-key' }}
+        env:
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          case "$LIMIT" in
+            noc|api) ;;
+            *) echo '::error::HashiCorp key repair requires exactly limit=noc or limit=api'; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 2
 
       - name: Runner deploy preflight
         run: scripts/ci/deploy-preflight.sh --runner
+
+      # New inventory hosts become reachable without a manual `apply.yml ci`
+      # known_hosts reseed (network-operations#404).
+      - name: Seed missing SSH host keys
+        run: scripts/ci/seed-missing-host-keys.sh
 
       - name: Source Vault-rendered secrets
         run: |
@@ -138,7 +155,7 @@ jobs:
           fi
 
       - name: Summarize app version pins
-        if: ${{ contains(fromJSON('["noc","cloud","web"]'), inputs.playbook) }}
+        if: ${{ contains(fromJSON('["noc","engineering-loop","cloud","web","network-proxy","tunnel-proxy"]'), inputs.playbook) }}
         env:
           PLAYBOOK: ${{ inputs.playbook }}
         run: |
@@ -147,7 +164,11 @@ jobs:
           case "$PLAYBOOK" in
             noc)
               host_vars="ansible/inventory/host_vars/noc.yml"
-              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp"
+              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp noc_knowledge_version|AS215932/knowledge"
+              ;;
+            engineering-loop)
+              host_vars="ansible/inventory/host_vars/loop.yml"
+              entries="engineering_loop_version|AS215932/engineering-loop knowledge_mcp_version|AS215932/knowledge knowledge_loop_version|AS215932/knowledge agentic_observatory_version|AS215932/agentic-observatory"
               ;;
             cloud)
               host_vars="ansible/inventory/host_vars/api.yml"
@@ -156,6 +177,14 @@ jobs:
             web)
               host_vars="ansible/inventory/host_vars/web.yml"
               entries="hyrule_web_version|AS215932/hyrule-web"
+              ;;
+            network-proxy)
+              host_vars="ansible/inventory/host_vars/netproxy.yml"
+              entries="hyrule_network_proxy_version|AS215932/hyrule-network-proxy"
+              ;;
+            tunnel-proxy)
+              host_vars="ansible/inventory/host_vars/netproxy.yml"
+              entries="hyrule_tunnel_proxy_version|AS215932/hyrule-network-proxy"
               ;;
           esac
 
@@ -201,6 +230,7 @@ jobs:
           set -euo pipefail
 
           playbook="$PLAYBOOK"
+          extra_apply_vars=""
           case "$playbook" in
             cloud)
               apply_var="hyrule_cloud_apply=true"
@@ -209,6 +239,34 @@ jobs:
             web)
               apply_var="hyrule_web_apply=true"
               expected_apply_var="hyrule_web_apply=true"
+              ;;
+            network-proxy)
+              apply_var="hyrule_network_proxy_apply=true"
+              expected_apply_var="hyrule_network_proxy_apply=true"
+              ;;
+            tunnel-proxy)
+              apply_var="hyrule_tunnel_proxy_apply=true"
+              expected_apply_var="hyrule_tunnel_proxy_apply=true"
+              ;;
+            engineering-loop)
+              apply_var="engineering_loop_apply=true"
+              expected_apply_var="engineering_loop_apply=true"
+              extra_apply_vars="knowledge_mcp_apply=true knowledge_loop_apply=true knowledge_api_apply=true agent_core_collector_apply=true agentic_observatory_apply=true"
+              ;;
+            soc)
+              # role gate is soc_agent_apply (role name != playbook name)
+              apply_var="soc_agent_apply=true"
+              expected_apply_var="soc_agent_apply=true"
+              ;;
+            prober)
+              # role gate is hyrule_prober_apply (role name != playbook name)
+              apply_var="hyrule_prober_apply=true"
+              expected_apply_var="hyrule_prober_apply=true"
+              ;;
+            mail_openbsd)
+              # role gate is mail_apply (role name != playbook name)
+              apply_var="mail_apply=true"
+              expected_apply_var="mail_apply=true"
               ;;
             *)
               apply_var="${playbook//-/_}_apply=true"
@@ -222,10 +280,14 @@ jobs:
           fi
 
           printf 'APPLY_VAR=%s\n' "$apply_var" >> "$GITHUB_ENV"
+          printf 'APPLY_EXTRA_VARS=%s\n' "$extra_apply_vars" >> "$GITHUB_ENV"
           {
             echo "## Apply gate"
             echo
             echo "\`${apply_var}\`"
+            if [ -n "$extra_apply_vars" ]; then
+              echo "\`${extra_apply_vars}\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Mint hyrule-cloud Vault bootstrap
@@ -267,20 +329,6 @@ jobs:
             echo "Minted response-wrapped AppRole SecretID for this apply run."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
-      # user on every host (created + NOPASSWD-root by the ci_runner_key role)
-      # and escalates with sudo — never root, never the operator's svag. An
-      # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
-      - name: Pre-deploy Icinga snapshot
-        working-directory: ansible
-        env:
-          PLAYBOOK: ${{ inputs.playbook }}
-        run: |
-          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
-            --tags snapshot \
-            -e ansible_user=ci \
-            -e snapshot_phase=pre
-
       - name: Render-only (dry run)
         if: ${{ inputs.dry_run }}
         working-directory: ansible
@@ -295,9 +343,12 @@ jobs:
           ansible-playbook "playbooks/${PLAYBOOK}.yml" \
             --tags validate \
             --connection=local \
-            --skip-tags=snapshot \
             "${limit_args[@]}"
 
+      # -e ansible_user=ci: the runner connects as the dedicated `ci` deploy
+      # user on every host (created + NOPASSWD-root by the ci_runner_key role)
+      # and escalates with sudo — never root, never the operator's svag. An
+      # extra-var so it overrides per-host ansible_user (rtr/xoa=root, etc.).
       - name: Apply
         if: ${{ !inputs.dry_run }}
         working-directory: ansible
@@ -315,22 +366,16 @@ jobs:
           if [ "$playbook" = "ci-runner-key" ] && [ "$BOOTSTRAP_CI_RUNNER_KEY" = "true" ]; then
             user_args=()
           fi
+          extra_var_args=()
+          for extra_var in ${APPLY_EXTRA_VARS:-}; do
+            extra_var_args+=(-e "$extra_var")
+          done
           ansible-playbook "playbooks/${playbook}.yml" \
             --tags apply \
             "${user_args[@]}" \
             -e "${APPLY_VAR}" \
+            "${extra_var_args[@]}" \
             "${limit_args[@]}"
-
-      - name: Post-deploy Icinga snapshot
-        if: ${{ !inputs.dry_run }}
-        working-directory: ansible
-        env:
-          PLAYBOOK: ${{ inputs.playbook }}
-        run: |
-          ansible-playbook "playbooks/${PLAYBOOK}.yml" \
-            --tags snapshot \
-            -e ansible_user=ci \
-            -e snapshot_phase=post
 
       - name: Post-deploy Goss validation
         if: ${{ !inputs.dry_run }}
@@ -338,57 +383,3 @@ jobs:
           PLAYBOOK: ${{ inputs.playbook }}
           LIMIT: ${{ inputs.limit }}
         run: scripts/ci/goss-validate.sh "$PLAYBOOK" "$LIMIT"
-
-      - name: Capture snapshot diff
-        if: ${{ !inputs.dry_run }}
-        id: diff
-        run: |
-          set -e
-          shopt -s nullglob
-          snapshots_root=ansible/generated/snapshots
-          if [ ! -d "$snapshots_root" ]; then
-            echo "::warning::no snapshots directory found at $snapshots_root"
-            echo "diff=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Two most recent snapshot dirs are pre/post.
-          mapfile -t dirs < <(ls -1dt "$snapshots_root"/*/ 2>/dev/null | head -2)
-          if [ "${#dirs[@]}" -lt 2 ]; then
-            echo "::warning::need 2 snapshot dirs, found ${#dirs[@]}"
-            exit 0
-          fi
-          {
-            echo "## Icinga snapshot diff"
-            echo
-            echo '```diff'
-            diff -ruN "${dirs[1]}" "${dirs[0]}" || true
-            echo '```'
-          } > /tmp/diff.md
-          {
-            echo "diff<<EOF"
-            cat /tmp/diff.md
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Post diff to workflow summary
-        if: ${{ !inputs.dry_run && steps.diff.outputs.diff != '' }}
-        run: cat /tmp/diff.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Post diff as PR comment
-        if: ${{ !inputs.dry_run && inputs.pr_number != '' && steps.diff.outputs.diff != '' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          gh pr comment "$PR_NUMBER" \
-            --repo "$REPOSITORY" \
-            --body-file /tmp/diff.md
-
-      - name: Upload snapshots as artifact
-        if: ${{ !inputs.dry_run }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: snapshots-${{ inputs.playbook }}-${{ inputs.limit }}
-          path: ansible/generated/snapshots/
-          retention-days: 30

@@ -1,0 +1,19 @@
+---
+# prometheus — manage mon-side Prometheus, blackbox_exporter, and rule configs.
+# Core probe/scrape configuration activates before dependent rules, so a merge
+# cannot publish an absent-series outage during a monitoring rollout.
+#
+# Render-only (dry run):
+#   ansible-playbook playbooks/prometheus.yml --tags validate \
+#       --connection=local --limit mon
+# Apply (live):
+#   ansible-playbook playbooks/prometheus.yml --tags apply \
+#       -e '{"prometheus_apply":true}' --limit mon
+
+- name: prometheus — validate + apply mon configs and rules
+  hosts: mon
+  gather_facts: true
+  become: true
+  roles:
+    - prometheus
+  tags: [prometheus]

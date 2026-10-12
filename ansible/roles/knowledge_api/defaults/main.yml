@@ -1,0 +1,44 @@
+---
+# Standalone read-only Knowledge API (insight metrics + concept corpus) on loop.
+# Thin HTTP front-end over the same hyrule-knowledge functions the CLI uses; the
+# Observatory calls it instead of shelling into the box. Read-only: it never
+# writes the git-tracked insight ledger.
+#
+# Default is validate/render only; live mutation needs -e knowledge_api_apply=true.
+knowledge_api_apply: false
+
+knowledge_api_user: knowledge-api
+knowledge_api_group: knowledge-api
+knowledge_api_install_dir: /opt/knowledge-api
+knowledge_api_config_dir: /etc/knowledge-api
+knowledge_api_state_dir: /var/lib/knowledge-api
+knowledge_api_env_file: "{{ knowledge_api_config_dir }}/knowledge-api.env"
+knowledge_api_uv_path: /usr/local/bin/uv
+
+knowledge_api_packages:
+  - python3
+  - python3-venv
+  - git
+  - ca-certificates
+  - curl
+
+knowledge_api_repo: https://github.com/AS215932/knowledge.git
+# MUST be an exact reviewed 40-char SHA before the first live apply (validate
+# rejects a moving ref when knowledge_api_apply=true).
+knowledge_api_version: main
+
+# Bind on the loop overlay address so mon can health-check it; firewalled to
+# loop (the Observatory) + mon only. Reads are unauthenticated and carry no
+# secrets (internal concept bodies + metrics).
+knowledge_api_bind: "127.0.0.1"
+knowledge_api_port: 8781
+
+# Where the API reads desired/committed state from (its own pinned checkout).
+knowledge_api_config: "{{ knowledge_api_install_dir }}/knowledge.config.yml"
+# Live metrics (source=collector) pull GET /v1/insights from the collector.
+knowledge_api_collector_url: ""
+
+# Ships disabled: the role is a no-op until an operator pins a knowledge
+# revision containing the api module (>= #36) and flips this true in a reviewed
+# promotion PR (which also adds the firewall rule + health check on loop).
+knowledge_api_enabled: false

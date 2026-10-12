@@ -24,10 +24,13 @@ jobs:
   render:
     runs-on: [self-hosted, linux, x64, hyrule-public-pr]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7.0.1
 
       - name: Render every playbook (validate-only, no apply)
         run: scripts/ci/render-all.sh
+
+      - name: Assert docs/network-flows.md matches the inventory
+        run: python3 scripts/render-network-flows.py --check
 
       - name: Repo deploy preflight
         run: scripts/ci/deploy-preflight.sh --repo-only

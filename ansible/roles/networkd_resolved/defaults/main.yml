@@ -10,3 +10,7 @@ networkd_primary_unit: "10-enX0"
 
 networkd_search_domain: as215932.net
 networkd_dns: "2a0c:b641:b50:2::1"
+
+# Opt-in private IPv4 service address for existing public DNAT backends.
+networkd_service_ipv4_address: ""
+networkd_service_ipv4_gateway: "10.0.2.1"

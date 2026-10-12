@@ -27,17 +27,29 @@ Underlay (hosting provider networks) is separate from overlay (AS215932 `2a0c:b6
 |--------|----------|-----|------------------|-------------------|-----------|
 | cr1.nl1 | Servperso NL | FreeBSD + FRRouting | `2a0c:b640:8:69::1` | `::a` | 1.1.1.1 |
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | `2a0c:b640:10::213` | `::b` | 2.2.2.2 |
+| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | `2a09:4c0:100:2d88::8898` | `::c` | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | `2001:41d0:303:48a::2` | `::d` | 0.0.0.13 |
+| rtr-bsd | OVH FR | OpenBSD + FRRouting (parallel burn-in, #14) | `2001:41d0:303:48a::3` | `::e` | 0.0.0.14 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
 
+**cr1.ch1 is the preferred core in both directions** — see `docs/bgp-policy.md`.
+
 ### WireGuard mesh
+
+Full mesh, six tunnels.
 
 | Tunnel | Endpoints | Overlay /127 |
 |--------|-----------|--------------|
 | cr1.nl1 wg0 ↔ cr1.de1 wg0 | :1337 ↔ :1337 | `ff00::/127` |
 | cr1.nl1 wg3 ↔ rtr wg0 | :1340 ↔ :1337 | `ff02::/127` |
 | cr1.de1 wg1 ↔ rtr wg1 | :1338 ↔ :1338 | `ff05::/127` |
+| cr1.ch1 wg0 ↔ rtr wg2 | :1339 ↔ :1339 | `ff06::/127` |
+| cr1.nl1 wg4 ↔ cr1.ch1 wg1 | :1341 ↔ :1341 | `ff07::/127` |
+| cr1.de1 wg2 ↔ cr1.ch1 wg2 | :1342 ↔ :1342 | `ff08::/127` |
+| rtr-bsd wg0 ↔ cr1.nl1 wg5 | :1343 ↔ :1343 | `ff10::/127` |
+| rtr-bsd wg1 ↔ cr1.de1 wg3 | :1344 ↔ :1343 | `ff11::/127` |
+| rtr-bsd wg2 ↔ cr1.ch1 wg3 | :1345 ↔ :1343 | `ff12::/127` |
 
 WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links for traceroute visibility.
 
@@ -45,19 +57,19 @@ WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links f
 
 | VM | Role | OS | NICs |
 |----|------|----|------|
-| rtr | Router + firewall | Debian 13 | enX0(mgmt), enX2(infra), enX3(vm), enX4(wan) |
+| rtr | Router + firewall | Debian 13 | enX0(mgmt), enX1(vpn transit), enX2(infra), enX3(vm), enX4(wan) |
 | dns | Authoritative DNS | Debian 13 | infra |
 | api | hyrule-cloud + Postgres | Debian 13 | infra |
 | web | hyrule-web | Debian 13 | infra |
 | proxy | TLS reverse proxy (Caddy) | Debian 13 | infra |
-| vpn | WireGuard VPN | Debian 13 | infra |
+| vpn | WireGuard VPN | Debian 13 | transit (enX1) |
 | xoa | Xen Orchestra | Debian 13 | mgmt, infra |
 
 dom0 is **underlay-only** — no AS215932 addresses. It acts as NDP proxy for rtr's OVH underlay address. mgmt bridge uses link-local IPv6 + `10.0.0.1/24` (for XOA→XAPI).
 
 rtr uses an overlay VRF (table 200) via systemd-networkd (not netplan). Interface assignment:
 - **Default VRF**: enX0 (mgmt, link-local only), enX4 (wan/underlay)
-- **Overlay VRF**: enX2 (infra), enX3 (vm), wg0, wg1, lo-overlay
+- **Overlay VRF**: enX1 (vpn transit), enX2 (infra), enX3 (vm), wg0, wg1, lo-overlay
 
 Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to rtr: dom0 → `2001:41d0:303:48a::2` (underlay, same L2 on xenbr0).
 
@@ -65,8 +77,9 @@ Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to
 
 ```
 mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
-2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
-2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM)
+2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, xoa ::70
+2a0c:b641:b50:1::/64  vpn transit  rtr ::1, vpn ::60 (xenbr-transit; 10.0.1.0/24 for WG DNAT)
+2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM at 1::60)
 2a0c:b641:b51::/48    customer VMs (one /64 each)
 ```
 
@@ -78,7 +91,7 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 - `autoinstall/` — OS autoinstall response files (OpenBSD, Debian cloud-init) and QMP tools for headless VM interaction.
 - `scripts/` — Shell scripts for dom0 bootstrap, TSIG key generation, VM template prep, and smoke tests.
 - `ansible/` — Declarative provisioning. Currently scopes the `firewall` role (nftables on Linux, pf on FreeBSD) for every host except dom0. Inventory + role + generated artifacts under `ansible/generated/<host>/`. Future roles (knot, caddy, frr, exporters) drop in here.
-- `docs/` — Deployment runbook, architecture docs, and the canonical traffic-flow inventory at `docs/network-flows.md`. rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`. Reverse DNS / PTR setup is in `docs/reverse-dns.md`.
+- `docs/` — Deployment runbook, architecture docs, and the traffic-flow inventory at `docs/network-flows.md` (**generated** from `ansible/inventory` by `scripts/render-network-flows.py` — edit the inventory, not the doc). rtr's VRF routing (DNAT VRF leak design + boot-order traps) is in `docs/rtr-vrf.md`. Reverse DNS / PTR setup is in `docs/reverse-dns.md`.
 
 ## Key conventions
 
@@ -92,9 +105,29 @@ mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
 
 ## BGP policy
 
+**`docs/bgp-policy.md` is the full reference** — read it before touching any
+route-map. Summary:
+
 - **Transit route-maps**: `TRANSIT-IN` (match as-path 1) and `TRANSIT-OUT` (match prefix-list AS215932v6-out) applied to all transit peers.
 - **AS-path filter** (as-path access-list 1): denies own ASN (loop prevention), private 16-bit ASNs (64512-65535), private 32-bit ASNs (4200000000-4294967295), and paths longer than 200 chars.
-- iBGP peers have no transit filters — only `next-hop-self` and `soft-reconfiguration inbound`.
+- **Local-pref ladder on the cores**: IX routes 200 (cr1-ch1 `IXP-IN`) > CDN
+  overrides 150 (Cloudflare `_13335$`, Fastly `_54113$` on cr1-ch1) > default 100 >
+  AS24961-tainted paths 80 (cr1-de1).
+- **Egress**: rtr applies `IBGP-{CH1,NL1,DE1}-IN` on its iBGP sessions (LP 200 / 90 /
+  80) so the whole OVH estate prefers cr1-ch1, with automatic fallback.
+- **Ingress**: cr1-nl1 and cr1-de1 export via `TRANSIT-OUT-PREPEND-3X` (3× prepend);
+  cr1-ch1 exports unprepended **and** is the sole origin of the `2a0c:b641:b50::/48`
+  and `2a0c:b641:b51::/48` more-specifics, which is what deterministically pulls
+  return traffic onto the CH path. The `/44` stays announced from all three cores
+  as failover.
+- **Never announce longer than a /48** — the ROA for `2a0c:b641:b50::/44` has
+  `maxLength 48`; anything longer is RPKI Invalid and gets dropped, not just
+  de-preferred.
+- Any route-map clause that sets local-preference and is not the last clause **must**
+  end with `on-match next`, or matched routes skip the AS-path hygiene filter
+  entirely. Enforced by `tests/iac/test_frr_static.py`.
+- iBGP peers have no transit filters — only `next-hop-self`, `soft-reconfiguration
+  inbound`, and (on rtr) the local-pref maps above.
 
 ## NAT64/DNS64
 
@@ -146,25 +179,37 @@ From an overlay VM: `ping6 64:ff9b::0101:0101` (embedded 1.1.1.1) should reply. 
 
 Host-level firewalls (nftables on Linux, pf on FreeBSD) are managed by the
 Ansible role at `ansible/roles/firewall/`. The single source of truth for
-"who talks to whom on which port" is `docs/network-flows.md`. Every rule in
-`ansible/inventory/host_vars/*.yml` traces back to a row in that file.
+"who talks to whom on which port" is the **structured inventory**:
+`firewall_extra_rules` (inbound) and `host_meta` / `network_flows_outbound`
+in `ansible/inventory/host_vars/*.yml`, plus `cross_cutting_flows` in
+`ansible/inventory/network_flows.yml`. `docs/network-flows.md` is **generated**
+from that data by `scripts/render-network-flows.py` and enforced by a
+freshness gate (`tests/iac/test_network_flows_render.py` + a `--check` step
+in `render-check.yml`) — never hand-edit it; edit the inventory and re-render.
 
 When changing firewall behaviour (opening/closing a port, adding a peer,
-adding a service, moving a host), update **all three** in this order:
+adding a service, moving a host), update in this order:
 
-1. **`docs/network-flows.md`** — add/remove/edit the relevant row in the
-   per-host inbound table and any cross-cutting flow entry. This is the
-   spec; if it's not in this file, it shouldn't be in a rule.
-2. **`ansible/inventory/host_vars/<host>.yml`** — append/edit the matching
-   `firewall_extra_rules` entry. Reference peers by name
-   (`{{ peers.mon.ipv6 }}`), never literal addresses. New peers go in
-   `ansible/inventory/group_vars/all.yml` under the `peers:` dict first.
-3. **Re-render and review** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
+1. **`ansible/inventory/host_vars/<host>.yml`** — append/edit the matching
+   `firewall_extra_rules` entry (inbound); for outbound or registry data edit
+   `network_flows_outbound` / `host_meta`. Genuinely N-to-M flows go in
+   `ansible/inventory/network_flows.yml :: cross_cutting_flows`. Reference
+   peers by name (`{{ peers.mon.ipv6 }}`), never literal addresses. New peers
+   go in `ansible/inventory/group_vars/all.yml` under the `peers:` dict first;
+   new external endpoints go in `network_flows.yml :: network_externals`.
+2. **Re-render the flow doc** — `python scripts/render-network-flows.py`
+   regenerates `docs/network-flows.md`. Commit the diff (or `--check` fails CI).
+3. **Re-render and review the firewall configs** — `cd ansible && ansible-playbook playbooks/firewall.yml --tags validate --connection=local`. Inspect the diff in `ansible/generated/<host>/{nftables.conf,pf.conf}` and commit it as part of the PR.
 
 The same flow applies when adding hosts: define the host in
-`ansible/inventory/hosts.yml`, add it to `peers:`, write its
-`host_vars/<host>.yml`, document its flows in `docs/network-flows.md`,
-re-render.
+`ansible/inventory/hosts.yml` (**use its IPv6 for `ansible_host`** — the ci
+runner is IPv6-only and cannot reach a literal IPv4), add it to `peers:`,
+write its `host_vars/<host>.yml` (with `host_meta` so it lands in the server
+registry + generated doc), re-render the doc + firewall configs. Then
+bootstrap CI access **from the workstation**: `CI_KEY_PATH=<id_ci> ansible-playbook
+playbooks/ci-runner-key.yml --tags apply --limit <host>` creates the `ci`
+deploy user drift/apply runs connect as (the runner's known_hosts self-seeds
+missing hosts at the start of every drift/apply run — no manual reseed).
 
 Apply (vs render) is gated on tag `apply` and the `firewall_apply=true`
 extra-var; see `docs/ansible.md` for the rollout runbook (`serial: 1`,
@@ -173,13 +218,15 @@ on first-time applies.
 
 ## Deployment safety — always check Icinga before and after
 
-Every live deployment MUST capture Icinga state before and after the change.
-Use the playbook snapshot wrapper or manually run the same check on `mon`
-before touching hosts and again after handlers/reloads finish. The point is to
-compare "already broken" vs "newly broken" and catch regressions from our
-changes immediately. Do not use `--skip-tags snapshot` for real deploys unless
-there is an explicit emergency reason, and record that reason in the rollout
-notes.
+Every live deployment MUST check monitoring before and after the change:
+inspect the `mon` Icinga problem list (or the hyrule MCP `icinga_list_problems`
+tool) before touching hosts and again a few minutes after handlers/reloads
+finish. The point is to compare "already broken" vs "newly broken" and catch
+regressions from our changes. Apply runs also finish with a post-deploy Goss
+suite (`scripts/ci/goss-validate.sh`). There is no in-playbook pre/post
+snapshot bracket — it was removed because a snapshot captured seconds after a
+reload just echoes the pre-deploy state before Icinga re-checks, adding a step
+without adding signal.
 
 ## Commit discipline
 
@@ -215,8 +262,10 @@ What it does:
 When adding a new host (or service) update **all three** alongside the
 firewall flow:
 
-1. **`docs/network-flows.md`** — open `mon → host:9100` for node_exporter
-   scrape (already implicit in firewall_extra_rules for most hosts).
+1. **Inventory flow data** — open `mon → host:9100` for node_exporter scrape
+   (already implicit in `firewall_extra_rules` for most hosts). Re-render
+   `docs/network-flows.md` with `scripts/render-network-flows.py`; it is a
+   generated artifact, not a hand-edited spec.
 2. **`host_vars/<host>.yml`** — set `monitoring_register: true` (only for
    hosts NOT in the legacy `/etc/icinga2/conf.d/hosts/{infra-vms,routers,
    dom0}.conf` — duplicates fail the icinga2 reload). Add
@@ -233,6 +282,25 @@ set -a; source ../secrets.local.sh; set +a
 ansible-playbook playbooks/monitoring.yml --tags apply \
     -e '{"monitoring_apply":true}' --limit <host>
 ```
+
+## Kim operator access — dedicated `kim` user, fleet-wide
+
+Kim owns AS215932 operations: `ansible/playbooks/kim-ops-key.yml` creates the
+dedicated `kim` operator user with NOPASSWD root (sudo on Linux, doas on BSD)
+and authorizes Kim's pubkey for it, mirroring the `ci` deploy user's privilege
+shape. Unlike `id_ci` the key carries no `from=` restriction — an operator
+connects from wherever they work, and SSH transport sources stay gated by the
+firewall role's `ssh_allow_sources_*`. The pubkey itself is never committed:
+the playbook reads it from the controller path in `KIM_KEY_PATH` (sibling
+`ci-runner-key.yml` reads `CI_KEY_PATH` the same way).
+
+```bash
+KIM_KEY_PATH=<id_kim> ansible-playbook playbooks/kim-ops-key.yml --tags apply
+```
+
+A follow-up wires `kim-ops-key` into the `apply.yml` playbook choices so the
+rollout can also run from the workflow (needs a token with `workflow` scope —
+deferred from this change).
 
 ## hyrule MCP — live-state queries via tools, not raw SSH
 
@@ -275,7 +343,7 @@ What counts as "worth filing":
 - A regression risk or hardening gap discovered during a deploy
   (shadow-mode flips, scope-broadening of a privileged credential, etc.).
 - A workaround for a tooling gap that should be automated
-  (manual `mon`-side snapshot, raw-mode Ansible fallback, etc.).
+  (manual `prometheus.yml` scrape edit, raw-mode Ansible fallback, etc.).
 
 What does NOT need an issue:
 

@@ -1,0 +1,30 @@
+---
+# alertmanager role — provisions Alertmanager on mon so Prometheus alerts are
+# actually delivered. Prometheus (configs/mon/prometheus.yml) already routes to
+# 127.0.0.1:9093; this installs the service and renders
+# configs/mon/alertmanager.yml.j2 → /etc/prometheus/alertmanager.yml, closing the
+# path to the noc-agent webhook + Discord. Without it every mon alert fires into
+# a dead socket.
+#
+# `apply:` propagates the include's tags to the included tasks — tags on a
+# dynamic include_tasks otherwise cover only the include itself.
+
+- name: Skip — only runs on mon
+  meta: end_host
+  when: inventory_hostname != "mon"
+  tags: [always]
+
+- name: Render config locally for review
+  ansible.builtin.include_tasks:
+    file: render.yml
+    apply:
+      tags: [validate, diff, apply]
+  tags: [validate, diff, apply]
+
+- name: Apply — install + configure Alertmanager
+  ansible.builtin.include_tasks:
+    file: install.yml
+    apply:
+      tags: [apply]
+  when: alertmanager_apply | bool
+  tags: [apply]

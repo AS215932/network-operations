@@ -1,0 +1,25 @@
+---
+- name: Validate agent_core_collector deployment inputs
+  ansible.builtin.assert:
+    that:
+      - agent_core_collector_user | length > 0
+      - agent_core_collector_group | length > 0
+      - agent_core_collector_install_dir.startswith('/')
+      - agent_core_collector_config_dir.startswith('/')
+      - agent_core_collector_env_file.startswith('/')
+      - agent_core_collector_state_dir.startswith('/')
+      - agent_core_collector_version | length > 0
+      - agent_core_collector_bind == peers.loop.ipv6
+      - agent_core_collector_port | int == 8770
+      - agent_core_collector_database_host == '127.0.0.1'
+      - agent_core_collector_database_name == 'agent_core_collector'
+      - agent_core_collector_database_role == 'agent_core_collector'
+    fail_msg: >-
+      agent_core_collector must remain a loop-host, overlay-bound collector with
+      local Postgres storage unless a later reviewed PR deliberately widens it.
+  tags: [validate, always]
+
+- name: Apply agent_core_collector runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: agent_core_collector_apply | bool
+  tags: [apply]

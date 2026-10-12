@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: knowledge_loop
+  author: AS215932
+  description: Source-managed AS215932 Knowledge Loop producer agent
+  license: private
+  min_ansible_version: "2.15"
+
+dependencies: []

@@ -1,0 +1,30 @@
+# /etc/systemd/system/hyrule-tunnel-proxy.service
+# Managed by Ansible.
+
+[Unit]
+Description=Hyrule Tunnel Proxy (public reverse-SSH tunnel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User={{ hyrule_tunnel_proxy_user }}
+Group={{ hyrule_tunnel_proxy_group }}
+EnvironmentFile={{ hyrule_tunnel_proxy_env_file }}
+ExecStart={{ hyrule_tunnel_proxy_bin_path }}
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+# systemd creates the state dir owned by the service user before the sandboxed
+# process starts (a fresh install has no /var/lib/hyrule-tunnel-proxy yet).
+StateDirectory={{ hyrule_tunnel_proxy_state_dir | basename }}
+StateDirectoryMode=0750
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-tunnel-proxy
+
+[Install]
+WantedBy=multi-user.target

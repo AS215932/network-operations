@@ -1,0 +1,15 @@
+# /etc/systemd/system/hyrule-engineering-loop.timer
+# Managed by ansible/roles/engineering_loop. Disabled by default until the
+# operator runs the manual canary and flips engineering_loop_timer_enabled.
+
+[Unit]
+Description=Schedule the AS215932 Engineering Loop operations lane
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=300
+Persistent=true
+Unit=hyrule-engineering-loop.service
+
+[Install]
+WantedBy=timers.target

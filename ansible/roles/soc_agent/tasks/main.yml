@@ -1,0 +1,52 @@
+---
+- name: Validate SOC Agent deployment inputs
+  ansible.builtin.assert:
+    that:
+      - soc_agent_user | length > 0
+      - soc_agent_install_dir.startswith('/')
+      - soc_agent_state_dir.startswith('/')
+      - soc_mode in ['shadow', 'case_only', 'handoff_dry', 'handoff_live']
+      # Ladder discipline: anything above shadow needs LHP wiring decisions
+      # recorded in host_vars, and handoff_live additionally needs the
+      # promotion-criteria evidence linked in the PR (see
+      # docs/runbooks/soc-mode-promotion.md).
+      - soc_mode == 'shadow' or soc_lhp_enabled | bool
+      # Handoff emission is only meaningful on the handoff_* rungs.
+      - >-
+        not (soc_posture_handoff_enabled | bool)
+        or soc_mode in ['handoff_dry', 'handoff_live']
+      - soc_redteam_allow_active_probes | bool == false
+      # Live applies deploy exact reviewed SHAs, never a moving ref — the app
+      # checkout and the desired-state checkout alike.
+      - >-
+        not (soc_agent_apply | bool)
+        or (soc_agent_version | length == 40
+            and soc_agent_version is match('^[0-9a-f]{40}$'))
+      - >-
+        not (soc_agent_apply | bool)
+        or (soc_network_operations_version | length == 40
+            and soc_network_operations_version is match('^[0-9a-f]{40}$'))
+      # MCP transport is exactly one of URL/CMD: both set would leave the app
+      # to pick a transport by implicit precedence instead of reviewed
+      # host_vars (rejected even in render-only runs)...
+      - >-
+        not (soc_hyrule_mcp_url | length > 0
+             and soc_hyrule_mcp_cmd | length > 0)
+      # ...and a live apply with posture enabled but no endpoint at all would
+      # silently degrade every MCP-backed check.
+      - >-
+        not (soc_agent_apply | bool and soc_posture_enabled | bool)
+        or (soc_hyrule_mcp_url | length > 0 or soc_hyrule_mcp_cmd | length > 0)
+    fail_msg: >-
+      SOC rollout must climb the SOC_MODE ladder one reviewed rung at a time
+      (handoff emission only on handoff_* rungs); active red-team probes stay
+      off in v1 (redteam-safety-policy.md); a live apply requires
+      soc_agent_version AND soc_network_operations_version pinned to exact
+      40-character commit SHAs, plus soc_hyrule_mcp_url or soc_hyrule_mcp_cmd
+      set when posture scanning is enabled.
+  tags: [validate, always]
+
+- name: Apply SOC Agent runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: soc_agent_apply | bool
+  tags: [apply]

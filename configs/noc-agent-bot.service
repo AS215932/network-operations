@@ -12,6 +12,7 @@ User=noc-agent
 Group=noc-agent
 WorkingDirectory=/opt/noc-agent
 EnvironmentFile=/opt/noc-agent/.env
+EnvironmentFile=/etc/noc-agent/runtime.env
 Environment=PYTHONPATH=/opt/noc-agent
 ExecStartPre=/bin/grep -Eq "^NOC_APPROVAL_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env
 ExecStartPre=/bin/grep -Eq "^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$" /opt/noc-agent/.env

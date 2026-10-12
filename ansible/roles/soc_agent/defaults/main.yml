@@ -1,0 +1,78 @@
+---
+# SOC Agent (security governance loop) deployment. Default is validate/render
+# only; live mutation requires -e soc_agent_apply=true from apply.yml.
+#
+# SOC_MODE is the human-gated rollout ladder (shadow -> case_only ->
+# handoff_dry -> handoff_live); promotion criteria live in
+# docs/runbooks/soc-mode-promotion.md and are computed from labeled insight
+# records (`hyrule-knowledge insights metrics --loop soc`). Every rung change
+# is a reviewed promotion PR that edits soc_mode in the TARGET HOST's
+# host_vars — these defaults stay at the ladder floor (shadow) so a new SOC
+# host never starts above it.
+
+soc_agent_apply: false
+
+soc_agent_user: soc-agent
+soc_agent_group: soc-agent
+soc_agent_install_dir: /opt/soc-agent
+soc_agent_config_dir: /etc/soc-agent
+soc_agent_state_dir: /var/lib/soc-agent
+# Non-secret mode/kill-switch env rendered by this role; secrets rendered by
+# Vault Agent into soc_agent_secrets_env_file (optional for shadow mode).
+soc_agent_mode_env_file: "{{ soc_agent_config_dir }}/soc-agent.env"
+soc_agent_secrets_env_file: "{{ soc_agent_install_dir }}/.env"
+
+# Public repo — https clone, no deploy key/SSH alias needed (engineering-loop
+# pattern).
+soc_agent_repo: "https://github.com/AS215932/soc-agent.git"
+# MUST be an exact reviewed 40-char SHA before the first live apply — the
+# validate step rejects a moving ref when soc_agent_apply=true (promotion-PR
+# discipline; see docs/ci/deploy-runbook.md).
+soc_agent_version: main
+
+soc_agent_uv_path: /usr/local/bin/uv
+
+# Desired-state checkout the posture scanner audits against
+# (SOC_NETWORK_OPERATIONS_DIR). Without it the scanner has no infra repo to
+# compare live state to. Same pin discipline as soc_agent_version: exact
+# 40-char SHA required on live applies; the SHA is also exported as
+# SOC_NETWORK_OPERATIONS_PIN_SHA so the app can verify the checkout.
+soc_network_operations_repo: "https://github.com/AS215932/network-operations.git"
+soc_network_operations_dir: "{{ soc_agent_install_dir }}/network-operations"
+soc_network_operations_version: main
+
+# MCP endpoint for live-state queries (hyrule-mcp on noc). The app requires
+# HYRULE_MCP_URL or HYRULE_MCP_CMD — leaving both empty degrades every
+# MCP-backed posture check, so validate rejects an apply with posture enabled
+# and neither set. Set exactly one in host_vars.
+soc_hyrule_mcp_url: ""
+soc_hyrule_mcp_cmd: ""
+
+# The FastAPI app serves the LHP origin endpoints (payload fetch + callbacks).
+soc_agent_listen_host: "::"
+soc_agent_listen_port: 8600
+
+# Rollout ladder position. shadow = read-only scanning, no cases, no handoffs.
+soc_mode: shadow
+soc_enabled: true
+soc_posture_enabled: true
+soc_redteam_enabled: false
+soc_redteam_allow_active_probes: false
+soc_lhp_enabled: false
+soc_case_verification_dry_run: true
+# Posture->engineering handoff emission. Only meaningful on the handoff_*
+# rungs; validate rejects it below them (SOC_MODE stays the outer gate).
+soc_posture_handoff_enabled: false
+
+# Insight stream (agent-core loop decision envelopes) toward the collector.
+soc_agent_core_trace_enabled: false
+soc_agent_core_trace_collector_url: ""
+
+# Posture scan timer (socctl posture run-once). Disabled until the operator
+# flips it in host_vars after the first supervised runs.
+soc_posture_timer_enabled: false
+soc_posture_on_calendar: "*:0/30"
+
+# soc-agent FastAPI service (LHP endpoints). Only needed from handoff_dry up;
+# ships disabled.
+soc_agent_service_enabled: false

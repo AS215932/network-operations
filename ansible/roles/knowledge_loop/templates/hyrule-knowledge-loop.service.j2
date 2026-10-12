@@ -1,0 +1,38 @@
+# /etc/systemd/system/hyrule-knowledge-loop.service
+# Managed by ansible/roles/knowledge_loop. One timer fire runs exactly one
+# bounded Knowledge Loop producer cycle. The loop opens reviewable PRs; it does
+# not merge and it does not promote generated synthesis to canonical truth.
+
+[Unit]
+Description=AS215932 Knowledge Loop producer agent (one bounded cycle)
+After=network-online.target vault-agent-knowledge-loop.service
+Wants=network-online.target vault-agent-knowledge-loop.service
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=oneshot
+User={{ knowledge_loop_user }}
+Group={{ knowledge_loop_group }}
+WorkingDirectory={{ knowledge_loop_install_dir }}
+Environment=HOME={{ knowledge_loop_state_dir }}
+EnvironmentFile={{ knowledge_loop_env_file }}
+ExecStart={{ knowledge_loop_daemon_wrapper_path }}
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=knowledge-loop
+
+# Hardening. The loop may write only its state dir (which holds the mutable repo
+# workspace and daemon state). The pinned install_dir runtime stays read-only. It
+# has no fleet SSH keys, Docker socket, app runtime credentials, wallet data, or
+# broad Vault access.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths={{ knowledge_loop_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

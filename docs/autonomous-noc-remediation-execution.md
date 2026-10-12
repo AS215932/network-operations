@@ -20,6 +20,19 @@ This document is the issue body for the next tranche: safe, auditable, approved 
 - Vault Agent renders `/opt/noc-agent/.env`; local plaintext NOC secrets have been moved out of the local secret file.
 - Live smoke checks for NOC Agent health and MCP daemon health pass against production.
 
+### Execution gating (current posture)
+
+Approved-remediation execution is now flag-gated in `noc-agent` and routed through `hyrule-mcp`:
+
+| Flag (in `/opt/noc-agent/.env`) | Value | Effect |
+|---|---|---|
+| `HYRULE_MCP_ENABLE_ACTIONS` | `1` | MCP real-action tools (restart/ack) available, allowlist-scoped |
+| `NOC_ENABLE_APPROVED_EXECUTION` | `1` | noc-agent executes approved remediation (off → `execution_disabled`) |
+| `NOC_ENABLE_NOOP_ROLLBACK_GUARDS` | `0` | when `1`, execution routes through inert no-op rollback guards instead of real actions |
+| `HYRULE_MCP_ENABLE_NOOP_GUARDS` | `0` | when `1`, exposes the MCP `prepare_commit_confirm`/`confirm_change`/`rollback_change`/`get_pending_rollback_guards` tools |
+
+The no-op rollback guard substrate (hyrule-mcp#20, noc-agent#19) ships **dormant**: to exercise the inert prepare→confirm/rollback path without real mutation, flip `HYRULE_MCP_ENABLE_NOOP_GUARDS=1` and `NOC_ENABLE_NOOP_ROLLBACK_GUARDS=1` (real actions can stay enabled or be turned off independently), smoke `prepare_commit_confirm` + cancel against `noc`, then revert.
+
 ## Goal
 
 Allow the NOC graph to execute only human-approved remediation plans with automatic rollback protection, full evidence retention, and post-change verification.

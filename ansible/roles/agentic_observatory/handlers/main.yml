@@ -1,0 +1,10 @@
+---
+- name: reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: restart agentic observatory
+  ansible.builtin.systemd:
+    name: "{{ agentic_observatory_service_name }}"
+    state: restarted
+  when: agentic_observatory_enabled | bool

@@ -7,6 +7,13 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+# Dedicated rtr<->vpn transit (xenbr-transit, rtr enX1 / vpn enX1). Keeps the
+# vpn VM off the shared infra /64 so client<->infra traffic is routed
+# symmetrically through rtr (see docs/vpn-transit.md).
+vpn_transit_subnet: "2a0c:b641:b50:1::/64"
+vpn_transit_v4: "10.0.1.0/24"
+# Routed GUA /64 for Docker bridge containers on the loop VM.
+loop_docker_subnet: "2a0c:b641:b50:f0::/64"
 customer_subnet: "2a0c:b641:b51::/48"
 wg_link_prefix: "2a0c:b641:b50:ff00::/56"  # all wg /127s sit under this
 router_loopback_subnet: "2a0c:b641:b50::/64"
@@ -22,9 +29,11 @@ customer_isolation_block_v6:
   - "{{ infra_subnet }}"
   - "{{ router_loopback_subnet }}"
   - "{{ wg_link_prefix }}"
+  - "{{ vpn_transit_subnet }}"
 customer_isolation_block_v4:
   - "{{ mgmt_v4 }}"
   - "{{ legacy_infra_v4 }}"
+  - "{{ vpn_transit_v4 }}"
 
 # --- Ops workstation (KPN home) ---
 # Live in cr1-* pf SSH allows and configs/knot.conf.j2 AXFR sources.
@@ -39,12 +48,24 @@ peers:
     ipv6: "2a0c:b641:b50:2::1"
     loopback: "2a0c:b641:b50::d"
     underlay: "2001:41d0:303:48a::2"
+  # rtr-bsd — parallel OpenBSD edge router (issue #14). Distinct overlay
+  # loopback (::e), infra address (::2), and OVH underlay address (::3) so it
+  # runs alongside live rtr. Underscore + hyphen keys mirror the cr1_* aliases
+  # (Jinja attribute access vs inventory_hostname lookup).
+  rtr_bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
+  rtr-bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
   dns:     { ipv6: "2a0c:b641:b50:2::10" }
   api:     { ipv6: "2a0c:b641:b50:2::20" }
   web:     { ipv6: "2a0c:b641:b50:2::30" }
   proxy:   { ipv6: "2a0c:b641:b50:2::40" }
   mon:     { ipv6: "2a0c:b641:b50:2::50" }
-  vpn:     { ipv6: "2a0c:b641:b50:2::60" }
+  vpn:     { ipv6: "2a0c:b641:b50:1::60" }
   xoa:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
@@ -57,6 +78,8 @@ peers:
     mgmt_v4: "10.0.0.60"
   vault:   { ipv6: "2a0c:b641:b50:2::c0" }
   ci:      { ipv6: "2a0c:b641:b50:2::d0" }
+  netproxy: { ipv6: "2a0c:b641:b50:2::e0" }
+  loop:    { ipv6: "2a0c:b641:b50:2::f0" }
   # ci-pr — unprivileged PR runner, customer-isolated segment (not infra).
   # Key matches inventory_hostname (the monitoring template does
   # peers[inventory_hostname]); referenced via peers['ci-pr'] where needed.
@@ -86,13 +109,11 @@ peers:
     underlay: "2a09:4c0:100:2d88::8898"
     underlay_v4: "45.136.136.152"
     gateway6: "2a09:4c0:100:2d88::8bfe"
-  # Off-net external monitor (different ASN, different billing).
+  # Off-net external monitor (Vultr London; different ASN, different billing).
   # Probes AS215932 from the outside the same way real users do.
-  # ipv4/ipv6 are placeholders until the VPS is provisioned — fill in
-  # before applying ansible/playbooks/extmon.yml.
   extmon:
-    ipv4: "0.0.0.0"          # TODO: fill in after Vultr/DO provisioning
-    ipv6: "::"               # TODO: fill in after Vultr/DO provisioning
+    ipv4: "45.32.179.134"
+    ipv6: "2001:19f0:7402:0cd5:5400:06ff:fe40:7112"
 
 # --- BGP peer addresses (external transits) ---
 bgp_peers:
@@ -134,7 +155,7 @@ wg_ports:
 
 # --- SSH source set used by every host's input chain ---
 # Permits the ops workstation directly, any client connected to the VPN, and
-# the ci runner (apply.yml SSHes to the fleet for snapshots + --tags apply).
+# the ci runner (apply.yml SSHes to the fleet for --tags apply).
 ssh_allow_sources_v6:
   - "{{ ops_prefix_v6 }}"
   - "{{ vpn_clients_subnet }}"
@@ -154,10 +175,12 @@ mail_failover_ipv4_gateway: "193.70.32.254"
 # Routers and the XO appliance accept root; everything else uses svag.
 ssh_users:
   rtr: root
+  rtr-bsd: root
   xoa: root
   cr1-nl1: svag
   cr1-de1: svag
   cr1-ch1: svag
+  extmon: root      # Vultr image login — matches inventory ansible_user
   default: svag
 
 # --- Centralized logging (Vector → Loki) ---

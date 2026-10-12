@@ -8,15 +8,28 @@ noc_agent_repo: "git@github-noc-agent:AS215932/noc-agent.git"
 noc_agent_version: main
 noc_agent_secret_backend: vault
 
-noc_agent_google_wif_enabled: false
-noc_agent_google_wif_project_id: project-73d4ac43-0c8a-4ec0-ac5
-noc_agent_google_wif_project_number: "338142359138"
-noc_agent_google_wif_pool_id: as215932-vault
-noc_agent_google_wif_provider_id: vault-identity
-noc_agent_google_wif_service_account_email: "noc-agent-monitoring@{{ noc_agent_google_wif_project_id }}.iam.gserviceaccount.com"
-noc_agent_google_subject_token_path: /run/noc-agent/google-subject.jwt
-noc_agent_google_wif_config_path: /etc/noc-agent/google-wif.json
-noc_agent_google_application_credentials: "{{ noc_agent_google_wif_config_path if noc_agent_google_wif_enabled else '' }}"
+# Enable only after promoting and validating the compatible attention worker.
+noc_case_reactive_report_enabled: false
+noc_case_attention_enabled: false
+noc_case_outbox_enabled: true
+
+noc_knowledge_repo: https://github.com/AS215932/knowledge.git
+noc_knowledge_version: main
+noc_knowledge_install_dir: /opt/noc-knowledge/repo
+noc_knowledge_export_dir: /opt/noc-knowledge/exports
+noc_knowledge_export_sqlite: "{{ noc_knowledge_export_dir }}/knowledge.sqlite"
+noc_knowledge_export_manifest: "{{ noc_knowledge_export_dir }}/manifest.json"
+
+noc_lhp_enabled: false
+noc_engineering_handoff_delivery_enabled: false
+noc_knowledge_context_enabled: false
+noc_case_verification_enabled: false
+noc_case_verification_dry_run: true
+noc_case_auto_resolve_enabled: false
+noc_disk_alert_handoff_enabled: false
+noc_lhp_disk_alert_fingerprint: ""
+noc_agent_core_trace_enabled: false
+noc_agent_core_trace_collector_url: ""
 
 # NodeSource setup script for Node.js LTS (used by `npx @xen-orchestra/mcp`).
 nodejs_lts_setup_url: "https://deb.nodesource.com/setup_lts.x"
@@ -26,4 +39,7 @@ noc_agent_redis_repo_suite: "{{ (ansible_facts.distribution_release | default(an
 noc_agent_redis_repo_key_source: /usr/share/keyrings/redis-archive-key.asc
 noc_agent_redis_repo_keyring: /usr/share/keyrings/redis-archive-keyring.gpg
 noc_agent_redis_repo_key_url: https://packages.redis.io/gpg
+# Verified against the official HTTPS endpoint, 2026-09-07.
+# Review key fingerprint/checksum together when rotating the repository key.
+noc_agent_redis_repo_key_checksum: sha256:817b5a78358d00ed6b71884d70ad5d2eab9934badca1a34299fdc6a2e4a8ad20
 noc_agent_redis_repo_url: https://packages.redis.io/deb

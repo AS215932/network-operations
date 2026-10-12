@@ -11,9 +11,14 @@ data_dir = "/var/lib/vector"
 
 [api]
 enabled = true
-address = "127.0.0.1:8686"
+# Local-only diagnostics API. Prometheus does not scrape this endpoint; Vector's
+# API returns health/control-plane responses, not Prometheus samples.
+address = "127.0.0.1:8687"
 
 # --- Sources -----------------------------------------------------------------
+
+[sources.internal_metrics]
+type = "internal_metrics"
 
 [sources.from_agents]
 type = "vector"
@@ -86,6 +91,12 @@ source = '''
 '''
 
 # --- Sinks -------------------------------------------------------------------
+
+[sinks.prometheus_metrics]
+type = "prometheus_exporter"
+inputs = ["internal_metrics"]
+# Prometheus on mon scrapes this listener; firewall only permits mon.
+address = "[::]:8686"
 
 [sinks.loki]
 type = "loki"

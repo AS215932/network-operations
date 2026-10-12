@@ -1,0 +1,29 @@
+---
+# prometheus role — manages mon-side Prometheus + blackbox_exporter config and
+# alerting/recording rules. Core configs are validated and activated before the
+# dependent ruleset, preventing an absent scrape job from becoming a false
+# customer-facing outage during rollout.
+#
+# `apply:` propagates the include's tags onto every task in the included file —
+# tags on a dynamic include_tasks otherwise cover only the include itself, so
+# `--tags apply` would run the include and skip the (untagged) work inside.
+
+- name: Skip — only runs on mon
+  meta: end_host
+  when: inventory_hostname != "mon"
+  tags: [always]
+
+- name: Validate rule files (controller-side, dry-run friendly)
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [validate, diff, apply]
+  tags: [validate, diff, apply]
+
+- name: Apply — publish rule files to mon
+  ansible.builtin.include_tasks:
+    file: install.yml
+    apply:
+      tags: [apply]
+  when: prometheus_apply | bool
+  tags: [apply]

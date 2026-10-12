@@ -29,7 +29,6 @@ export ANSIBLE_FORCE_COLOR=true
 export DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-https://discord.com/api/webhooks/0/render-stub}"
 export ICINGA_API_USER="${ICINGA_API_USER:-render-stub}"
 export ICINGA_API_PASSWORD="${ICINGA_API_PASSWORD:-render-stub}"
-export GEMINI_API_KEY="${GEMINI_API_KEY:-render-stub}"
 export NOC_DISCORD_WEBHOOK="${NOC_DISCORD_WEBHOOK:-https://discord.com/api/webhooks/0/render-stub}"
 export XO_TOKEN="${XO_TOKEN:-render-stub}"
 export MAIL_NOC_PASSWORD="${MAIL_NOC_PASSWORD:-render-stub}"
@@ -46,7 +45,7 @@ else
   # Default set — playbooks that have a render-only `--tags validate` path.
   # Skip ones whose role is apply-only (vault, knot, networkd_resolved, etc.)
   # to keep the workflow tight.
-  for p in firewall monitoring logs icinga2 ci; do
+  for p in firewall monitoring logs icinga2 prometheus alertmanager ci extmon rtr-apt-cache; do
     [ -f "playbooks/${p}.yml" ] || continue
     playbooks+=("playbooks/${p}.yml")
   done
@@ -55,19 +54,19 @@ fi
 fail=0
 for pb in "${playbooks[@]}"; do
   echo "::group::render ${pb}"
-  # NOTE: skip only `snapshot` here, NOT `apply`. The controller-render tasks
-  # that write ansible/generated/<host>/* are tagged `[validate, diff, apply]`
-  # (they re-render the review artifact during a real apply too). Because
-  # --skip-tags wins over --tags in Ansible, adding `apply` to --skip-tags
-  # silently skipped those render tasks, so this script produced nothing and
-  # the render check passed trivially (issue #109). The live-mutation tasks are
+  # NOTE: render with `--tags validate` only — never add `apply` to a
+  # --skip-tags here. The controller-render tasks that write
+  # ansible/generated/<host>/* are tagged `[validate, diff, apply]` (they
+  # re-render the review artifact during a real apply too), and because
+  # --skip-tags wins over --tags in Ansible, skipping `apply` would silently
+  # drop those render tasks, so this script would produce nothing and the
+  # render check would pass trivially (issue #109). The live-mutation tasks are
   # all gated on `*_apply | default(false)` and tagged `[apply]`-only, so they
   # are not selected by `--tags validate` — render stays side-effect-free.
   # This matches the documented manual workflow in CLAUDE.md.
   if ! ansible-playbook "${pb}" \
        --tags validate \
-       --connection=local \
-       --skip-tags=snapshot; then
+       --connection=local; then
     echo "::error::render failed: ${pb}"
     fail=1
   fi

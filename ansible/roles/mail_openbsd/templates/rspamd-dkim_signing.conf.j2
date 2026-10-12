@@ -3,8 +3,10 @@
 allow_username_mismatch = true;
 
 domain {
-    {{ mail_domain }} {
+{% for domain in [mail_domain] + mail_dkim_extra_domains %}
+    {{ domain }} {
         path = "{{ mail_dkim_private_key_path }}";
         selector = "{{ mail_dkim_selector }}";
     }
+{% endfor %}
 }

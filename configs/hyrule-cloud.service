@@ -20,7 +20,9 @@ ExecStart=/opt/hyrule-cloud/.venv/bin/uvicorn hyrule_cloud.app:app \
     --port 8402 \
     --workers 4 \
     --log-level info \
-    --access-log
+    --access-log \
+    --proxy-headers \
+    --forwarded-allow-ips "*"
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -29,7 +31,7 @@ SyslogIdentifier=hyrule-cloud
 
 # Security hardening
 ProtectSystem=strict
-ReadWritePaths=/opt/hyrule-cloud
+ReadWritePaths=/opt/hyrule-cloud /var/lib/hyrule-cloud
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes

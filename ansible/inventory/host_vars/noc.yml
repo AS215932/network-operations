@@ -5,12 +5,63 @@
 # on mon, runs an LLM-driven investigation against hyrule-mcp tools, and
 # notifies a Discord channel. hyrule-mcp is a stdio child of noc-agent.
 
-noc_agent_version: c2ae3a9a59d2e6e9600b14c9b33350a029e65faf
-hyrule_mcp_version: 78b97ee626d665160b9bd3c3741589392655a00e
+# Pinned to the merged insight-stream build (AS215932/noc-agent#70): proactive
+# cycles can emit InsightDecisionRecords to the collector and the standing-
+# grant/no-op-guard substrate ships dark. Everything is default-off until the
+# env promotions in docs/runbooks/noc-standing-grant-rollout.md
+# (NOC_INSIGHT_RECORDS_ENABLED first).
+noc_agent_version: 5fb63e95b3b664710ac96ca48d09f9126a9c36ce
+hyrule_mcp_version: b201978d6474112f46095b37bb4b35e13855fd50
+
+# hyrule-prober — AS215932 looking-glass backing Hyrule Cloud /v1/path/* (ping +
+# traceroute). Apply is gated (hyrule_prober_apply); go-live also needs
+# prober_token in kv/hyrule-cloud so the api VM authenticates. See
+# hyrule-cloud/docs/runbooks/prober-deploy.md.
+hyrule_prober_version: 1e2fc5495ec470dc5eacc80b0ac35f3edf49ab1d
+
+# Model chain: Hunyuan 3 primary ($0.14/$0.58 per Mtok, frontier-level) with
+# DeepSeek V4 Flash as fallback; venice:deepseek-v4-flash keeps the chain
+# provider-redundant (issue #393 — a single OpenRouter key cap must not take
+# triage down; Venice does not host Hunyuan). venice: entries require
+# noc-agent >= a7f0432 (venice provider) and venice_api_key in kv/noc-agent.
+noc_agent_model: "openrouter:tencent/hy3"
+noc_agent_fallback_models: "openrouter:deepseek/deepseek-v4-flash,venice:deepseek-v4-flash"
+# Pinned to the Knowledge build with grounding-aware exports (AS215932/
+# knowledge#35): grounding.jsonl + sqlite grounding table ride the export the
+# case-context retriever reads; A0 issue + A1 routing context unchanged.
+noc_knowledge_version: a68f974e7ed093d8f4195a15dc5b1afc636999f4
+
+# Keep local CaseService verification and knowledge context. Engineering Loop
+# handoffs and collector emissions are disabled because the loop VM is retired.
+# The existing disk condition remains an active incident, without suppression.
+noc_lhp_enabled: true
+noc_engineering_handoff_delivery_enabled: false
+noc_knowledge_context_enabled: true
+noc_case_verification_enabled: true
+noc_case_verification_dry_run: false
+noc_case_auto_resolve_enabled: false
+noc_disk_alert_handoff_enabled: false
+noc_lhp_disk_alert_fingerprint: 8fb421ff94bb1285
+noc_agent_core_trace_enabled: false
+noc_agent_core_trace_collector_url: ""
+
+# XO MCP occasionally takes >5s to answer tools/list via supergateway during
+# streamable-HTTP session churn. Keep Icinga + app health probes below their
+# 15s HTTP wrapper timeout while avoiding false 5s flaps.
+noc_agent_mcp_health_timeout_seconds: 12
 
 firewall_extra_rules:
-  # Webhooks from Alertmanager + Icinga2 on mon.
+  # Webhooks from Alertmanager + Icinga2 on mon; best-effort external BGP alerts from extmon.
   - { proto: tcp, dport: 8000, src: "{{ peers.mon.ipv6 }}", comment: "noc-agent webhook from mon (Alertmanager + Icinga)" }
+  - { proto: tcp, dport: 8000, src: "{{ peers.extmon.ipv6 }}", comment: "noc-agent webhook from extmon Alertmanager" }
+
+  # Operator dashboard via Caddy on proxy (noc.servify.network -> /control + /health).
+  - { proto: tcp, dport: 8000, src: "{{ peers.proxy.ipv6 }}", comment: "noc-agent control dashboard via Caddy (proxy)" }
+
+  # hyrule-prober (:8460): x402-gated path probes from the api VM; liveness
+  # check from Icinga on mon.
+  - { proto: tcp, dport: 8460, src: "{{ peers.api.ipv6 }}", comment: "hyrule-cloud API to hyrule-prober (path probes)" }
+  - { proto: tcp, dport: 8460, src: "{{ peers.mon.ipv6 }}", comment: "Icinga /healthz check for hyrule-prober" }
 
   # Monitoring scrapes.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
@@ -18,6 +69,12 @@ firewall_extra_rules:
 # Monitoring — register on mon (new host, not in legacy infra-vms.conf).
 monitoring_register: true
 monitoring_role: noc
+monitoring_check_vars:
+  # Vault Agent secret delivery — see configs/mon/icinga2/services/vault-agent.conf.
+  # noc-agent already uses the durable (persisted SecretID) shape via
+  # VAULT_NOC_AGENT_SECRET_ID in noc.yml.
+  vault_agents:
+    - noc-agent
 monitoring_extra_services:
   - name: noc-agent-health
     check_command: http
@@ -32,18 +89,35 @@ monitoring_extra_services:
       http_timeout: 10
       http_expect_body_regex: '"status":"ok"'
 
-  - name: noc-agent-mcp-health
-    check_command: http
+  # Deploy only after noc-agent delivery-health support (app PR82) is live.
+  - name: noc-agent-delivery-health
+    check_command: noc_agent_delivery_health
     interval: 1m
     retry: 30s
+    max_check_attempts: 3
+    notes: "Independent detection of stalled NOC delivery and overdue report intents"
+    vars:
+      noc_delivery_host: "{{ peers.noc.ipv6 }}"
+      noc_delivery_port: 8000
+
+  - name: noc-agent-mcp-health
+    # Custom check: surfaces /health/mcp's per-source JSON state instead of
+    # the generic check_http "503 + pattern not found" output.
+    # CheckCommand defined in configs/mon/icinga2/services/noc-agent-mcp-health.conf.
+    check_command: noc_agent_mcp_health
+    interval: 1m
+    retry: 30s
+    # Require ~2 minutes of consistent failure before a HARD CRITICAL so a
+    # single 1/3 soft flap does not page. Flapping detection surfaces the
+    # pattern when it repeatedly fails on one attempt and recovers.
+    max_check_attempts: 5
+    enable_flapping: true
+    flapping_threshold_low: 20
+    flapping_threshold_high: 35
     notes: "MCP subprocess connectivity for Prometheus/SSH and Xen Orchestra tools"
     vars:
-      http_address: "{{ peers.noc.ipv6 }}"
-      http_port: 8000
-      http_uri: "/health/mcp"
-      http_ipv6: true
-      http_timeout: 10
-      http_expect_body_regex: '"status":"ok"'
+      noc_mcp_host: "{{ peers.noc.ipv6 }}"
+      noc_mcp_port: 8000
 
   - name: noc-agent-config-health
     check_command: http
@@ -81,6 +155,32 @@ monitoring_extra_services:
       noc_model_host: "{{ peers.noc.ipv6 }}"
       noc_model_port: 8000
 
+  - name: hyrule-prober-health
+    check_command: http
+    interval: 1m
+    retry: 30s
+    notes: "hyrule-prober liveness (AS215932 path-probe backend for Hyrule Cloud /v1/path/*)"
+    vars:
+      http_address: "{{ peers.noc.ipv6 }}"
+      http_port: 8460
+      http_uri: "/healthz"
+      http_ipv6: true
+      http_timeout: 10
+      http_expect_body_regex: '"status":"live"'
+
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: noc
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "noc-agent (FastAPI :8000) + hyrule-mcp + hyrule-prober (:8460)"
+  summary: "Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child), plus the hyrule-prober sidecar (:8460) for Hyrule Cloud /v1/path/* probes."
+network_flows_outbound:
+  - { to: all-infra, proto: tcp, port: 22, purpose: "hyrule-mcp SSH to every infra host" }
+  - { to: mon, proto: tcp, port: 9090, purpose: "Prometheus query API" }
+  - { to: mon, proto: tcp, port: 5665, purpose: "Icinga2 REST API" }
+  - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP snapshot ingest (cloud.hyrule.host)" }
+  - { to: public, proto: tcp, port: 443, purpose: "LLM API, Discord webhook, and npx package install" }
+  - { to: public, proto: "icmp+udp", purpose: "hyrule-prober ping/traceroute to probe targets (AS215932 vantage)" }

@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: prometheus
+  description: Mon-side Prometheus alerting/recording rules under /etc/prometheus/rules.d
+  author: AS215932 ops
+  license: proprietary
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Debian
+      versions: [bookworm, trixie]
+
+dependencies: []

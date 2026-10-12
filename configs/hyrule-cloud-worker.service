@@ -1,0 +1,38 @@
+# /etc/systemd/system/hyrule-cloud-worker.service
+# Exactly one worker consumes durable domain/native-payment jobs. API workers
+# never run schedulers in-process.
+
+[Unit]
+Description=Hyrule Cloud durable background worker
+After=network-online.target postgresql.service hyrule-cloud.service monero-wallet-rpc.service
+Requires=postgresql.service
+Wants=hyrule-cloud.service monero-wallet-rpc.service
+
+[Service]
+Type=exec
+User=hyrule
+Group=hyrule
+WorkingDirectory=/opt/hyrule-cloud
+EnvironmentFile=/opt/hyrule-cloud/.env
+Environment=PYTHONPATH=/opt/hyrule-cloud
+# uv treats hyrule-cloud as a virtual project because it has no explicit
+# build-system, so project console scripts are not installed by `uv sync`.
+# Launch the checked-out module through the venv interpreter, matching the
+# PYTHONPATH-based API service contract above.
+ExecStart=/opt/hyrule-cloud/.venv/bin/python -m hyrule_cloud.worker
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hyrule-cloud-worker
+
+ProtectSystem=strict
+ReadWritePaths=/opt/hyrule-cloud /var/lib/hyrule-cloud
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+
+[Install]
+WantedBy=multi-user.target

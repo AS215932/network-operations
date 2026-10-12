@@ -1,9 +1,13 @@
 ---
-# mon — Prometheus + Grafana + Icinga2 + blackbox_exporter.
-# Requires:
-#   export MON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
-
-mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default('') }}"
+# mon — Prometheus + Alertmanager + Grafana + Icinga2 + blackbox_exporter.
+# Discord webhook for mon alerts (Alertmanager + Icinga2). On the CI runner the
+# Vault-rendered env provides DISCORD_WEBHOOK_URL (github-runner.env.ctmpl.j2),
+# NOT a mon-specific var — so DISCORD_WEBHOOK_URL must be in the fallback chain
+# or the automated `apply(alertmanager, mon)` pre-flight sees an empty webhook
+# and aborts. MON_DISCORD_WEBHOOK_URL is the optional mon-specific override
+# (e.g. from secrets.local.sh for a manual apply). Mirrors icinga2's default.
+#   export MON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'  # optional override
+mon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'MON_DISCORD_WEBHOOK_URL') | default(lookup('ansible.builtin.env', 'DISCORD_WEBHOOK_URL'), true) | default('') }}"
 
 firewall_extra_rules:
   # Icinga Web + Grafana via Caddy.
@@ -16,6 +20,10 @@ firewall_extra_rules:
   # NOC automation queries Prometheus and Icinga's REST API directly.
   - { proto: tcp, dport: 9090, src: "{{ peers.noc.ipv6 }}", comment: "Prometheus API from noc-agent" }
   - { proto: tcp, dport: 5665, src: "{{ peers.noc.ipv6 }}", comment: "Icinga2 API from noc-agent" }
+
+  # The customer-facing status endpoint reads only the curated public-status
+  # alert labels from Prometheus.
+  - { proto: tcp, dport: 9090, src: "{{ peers.api.ipv6 }}", comment: "Prometheus public-status queries from hyrule-cloud" }
 
   # Blackbox is localhost-only (Prometheus runs on the same box). Loopback is
   # already accepted by the base firewall rules.
@@ -30,3 +38,13 @@ noc_mcp_reader_groups:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: mon
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Prometheus + Grafana + Icinga2 + blackbox"
+  summary: "Central monitoring plane: Prometheus scrape, Grafana, Icinga2, and blackbox probes for AS215932."
+  notes: "mon-to-fleet scrape (tcp/9100 and per-host exporter ports) and Icinga by_ssh checks (tcp/22) are captured in the cross-cutting flows table."
+network_flows_outbound:
+  - { to: public, proto: tcp, port: 443, purpose: "blackbox_exporter HTTPS probes of public services" }
+  - { to: public, proto: icmp6, purpose: "blackbox_exporter ICMP reachability probes of public services (internal fleet ICMP sweep is noted in network_flows.yml)" }

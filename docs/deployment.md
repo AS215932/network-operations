@@ -9,7 +9,8 @@ Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 ```
 2a0c:b641:b50::/44  (full allocation)
 ├── 2a0c:b641:b50::/48   Infrastructure
-│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
+│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, xoa ::70
+│   └── :1::/64   vpn transit  rtr ::1, vpn ::60 (dedicated rtr<->vpn segment, docs/vpn-transit.md)
 ├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM)
 └── 2a0c:b641:b52-b5f    Future expansion
 ```
@@ -43,6 +44,30 @@ Internet (IPv4 + IPv6)
 
 xenbr-mgmt (link-local): dom0, rtr enX0, xoa (+ 10.0.0.x for XOA→XAPI)
 ```
+
+### Customer VM IPv6 provisioning
+
+Customer VMs live on the shared XCP-NG `xenbr-vm` L2 segment behind `rtr`
+`enX3`. `rtr` owns the customer aggregate as `2a0c:b641:b51::1/48` in
+FRR and advertises `2a0c:b641:b51::/48` by BGP.
+
+There is intentionally no RA/DHCPv6 service on `enX3` for paid VMs. The
+customer design is one `/64` per VM, and RA is link-wide on the shared L2, so
+it cannot hand a different `/64` to each VM. Hyrule allocates a deterministic
+per-VM `/64` from `2a0c:b641:b51::/48` and passes Debian netplan v2
+`networkConfig` through XO:
+
+- prefix index `0` (`2a0c:b641:b51::/64`) is reserved for the router, legacy
+  shared addresses, and static canaries such as `ci-pr`;
+- paid VM prefixes start at index `1`, with the VM address set to `::2` inside
+  its allocated `/64`;
+- the default route points at `2a0c:b641:b51::1` with `on-link: true` because
+  the gateway address is outside each VM-specific `/64`;
+- DNS points at `2a0c:b641:b51::1`.
+
+This is a tactical allocator in `hyrule-cloud`, not the long-term source of
+truth. Proper IPAM deployment and Hyrule integration are tracked in
+<https://github.com/AS215932/network-operations/issues/346>.
 
 ### Routers (WireGuard mesh, iBGP + OSPF6)
 
@@ -101,6 +126,7 @@ WG endpoints are **underlay** addresses. WG link addresses are in `2a0c:b641:b50
 | api | hyrule-cloud + Postgres 17 | 2 | 4GB | 40GB | Debian 13 | infra :2::20 |
 | web | hyrule-web | 1 | 2GB | 20GB | Debian 13 | infra :2::30 |
 | proxy | TLS reverse proxy | 1 | 1GB | 10GB | Debian 13 + Caddy | infra :2::40 |
+| netproxy | Hyrule Network Proxy sidecar | 1 | 1GB | 20GB | Debian 13 + Tor/I2P/Yggdrasil | infra :2::e0 |
 | vault | machine secret plane | 1 | 2GB | 20GB | Debian 13 + Vault OSS | infra :2::c0 |
 | mail | Mail server | 2 | 2GB | 40GB | OpenBSD 7.8 + OpenSMTPD/Rspamd/Dovecot | infra :2::90 + dedicated failover IPv4 |
 
@@ -170,10 +196,11 @@ scripts/openbsd-offline-resize.sh \
 
 ## Deployment Runbook
 
-Before every live deployment, capture Icinga state from `mon`; capture it again
-after the deployment finishes and compare for new problems. The Ansible
-playbooks include pre/post snapshot plays for this. Do not skip snapshots on a
-real rollout unless it is an explicit emergency.
+Before every live deployment, check the Icinga problem list on `mon` (or the
+hyrule MCP `icinga_list_problems` tool); check it again a few minutes after the
+deployment finishes and compare for new problems. Apply runs also finish with a
+post-deploy Goss suite. There are no in-playbook snapshot plays — watch live
+monitoring instead, since Icinga only re-checks on its own interval.
 
 ### Phase 0: Server Preparation
 
@@ -402,7 +429,7 @@ Render and review:
 ```bash
 cd ansible
 ansible-playbook playbooks/mail_openbsd.yml --tags validate --connection=local
-ansible-playbook playbooks/firewall.yml --tags validate --connection=local --skip-tags=snapshot
+ansible-playbook playbooks/firewall.yml --tags validate --connection=local
 ```
 
 Apply after `MAIL_NOC_PASSWORD_HASH` and `MAIL_DKIM_PRIVATE_KEY` are loaded

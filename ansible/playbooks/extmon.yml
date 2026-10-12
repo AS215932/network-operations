@@ -7,7 +7,7 @@
 #
 # Render-only (review the rendered configs in ansible/generated/extmon/):
 #   ansible-playbook playbooks/extmon.yml --tags validate \
-#       --connection=local --skip-tags=snapshot --limit extmon
+#       --connection=local --limit extmon
 #
 # Apply (live):
 #   set -a; source ../secrets.local.sh; set +a

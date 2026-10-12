@@ -53,7 +53,8 @@ vault kv put kv/ci-runner \
     discord_webhook_url="https://discord.com/api/webhooks/..." \
     icinga_api_user="..." \
     icinga_api_password="..." \
-    icinga_noc_agent_api_password="..."
+    icinga_noc_agent_api_password="..." \
+    network_proxy_token="..."
 ```
 
 Do **not** store `XO_TOKEN` or `XCPNG_XO_TOKEN` here. Hyrule Cloud receives

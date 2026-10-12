@@ -5,7 +5,7 @@ $ORIGIN hyrule.host.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026051601 ; serial (YYYYMMDDNN)
+                  2026072501 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -14,6 +14,14 @@ $TTL 3600
 ; Nameservers are infrastructure identity, intentionally under servify.network.
 @       IN  NS    ns1.servify.network.
 @       IN  NS    ns2.servify.network.
+
+; Mail for Hyrule customer support.
+@       IN  MX    10 mail.as215932.net.
+@       IN  TXT   "v=spf1 ip4:51.91.236.215 ip6:2a0c:b641:b50:2::90 -all"
+_dmarc  IN  TXT   "v=DMARC1; p=none; rua=mailto:noc@as215932.net; adkim=s; aspf=s"
+; DKIM selector for Rspamd signing on mail.as215932.net.
+dkim._domainkey IN TXT ( "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxF/V0NkAuLkXFZ6WVPqTrdi1na7DZKHXFl605qBrhhgiFM6oR65kPivhwKcP7S+8PsbxAIzZb2irl1RUZqeTrYigsetugKyg7ONX1o5C9+JEO+BuY4ug6Lg9LRMy00q+DNKV7HxD"
+                  "3Cp8mwEcJNiMXHzGhEGzry5O93mzkT/vFSxytwrsLychXpt6OKQ2lcgO5YKxa5xwRrQdpTVYup2hHwSD85rUtkoaCDPPzyx3BTbCvGMf7MkIPR4A/UHH0h+/pA+fGfElECzkZXqBNLYWrEnRIlsI36bjXBITnuGl/l6Vhzazjgc0xGjJcGBRenP5nqxN9Jw8vbDGgjmTxFMmbwIDAQAB" )
 
 ; --- Verification / site ownership tokens ---
 @       IN  TXT   "google-site-verification=pbrhNLnPwPQ5MkW5HgpRFDtG-2jus8peu0luKerDWso"
@@ -29,6 +37,18 @@ cloud   IN  A     46.105.40.223
 cloud   IN  AAAA  2a0c:b641:b50:2::40
 api     IN  A     46.105.40.223
 api     IN  AAAA  2a0c:b641:b50:2::40
+
+; Reverse-SSH tunnel endpoint (hyrule-tunnel-proxy on netproxy). Raw TCP, so a
+; single static A/AAAA — no per-lease DNS. IPv4 via rtr DNAT, IPv6 direct GUA.
+tun     IN  A     46.105.40.223
+tun     IN  AAAA  2a0c:b641:b50:2::e0
+
+; Branded registrar glue/host records for managed customer zones. The
+; hyrule.host zone itself deliberately remains delegated to servify.network.
+ns1     IN  A     46.105.40.223
+ns1     IN  AAAA  2a0c:b641:b50:2::10
+ns2     IN  A     54.38.14.218
+ns2     IN  AAAA  2001:41d0:304:300::7bfb
 
 ; Delegate customer VM records to the deploy.hyrule.host zone served by Knot.
 deploy  IN  NS    ns1.servify.network.

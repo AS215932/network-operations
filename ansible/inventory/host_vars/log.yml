@@ -22,7 +22,9 @@ firewall_extra_rules:
   - { proto: tcp, dport: 6000, src: "{{ peers.xoa.ipv6 }}",   comment: "Vector ingest from xoa" }
   - { proto: tcp, dport: 6000, src: "{{ peers.irc.ipv6 }}",   comment: "Vector ingest from irc" }
   - { proto: tcp, dport: 6000, src: "{{ peers.noc.ipv6 }}",   comment: "Vector ingest from noc" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.vault.ipv6 }}", comment: "Vector ingest from vault" }
   - { proto: tcp, dport: 6000, src: "{{ peers.ci.ipv6 }}",    comment: "Vector ingest from ci" }
+  - { proto: tcp, dport: 6000, src: "{{ peers.netproxy.ipv6 }}", comment: "Vector ingest from netproxy" }
   - { proto: tcp, dport: 6000, src: "{{ peers.cr1_nl1.loopback }}", comment: "Vector ingest from cr1-nl1 (over WG mesh)" }
   - { proto: tcp, dport: 6000, src: "{{ peers.cr1_de1.loopback }}", comment: "Vector ingest from cr1-de1 (over WG mesh)" }
 
@@ -34,6 +36,8 @@ firewall_extra_rules:
 
   # OpenBSD mail's native syslogd `@@host` forward — TCP only, no UDP.
   - { proto: tcp, dport: 6514, src: "{{ peers.mail.ipv6 }}",  comment: "syslog (TCP) from OpenBSD mail" }
+  # rtr-bsd ships the same way (issue #14).
+  - { proto: tcp, dport: 6514, src: "{{ peers.rtr_bsd.ipv6 }}", comment: "syslog (TCP) from OpenBSD rtr-bsd" }
   # FreeBSD core routers' native syslogd `@@host` forward (issue #17).
   - { proto: tcp, dport: 6514, src: "{{ peers.cr1_nl1.loopback }}", comment: "syslog (TCP) from cr1-nl1" }
   - { proto: tcp, dport: 6514, src: "{{ peers.cr1_de1.loopback }}", comment: "syslog (TCP) from cr1-de1" }
@@ -71,3 +75,11 @@ logs_aggregator: true
 # in-process Vector pipeline. Buffer cap on the loki sink instead, sized
 # generously since /var/lib/loki has 50 GB.
 logs_agent_disk_buffer_bytes: 4294967296   # 4 GB (loki sink buffer)
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Vector aggregator + Loki (centralized logs)"
+  summary: "Central log aggregation: Vector aggregator (:6000 native, :6514 syslog) and Loki (:3100), queried by Grafana on mon."
+  notes: "Also carries a mgmt v4 NIC (10.0.0.60) so dom0 can ship logs without overlay routing. Loki is never exposed publicly — Grafana on mon is the only read path."
+network_flows_outbound: []
