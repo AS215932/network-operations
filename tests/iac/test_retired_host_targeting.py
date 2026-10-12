@@ -21,7 +21,7 @@ class RetiredHostTargetingTest(unittest.TestCase):
 
     def test_routine_plays_preserve_active_hosts_and_exclude_retired(self):
         for name in ('firewall', 'networkd_resolved', 'logs',
-                     'ci-runner-key', 'noc_mcp_key'):
+                     'ci-runner-key', 'noc_mcp_key', 'kim-ops-key'):
             plays = yaml.safe_load((REPO / f'ansible/playbooks/{name}.yml').read_text())
             for play in plays:
                 pattern = play['hosts']

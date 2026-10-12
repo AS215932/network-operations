@@ -6,12 +6,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 FRR_FILES = {
     "rtr": REPO / "configs/rtr/frr.conf",
+    "rtr-bsd": REPO / "configs/rtr-bsd/frr.conf",
     "cr1-nl1": REPO / "configs/cr1-nl1/frr.conf",
     "cr1-de1": REPO / "configs/cr1-de1/frr.conf",
     "cr1-ch1": REPO / "configs/cr1-ch1/frr.conf",
 }
 CORE_LOOPBACKS = {
     "rtr": "2a0c:b641:b50::d",
+    "rtr-bsd": "2a0c:b641:b50::e",
     "cr1-nl1": "2a0c:b641:b50::a",
     "cr1-de1": "2a0c:b641:b50::b",
     "cr1-ch1": "2a0c:b641:b50::c",
@@ -171,6 +173,37 @@ class ReturnPathSteeringTest(unittest.TestCase):
         ch1, nl1, de1 = (seen[k] for k in ("2a0c:b641:b50::c", "2a0c:b641:b50::a", "2a0c:b641:b50::b"))
         self.assertGreater(ch1, nl1)
         self.assertGreater(nl1, de1)
+
+    def test_rtr_bsd_ibgp_local_pref_mirrors_rtr(self):
+        """rtr-bsd is equally transit-free: its egress ladder must agree with
+        rtr's (ch1 200 > nl1 90 > de1 80), or the two edge routers flap egress
+        preference between themselves during parallel operation (issue #14)."""
+        for node in ("rtr", "rtr-bsd"):
+            text = frr_text(node)
+            expected = {"2a0c:b641:b50::c": 200, "2a0c:b641:b50::a": 90, "2a0c:b641:b50::b": 80}
+            seen = {}
+            for loopback, want in expected.items():
+                match = re.search(
+                    rf"neighbor\s+{re.escape(loopback)}\s+route-map\s+(\S+)\s+in", text
+                )
+                self.assertIsNotNone(match, f"{node} has no inbound route-map for {loopback}")
+                block = re.search(
+                    rf"^route-map {match.group(1)} permit \d+\n(.*?)^exit", text, re.M | re.S
+                )
+                self.assertIsNotNone(block, f"{node} route-map {match.group(1)} is undefined")
+                lp = re.search(r"set local-preference (\d+)", block.group(1))
+                self.assertIsNotNone(lp, f"{node} route-map {match.group(1)} sets no local-preference")
+                seen[loopback] = int(lp.group(1))
+            self.assertEqual(seen, expected, node)
+
+    def test_more_specifics_are_originated_by_both_edge_routers(self):
+        """rtr-bsd must be a drop-in at cutover: it originates the same /48
+        more-specifics as rtr so cr1-ch1's export keeps working unchanged."""
+        for node in ("rtr", "rtr-bsd"):
+            text = frr_text(node)
+            for prefix in self.MORE_SPECIFICS:
+                with self.subTest(node=node, prefix=prefix):
+                    self.assertRegex(text, rf"(?m)^\s*network {re.escape(prefix)}\s*$")
 
     def test_non_terminal_local_pref_clauses_fall_through_to_the_hygiene_filter(self):
         """A `set local-preference` clause that skips `on-match next` bypasses the

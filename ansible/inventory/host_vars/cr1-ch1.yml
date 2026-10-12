@@ -14,8 +14,8 @@ pf_ext_ifs: ["vmx0", "vmx1", "vmx2"]
 pf_antispoof: true
 pf_use_as215932_table: true
 
-# WG underlay listener ports — 1339 (rtr), 1341 (cr1-nl1), 1342 (cr1-de1).
-pf_wg_ports: [1339, 1341, 1342]
+# WG underlay listener ports — 1339 (rtr), 1341 (cr1-nl1), 1342 (cr1-de1), 1343 (rtr-bsd, issue #14).
+pf_wg_ports: [1339, 1341, 1342, 1343]
 
 # External BGP peers: Securebit transit + SBIX route servers.
 pf_bgp_peers:
