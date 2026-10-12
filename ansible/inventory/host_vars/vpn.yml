@@ -9,14 +9,17 @@ firewall_extra_rules:
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
 
 # VPN clients are full-tunnel IPv6 peers. Their traffic arrives on wg0 and
-# leaves via the infra uplink toward rtr, which then handles DNS64/NAT64.
+# leaves via the dedicated transit uplink (enX1, 2a0c:b641:b50:1::/64) toward
+# rtr, which then handles DNS64/NAT64. vpn has no leg on the infra /64: when
+# it did, it delivered client packets on-link to infra hosts, whose replies
+# went via rtr, and rtr's `ct state invalid drop` discarded them.
 # The return leg is explicit too: without it, infra replies (SYN-ACKs from
 # fleet hosts back to clients) hit the forward chain's default drop, so
 # client-initiated sessions establish one way and stall (issue: Kim's VPN
 # SSH SYNs accepted fleet-wide, SYN-ACKs never returned).
 firewall_forward_extra_raw_nft: |
-  iifname wg0 oifname enX0 ip6 saddr {{ vpn_clients_subnet }} accept comment "VPN client transit via rtr"
-  iifname enX0 oifname wg0 ip6 daddr {{ vpn_clients_subnet }} accept comment "infra return to VPN clients"
+  iifname wg0 oifname enX1 ip6 saddr {{ vpn_clients_subnet }} accept comment "VPN client transit via rtr"
+  iifname enX1 oifname wg0 ip6 daddr {{ vpn_clients_subnet }} accept comment "infra return to VPN clients"
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
@@ -26,7 +29,7 @@ logs_role: vpn
 host_meta:
   os: "Debian 13"
   role: "WireGuard server"
-  summary: "WireGuard server for client tunnels; forwards client traffic (wg0 to enX0) toward rtr for DNS64/NAT64 egress."
+  summary: "WireGuard server for client tunnels; forwards client traffic (wg0 to enX1, dedicated transit) toward rtr for DNS64/NAT64 egress."
   ipv4: "via rtr DNAT (46.105.40.223)"
   notes: "The vpn-clients-to-rtr/internet transit is captured in the cross-cutting flows table."
 network_flows_outbound: []

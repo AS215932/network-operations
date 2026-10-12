@@ -57,19 +57,19 @@ WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links f
 
 | VM | Role | OS | NICs |
 |----|------|----|------|
-| rtr | Router + firewall | Debian 13 | enX0(mgmt), enX2(infra), enX3(vm), enX4(wan) |
+| rtr | Router + firewall | Debian 13 | enX0(mgmt), enX1(vpn transit), enX2(infra), enX3(vm), enX4(wan) |
 | dns | Authoritative DNS | Debian 13 | infra |
 | api | hyrule-cloud + Postgres | Debian 13 | infra |
 | web | hyrule-web | Debian 13 | infra |
 | proxy | TLS reverse proxy (Caddy) | Debian 13 | infra |
-| vpn | WireGuard VPN | Debian 13 | infra |
+| vpn | WireGuard VPN | Debian 13 | transit (enX1) |
 | xoa | Xen Orchestra | Debian 13 | mgmt, infra |
 
 dom0 is **underlay-only** — no AS215932 addresses. It acts as NDP proxy for rtr's OVH underlay address. mgmt bridge uses link-local IPv6 + `10.0.0.1/24` (for XOA→XAPI).
 
 rtr uses an overlay VRF (table 200) via systemd-networkd (not netplan). Interface assignment:
 - **Default VRF**: enX0 (mgmt, link-local only), enX4 (wan/underlay)
-- **Overlay VRF**: enX2 (infra), enX3 (vm), wg0, wg1, lo-overlay
+- **Overlay VRF**: enX1 (vpn transit), enX2 (infra), enX3 (vm), wg0, wg1, lo-overlay
 
 Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to rtr: dom0 → `2001:41d0:303:48a::2` (underlay, same L2 on xenbr0).
 
@@ -77,8 +77,9 @@ Interfaces are in the correct VRF from boot — no runtime VRF migration. SSH to
 
 ```
 mgmt bridge           link-local only (dom0, rtr enX0, xoa enX0 + 10.0.0.10)
-2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
-2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM)
+2a0c:b641:b50:2::/64  infra     rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, xoa ::70
+2a0c:b641:b50:1::/64  vpn transit  rtr ::1, vpn ::60 (xenbr-transit; 10.0.1.0/24 for WG DNAT)
+2a0c:b641:b50:3::/64  vpn clients (routed via vpn VM at 1::60)
 2a0c:b641:b51::/48    customer VMs (one /64 each)
 ```
 

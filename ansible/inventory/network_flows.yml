@@ -59,7 +59,7 @@ cross_cutting_flows:
 
   # --- VPN client transit (vpn forwards ip6 saddr from wg0 to enX0 with no L4
   #     restriction, so all protocols — ICMPv6 included — transit) ---
-  - { from: vpn-clients, to: rtr, proto: "tcp+udp", port: 53, purpose: "DNS64 to rtr; vpn forwards wg0 to enX0" }
+  - { from: vpn-clients, to: rtr, proto: "tcp+udp", port: 53, purpose: "DNS64 to rtr; vpn forwards wg0 to enX1 (dedicated transit)" }
   - { from: vpn-clients, to: public, proto: any, purpose: "routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr" }
 
   # --- WireGuard mesh (bidirectional; 1343-1345 are the rtr-bsd links, issue #14) ---

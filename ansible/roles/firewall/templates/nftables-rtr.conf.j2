@@ -62,7 +62,7 @@ table ip filter {
         # reach infrastructure/mgmt ranges.  Match destination prefixes first
         # so enforcement does not depend solely on VRF slave oifname exposure.
         iifname enX3 ip daddr { {{ customer_isolation_block_v4 | join(', ') }} } counter drop comment "customer→infra/mgmt v4 isolation"
-        iifname enX3 oifname { enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
+        iifname enX3 oifname { enX1, enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
 
         # Allow DNAT'd traffic to infra VMs
         ip daddr $DNS_IP tcp dport 53 accept
@@ -110,7 +110,7 @@ table inet filter {
         # customer packets seen with the physical vm-bridge ingress device.
         ip6 saddr {{ customer_subnet }} ip6 daddr { {{ customer_isolation_block_v6 | join(', ') }} } counter drop comment "customer→infra/router v6 isolation"
         iifname enX3 ip6 daddr { {{ customer_isolation_block_v6 | join(', ') }} } counter drop comment "customer→infra/router v6 bridge isolation"
-        iifname enX3 oifname { enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
+        iifname enX3 oifname { enX1, enX2, enX0 } counter drop comment "customer→infra/mgmt bridge isolation"
     }
 
     chain output {
