@@ -32,6 +32,7 @@
   include_tasks: check_scripts.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_check_scripts | default([]) | length > 0
   tags: [apply]
 
@@ -42,6 +43,7 @@
   include_tasks: by_ssh_user.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
   tags: [apply]
@@ -62,6 +64,7 @@
   check_mode: false
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
   tags: [apply]
@@ -76,6 +79,7 @@
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
     - by_ssh_host_keyscan.stdout is defined
@@ -92,6 +96,7 @@
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
     - by_ssh_host_keyscan.stdout_lines is defined

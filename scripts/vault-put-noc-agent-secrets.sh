@@ -25,7 +25,6 @@ vault token lookup >/dev/null 2>&1 || {
 : "${NOC_APPROVAL_SIGNING_SECRET:?NOC_APPROVAL_SIGNING_SECRET is required}"
 
 vault_args=(
-  gemini_api_key="${GEMINI_API_KEY:-}" \
   anthropic_api_key="${ANTHROPIC_API_KEY:-}" \
   openai_api_key="${OPENAI_API_KEY:-}" \
   openrouter_api_key="${OPENROUTER_API_KEY}" \

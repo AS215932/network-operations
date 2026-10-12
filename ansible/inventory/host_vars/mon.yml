@@ -24,9 +24,6 @@ firewall_extra_rules:
   # alert labels from Prometheus.
   - { proto: tcp, dport: 9090, src: "{{ peers.api.ipv6 }}", comment: "Prometheus public-status queries from hyrule-cloud" }
 
-  # Engineering Loop submits its own passive run-status check to Icinga.
-  - { proto: tcp, dport: 5665, src: "{{ peers.loop.ipv6 }}", comment: "Icinga2 passive check from engineering-loop" }
-
   # Blackbox is localhost-only (Prometheus runs on the same box). Loopback is
   # already accepted by the base firewall rules.
 

@@ -67,8 +67,8 @@ Required structure:
 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0   IN  PTR  rtr.as215932.net.
 ```
 
-PTRs the file currently carries (all under the `:2::/64` infra
-subnet):
+PTRs the file currently carries (`:2::/64` infra plus the `:1::/64` vpn
+transit, docs/vpn-transit.md):
 
 | Suffix    | Host  | PTR target              |
 |-----------|-------|-------------------------|
@@ -78,7 +78,7 @@ subnet):
 | `:2::30`  | web   | `web.as215932.net.`     |
 | `:2::40`  | proxy | `proxy.as215932.net.`   |
 | `:2::50`  | mon   | `mon.as215932.net.`     |
-| `:2::60`  | vpn   | `vpn.as215932.net.`     |
+| `:1::60`  | vpn   | `vpn.as215932.net.`     |
 | `:2::70`  | xoa   | `xoa.as215932.net.`     |
 | `:2::80`  | irc   | `irc.as215932.net.` (host not yet provisioned) |
 | `:2::90`  | mail  | `mail.as215932.net.`    |

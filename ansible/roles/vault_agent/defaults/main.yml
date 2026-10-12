@@ -56,7 +56,6 @@ vault_agent_token_sink_group: root
 vault_agent_token_sink_mode: "0600"
 vault_agent_template_dir: "{{ vault_agent_config_dir }}/templates"
 vault_agent_env_destination: /opt/noc-agent/.env
-vault_agent_google_subject_token_destination: /run/noc-agent/google-subject.jwt
 vault_agent_noc_github_app_key_destination: /etc/noc-agent/github-app.pem
 # Backward-compat alias: callers that set vault_agent_reload_command still work —
 # both per-template commands fall back to it. New callers should set the
@@ -65,17 +64,14 @@ vault_agent_reload_command: /bin/systemctl try-restart noc-agent.service
 # Env-template reload runs whenever Vault re-renders /opt/noc-agent/.env.
 # Defaults to vault_agent_reload_command for backward compat.
 vault_agent_env_reload_command: "{{ vault_agent_reload_command }}"
-# JWT-template reload runs whenever Vault re-renders the WIF subject token.
-# Defaults to /bin/true because Google's identity_pool.Credentials re-reads
-# the source credential file on every STS exchange — no consumer restart needed.
-# Issue #26: prior to this default, vault-agent restarted noc-agent every
-# ~4-5 min on JWT renewal (TTL 45 min, renew at 10% remaining).
-vault_agent_jwt_reload_command: /bin/true
+# Static credentials are re-read by their consumer on demand, so their refresh
+# must not restart the NOC agent.
+vault_agent_static_secret_reload_command: /bin/true
 vault_agent_hashicorp_repo_url: "https://apt.releases.hashicorp.com"
 vault_agent_hashicorp_gpg_url: "https://apt.releases.hashicorp.com/gpg"
-# Verified official package key, 2026-09-07. Rotate URL/checksum together; see
+# Verified official package key, 2026-09-12 (rotation 2026-09-10). Rotate URL/checksum together; see
 # docs/runbooks/package-signing-keys.md. Matching installed keys need no network.
-vault_agent_hashicorp_gpg_checksum: sha256:cafb01beac341bf2a9ba89793e6dd2468110291adfbb6c62ed11a0cde6c09029
+vault_agent_hashicorp_gpg_checksum: sha256:1df7d66b79352bab45388511079f74987568672a8ed6395053a050b61f6c5430
 
 # Secret templates Vault Agent renders. Each entry: src (Jinja2 template in
 # this role's templates/), name (ctmpl filename written into the template
@@ -90,18 +86,12 @@ vault_agent_templates:
     destination: "{{ vault_agent_env_destination }}"
     group: noc-agent
     reload_command: "{{ vault_agent_env_reload_command }}"
-  - src: google-subject.jwt.ctmpl.j2
-    name: google-subject.jwt.ctmpl
-    destination: "{{ vault_agent_google_subject_token_destination }}"
-    group: noc-agent
-    # /bin/true by default — JWT re-renders must not bounce the consumer (#26).
-    reload_command: "{{ vault_agent_jwt_reload_command }}"
   - src: noc-agent-github-app-key.pem.ctmpl.j2
     name: noc-agent-github-app-key.pem.ctmpl
     destination: "{{ vault_agent_noc_github_app_key_destination }}"
     group: noc-agent
     # noc-agent reads the PEM per handoff, so a re-render must not bounce it.
-    reload_command: "{{ vault_agent_jwt_reload_command }}"
+    reload_command: "{{ vault_agent_static_secret_reload_command }}"
 
 # Extra directories the consumer needs created beyond the Vault Agent
 # config/run/template dirs. Default = noc-agent's runtime dirs.

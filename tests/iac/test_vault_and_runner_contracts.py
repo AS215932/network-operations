@@ -848,22 +848,87 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         for text in (noc_service, bot_service, mcp_service):
             self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', text)
 
-    def test_noc_agent_model_defaults_come_from_toml_not_env(self):
-        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
-        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
-        vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
-        playbook = (REPO / "ansible/playbooks/noc.yml").read_text()
+    def test_noc_agent_uses_one_process_for_coherent_runtime_state(self):
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
 
+        worker_lines = [
+            line.strip()
+            for line in noc_service.splitlines()
+            if line.strip().startswith("--workers ")
+        ]
+        self.assertEqual(worker_lines, ["--workers 1 \\"])
+
+    def test_noc_post_deploy_health_matches_ipv6_listener(self):
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
+        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
+        health_block = next(
+            task
+            for task in play["post_tasks"]
+            if task["name"] == "Verify noc-agent CaseService health"
+        )
+        health_wait = next(
+            task
+            for task in health_block["block"]
+            if task["name"] == "Wait for noc-agent CaseService health endpoint"
+        )
+
+        self.assertIn("--host :: \\", noc_service)
+        self.assertEqual(
+            health_wait["uri"]["url"],
+            "http://[::1]:8000/health/cases",
+        )
+
+    def test_noc_agent_has_no_gemini_or_google_wif_configuration(self):
+        paths = [
+            "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
+            "configs/noc-agent.env.j2",
+            "scripts/vault-put-noc-agent-secrets.sh",
+            "ansible/playbooks/noc.yml",
+            "ansible/roles/noc_agent/defaults/main.yml",
+            "ansible/roles/noc_agent/tasks/main.yml",
+            "ansible/roles/vault_agent/defaults/main.yml",
+        ]
+        for path in paths:
+            text = (REPO / path).read_text()
+            self.assertNotIn("GEMINI", text, path)
+            self.assertNotIn("google_wif", text, path)
+            self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", text, path)
+
+        vault_agent_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertEqual(
+            [template["name"] for template in vault_agent_defaults["vault_agent_templates"]],
+            ["noc-agent.env.ctmpl", "noc-agent-github-app-key.pem.ctmpl"],
+        )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_static_secret_reload_command"],
+            "/bin/true",
+        )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_templates"][1]["reload_command"],
+            "{{ vault_agent_static_secret_reload_command }}",
+        )
+
+        vault_template = (REPO / paths[0]).read_text()
+        noc_env = (REPO / paths[1]).read_text()
+        vault_put = (REPO / paths[2]).read_text()
+        playbook = (REPO / paths[3]).read_text()
         for text in (vault_template, noc_env):
-            self.assertNotIn("google-gla:gemini-3.1-pro-preview", text)
-            self.assertNotIn("google-gla:gemini-2.5-flash", text)
             self.assertIn("OPENROUTER_API_KEY", text)
             self.assertIn("OPENROUTER_MANAGEMENT_API_KEY", text)
-
         self.assertIn("OPENROUTER_API_KEY is required", vault_put)
         self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
         self.assertIn("openrouter_api_key", playbook)
         self.assertIn("openrouter_management_api_key", playbook)
+
+    def test_vault_health_accepts_pretty_printed_unsealed_json(self):
+        vault = yaml.safe_load((REPO / "ansible/inventory/host_vars/vault.yml").read_text())
+        health = vault["monitoring_extra_services"][0]["vars"]
+        self.assertEqual(
+            health["http_expect_body_regex"],
+            '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false',
+        )
 
     def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
@@ -893,6 +958,36 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         defaults = yaml.safe_load((REPO / "ansible/roles/ci_runner_key/defaults/main.yml").read_text())
 
         self.assertEqual(defaults["ci_runner_user_shell"], "/bin/sh")
+
+    def test_kim_ops_user_is_dedicated_and_portable(self):
+        # Kim owns AS215932 operations: the account must be its own dedicated
+        # user (never root, never the legacy operator's svag) with a portable
+        # shell so the role works on Linux and the BSD routers alike.
+        defaults = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/defaults/main.yml").read_text())
+        tasks = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/tasks/main.yml").read_text())
+        play = yaml.safe_load((REPO / "ansible/playbooks/kim-ops-key.yml").read_text())[0]
+
+        self.assertEqual(defaults["kim_ops_user"], "kim")
+        self.assertEqual(defaults["kim_ops_user_shell"], "/bin/sh")
+
+        authorize = _task_by_name(tasks, "Authorize Kim's operator key for the kim user")
+        self.assertEqual(authorize["authorized_key"]["user"], "{{ kim_ops_user }}")
+        self.assertEqual(authorize["authorized_key"]["state"], "present")
+        self.assertNotIn("key_options", authorize["authorized_key"])
+
+        sudo = _task_by_name(tasks, "Grant the kim operator user NOPASSWD sudo (Linux)")
+        self.assertEqual(sudo["copy"]["dest"], "/etc/sudoers.d/kim-ops")
+        self.assertIn("NOPASSWD", sudo["copy"]["content"])
+
+        doas = _task_by_name(tasks, "Grant the kim operator user NOPASSWD doas (BSD)")
+        self.assertIn("permit nopass", doas["lineinfile"]["line"])
+
+        self.assertIn("linux", play["hosts"])
+        self.assertIn("freebsd", play["hosts"])
+        self.assertIn("openbsd", play["hosts"])
+        self.assertIn("external", play["hosts"])
+        self.assertIn("!retired", play["hosts"])
+        self.assertEqual(play["roles"], ["kim_ops_key"])
 
     def test_freebsd_router_inventory_uses_loopback_addresses(self):
         inventory = yaml.safe_load((REPO / "ansible/inventory/hosts.yml").read_text())

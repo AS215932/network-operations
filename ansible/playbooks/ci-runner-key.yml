@@ -12,7 +12,7 @@
 # `external` (extmon) included: drift-detection connects as ci to every host
 # in `all:!ci-pr`, so off-net hosts need the deploy user too.
 - name: ci-runner key distribution — all hosts except ci itself
-  hosts: linux:freebsd:openbsd:external:!ci
+  hosts: linux:freebsd:openbsd:external:!ci:!retired
   gather_facts: false
   become: true
   vars:

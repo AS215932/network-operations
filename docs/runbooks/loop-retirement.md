@@ -6,12 +6,16 @@ Observatory are no longer active infrastructure. Their repository history,
 databases, credentials and VM disks are retained for recovery or archival.
 
 The old `engineering-loop.yml` entrypoint ends without deploying. Automatic
-promotion no longer selects legacy roles; changes to retirement inventory select
-`retire-loop.yml`. NOC handoff delivery and collector emissions are disabled in
-both environment backends. Local NOC case verification and knowledge context
-remain independent of the retired collector.
+promotion ignores loop retirement metadata and never targets the halted VM.
+`retire-loop.yml` is available only through a manual `apply.yml` dispatch from
+`main`. NOC handoff delivery and collector emissions are disabled in both
+environment backends. Local NOC case verification and knowledge context remain
+independent of the retired collector.
 
-Apply the reviewed change through the normal main-only `apply.yml` controls:
+For a reviewed future recovery or retirement pass, first make the preserved VM
+intentionally reachable. Then manually dispatch `apply.yml` from `main` with
+playbook `retire-loop` and limit `loop`. Never dispatch that playbook while the
+VM is halted. The controlled sequence is:
 
 1. Deploy the NOC environment changes and confirm no new Engineering Loop handoffs.
 2. Apply `retire-loop` with limit `loop`. It replaces the managed Icinga host file

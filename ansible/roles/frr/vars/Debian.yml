@@ -7,5 +7,7 @@ frr_validate_cmd: "vtysh -C -f"
 # systemctl reload frr runs /usr/lib/frr/frr-reload.py --reload internally,
 # computing + applying the delta against the running config.
 frr_reload_cmd: "systemctl reload frr"
+# No fallback: systemctl exists wherever the frr package is installed.
+frr_reload_fallback_cmd: ""
 # Debian's frr package ships frr-reload.py — no separate tools package needed.
 frr_pythontools_pkg: ""
