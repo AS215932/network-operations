@@ -119,6 +119,37 @@ class InventorySchemaTest(unittest.TestCase):
                     f"infra VM {host} ({addr}) is outside infra_subnet {self.infra}",
                 )
 
+    def test_vpn_lives_on_the_dedicated_transit_not_infra_vms(self):
+        # The vpn VM sits on the dedicated rtr<->vpn transit
+        # (2a0c:b641:b50:1::/64, xenbr-transit) with no leg on the infra /64
+        # (docs/vpn-transit.md). It must therefore stay out of infra_vms —
+        # otherwise the segment invariant above fails — while remaining a
+        # managed Debian host (linux group) with public WireGuard ingress.
+        transit = _net(self.vars["vpn_transit_subnet"])
+        addr = self.host_addr["vpn"]
+        self.assertIn(
+            _ip(addr),
+            transit,
+            f"vpn ({addr}) must be in vpn_transit_subnet {transit}",
+        )
+        self.assertNotIn(
+            _ip(addr),
+            self.infra,
+            f"vpn ({addr}) must NOT be on the shared infra segment",
+        )
+        self.assertNotIn(
+            "vpn",
+            self.groups["infra_vms"],
+            "vpn must not be a member of the infra_vms group",
+        )
+        for group in ("linux", "public_facing"):
+            with self.subTest(group=group):
+                self.assertIn(
+                    "vpn",
+                    self.groups[group],
+                    f"vpn must stay in the {group} group",
+                )
+
     def test_ci_pr_runner_is_isolated_on_the_customer_segment(self):
         # The two-runner security model requires the unprivileged PR runner to
         # sit on the customer-isolated segment, never the infra segment.
