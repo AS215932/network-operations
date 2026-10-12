@@ -41,6 +41,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
+| rtr-bsd | OpenBSD | `2a0c:b641:b50:2::2` | — | router/DNS forwarder (parallel burn-in) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane |
 | vpn | Debian 13 | `2a0c:b641:b50:2::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
 | web | Debian 13 | `2a0c:b641:b50:2::30` | — | nginx + uvicorn (:8080, :8081) |
@@ -146,7 +147,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | 2001:7f8:d9:1::3 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2001:7f8:d9:1::4 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2a09:4c0:100:2d88::8bfa | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1339, 1341, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
+| any | udp | 1339, 1341, 1342, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -164,7 +165,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2a0c:b641:870::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1337, 1338, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
+| any | udp | 1337, 1338, 1342, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -181,7 +182,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1337, 1338, 1340, 1341 | WireGuard underlay tunnels (pf_wg_ports) |
+| any | udp | 1337, 1338, 1340, 1341, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -290,6 +291,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | cr1-de1 loopback | tcp | 6514 | syslog (TCP) from cr1-de1 |
 | cr1-nl1 loopback | tcp | 6514 | syslog (TCP) from cr1-nl1 |
 | mail | tcp | 6514 | syslog (TCP) from OpenBSD mail |
+| rtr-bsd | tcp | 6514 | syslog (TCP) from OpenBSD rtr-bsd |
 | mon | tcp | 8686 | Vector internal metrics scrape from mon |
 | mon | tcp | 9100 | node_exporter scrape |
 
@@ -457,6 +459,24 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | public | any | — | NAT64 egress via Jool (TCP/UDP/ICMP pool4) to the IPv4 internet (source 46.105.40.223); ICMP is used by the nat64 ping6 health check |
 
+### rtr-bsd — Parallel OpenBSD edge router running FRR BGP/OSPF, Unbound DNS64, and pf customer isolation alongside live rtr; no public v4 services until atomic cutover.
+
+> OSPF (proto 89) on the wg0/wg1/wg2 mesh and iBGP/179 are allowed via firewall_extra_raw_pf, not firewall_extra_rules. SSH (tcp/22) on wan+infra, DNS recursion on infra/vm, and the customer→infra isolation drops are captured in the cross-cutting flows table.
+
+**Inbound**
+
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| any | udp | 1343, 1344, 1345 | WireGuard underlay tunnels (pf_wg_ports) |
+| mon | tcp | 9100 | node_exporter scrape from mon |
+| mon | tcp | 9342 | frr_exporter scrape from mon |
+
+**Outbound**
+
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| public | any | — | IPv6 egress to the internet via the underlay default route (no NAT64 in Phase 1 — overlay clients keep using rtr for v4) |
+
 ### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
 
 > Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
@@ -567,7 +587,8 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | public | rtr | tcp (v4) | 80 | DNAT to proxy |
 | public | rtr | tcp (v4) | 443 | DNAT to proxy |
 | public | rtr | udp (v4) | 51820 | DNAT to vpn |
-| routers | routers | udp | 1337-1342 | WireGuard full mesh between router underlays |
+| routers | routers | udp | 1337-1345 | WireGuard full mesh between router underlays |
+| rtr-bsd | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
 | vpn-clients | public | any | — | routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr |
 | vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
@@ -594,7 +615,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | `openrouter` | openrouter.ai | OpenRouter LLM API (PR-Agent) |
 | `ops-prefix` | ops workstation prefix (KPN home) | 2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow |
 | `package-registries` | PyPI / npm / ghcr.io / Docker Hub | toolchain and container image pulls |
-| `routers` | AS215932 routers | rtr, cr1-nl1, cr1-de1, cr1-ch1 |
+| `routers` | AS215932 routers | rtr, rtr-bsd (parallel burn-in, issue #14), cr1-nl1, cr1-de1, cr1-ch1 |
 | `vpn-clients` | VPN clients | 2a0c:b641:b50:3::/64, routed via the vpn VM |
 
 ---

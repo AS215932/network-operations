@@ -41,6 +41,18 @@ peers:
     ipv6: "2a0c:b641:b50:2::1"
     loopback: "2a0c:b641:b50::d"
     underlay: "2001:41d0:303:48a::2"
+  # rtr-bsd — parallel OpenBSD edge router (issue #14). Distinct overlay
+  # loopback (::e), infra address (::2), and OVH underlay address (::3) so it
+  # runs alongside live rtr. Underscore + hyphen keys mirror the cr1_* aliases
+  # (Jinja attribute access vs inventory_hostname lookup).
+  rtr_bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
+  rtr-bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
   dns:     { ipv6: "2a0c:b641:b50:2::10" }
   api:     { ipv6: "2a0c:b641:b50:2::20" }
   web:     { ipv6: "2a0c:b641:b50:2::30" }
@@ -156,6 +168,7 @@ mail_failover_ipv4_gateway: "193.70.32.254"
 # Routers and the XO appliance accept root; everything else uses svag.
 ssh_users:
   rtr: root
+  rtr-bsd: root
   xoa: root
   cr1-nl1: svag
   cr1-de1: svag

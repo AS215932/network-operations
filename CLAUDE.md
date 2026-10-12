@@ -29,6 +29,7 @@ Underlay (hosting provider networks) is separate from overlay (AS215932 `2a0c:b6
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | `2a0c:b640:10::213` | `::b` | 2.2.2.2 |
 | cr1.ch1 | Securebit CH | FreeBSD + FRRouting | `2a09:4c0:100:2d88::8898` | `::c` | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | `2001:41d0:303:48a::2` | `::d` | 0.0.0.13 |
+| rtr-bsd | OVH FR | OpenBSD + FRRouting (parallel burn-in, #14) | `2001:41d0:303:48a::3` | `::e` | 0.0.0.14 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).
 
@@ -46,6 +47,9 @@ Full mesh, six tunnels.
 | cr1.ch1 wg0 ↔ rtr wg2 | :1339 ↔ :1339 | `ff06::/127` |
 | cr1.nl1 wg4 ↔ cr1.ch1 wg1 | :1341 ↔ :1341 | `ff07::/127` |
 | cr1.de1 wg2 ↔ cr1.ch1 wg2 | :1342 ↔ :1342 | `ff08::/127` |
+| rtr-bsd wg0 ↔ cr1.nl1 wg5 | :1343 ↔ :1343 | `ff10::/127` |
+| rtr-bsd wg1 ↔ cr1.de1 wg3 | :1344 ↔ :1343 | `ff11::/127` |
+| rtr-bsd wg2 ↔ cr1.ch1 wg3 | :1345 ↔ :1343 | `ff12::/127` |
 
 WG link addresses are in `2a0c:b641:b50:ffXX::/127`. Global addresses on links for traceroute visibility.
 

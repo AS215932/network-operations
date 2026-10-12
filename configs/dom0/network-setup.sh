@@ -22,6 +22,12 @@ ip -6 route replace default via 2001:41d0:303:4ff:ff:ff:ff:ff dev xenbr0
 # NDP proxy for rtr's underlay address (so OVH switch sees replies from dom0's MAC)
 ip -6 neigh add proxy 2001:41d0:303:48a::2 dev xenbr0 2>/dev/null || true
 
+# NDP proxy for rtr-bsd's distinct underlay address (issue #14 — parallel router).
+# No OVH virtual MAC needed in Phase 1: rtr-bsd holds no failover IPv4, and v6
+# behind the proxy works with the Xen auto-MAC. A vMAC enters the picture only
+# if the cutover assigns a failover IP directly to rtr-bsd's wan VIF.
+ip -6 neigh add proxy 2001:41d0:303:48a::3 dev xenbr0 2>/dev/null || true
+
 # dom0 is underlay-only — no AS215932 addresses.
 # mgmt bridge (xapi0) uses link-local IPv6 + 10.0.0.1/24 for XOA.
 

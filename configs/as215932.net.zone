@@ -32,6 +32,7 @@ www     IN  AAAA  2a0c:b641:b50:2::40
 
 ; --- Infrastructure network (2a0c:b641:b50:2::/64) ---
 rtr     IN  AAAA  2a0c:b641:b50:2::1
+rtr-bsd IN  AAAA  2a0c:b641:b50:2::2 ; parallel OpenBSD edge router (issue #14)
 dns     IN  AAAA  2a0c:b641:b50:2::10
 api     IN  AAAA  2a0c:b641:b50:2::20
 web     IN  AAAA  2a0c:b641:b50:2::30

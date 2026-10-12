@@ -133,9 +133,12 @@ class InventorySchemaTest(unittest.TestCase):
         )
 
     def test_routers_group_is_exactly_the_core_routers(self):
+        # rtr-bsd is the parallel OpenBSD edge router (issue #14) — a 5th
+        # iBGP router during burn-in, removed from this set at cutover when
+        # it replaces rtr.
         self.assertEqual(
             set(self.groups["routers"]),
-            {"rtr", "cr1-nl1", "cr1-de1", "cr1-ch1"},
+            {"rtr", "rtr-bsd", "cr1-nl1", "cr1-de1", "cr1-ch1"},
         )
 
     def test_nameservers_are_a_subset_of_public_facing(self):
@@ -191,7 +194,7 @@ class InventorySchemaTest(unittest.TestCase):
                 )
 
     def test_router_loopbacks_live_in_the_loopback_subnet(self):
-        for name in ("rtr", "cr1_nl1", "cr1_de1"):
+        for name in ("rtr", "rtr_bsd", "cr1_nl1", "cr1_de1", "cr1_ch1"):
             lo = self.vars["peers"][name].get("loopback")
             with self.subTest(peer=name):
                 self.assertIsNotNone(lo, f"{name} has no loopback")
