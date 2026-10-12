@@ -43,7 +43,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
 | rtr-bsd | OpenBSD | `2a0c:b641:b50:2::2` | — | router/DNS forwarder (parallel burn-in) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane |
-| vpn | Debian 13 | `2a0c:b641:b50:2::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
+| vpn | Debian 13 | `2a0c:b641:b50:1::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
 | web | Debian 13 | `2a0c:b641:b50:2::30` | — | nginx + uvicorn (:8080, :8081) |
 | xoa | Debian 13 | `2a0c:b641:b50:2::70` | `10.0.0.10` (mgmt) | Xen Orchestra |
 
@@ -59,6 +59,7 @@ dom0 is an XCP-NG hypervisor on the underlay only; it is not on the AS215932 ove
 | `2a0c:b641:b50::/64` | Router loopbacks (::a cr1-nl1, ::b cr1-de1, ::c cr1-ch1, ::d rtr) |
 | `2a0c:b641:b50:2::/64` | Infra subnet (rtr ::1, VMs ::10-::f0) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via the vpn VM) |
+| `2a0c:b641:b50:1::/64` | Dedicated rtr<->vpn transit (xenbr-transit) |
 | `2a0c:b641:b50:f0::/64` | loop VM Docker bridge containers (routed GUA /64) |
 | `2a0c:b641:b50:ff00::/56` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (::c1 = ci-pr, the unprivileged PR runner) |
@@ -445,7 +446,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| infra subnet, customer subnet, vpn-clients, rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
+| infra subnet, customer subnet, vpn-clients, vpn transit (rtr<->vpn), rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
 | cr1-nl1 loopback, cr1-de1 loopback, cr1-ch1 loopback | tcp | 179 | iBGP from cr1-* loopbacks |
 | cr1-nl1 underlay | udp | 1337 | WG to cr1-nl1 |
 | cr1-de1 underlay | udp | 1338 | WG to cr1-de1 |
@@ -495,7 +496,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
-### vpn — WireGuard server for client tunnels; forwards client traffic (wg0 to enX0) toward rtr for DNS64/NAT64 egress.
+### vpn — WireGuard server for client tunnels; forwards client traffic (wg0 to enX1, dedicated transit) toward rtr for DNS64/NAT64 egress.
 
 > The vpn-clients-to-rtr/internet transit is captured in the cross-cutting flows table.
 
@@ -591,7 +592,7 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | rtr-bsd | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
 | vpn-clients | public | any | — | routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr |
-| vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
+| vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX1 (dedicated transit) |
 | web | vault | tcp | 8200 | vault-agent secret render |
 
 ---
