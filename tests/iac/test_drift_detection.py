@@ -71,6 +71,16 @@ class DriftDetectionTest(unittest.TestCase):
         text = (REPO / "scripts/ci/drift-apply-plan.sh").read_text()
         self.assertIn('pb == "ci"', text)
 
+    def test_unbuilt_parallel_router_stays_out_of_the_default_sweep(self):
+        # rtr-bsd (issue #14) is in inventory before its VM exists. An
+        # inventory host with no machine behind it fails every sweep as
+        # UNREACHABLE, so the default limit excludes it — exactly like ci-pr.
+        # The exclusion is temporary: the Phase 1 build commit that first
+        # boots rtr-bsd MUST remove it (the runbook calls this out), and this
+        # test must go with it.
+        text = (REPO / "scripts/ci/check-drift.sh").read_text()
+        self.assertIn("all:!ci-pr:!rtr-bsd", text)
+
 
 if __name__ == "__main__":
     unittest.main()
