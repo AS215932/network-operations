@@ -23,6 +23,7 @@ class LoopRetirementTest(unittest.TestCase):
     def test_noc_backends_do_not_send_work_to_retired_runtime(self):
         for path in ["configs/noc-agent.env.j2", "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2"]:
             text = (REPO / path).read_text()
+            self.assertIn("NOC_PROACTIVE_ENABLED=0", text)
             self.assertIn("NOC_PROACTIVE_HANDOFF_ENABLED=0", text)
             self.assertIn("NOC_INSIGHT_RECORDS_ENABLED=0", text)
         host = yaml.safe_load((REPO / "ansible/inventory/host_vars/noc.yml").read_text())
@@ -48,7 +49,7 @@ class LoopRetirementTest(unittest.TestCase):
         values = dict(line.split("=", 1) for line in text.splitlines() if line and not line.startswith("#"))
         for key in [
             "NOC_ENGINEERING_HANDOFF_DELIVERY_ENABLED", "NOC_DISK_ALERT_HANDOFF_ENABLED",
-            "HYRULE_NOC_AGENT_CORE_TRACE", "NOC_PROACTIVE_HANDOFF_ENABLED", "NOC_INSIGHT_RECORDS_ENABLED",
+            "HYRULE_NOC_AGENT_CORE_TRACE", "NOC_PROACTIVE_ENABLED", "NOC_PROACTIVE_HANDOFF_ENABLED", "NOC_INSIGHT_RECORDS_ENABLED",
         ]:
             self.assertEqual(values[key], "0")
         self.assertEqual(values["NOC_CASESERVICE_REACTIVE_REPORT"], "0")

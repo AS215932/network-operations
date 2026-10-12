@@ -1,0 +1,10 @@
+---
+# Path on the ansible controller to the public half of Kim's operator keypair.
+kim_ops_key_pub_path: "{{ kim_ops_key_path }}.pub"
+
+# Dedicated operator user Kim connects as — never root, never the legacy
+# operator's svag. Gets NOPASSWD root (sudo on Linux, doas on BSD) because
+# Kim owns AS215932 operations: apply.yml's playbooks must escalate the
+# same way they do for the ci deploy user.
+kim_ops_user: kim
+kim_ops_user_shell: /bin/sh

@@ -2,6 +2,9 @@
 # mail — OpenBSD mail server for as215932.net.
 # Public SMTP and IPv4 IMAPS are world-facing; IPv6 mailbox access stays on ops/VPN plus NOC automation.
 
+# Service-host pf profile (see roles/firewall/vars/OpenBSD.yml — OpenBSD hosts
+# declare their pf profile explicitly; the role default is the router profile).
+firewall_pf_template: pf-service.conf.j2
 pf_ext_if: xnf0
 pf_ext_ifs: ["xnf0", "xnf1"]
 firewall_log_only: false

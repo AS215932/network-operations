@@ -8,11 +8,16 @@
 #   ../scripts/ci/check-drift.sh <log-dir> [playbook ...]
 #
 # With no playbook arguments the canonical sweep below runs. The limit can be
-# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr; retirement registration remains covered) — used by the post-merge
+# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr:!rtr-bsd; retirement registration remains covered) — used by the post-merge
 # verify pass to re-check only the hosts it just applied.
 #
 # ci-pr lives on the customer-isolated segment and is managed from the ops
 # workstation, not from the privileged ci runner — hence the default limit.
+#
+# rtr-bsd is excluded until its VM exists (issue #14, Phase 1 build): an
+# inventory host with no machine behind it would fail every sweep as
+# UNREACHABLE. REMOVE this exclusion in the build commit that first boots
+# rtr-bsd — the runbook (docs/runbooks/rtr-bsd-build.md Phase 1) calls it out.
 
 set -uo pipefail
 
@@ -33,7 +38,7 @@ if [ "${#playbooks[@]}" -eq 0 ]; then
 fi
 
 # Monitoring must still reconcile retired-host tombstones on mon.
-limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr}"
+limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr:!rtr-bsd}"
 
 mkdir -p "$logdir"
 status=0

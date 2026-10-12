@@ -66,6 +66,14 @@
   notify: restart node_exporter
   tags: [apply]
 
+- name: Ensure node_exporter is enabled and running (Debian)
+  systemd:
+    name: "{{ monitoring_node_service }}"
+    state: started
+    enabled: true
+  when: ansible_os_family == "Debian"
+  tags: [apply]
+
 - name: Install node_exporter (FreeBSD)
   community.general.pkgng:
     name: "{{ monitoring_pkg }}"
@@ -114,4 +122,19 @@
   command: "rcctl enable {{ monitoring_node_service }}"
   changed_when: false
   when: ansible_os_family == "OpenBSD"
+  tags: [apply]
+
+- name: Check node_exporter state (OpenBSD)
+  command: "rcctl check {{ monitoring_node_service }}"
+  register: monitoring_openbsd_node_exporter_state
+  changed_when: false
+  failed_when: monitoring_openbsd_node_exporter_state.rc not in [0, 1]
+  when: ansible_os_family == "OpenBSD"
+  tags: [apply]
+
+- name: Start node_exporter when stopped (OpenBSD)
+  command: "rcctl start {{ monitoring_node_service }}"
+  when:
+    - ansible_os_family == "OpenBSD"
+    - monitoring_openbsd_node_exporter_state.rc == 1
   tags: [apply]

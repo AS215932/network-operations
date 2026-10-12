@@ -5,4 +5,8 @@ firewall_conf_path: /etc/pf.conf
 firewall_backup_path: /etc/pf.conf.backup
 firewall_validate_cmd: "pfctl -nf"
 firewall_reload_cmd: "pfctl -f /etc/pf.conf"
-firewall_pf_template: pf-service.conf.j2
+# NOTE: no firewall_pf_template here on purpose. The task default is the
+# router profile (pf.conf.j2); each OpenBSD host declares its own profile
+# explicitly in host_vars (mail: pf-service.conf.j2, rtr-bsd: pf.conf.j2).
+# A group-level default would beat host_vars (include_vars outranks inventory
+# vars) and make per-host profiles impossible — see issue #14.

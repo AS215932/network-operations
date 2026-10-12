@@ -237,6 +237,32 @@ fi
         self.assertIn('pkill -x {{ monitoring_node_service }}', handlers)
         self.assertIn('service {{ monitoring_node_service }} onestart', handlers)
 
+    def test_node_exporter_start_tasks_have_correct_os_guards(self):
+        tasks = yaml.safe_load(
+            (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text()
+        )
+        by_name = {task["name"]: task for task in tasks}
+
+        debian = by_name["Ensure node_exporter is enabled and running (Debian)"]
+        self.assertEqual(debian["systemd"]["state"], "started")
+        self.assertTrue(debian["systemd"]["enabled"])
+        self.assertEqual(debian["when"], 'ansible_os_family == "Debian"')
+        self.assertEqual(debian["tags"], ["apply"])
+
+        check = by_name["Check node_exporter state (OpenBSD)"]
+        self.assertEqual(check["command"], "rcctl check {{ monitoring_node_service }}")
+        self.assertEqual(check["when"], 'ansible_os_family == "OpenBSD"')
+        start = by_name["Start node_exporter when stopped (OpenBSD)"]
+        self.assertEqual(start["command"], "rcctl start {{ monitoring_node_service }}")
+        self.assertEqual(
+            start["when"],
+            [
+                'ansible_os_family == "OpenBSD"',
+                "monitoring_openbsd_node_exporter_state.rc == 1",
+            ],
+        )
+        self.assertEqual(start["tags"], ["apply"])
+
 
 if __name__ == "__main__":
     unittest.main()
