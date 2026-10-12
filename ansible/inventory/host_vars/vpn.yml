@@ -10,8 +10,13 @@ firewall_extra_rules:
 
 # VPN clients are full-tunnel IPv6 peers. Their traffic arrives on wg0 and
 # leaves via the infra uplink toward rtr, which then handles DNS64/NAT64.
+# The return leg is explicit too: without it, infra replies (SYN-ACKs from
+# fleet hosts back to clients) hit the forward chain's default drop, so
+# client-initiated sessions establish one way and stall (issue: Kim's VPN
+# SSH SYNs accepted fleet-wide, SYN-ACKs never returned).
 firewall_forward_extra_raw_nft: |
   iifname wg0 oifname enX0 ip6 saddr {{ vpn_clients_subnet }} accept comment "VPN client transit via rtr"
+  iifname enX0 oifname wg0 ip6 daddr {{ vpn_clients_subnet }} accept comment "infra return to VPN clients"
 
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
