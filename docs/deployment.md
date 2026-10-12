@@ -9,7 +9,8 @@ Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 ```
 2a0c:b641:b50::/44  (full allocation)
 ├── 2a0c:b641:b50::/48   Infrastructure
-│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
+│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, xoa ::70
+│   └── :1::/64   vpn transit  rtr ::1, vpn ::60 (dedicated rtr<->vpn segment, docs/vpn-transit.md)
 ├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM)
 └── 2a0c:b641:b52-b5f    Future expansion
 ```
