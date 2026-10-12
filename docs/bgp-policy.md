@@ -110,7 +110,9 @@ makes the policy work.
 
 rtr originates `2a0c:b641:b50::/48` (infra) and `2a0c:b641:b51::/48` (customer
 VMs). Only cr1-ch1 exports them, via its own `AS215932v6-out-ch1` prefix-list;
-nl1 and de1 continue to export the `/44` alone.
+nl1 and de1 continue to export the `/44` alone. rtr-bsd (parallel burn-in,
+issue #14) originates the same two /48s so it is a drop-in at cutover —
+cr1-ch1's export keeps working unchanged whichever edge router is live.
 
 Longest-prefix-match is honoured by every router on the internet regardless of
 local policy, so return traffic for the infra and customer estates lands on

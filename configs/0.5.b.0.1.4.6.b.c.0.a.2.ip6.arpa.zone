@@ -32,6 +32,9 @@ $TTL 3600
 ; --- :2::1 — rtr (infra gateway) ---
 1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  rtr.as215932.net.
 
+; --- :2::2 — rtr-bsd (parallel OpenBSD edge router, issue #14) ---
+2.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  rtr-bsd.as215932.net.
+
 ; --- :2::10 — dns ---
 0.1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  dns.as215932.net.
 

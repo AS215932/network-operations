@@ -1,0 +1,19 @@
+---
+# OpenBSD edge router (rtr-bsd) — FRR from packages, config under /usr/local
+# like the FreeBSD cores (NOT /etc like Debian).
+#
+# VERIFY ON FIRST APPLY: the OpenBSD frr package layout. If `vtysh -C -f`
+# rejects the staged config or the reload command differs, update here —
+# the frr role's at(1) watchdog restores the backup on failure either way.
+frr_conf_path: /usr/local/etc/frr/frr.conf
+frr_backup_path: /usr/local/etc/frr/frr.conf.backup
+# Standalone parse check of a config file (no daemon connection needed).
+frr_validate_cmd: "vtysh -C -f"
+# OpenBSD rc.d service wrapper for FRR. The FreeBSD port ships an
+# `frr-reload` delta-reload wrapper; if the OpenBSD package lacks it, fall
+# back to `rcctl reload frr` (full reload, brief session flap — schedule
+# with the mesh in mind) after confirming vtysh parsing passes.
+frr_reload_cmd: "/usr/local/sbin/frr-reload"
+# Package providing frr-reload.py. If the OpenBSD frr package bundles it
+# (like Debian) instead of splitting it (like FreeBSD), set to "".
+frr_pythontools_pkg: "frr-pythontools"
