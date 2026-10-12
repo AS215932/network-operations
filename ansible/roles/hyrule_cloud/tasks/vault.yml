@@ -3,12 +3,20 @@
 # environment. Vault Agent renders /opt/hyrule-cloud/.env on the target and
 # bounces the service when a valid render changes.
 
+# Durable mode takes the plain, non-expiring SecretID and ignores any wrapped
+# value still exported by an old CI environment: a wrapping token would be
+# unwrapped once and deleted, which is exactly how the July 2026 outage started.
+# With hyrule_cloud_vault_require_durable_secret_id: false the historical
+# precedence (wrapped first) is restored for break-glass use.
 - name: Set hyrule-cloud Vault Agent SecretID bootstrap value
   ansible.builtin.set_fact:
     hyrule_cloud_vault_agent_secret_id: >-
-      {{ hyrule_cloud_vault_wrapped_secret_id
-         if (hyrule_cloud_vault_wrapped_secret_id | length > 0)
-         else hyrule_cloud_vault_secret_id }}
+      {{ hyrule_cloud_vault_secret_id
+         if (
+           hyrule_cloud_vault_require_durable_secret_id | bool
+           or hyrule_cloud_vault_wrapped_secret_id | length == 0
+         )
+         else hyrule_cloud_vault_wrapped_secret_id }}
   no_log: true
 
 - name: Capture current hyrule-cloud Vault Agent state
@@ -39,14 +47,14 @@
             'name': 'hyrule-cloud-monero.env.ctmpl',
             'destination': hyrule_cloud_monero_wallet_rpc_env_file,
             'group': hyrule_cloud_app_group,
-            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_worker_service_name ~ '.service',
           },
           {
             'src': 'hyrule-cloud-monero-password.ctmpl.j2',
             'name': 'hyrule-cloud-monero-password.ctmpl',
             'destination': hyrule_cloud_monero_wallet_rpc_password_file,
             'group': hyrule_cloud_app_group,
-            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service',
+            'reload_command': '/bin/systemctl try-restart ' ~ hyrule_cloud_monero_wallet_rpc_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_service_name ~ '.service && /bin/systemctl try-restart ' ~ hyrule_cloud_worker_service_name ~ '.service',
           },
         ]
       }}
@@ -61,6 +69,7 @@
     vault_agent_role_id: "{{ hyrule_cloud_vault_role_id }}"
     vault_agent_secret_id: "{{ hyrule_cloud_vault_agent_secret_id }}"
     vault_agent_secret_id_response_wrapping_path: "{{ hyrule_cloud_vault_secret_id_response_wrapping_path }}"
+    vault_agent_require_durable_secret_id: "{{ hyrule_cloud_vault_require_durable_secret_id }}"
     vault_agent_templates: "{{ hyrule_cloud_vault_agent_templates }}"
     vault_agent_extra_dirs:
       - path: "{{ hyrule_cloud_install_dir }}"

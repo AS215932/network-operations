@@ -64,6 +64,111 @@
   notify: restart node_exporter
   tags: [apply]
 
+# --- BGP / diagnostic agents ---
+- name: Ensure extmon and BGPalerter directories exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0755') }}"
+    recurse: "{{ item.recurse | default(false) }}"
+  loop:
+    - { path: /etc/extmon, mode: "0750" }
+    - { path: /opt/bgpalerter, mode: "0755" }
+    - { path: /etc/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
+    # No recurse: BGPalerter (User=prometheus) owns the files it writes in
+    # these runtime dirs; recursing over them never converges in check mode
+    # and made the nightly drift run flag this task forever.
+    - { path: /etc/bgpalerter/logs, owner: prometheus, group: prometheus, mode: "0755" }
+    - { path: /etc/bgpalerter/alertdata, owner: prometheus, group: prometheus, mode: "0755" }
+    - { path: /etc/bgpalerter/.cache, owner: prometheus, group: prometheus, mode: "0755" }
+    - { path: /var/lib/bgpalerter, owner: prometheus, group: prometheus, mode: "0755" }
+  tags: [apply]
+
+- name: Install extmon BGP and diagnostic agents
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - { src: bgp-agent.py.j2, dest: /usr/local/bin/extmon-bgp-agent.py }
+    - { src: diag-agent.py.j2, dest: /usr/local/bin/extmon-diag-agent.py }
+  notify:
+    - restart extmon-bgp-agent
+    - restart extmon-diag-agent
+  tags: [apply]
+
+# Secret-bearing env files are only managed when the corresponding token is
+# present in the controller environment. The nightly drift check runs without
+# the extmon tokens; skipping (instead of diffing an empty render against the
+# live 0600 file) keeps drift green while every other file is still checked.
+- name: Install extmon agent env files (skipped when tokens are absent)
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - { src: bgp-agent.env.j2, dest: /etc/extmon/bgp-agent.env, token: "{{ extmon_bgp_ingest_token }}" }
+    - { src: diag-agent.env.j2, dest: /etc/extmon/diag-agent.env, token: "{{ extmon_diag_agent_token }}" }
+  when: item.token | length > 0
+  no_log: true
+  notify:
+    - restart extmon-bgp-agent
+    - restart extmon-diag-agent
+  tags: [apply]
+
+- name: Install extmon BGP and diagnostic systemd units
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: bgp-agent.service.j2, dest: extmon-bgp-agent.service }
+    - { src: diag-agent.service.j2, dest: extmon-diag-agent.service }
+  notify: reload systemd
+  tags: [apply]
+
+- name: Download pinned BGPalerter binary
+  get_url:
+    url: "{{ extmon_bgpalerter_url }}"
+    dest: /opt/bgpalerter/bgpalerter-linux-x64
+    checksum: "sha256:{{ extmon_bgpalerter_sha256 }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart bgpalerter
+  tags: [apply]
+
+- name: Install BGPalerter config
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/bgpalerter/{{ item.dest }}"
+    owner: prometheus
+    group: prometheus
+    mode: "0644"
+  loop:
+    - { src: bgpalerter-config.yml.j2, dest: config.yml }
+    - { src: bgpalerter-prefixes.yml.j2, dest: prefixes.yml }
+  notify: restart bgpalerter
+  tags: [apply]
+
+- name: Install BGPalerter systemd unit
+  template:
+    src: bgpalerter.service.j2
+    dest: /etc/systemd/system/bgpalerter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+  tags: [apply]
+
 # --- OVH expiry collector (Phase C/L0b) ---
 - name: Install ovh.conf for the collector
   copy:
@@ -141,6 +246,25 @@
     enabled: true
   tags: [apply]
 
+- name: Enable + start Routinator
+  systemd:
+    name: routinator
+    state: started
+    enabled: true
+  tags: [apply]
+
+- name: Enable + start extmon BGP/diagnostic services
+  systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - extmon-bgp-agent
+    - extmon-diag-agent
+    - bgpalerter
+  tags: [apply]
+
 - name: Enable + start prometheus
   systemd:
     name: prometheus
@@ -150,10 +274,18 @@
 
 # blackbox_exporter ICMP probes need raw sockets. The Debian package ships
 # without CAP_NET_RAW; grant it via setcap so we don't need to run as root.
+# Guarded command instead of the `capabilities` module: modern libcap's getcap
+# prints `cap_net_raw=ep` while the module compares against `+ep`, so the
+# module reports changed on every run and kept the drift check red.
+- name: Check blackbox_exporter capabilities
+  command: getcap /usr/bin/prometheus-blackbox-exporter
+  register: extmon_blackbox_caps
+  changed_when: false
+  check_mode: false
+  tags: [apply]
+
 - name: Grant CAP_NET_RAW to blackbox_exporter (for ICMP)
-  capabilities:
-    path: /usr/bin/prometheus-blackbox-exporter
-    capability: cap_net_raw+ep
-    state: present
+  command: setcap cap_net_raw+ep /usr/bin/prometheus-blackbox-exporter
+  when: "'cap_net_raw' not in extmon_blackbox_caps.stdout"
   notify: restart blackbox_exporter
   tags: [apply]

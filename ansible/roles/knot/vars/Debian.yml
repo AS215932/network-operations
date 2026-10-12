@@ -1,5 +1,6 @@
 ---
 knot_pkg: knot
+knot_dnssecutils_pkg: knot-dnssecutils
 knot_service: knot
 knot_conf_path: /etc/knot/knot.conf
 knot_backup_path: /etc/knot/knot.conf.backup

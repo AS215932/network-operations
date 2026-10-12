@@ -8,8 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Vault Agent AppRole auth now survives restarts (`vault_agent_require_durable_secret_id`),
+  and every agent host publishes freshness metrics with an Icinga check on them.
+  A response-wrapped SecretID is consumed on first read, so the 2026-07-18 restart
+  left `vault-agent-hyrule-cloud` on `api` 403-looping until 2026-07-25 with
+  `/opt/hyrule-cloud/.env` frozen and no alert. See
+  `docs/runbooks/vault-agent-durable-auth.md`.
+
 ### Added
 - Profile/README optimization pass: roadmap, architecture diagrams, screenshots, contributing guide, and changelog.
+
+### Removed
+- In-repo Engineering Loop runtime, prompt/skill docs, Pi extension, model
+  policies, and loop-specific test suite after extraction to
+  `AS215932/engineering-loop`.
 
 ## [2025.06] — Infrastructure hardening & automation
 

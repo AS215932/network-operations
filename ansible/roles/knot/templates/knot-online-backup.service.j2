@@ -1,0 +1,16 @@
+[Unit]
+Description=Online backup of Knot zones, catalogs, and DNSSEC keys
+After={{ knot_service }}.service
+Requires={{ knot_service }}.service
+
+[Service]
+Type=oneshot
+User=knot
+Group=knot
+ExecStart=/usr/local/sbin/knot-online-backup
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths={{ knot_backup_dir }} {{ knot_dns_control_state_dir }}

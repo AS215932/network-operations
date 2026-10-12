@@ -1,0 +1,26 @@
+# /etc/systemd/network/10-enX1.network — vpn VM (dedicated transit to rtr)
+# Xen network xenbr-transit; rtr is ::1 / 10.0.1.1 on the same segment.
+# The vpn VM has NO address on the infra /64 (2a0c:b641:b50:2::/64): all
+# client <-> infra traffic must go through rtr in both directions.
+# RFC1918 IPv4 for inbound DNAT from rtr (failover IP → WireGuard).
+[Match]
+Name=enX1
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:1::60/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:1::1
+
+[Address]
+Address=10.0.1.60/24
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=10.0.1.1

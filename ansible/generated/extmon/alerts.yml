@@ -43,6 +43,81 @@ groups:
         annotations:
           summary: 'TLS cert expires in <7d: {{ $labels.instance }}'
 
+  - name: extmon-bgp
+    interval: 60s
+    rules:
+      - alert: AS215932PrefixNotVisible
+        expr: bgp_prefix_visible{prefix="2a0c:b641:b50::/44"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'AS215932 prefix not visible from {{ $labels.source }}'
+          description: 'External BGP monitoring does not currently see 2a0c:b641:b50::/44.'
+
+      - alert: AS215932UnexpectedOrigin
+        expr: bgp_prefix_origin_visible{prefix="2a0c:b641:b50::/44",origin!="215932"} > 0
+        for: 2m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'Unexpected origin AS for AS215932 prefix: {{ $labels.origin }}'
+
+      - alert: AS215932RPKIInvalid
+        expr: bgp_rpki_valid{prefix="2a0c:b641:b50::/44",origin="215932"} == 0
+        for: 10m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'RPKI invalid/not-valid for 2a0c:b641:b50::/44 origin AS215932'
+
+      - alert: BGPSourceDown
+        expr: bgp_source_up == 0
+        for: 15m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'BGP data source down/degraded: {{ $labels.source }}'
+
+      - alert: BGPSourceStale
+        expr: time() - bgp_source_last_success_timestamp > 1800
+        for: 10m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'BGP data source stale: {{ $labels.source }}'
+
+      - alert: BGPalerterCriticalEvent
+        # Fire from the last-event timestamp gauge, not increase() on the
+        # counter: a counter's first sample for a new labelset has no prior
+        # point, so increase() would miss the very first hijack/withdrawal.
+        expr: time() - max(bgpalerter_last_event_timestamp{severity="critical"}) < 600
+        for: 0m
+        labels:
+          severity: critical
+          source: extmon
+        annotations:
+          summary: 'BGPalerter critical BGP event for AS215932'
+
+      - alert: ExtmonBGPAgentDown
+        expr: up{job="extmon-bgp-agent"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'extmon BGP agent not serving /metrics'
+          description: |
+            up{job="extmon-bgp-agent"}=0 — the BGP monitoring agent is down, so
+            every bgp_prefix_*/bgp_source_*/BGPalerter series goes stale and the
+            BGP alerts above can no longer fire. This job is outside the
+            ExtmonComponentDown (extmon-self) matcher, hence its own rule.
+
   - name: extmon-self
     interval: 30s
     rules:
@@ -100,3 +175,21 @@ groups:
           source: extmon
         annotations:
           summary: 'OVH expiry collector has not run in over an hour'
+
+      - alert: OVHCollectorErrors
+        # The collector always writes its textfile (a fresh timestamp) even when
+        # OVH API calls fail, so OVHCollectorStale alone can't see a partial
+        # failure. This consumes the error gauge so missing expiry/billing
+        # coverage pages — e.g. the rtr failover IP whose expiry breaks NAT64.
+        expr: ovh_collector_errors_total > 0
+        for: 30m
+        labels:
+          severity: warning
+          source: extmon
+        annotations:
+          summary: 'OVH expiry collector reported {{ $value }} error(s)'
+          description: |
+            One or more OVH API calls (/dedicated, /ip, /me/bill) failed on the
+            last runs, so ovh_service_expires_seconds / ovh_unpaid_bill_count may
+            be missing or stale despite a fresh collector timestamp. Check OVH
+            credentials / API status before an expiry slips through unmonitored.

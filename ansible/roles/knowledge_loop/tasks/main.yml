@@ -1,0 +1,27 @@
+---
+- name: Validate Knowledge Loop deployment inputs
+  ansible.builtin.assert:
+    that:
+      - knowledge_loop_user | length > 0
+      - knowledge_loop_group | length > 0
+      - knowledge_loop_install_dir.startswith('/')
+      - knowledge_loop_config_dir.startswith('/')
+      - knowledge_loop_state_dir.startswith('/')
+      - knowledge_loop_daemon_state_dir.startswith('/')
+      - knowledge_loop_workspace_dir.startswith('/')
+      - knowledge_loop_repo_workspace.startswith('/')
+      - knowledge_loop_env_file.startswith('/')
+      - knowledge_loop_version | length > 0
+      - knowledge_loop_max_cycles_per_day | int >= 0
+      - knowledge_loop_max_prs_per_day | int >= 0
+      - knowledge_loop_max_openrouter_calls_per_day | int >= 0
+      - knowledge_loop_max_learning_events_per_day | int >= 0
+    fail_msg: >-
+      Knowledge Loop must run as a dedicated, bounded producer agent with an
+      explicit checked-out Knowledge revision and no production fleet secrets.
+  tags: [validate, always]
+
+- name: Apply Knowledge Loop runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: knowledge_loop_apply | bool
+  tags: [apply]

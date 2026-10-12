@@ -25,4 +25,4 @@ Validation:
 - [ ] `scripts/ci/iac-static.sh` passes.
 - [ ] `apply.yml` dry-run completed for each affected playbook.
 - [ ] Production `apply.yml` completed.
-- [ ] Icinga pre/post snapshot diff reviewed.
+- [ ] Post-deploy Goss passed and live Icinga (`mon`) checked for new problems.

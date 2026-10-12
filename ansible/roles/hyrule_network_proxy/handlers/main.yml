@@ -1,4 +1,10 @@
 ---
+- name: restart node_exporter
+  ansible.builtin.systemd:
+    name: "{{ hyrule_network_proxy_node_exporter_service_name }}"
+    state: restarted
+    enabled: true
+
 - name: restart hyrule-network-proxy
   ansible.builtin.systemd:
     name: hyrule-network-proxy

@@ -36,3 +36,27 @@ knot_generated_dir: "{{ playbook_dir }}/../generated"
 
 # Whether to install knot, copy config into place + reload. False = render only.
 knot_apply: false
+
+# Customer zones are declared on the primary through a generated include.
+# Knot turns those declarations into an RFC 9432 catalog and the secondary
+# interprets it, so adding a domain never requires editing host inventory.
+knot_customer_catalog_enabled: true
+knot_customer_catalog_zone: customer-zones.catalog.invalid
+knot_customer_member_template: customer-member
+knot_customer_secondary_template: customer-secondary
+knot_customer_zones_dir: /var/lib/knot/customer-zones
+knot_customer_zones_config: /var/lib/knot/customer-zones.conf
+knot_customer_dnssec_policy: customer-domains
+
+# HMAC-authenticated internal control service (primary only).
+knot_dns_control_enabled: "{{ knot_role == 'primary' }}"
+knot_dns_control_secret: "{{ lookup('env', 'HYRULE_DNS_CONTROL_SECRET') }}"
+knot_dns_control_host: "{{ peers.dns.ipv6 | default('::1') }}"
+knot_dns_control_port: 8453
+knot_dns_control_state_dir: /var/lib/knot/hyrule-dns-control
+knot_dns_control_env_file: /etc/knot/hyrule-dns-control.env
+
+# Online backups include zone contents, catalog metadata, and KASP keys.
+knot_backup_enabled: true
+knot_backup_dir: /var/backups/knot
+knot_backup_retention_days: 14

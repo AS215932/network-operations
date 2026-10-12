@@ -1,0 +1,29 @@
+# Deploy path: /etc/systemd/system/soc-agent.service
+[Unit]
+Description=SOC Agent LHP origin endpoints (payload fetch + engineering callbacks)
+# Order after the Vault Agent sink that renders the REQUIRED secrets env —
+# without it, boot can start this unit before /opt/soc-agent/.env exists and
+# burn through the restart budget (engineering_loop/observatory precedent).
+After=network-online.target vault-agent-soc-agent.service
+Wants=network-online.target vault-agent-soc-agent.service
+
+[Service]
+User={{ soc_agent_user }}
+Group={{ soc_agent_group }}
+WorkingDirectory={{ soc_agent_install_dir }}/repo
+# Role-rendered mode/kill switches (required) + Vault-rendered secrets. The
+# secrets file is REQUIRED here: this service only runs from handoff_dry up,
+# where the LHP HMAC secret must exist.
+EnvironmentFile={{ soc_agent_mode_env_file }}
+EnvironmentFile={{ soc_agent_secrets_env_file }}
+ExecStart={{ soc_agent_uv_path }} run uvicorn app.main:app --host {{ soc_agent_listen_host }} --port {{ soc_agent_listen_port }}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ soc_agent_state_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

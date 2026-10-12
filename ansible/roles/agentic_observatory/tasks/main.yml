@@ -1,0 +1,23 @@
+---
+- name: Validate agentic_observatory deployment inputs
+  ansible.builtin.assert:
+    that:
+      - agentic_observatory_user | length > 0
+      - agentic_observatory_group | length > 0
+      - agentic_observatory_install_dir.startswith('/')
+      - agentic_observatory_config_dir.startswith('/')
+      - agentic_observatory_env_file.startswith('/')
+      - agentic_observatory_state_dir.startswith('/')
+      - agentic_observatory_version is match('^[0-9a-f]{40}$')
+      - agentic_observatory_host == peers.loop.ipv6
+      - agentic_observatory_port | int == 8780
+      - agentic_observatory_database_name == 'agentic_observatory'
+    fail_msg: >-
+      agentic_observatory must remain a loop-host, overlay-bound internal console
+      with local cache/audit state unless a later reviewed PR deliberately widens it.
+  tags: [validate, always]
+
+- name: Apply agentic_observatory runtime
+  ansible.builtin.import_tasks: apply.yml
+  when: agentic_observatory_apply | bool
+  tags: [apply]

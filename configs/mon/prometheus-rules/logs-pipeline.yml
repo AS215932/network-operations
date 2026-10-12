@@ -36,7 +36,7 @@ groups:
       # buffered sink. A persistent buffer backlog means downstream (Loki)
       # is unable to keep up.
       - alert: VectorBufferStalling
-        expr: rate(vector_buffer_byte_size_bytes[5m]) > 0 and vector_buffer_byte_size_bytes > 100e6
+        expr: rate(vector_buffer_byte_size[5m]) > 0 and vector_buffer_byte_size > 100e6
         for: 10m
         labels:
           severity: warning

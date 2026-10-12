@@ -1,0 +1,69 @@
+---
+# Vault Agent health metrics for node_exporter's textfile collector.
+#
+# Host-wide, not per-agent: the collector enumerates every
+# {{ vault_agent_config_dir }}/*.hcl on the box, so including this file once
+# per vault_agent invocation converges to the same content.
+#
+# node_exporter is pointed at the textfile directory by ansible/roles/monitoring
+# (monitoring_node_textfile_enabled). The metrics are harmless if that role has
+# not run yet — they are simply not scraped.
+
+- name: Ensure node_exporter textfile collector dir exists
+  file:
+    path: "{{ vault_agent_metrics_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [apply]
+
+- name: Install Vault Agent health metrics collector
+  template:
+    src: vault-agent-health-metrics.py.j2
+    dest: "{{ vault_agent_metrics_script }}"
+    owner: root
+    group: root
+    mode: "0750"
+  register: vault_agent_metrics_script_state
+  tags: [apply]
+
+- name: Install Vault Agent health metrics unit
+  template:
+    src: vault-agent-health-metrics.service.j2
+    dest: /etc/systemd/system/vault-agent-health-metrics.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: vault_agent_metrics_unit_state
+  tags: [apply]
+
+- name: Install Vault Agent health metrics timer
+  template:
+    src: vault-agent-health-metrics.timer.j2
+    dest: /etc/systemd/system/vault-agent-health-metrics.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: vault_agent_metrics_timer_state
+  tags: [apply]
+
+- name: Enable Vault Agent health metrics timer
+  systemd:
+    name: vault-agent-health-metrics.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: [apply]
+
+# Publish a first sample immediately so the Icinga service does not sit at
+# UNKNOWN ("no vault_agent metrics") until the timer's first elapse.
+- name: Publish an initial Vault Agent health sample
+  command: "{{ vault_agent_metrics_script }}"
+  changed_when: false
+  failed_when: false
+  when: >-
+    vault_agent_metrics_script_state is changed
+    or vault_agent_metrics_unit_state is changed
+    or vault_agent_metrics_timer_state is changed
+  tags: [apply]

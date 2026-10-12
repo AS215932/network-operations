@@ -1,0 +1,32 @@
+# /etc/systemd/system/hyrule-knowledge-api.service
+# Managed by ansible/roles/knowledge_api. Long-running read-only HTTP service
+# over insight metrics + the concept corpus. Never writes the git ledger.
+
+[Unit]
+Description=AS215932 Knowledge read API (insight metrics + concept corpus)
+After=network-online.target
+Wants=network-online.target
+ConditionEnvironment=!GITHUB_ACTIONS
+
+[Service]
+Type=simple
+User={{ knowledge_api_user }}
+Group={{ knowledge_api_group }}
+WorkingDirectory={{ knowledge_api_install_dir }}
+Environment=HOME={{ knowledge_api_state_dir }}
+EnvironmentFile={{ knowledge_api_env_file }}
+ExecStart={{ knowledge_api_install_dir }}/.venv/bin/hyrule-knowledge-api
+Restart=on-failure
+RestartSec=5
+
+# Read-only service: no fleet keys, no Docker socket, no writes beyond state.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectSystem=strict
+ReadWritePaths={{ knowledge_api_state_dir }}
+
+[Install]
+WantedBy=multi-user.target

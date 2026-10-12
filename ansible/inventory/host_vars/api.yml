@@ -1,7 +1,7 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
-hyrule_cloud_version: 270b65d764dbab7155fa98f08ab4370f7c605b19
+hyrule_cloud_version: 4543c7d0ac61a128e98e2275634eb03abceeb210
 hyrule_cloud_monero_wallet_rpc_enabled: true
 
 firewall_extra_rules:
@@ -15,3 +15,15 @@ firewall_extra_rules:
 # --- Logs --- (ships journald to log VM via Vector)
 logs_register: true
 logs_role: api
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "hyrule-cloud (FastAPI :8402) + Postgres"
+  summary: "hyrule-cloud VM-lifecycle API on :8402 backed by PostgreSQL, with postgres_exporter for monitoring."
+network_flows_outbound:
+  - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates (TSIG hyrule-dns)" }
+  - { to: dns, proto: tcp, port: 8453, purpose: "HMAC-authenticated managed customer DNS control" }
+  - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
+  - { to: netproxy, proto: tcp, port: 8452, purpose: "authenticated reverse-SSH tunnel control API (create/extend/revoke leases)" }
+  - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }

@@ -9,5 +9,7 @@ frr_validate_cmd: "vtysh -C -f"
 # frr-reload.py script from the frr10-pythontools package (frr_pythontools_pkg) —
 # without it `service frr reload` / the wrapper silently fail and apply nothing.
 frr_reload_cmd: "/usr/local/sbin/frr-reload"
+# No fallback: the wrapper ships with the port (plus frr_pythontools_pkg below).
+frr_reload_fallback_cmd: ""
 # Package providing frr-reload.py on FreeBSD. The reload is a no-op without it.
 frr_pythontools_pkg: "frr10-pythontools"

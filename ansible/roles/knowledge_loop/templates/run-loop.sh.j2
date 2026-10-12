@@ -1,0 +1,75 @@
+#!/bin/sh
+# Managed by ansible/roles/knowledge_loop.
+# One-shot Knowledge Loop runtime wrapper. It mints a short-lived GitHub App
+# token when configured, then runs exactly one bounded producer cycle.
+# shellcheck shell=sh
+
+set -eu
+
+fatal() {
+  printf '%s\n' "knowledge-loop: $*" >&2
+  exit 1
+}
+
+existing_token="${KNOWLEDGE_LOOP_GITHUB_TOKEN:-}"
+if [ -z "$existing_token" ]; then
+  existing_token="${GH_TOKEN:-}"
+fi
+
+if [ "${KNOWLEDGE_LOOP_GITHUB_AUTH_MODE:-}" = "app" ] || [ -n "${KNOWLEDGE_LOOP_GITHUB_APP_ID:-}" ]; then
+  token="$({{ knowledge_loop_github_app_token_path }})"
+  [ -n "$token" ] || fatal "GitHub App token helper returned an empty token"
+  export GH_TOKEN="$token"
+  export KNOWLEDGE_LOOP_GITHUB_TOKEN="$token"
+elif [ -n "$existing_token" ]; then
+  export GH_TOKEN="$existing_token"
+  export KNOWLEDGE_LOOP_GITHUB_TOKEN="$existing_token"
+else
+  fatal "no GitHub authentication configured; set GitHub App credentials or a break-glass token"
+fi
+
+export GIT_ASKPASS={{ knowledge_loop_git_askpass_path }}
+export GIT_TERMINAL_PROMPT=0
+
+loop_bin="{{ knowledge_loop_install_dir }}/.venv/bin/hyrule-knowledge"
+
+set -- loop --once \
+  --repo-path {{ knowledge_loop_repo_workspace }} \
+  --state-dir {{ knowledge_loop_daemon_state_dir }} \
+  --branch-prefix {{ knowledge_loop_branch_prefix }} \
+  --base-branch {{ knowledge_loop_base_branch }} \
+  --max-cycles-per-day {{ knowledge_loop_max_cycles_per_day }} \
+  --max-prs-per-day {{ knowledge_loop_max_prs_per_day }} \
+  --max-learning-events-per-day {{ knowledge_loop_max_learning_events_per_day }}
+
+# Let a Vault-rendered OpenRouter budget win. The CLI reads
+# HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY (from kv/knowledge-loop) as
+# the argparse default only when the flag is absent, so passing the Ansible
+# default here would override a higher Vault budget and reject live enrichment.
+if [ -z "${HYRULE_KNOWLEDGE_LOOP_MAX_OPENROUTER_CALLS_PER_DAY:-}" ]; then
+  set -- "$@" --max-openrouter-calls-per-day {{ knowledge_loop_max_openrouter_calls_per_day }}
+fi
+
+{% if knowledge_loop_create_pr | bool -%}
+set -- "$@" --create-pr
+{% endif -%}
+{% if knowledge_loop_skip_validation | bool -%}
+set -- "$@" --skip-validation
+{% endif -%}
+{% for target in knowledge_loop_dry_run_enrich_targets -%}
+set -- "$@" --dry-run-enrich-target {{ target }}
+{% endfor -%}
+{% for target in knowledge_loop_enrich_targets -%}
+set -- "$@" --enrich-target {{ target }}
+{% endfor -%}
+{% if knowledge_loop_enrich_live | bool -%}
+set -- "$@" --enrich-live
+{% endif -%}
+{% for path in knowledge_loop_learning_event_paths -%}
+set -- "$@" --learning-event {{ path }}
+{% endfor -%}
+{% if knowledge_loop_replace_learning_events | bool -%}
+set -- "$@" --replace-learning-events
+{% endif -%}
+
+exec "$loop_bin" "$@"

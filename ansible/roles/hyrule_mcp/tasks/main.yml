@@ -58,6 +58,7 @@
     - { path: "{{ hyrule_mcp_etc_dir }}", owner: root, mode: "0750" }
     - { path: "{{ hyrule_mcp_state_dir }}", mode: "0750" }
     - { path: "{{ hyrule_mcp_state_dir }}/.ssh", mode: "0700" }
+    - { path: "{{ hyrule_mcp_bgp_snapshot_dir }}", mode: "0750" }
   tags: [apply]
 
 - name: Check for controller id_noc_mcp private key
@@ -266,3 +267,64 @@
     - restart hyrule-mcp
     - restart noc-agent
     - restart noc-agent-bot
+
+- name: Install BGP router snapshot environment
+  template:
+    src: bgp-router-snapshot.env.j2
+    dest: "{{ hyrule_mcp_etc_dir }}/bgp-router-snapshot.env"
+    owner: root
+    group: "{{ hyrule_mcp_app_group }}"
+    mode: "0640"
+  no_log: true
+  tags: [apply]
+
+- name: Install BGP router snapshot systemd units
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: bgp-router-snapshot.service.j2, dest: bgp-router-snapshot.service }
+    - { src: bgp-router-snapshot.timer.j2, dest: bgp-router-snapshot.timer }
+  tags: [apply]
+  notify: reload systemd
+
+- name: Enforce BGP snapshot retention before enabling the timer (incident 321)
+  ansible.builtin.copy:
+    dest: /etc/tmpfiles.d/hyrule-mcp-bgp-snapshots.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible/roles/hyrule_mcp. Age-based retention for the hourly
+      # BGP router snapshots so the timer cannot refill / like incident #321
+      # (snapshots reached ~14 GiB). See
+      # docs/runbooks/noc-bgp-snapshot-retention.md.
+      e {{ hyrule_mcp_bgp_snapshot_dir }} - - - {{ hyrule_mcp_bgp_snapshot_retention_days }}d
+  tags: [apply]
+
+- name: Activate snapshot retention now (do not wait for the daily clean timer)
+  ansible.builtin.command: systemd-tmpfiles --clean /etc/tmpfiles.d/hyrule-mcp-bgp-snapshots.conf
+  changed_when: false
+  tags: [apply]
+
+# Gate on the snapshot CLI itself, not pyproject.toml — the checkout can
+# predate the app pin that ships hyrule-mcp-bgp-snapshot, and enabling the
+# timer without the ExecStart binary fails the unit every hour until the
+# promotion catches up.
+- name: Check for the BGP snapshot CLI in the pinned venv
+  stat:
+    path: "{{ hyrule_mcp_install_dir }}/.venv/bin/hyrule-mcp-bgp-snapshot"
+  register: hyrule_mcp_bgp_snapshot_cli
+  tags: [apply]
+
+- name: Enable + start BGP router snapshot timer
+  systemd:
+    name: bgp-router-snapshot.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: hyrule_mcp_bgp_snapshot_cli.stat.exists
+  tags: [apply]

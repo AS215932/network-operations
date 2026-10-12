@@ -27,6 +27,27 @@
   when: frr_pythontools_pkg | default('') | length > 0
   tags: [apply]
 
+- name: Resolve effective reload command (fall back when the primary wrapper is absent)
+  # Some FRR packages (notably OpenBSD, see roles/frr/vars/OpenBSD.yml) may
+  # not ship the integrated-reload wrapper. Probe for the primary command's
+  # binary; if it is missing and a fallback is defined, use the fallback for
+  # both the watchdog restore and the reload below — instead of failing into
+  # the watchdog and flapping sessions. (PR #585 review finding.)
+  shell: "command -v {{ frr_reload_cmd.split()[0] }} >/dev/null 2>&1"
+  register: _frr_reload_primary_present
+  changed_when: false
+  failed_when: false
+  tags: [apply]
+
+- name: Set effective FRR reload command
+  set_fact:
+    _frr_effective_reload_cmd: >-
+      {{ frr_reload_cmd if _frr_reload_primary_present.rc == 0
+         else (frr_reload_fallback_cmd
+               if (frr_reload_fallback_cmd | default('') | length > 0)
+               else frr_reload_cmd) }}
+  tags: [apply]
+
 - name: Stage new FRR config on host (.new)
   copy:
     src: "{{ frr_config_src_dir }}/{{ inventory_hostname }}/frr.conf"
@@ -50,7 +71,7 @@
 
 - name: Schedule rollback watchdog — restores + reloads the backup if not cancelled
   shell: |
-    echo 'cp {{ frr_backup_path }} {{ frr_conf_path }} && {{ frr_reload_cmd }} 2>&1 | logger -t frr-rollback' \
+    echo 'cp {{ frr_backup_path }} {{ frr_conf_path }} && {{ _frr_effective_reload_cmd }} 2>&1 | logger -t frr-rollback' \
       | at now + {{ frr_watchdog_minutes }} minutes 2>&1 \
       | awk 'tolower($1) == "job" {print $2}'
   register: _frr_at_job
@@ -66,12 +87,13 @@
   tags: [apply]
 
 - name: Reload FRR (integrated delta apply — converges running daemon, no restart)
-  command: "{{ frr_reload_cmd }}"
+  command: "{{ _frr_effective_reload_cmd }}"
   changed_when: true
   tags: [apply]
 
 - name: Re-evaluate BGP policy (soft — re-applies route-maps without flapping sessions)
-  command: "{{ frr_clear_bgp_cmd }}"
+  command: "{{ item }}"
+  loop: "{{ frr_clear_bgp_cmds }}"
   changed_when: false
   when: frr_clear_bgp | default(true) | bool
   tags: [apply]

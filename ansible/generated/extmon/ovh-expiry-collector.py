@@ -101,7 +101,9 @@ def main() -> int:
 
     # --- Unpaid invoices ---
     try:
-        month_start = datetime.now(timezone.utc).replace(day=1).isoformat()
+        # OVH expects a plain date here. A full ISO timestamp with timezone is
+        # rejected with HTTP 400.
+        month_start = datetime.now(timezone.utc).replace(day=1).date().isoformat()
         bills = ovh_get(creds, "/me/bill?date.from=" + month_start)
         unpaid = 0
         for bill_id in bills:
@@ -139,7 +141,10 @@ def main() -> int:
             pass
         raise
 
-    return 0 if error_count == 0 else 1
+    # Always return success after writing the textfile. Partial OVH API
+    # failures are represented by ovh_collector_errors_total and should alert
+    # through Prometheus; failing the oneshot leaves stale/missing metrics.
+    return 0
 
 
 if __name__ == "__main__":

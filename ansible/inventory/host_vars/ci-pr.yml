@@ -66,3 +66,15 @@ monitoring_check_vars:
 # customer isolation; shipping would require weakening that boundary. The logs
 # role end_hosts itself when logs_register is false — local journald only.
 logs_register: false
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Unprivileged PR runner (PR-Agent/Semgrep/PR CI)"
+  summary: "Unprivileged self-hosted GitHub Actions runner for untrusted PR code, deliberately on the customer-isolated segment."
+  notes: "Customer-isolated: rtr drops forwarding from 2a0c:b641:b51::/48 to infra/router/mgmt ranges. No Vault, no id_ci, no Containerlab, no log shipping (ci-pr to log:6000 is customer-to-infra, dropped) — treated as disposable."
+network_flows_outbound:
+  - { to: github, proto: tcp, port: 443, purpose: "runner queue, action images" }
+  - { to: openrouter, proto: tcp, port: 443, purpose: "PR-Agent LLM" }
+  - { to: package-registries, proto: tcp, port: 443, purpose: "PyPI/npm/ghcr/Docker Hub toolchain and semgrep image" }
+  - { to: rtr, proto: "tcp+udp", port: 53, purpose: "Unbound + DNS64 via rtr infra address 2a0c:b641:b50:2::1 (the only Unbound listener; not the b51::1 customer gateway)" }

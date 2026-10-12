@@ -14,8 +14,9 @@
 set -euo pipefail
 
 # --- AS215932 addressing ---
-# 2a0c:b641:b50:0::/64  mgmt     (dom0 ::1, fw ::2, xoa ::10)
-# 2a0c:b641:b50:1::/64  transit  (fw ::1, rtr ::2)
+# 2a0c:b641:b50:0::/64  mgmt     (dom0 ::1, xoa ::10)
+# 2a0c:b641:b50:1::/64  transit  (rtr ::1, vpn ::60; was reserved for an fw VM
+#                                  that was never built — see docs/vpn-transit.md)
 # 2a0c:b641:b50:2::/64  infra    (rtr ::1, dns ::10, api ::20, web ::30)
 # 2a0c:b641:b51::/48    customer VMs
 
@@ -55,7 +56,7 @@ create_network() {
 echo ""
 echo "Creating internal networks..."
 create_network "xenbr-mgmt"    "Management (2a0c:b641:b50:0::/64) — XO, dom0"
-create_network "xenbr-transit" "Transit (2a0c:b641:b50:1::/64) — fw <-> rtr"
+create_network "xenbr-transit" "Transit (2a0c:b641:b50:1::/64) — rtr <-> vpn"
 create_network "xenbr-infra"   "Infrastructure (2a0c:b641:b50:2::/64) — api, web, dns"
 create_network "xenbr-vm"      "Customer VMs (2a0c:b641:b51::/48) — tenant VMs"
 
@@ -90,7 +91,7 @@ xe network-list params=uuid,name-label,bridge | grep -E "uuid|name-label|bridge"
 echo ""
 echo "=== IPv6 Addressing Plan ==="
 echo "  mgmt:     2a0c:b641:b50:0::/64  (dom0 ::1, fw ::2, xoa ::10)"
-echo "  transit:  2a0c:b641:b50:1::/64  (fw ::1, rtr ::2)"
+echo "  transit:  2a0c:b641:b50:1::/64  (rtr ::1, vpn ::60)"
 echo "  infra:    2a0c:b641:b50:2::/64  (rtr ::1, dns ::10, api ::20, web ::30)"
 echo "  customer: 2a0c:b641:b51::/48    (one /64 per VM)"
 

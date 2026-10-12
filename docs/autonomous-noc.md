@@ -102,3 +102,58 @@ uv run --group dev python -m pytest -q
 ```
 
 Live smoke suites exist but are explicitly opt-in and read-only.
+
+## Proactive operations loop
+
+The reactive path above waits for an alert. `noc-agent` also ships an **active
+operator loop** (`app/proactive/`) that continuously sweeps Prometheus/Icinga
+for precursors and investigates the worst ones *before* a tripwire hardens. It
+is **read-only**, budgeted, human-gated, and **off by default**.
+
+Lifecycle per cycle: scan (cheap PromQL/Icinga) → rank → snapshot a decision
+context → gate against the daily ledger and severity floor → (non-shadow)
+render the top hotspot as a synthetic alert and run the *existing* investigation
+graph with heavy probes stripped → Discord digest (+ optional Icinga heartbeat)
+→ open an idempotent `loop:candidate` issue when a config change is warranted →
+record the prediction and, on deep cycles, evaluate prior predictions against
+real alerts and propose candidate lessons.
+
+Governance mirrors the engineering-loop: a per-day ledger
+(`/var/lib/noc-agent/proactive/ledger-<date>.json`), a singleton run-lock, and
+per-cycle/per-day investigation + cost budgets. Memory (lessons / proposals /
+journal / observations) lives under `/var/lib/noc-agent/memory`; humans merge
+proposals into `lessons/`.
+
+### Activation sequence
+
+These env flags are **inert until `noc-agent` is promoted to a build that
+contains the proactive loop**. The production app version is the pinned
+`noc_agent_version` in `host_vars/noc.yml`; until that pin advances to a SHA
+with `app/proactive/`, `apply.yml` renders the new `NOC_PROACTIVE_*` vars but
+keeps running the old agent, so nothing starts. Correct order:
+
+1. Merge `noc-agent#20`.
+2. Promote `noc-agent` (the `promote-apps` flow bumps `noc_agent_version`).
+3. Merge this PR and run `apply.yml playbook=noc` (human `production` gate) — the
+   loop now starts with these flags.
+
+Merging this PR on its own is therefore safe: it cannot start the loop early.
+
+### Deployed state
+
+The proactive loop is **disabled** (`NOC_PROACTIVE_ENABLED=0`). Reactive
+alerting and case handling remain active. It must not be re-enabled until its
+findings are deduplicated and explicitly approved by an operator; investigation
+budgets alone do not make recurring Discord digests useful.
+
+If it is reintroduced, start in shadow mode, keep heavy probes disabled, and
+require a tested deduplication policy before permitting notification delivery.
+All flag changes deploy through `apply.yml playbook=noc` (human `production`
+gate).
+
+### Optional Icinga heartbeat
+
+To alert if the loop stops, set `NOC_PROACTIVE_ICINGA_URL` to the Icinga API
+base and add a **passive** Service `proactive-loop` on the `noc` host (in
+`host_vars/noc.yml :: monitoring_extra_services`, with `enable_active_checks`
+false and a freshness threshold). Left unset, the loop posts no passive result.

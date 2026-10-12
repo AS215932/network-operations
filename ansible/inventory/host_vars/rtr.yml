@@ -1,6 +1,6 @@
 ---
 # rtr — Debian 13 + FRRouting + nftables, dom0-hosted VM at OVH FR.
-# Bridges: enX0 (mgmt), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
+# Bridges: enX0 (mgmt), enX1 (vpn transit), enX2 (infra), enX3 (vm/customer), enX4 (wan/underlay).
 # Carries IPv4 NAT/DNAT for legacy v4 service ingress + customer VM isolation.
 
 # --- networkd_resolved role override: drop-in goes on the overlay infra interface,
@@ -8,19 +8,21 @@
 networkd_primary_unit: "10-enX2"
 
 # --- FRR role override ---
-# rtr runs BGP in the overlay VRF, so the frr role's post-reload soft clear must
-# target it. The role default (`clear bgp ipv6 unicast * soft`) hits the empty
-# default VRF and is a no-op here. See network-operations#150. (rtr's iBGP peers
-# carry no inbound route-maps today, so this only matters once rtr gains inbound
-# policy — e.g. future peering — but keep it correct.)
-frr_clear_bgp_cmd: "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft'"
+# rtr runs BGP in the overlay VRF, so the frr role's post-reload soft clears must
+# target it. The role defaults hit the empty default VRF and are no-ops here. See
+# network-operations#150. Keep both directions: inbound re-evaluates route-maps,
+# outbound re-advertises changed attributes such as local-pref to iBGP peers.
+frr_clear_bgp_cmds:
+  - "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft in'"
+  - "vtysh -c 'clear bgp vrf overlay ipv6 unicast * soft out'"
 
 # --- IPv4 variables for the preserved nat/forward block ---
 rtr_wan_ip:   "46.105.40.223"
 rtr_wan_if:   "enX4"
-rtr_dns_v4:   "10.0.2.10"
-rtr_proxy_v4: "10.0.2.40"
-rtr_vpn_v4:   "10.0.2.60"
+rtr_dns_v4:    "10.0.2.10"
+rtr_proxy_v4:  "10.0.2.40"
+rtr_vpn_v4:    "10.0.1.60"  # vpn on the dedicated transit (enX1)
+rtr_tunnel_v4: "10.0.2.224"
 
 # --- Input chain posture ---
 # Enforced default-deny. Customer forwarding isolation is enforced separately in
@@ -36,7 +38,7 @@ firewall_extra_rules:
   # default-VRF processes (apt, curl, unbound-anchor) therefore query the
   # overlay Unbound with rtr's underlay source — allow it so rtr can resolve.
   # See issue #135. (Goes away with the OpenBSD/rdomain migration, #14.)
-  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}", "{{ peers.rtr.underlay }}"], comment: "DNS recursion from overlay + rtr's own (underlay src, VRF)" }
+  - { proto: tcp+udp, dport: 53, src: ["{{ infra_subnet }}", "{{ customer_subnet }}", "{{ vpn_clients_subnet }}", "{{ vpn_transit_subnet }}", "{{ peers.rtr.underlay }}"], comment: "DNS recursion from overlay + rtr's own (underlay src, VRF)" }
 
   # Monitoring scrapes from mon.
   - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
@@ -89,3 +91,15 @@ monitoring_remove_legacy_root_by_ssh_key: true
 logs_register: true
 logs_role: router
 logs_agent_disk_buffer_bytes: 300000000   # ~286 MB — router log volume is low (Vector requires ≥ 256 MiB + 32 B)
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+# host_meta + network_flows_outbound feed docs/network-flows.md. firewall_extra_rules
+# above stays the source of truth for inbound rules — do not duplicate them here.
+host_meta:
+  os: "Debian 13"
+  role: "router/NAT64/DNS forwarder/DNAT gateway"
+  summary: "Overlay-VRF router running FRR BGP/OSPF, Jool NAT64, Unbound DNS64, and the IPv4 DNAT gateway for legacy v4 service ingress."
+  ipv4: "46.105.40.223 (failover, NAT64)"
+  notes: "OSPF6 (proto 89) on the wg0/wg1/wg2 mesh is allowed via firewall_extra_raw_nft, not firewall_extra_rules. SSH (tcp/22) and the public v4 DNAT ingress (53 tcp/udp, 80/443 tcp, 51820 udp to dns/proxy/vpn) are captured in the cross-cutting flows table."
+network_flows_outbound:
+  - { to: public, proto: any, purpose: "NAT64 egress via Jool (TCP/UDP/ICMP pool4) to the IPv4 internet (source 46.105.40.223); ICMP is used by the nat64 ping6 health check" }

@@ -14,7 +14,8 @@ and applies a delta-reload so iBGP/OSPF sessions are not flapped.
 5. Schedules an `at(1)` watchdog (default 5 min) that restores + reloads the
    backup if the play does not cancel it — covers a lockout from a bad policy.
 6. Moves the new config into place, **reloads** (FRR integrated delta-reload —
-   no restart), then **`clear bgp ipv6 unicast * soft`** to re-apply policy.
+   no restart), then soft-clears BGP **in** and **out** to re-apply policy and
+   re-advertise changed attributes.
 7. Cancels the watchdog once the reload completes cleanly.
 
 The reload runs on **every** apply (not gated on the file changing): `frr-reload`
@@ -22,12 +23,13 @@ diffs against the *running daemon*, so a converged daemon is a cheap no-op, whil
 a daemon left stale by a prior run still gets converged. This avoids the trap
 where the on-disk file already matches the repo but the daemon never ingested it.
 
-`serial: 1` and the pre/post Icinga snapshot bracket are on the playbook
-(`playbooks/frr.yml`), matching the `firewall` role.
+`serial: 1` is on the playbook (`playbooks/frr.yml`), matching the `firewall`
+role, so a bad policy change blocks the next router instead of taking the mesh
+down.
 
 ## OS differences (`vars/<os_family>.yml`)
 
-| | FreeBSD (cr1-nl1, cr1-de1) | Debian (rtr) |
+| | FreeBSD (cr1-nl1, cr1-de1, cr1-ch1) | Debian (rtr) |
 |---|---|---|
 | `frr_conf_path` | `/usr/local/etc/frr/frr.conf` | `/etc/frr/frr.conf` |
 | `frr_reload_cmd` | `/usr/local/sbin/frr-reload` (port wrapper) | `systemctl reload frr` |
@@ -47,7 +49,7 @@ where the on-disk file already matches the repo but the daemon never ingested it
 ## Key variables (`defaults/main.yml`)
 
 - `frr_apply` (false) — push + reload, or validate-only.
-- `frr_clear_bgp` (true) / `frr_clear_bgp_cmd` — soft policy re-eval after reload.
+- `frr_clear_bgp` (true) / `frr_clear_bgp_cmds` — soft policy re-eval after reload.
 - `frr_watchdog_minutes` (5) — rollback window.
 
 ## Usage
@@ -55,9 +57,9 @@ where the on-disk file already matches the repo but the daemon never ingested it
 ```bash
 cd ansible
 # Validate-only (no host connection, no change):
-ansible-playbook playbooks/frr.yml --tags validate --connection=local --skip-tags=snapshot
+ansible-playbook playbooks/frr.yml --tags validate --connection=local
 
-# Apply to one router (Icinga-bracketed, serial:1):
+# Apply to one router (serial:1):
 ansible-playbook playbooks/frr.yml --tags apply --limit rtr -e frr_apply=true
 ```
 

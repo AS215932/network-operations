@@ -4,6 +4,7 @@ set -eu
 
 env_file="{{ hyrule_cloud_env_file }}"
 service="{{ hyrule_cloud_service_name }}.service"
+worker="{{ hyrule_cloud_worker_service_name | default('hyrule-cloud-worker') }}.service"
 
 if [ ! -s "$env_file" ]; then
   echo "hyrule-cloud Vault render produced an empty env file" >&2
@@ -31,4 +32,7 @@ chmod 0640 "$env_file"
 
 if systemctl list-unit-files "$service" >/dev/null 2>&1; then
   systemctl try-restart "$service"
+fi
+if systemctl list-unit-files "$worker" >/dev/null 2>&1; then
+  systemctl try-restart "$worker"
 fi

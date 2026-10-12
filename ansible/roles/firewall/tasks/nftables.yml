@@ -55,12 +55,18 @@
     - not ansible_check_mode
   tags: [apply]
 
+# The watchdog restores {{ firewall_backup_path }} with `nft -f`. On hosts
+# that never had a config, synthesize it from the live ruleset instead —
+# prefixed with `flush ruleset` (which `nft list ruleset` omits but every
+# rendered config carries) so the restore replaces rather than merges.
 - name: Backup currently-loaded ruleset before swap
   shell: |
     set -e
     nft list ruleset > {{ firewall_backup_path }}.live || true
     if [ -f {{ firewall_conf_path }} ]; then
       cp {{ firewall_conf_path }} {{ firewall_backup_path }}
+    else
+      { echo "flush ruleset"; cat {{ firewall_backup_path }}.live; } > {{ firewall_backup_path }}
     fi
   changed_when: false
   when:
@@ -88,6 +94,22 @@
   when:
     - firewall_apply | default(false) | bool
     - not ansible_check_mode
+  notify: reload nftables
+  tags: [apply]
+
+# First-time hosts have nftables.service inactive (never started), and the
+# reload handler's `systemctl reload` fails on inactive units. Starting here
+# loads the config just moved into place; on already-active hosts this is a
+# no-op (started != restarted). Enabling keeps the ruleset across reboots.
+# Notify on change: starting the unit loads the ruleset even when the copy
+# above didn't change the file, and on rtr the handler chain (validate →
+# reload → jool → nat64-vrf-leak) must run whenever the ruleset is reloaded.
+- name: Ensure nftables service is enabled and active
+  systemd:
+    name: nftables
+    enabled: true
+    state: started
+  when: firewall_apply | default(false) | bool
   notify: reload nftables
   tags: [apply]
 

@@ -20,12 +20,33 @@ ansible_distribution: Debian
 # install packages or restart services. Mirrors the other roles' apply gates.
 extmon_apply: false
 
-# Discord webhook for Alertmanager. Will move to Vault in Phase C/L4 — for
-# now sourced from secrets.local.sh on the operator's workstation:
-#   export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+# Discord webhook for Alertmanager. Two supply paths set the same-named
+# env var, so this lookup works unchanged either way:
+#   - Manual: export EXTMON_DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
+#     on the operator's workstation before running playbooks/extmon.yml directly.
+#   - CI (post-merge-apply / apply.yml): Vault Agent renders it into
+#     /etc/github-runner/secrets.env from kv/data/ci-runner's
+#     extmon_discord_webhook_url field (ansible/roles/vault_agent/templates/
+#     github-runner.env.ctmpl.j2), which the workflow sources into $GITHUB_ENV.
+# If neither path has set it, the value is empty and the alertmanager
+# template renders the discord receiver with zero configs (see
+# roles/extmon/templates/alertmanager.yml.j2) rather than a config
+# Alertmanager rejects at load — so an unset webhook degrades to
+# "alerts silently drop" instead of "alertmanager crash-loops".
 # Use discord.com (v4 + v6) instead of discordapp.com (v4-only) so future
 # redeploys to v6-preferred providers stay clean.
 extmon_discord_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_DISCORD_WEBHOOK_URL') | default('') }}"
+extmon_noc_alertmanager_webhook_url: "{{ lookup('ansible.builtin.env', 'EXTMON_NOC_ALERTMANAGER_WEBHOOK_URL') | default('') }}"
+
+# BGP/network intelligence secrets. Cloudflare Radar is optional but improves
+# hijack/leak/MOAS visibility; Hyrule ingest is used once /v1/internal/bgp is live.
+# Native BGPStream packages do not support Debian 13/trixie yet.
+extmon_install_bgpstream: false
+extmon_bgp_cloudflare_api_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_CLOUDFLARE_API_TOKEN') | default('') }}"
+extmon_bgp_hyrule_ingest_url: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_HYRULE_INGEST_URL') | default('https://cloud.hyrule.host/v1/internal/bgp', true) }}"
+extmon_bgp_ingest_token: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_INGEST_TOKEN') | default('', true) }}"
+extmon_bgp_bgp_tools_user_agent: "{{ lookup('ansible.builtin.env', 'EXTMON_BGP_BGPTOOLS_USER_AGENT') | default('AS215932-bgp-observer/1.0 (noc@as215932.net; +https://as215932.net)', true) }}"
+extmon_diag_agent_token: "{{ lookup('ansible.builtin.env', 'EXTMON_DIAG_AGENT_TOKEN') | default('') }}"
 
 # OVH API credentials for the service-expiry collector (Phase C/L0b). Same
 # tokens as scripts/ovh-cli.py uses; rendered into /etc/ovh.conf on extmon.
@@ -39,11 +60,31 @@ extmon_ovh_failover_ips:
   - "51.91.236.215"   # mail (SMTP/IMAP failover)
   - "54.38.14.218"    # ns2 (auth DNS secondary)
 
-# Inbound SSH allow-list. Same set as the rest of the fleet — ops workstation
-# + AS215932 VPN clients. Extmon also needs to be reachable from the AS215932
-# overlay so we can SSH in to deploy/debug.
-extmon_ssh_allow_v4:
-  - "{{ ops_prefix_v4 }}"
-extmon_ssh_allow_v6:
-  - "{{ ops_prefix_v6 }}"
-  - "{{ as215932_prefix }}"   # allows SSH from any AS215932 host
+# Mon delegates the public IPv4 API health probe to extmon's dual-stack
+# blackbox_exporter. The service listens on :9115 by package default; expose it
+# only to the mon peer.
+firewall_extra_rules:
+  - { proto: tcp, dport: 9115, src: "{{ peers.mon.ipv6 }}", comment: "blackbox IPv4 probes requested by mon" }
+
+# Inbound SSH allow-list comes from the firewall role's standard set (ops
+# workstation, VPN clients, ci, noc, mon) — UFW and its extmon_ssh_allow_*
+# vars are retired; see roles/extmon/tasks/ufw.yml.
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+# extmon lives OUTSIDE AS215932 (off-net, different ASN) so it is not part of the
+# overlay flow map, but it is transcribed here because its host_vars file exists
+# and it appears as a source in noc's inbound rules.
+host_meta:
+  os: "Debian 13"
+  role: "External monitoring host (off-net)"
+  summary: "Off-net external monitor (Vultr London, different ASN) probing AS215932 public services from the outside and posting alerts directly."
+  notes: "Outside AS215932; independent failure domain. Runs its own Prometheus + blackbox + Alertmanager. Inbound SSH comes from the firewall role's standard allow set."
+network_flows_outbound:
+  - { to: noc, proto: tcp, port: 8000, purpose: "best-effort external Alertmanager webhook enrichment" }
+  - { to: hyrule-cloud, proto: tcp, port: 443, purpose: "BGP intelligence ingest (cloud.hyrule.host/v1/internal/bgp)" }
+  - { to: public, proto: tcp, port: 443, purpose: "probe AS215932 public services, Discord webhook, Cloudflare Radar, OVH API" }
+  # blackbox probes of AS215932 public services from off-net (over public IPv6).
+  - { to: dns, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns1 (auth Knot)" }
+  - { to: ns2, proto: udp, port: 53, purpose: "blackbox DNS SOA probe of ns2 (off-net secondary)" }
+  - { to: mail, proto: tcp, port: [25, 465, 587, 993], purpose: "blackbox SMTP/submission/IMAPS reachability + TLS probes" }
+  - { to: public, proto: icmp6, purpose: "blackbox ICMP v4/v6 reachability probes of AS215932 endpoints" }

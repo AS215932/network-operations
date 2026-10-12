@@ -1,0 +1,172 @@
+---
+- name: Ensure agent-core collector packages are installed
+  ansible.builtin.apt:
+    name: "{{ agent_core_collector_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled for agent-core collector
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Ensure PostgreSQL is enabled for agent-core collector
+  ansible.builtin.systemd:
+    name: postgresql
+    enabled: true
+    state: started
+
+- name: Ensure agent-core collector group exists
+  ansible.builtin.group:
+    name: "{{ agent_core_collector_group }}"
+    state: present
+    system: true
+
+- name: Ensure agent-core collector user exists
+  ansible.builtin.user:
+    name: "{{ agent_core_collector_user }}"
+    group: "{{ agent_core_collector_group }}"
+    home: "{{ agent_core_collector_state_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Ensure agent-core collector directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(agent_core_collector_user) }}"
+    group: "{{ item.group | default(agent_core_collector_group) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ agent_core_collector_install_dir }}", mode: "0755" }
+    - { path: "{{ agent_core_collector_config_dir }}", owner: root, mode: "0750" }
+    - { path: "{{ agent_core_collector_state_dir }}", mode: "0750" }
+
+- name: Checkout agent-core collector source
+  ansible.builtin.git:
+    repo: "{{ agent_core_collector_repo }}"
+    dest: "{{ agent_core_collector_install_dir }}"
+    version: "{{ agent_core_collector_version }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ agent_core_collector_user }}"
+  notify: restart agent-core-collector
+
+- name: Wait for collector env file rendered by Vault Agent
+  ansible.builtin.wait_for:
+    path: "{{ agent_core_collector_env_file }}"
+    state: present
+    timeout: 60
+    msg: >-
+      {{ agent_core_collector_env_file }} is missing. Bootstrap the
+      agent-core-collector AppRole/KV and run the Vault Agent role before
+      applying agent_core_collector.
+
+- name: Ensure agent-core collector PostgreSQL role has env password
+  ansible.builtin.shell: |
+    set -euo pipefail
+    set -a
+    . {{ agent_core_collector_env_file | quote }}
+    set +a
+    test -n "${AGENT_CORE_COLLECTOR_DB_PASSWORD:-}"
+
+    sql_file="$(mktemp /tmp/agent-core-collector-pg.XXXXXX.sql)"
+    trap 'rm -f "$sql_file"' EXIT
+    chmod 0600 "$sql_file"
+
+    python3 - <<'PY' > "$sql_file"
+    import os
+
+    password = os.environ["AGENT_CORE_COLLECTOR_DB_PASSWORD"].replace("'", "''")
+    print("""DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ agent_core_collector_database_role }}') THEN
+        CREATE ROLE {{ agent_core_collector_database_role }} LOGIN PASSWORD '%s';
+      ELSE
+        ALTER ROLE {{ agent_core_collector_database_role }} WITH LOGIN PASSWORD '%s';
+      END IF;
+    END
+    $$;""" % (password, password))
+    PY
+
+    chown postgres:postgres "$sql_file"
+    runuser -u postgres -- psql -v ON_ERROR_STOP=1 -f "$sql_file"
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+
+- name: Check agent-core collector PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -tAc
+      - "SELECT 1 FROM pg_database WHERE datname='{{ agent_core_collector_database_name }}'"
+  become: true
+  become_user: postgres
+  register: agent_core_collector_pg_database
+  changed_when: false
+
+- name: Create agent-core collector PostgreSQL database
+  ansible.builtin.command:
+    argv:
+      - psql
+      - -v
+      - ON_ERROR_STOP=1
+      - -c
+      - "CREATE DATABASE {{ agent_core_collector_database_name }} OWNER {{ agent_core_collector_database_role }}"
+  become: true
+  become_user: postgres
+  when: agent_core_collector_pg_database.stdout | trim != '1'
+
+- name: Inspect existing agent-core collector container image revision
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ agent_core_collector_image }}"
+      - --format
+      - "{{ '{{' }} index .Config.Labels \"org.opencontainers.image.revision\" {{ '}}' }}"
+  register: agent_core_collector_image_revision
+  failed_when: false
+  changed_when: false
+
+- name: Build agent-core collector container image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - build
+      - -t
+      - "{{ agent_core_collector_image }}"
+      - --label
+      - "org.opencontainers.image.revision={{ agent_core_collector_version }}"
+      - .
+  args:
+    chdir: "{{ agent_core_collector_install_dir }}"
+  register: agent_core_collector_docker_build
+  changed_when: true
+  when: agent_core_collector_image_revision.stdout | trim != agent_core_collector_version
+  notify: restart agent-core-collector
+
+- name: Install agent-core collector systemd service
+  ansible.builtin.template:
+    src: agent-core-collector.service.j2
+    dest: "/etc/systemd/system/{{ agent_core_collector_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart agent-core-collector
+
+- name: Set agent-core collector service state
+  ansible.builtin.systemd:
+    name: "{{ agent_core_collector_service_name }}"
+    enabled: "{{ agent_core_collector_enabled | bool }}"
+    state: "{{ 'started' if agent_core_collector_enabled | bool else 'stopped' }}"
+    daemon_reload: true

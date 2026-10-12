@@ -8,3 +8,9 @@
     name: "{{ hyrule_cloud_service_name }}"
     state: restarted
     enabled: true
+
+- name: restart hyrule-cloud-worker
+  ansible.builtin.systemd:
+    name: "{{ hyrule_cloud_worker_service_name }}"
+    state: restarted
+    enabled: true

@@ -1,0 +1,36 @@
+---
+agentic_observatory_apply: false
+agentic_observatory_enabled: true
+
+agentic_observatory_user: agentic-observatory
+agentic_observatory_group: agentic-observatory
+agentic_observatory_install_dir: /opt/agentic-observatory
+agentic_observatory_config_dir: /etc/agentic-observatory
+agentic_observatory_env_file: /etc/agentic-observatory/observatory.env
+agentic_observatory_state_dir: /var/lib/agentic-observatory
+agentic_observatory_repo: https://github.com/AS215932/agentic-observatory.git
+agentic_observatory_version: "6e1d393bbc8ded63ff457ca16a7d2ecb14153a67"
+
+agentic_observatory_service_name: agentic-observatory.service
+agentic_observatory_host: "{{ peers.loop.ipv6 }}"
+agentic_observatory_port: 8780
+agentic_observatory_domain: observatory.servify.network
+agentic_observatory_database_name: agentic_observatory
+agentic_observatory_database_role: agentic_observatory
+agentic_observatory_database_host: 127.0.0.1
+agentic_observatory_read_only: true
+agentic_observatory_actions_enabled: false
+# Comma-separated allowlist of write actions to expose when actions are enabled
+# (e.g. "feedback,ack"). Empty = deny-all, so writes stay off even if
+# actions_enabled flips true. Drives OBSERVATORY_ENABLED_ACTIONS.
+agentic_observatory_enabled_actions: ""
+agentic_observatory_collector_base_url: "http://[{{ peers.loop.ipv6 }}]:8770"
+agentic_observatory_noc_base_url: "http://[{{ peers.noc.ipv6 }}]:8000"
+
+agentic_observatory_packages:
+  - ca-certificates
+  - curl
+  - git
+  - postgresql
+  - postgresql-client
+  - python3

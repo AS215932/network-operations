@@ -22,7 +22,15 @@ monitoring_extra_services:
       http_uri: "/v1/sys/health?standbyok=true&sealedcode=200&uninitcode=200"
       http_ipv6: true
       http_timeout: 10
-      http_expect_body_regex: '"sealed":false|"initialized":false'
+      http_expect_body_regex: '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false'
 
 logs_register: true
 logs_role: vault
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Vault secret plane"
+  summary: "HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly."
+  notes: "Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, VPN operators, ops-prefix) are captured in the cross-cutting flows table."
+network_flows_outbound: []

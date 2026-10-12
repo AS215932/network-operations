@@ -8,7 +8,7 @@
 #
 # Render-only (review the rendered templated file in ansible/generated/mon/icinga2/):
 #   ansible-playbook playbooks/icinga2.yml --tags validate \
-#       --connection=local --skip-tags=snapshot --limit mon
+#       --connection=local --limit mon
 #
 # Apply (live):
 #   set -a; source ../secrets.local.sh; set +a    # provides MON_DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK_URL
@@ -21,24 +21,6 @@
   become: true
   vars:
     icinga2_noc_agent_api_password: "{{ lookup('env', 'ICINGA_NOC_AGENT_API_PASSWORD') | default('', true) }}"
-  pre_tasks:
-    - name: Pre-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: pre
-      run_once: true
-      tags: [snapshot, always]
   roles:
     - icinga2
-  post_tasks:
-    - name: Post-deploy Icinga snapshot
-      include_role:
-        name: firewall
-        tasks_from: snapshot
-      vars:
-        snapshot_phase: post
-      run_once: true
-      tags: [snapshot, always]
   tags: [icinga2]
