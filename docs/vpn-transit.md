@@ -70,8 +70,14 @@ Steps:
    vm-uuid=<vpn> network-uuid=<xenbr-transit> device=1` + `xe vif-plug`).
 4. vpn: deploy `configs/vpn/10-enX1.network`, reconfigure. `ping -6
    2a0c:b641:b50:1::1` must work.
-5. vpn: apply firewall (`ansible-playbook playbooks/firewall.yml -l vpn --tags
-   apply`). The forward rules move to `enX1`.
+5. vpn: apply firewall (`ansible-playbook playbooks/firewall.yml -l vpn -e
+   firewall_apply=true`; without `firewall_apply=true` the role only renders
+   to `generated/` and changes nothing). The forward rules move to `enX1`.
+   The inventory already targets `2a0c:b641:b50:1::60`, so accept its host key
+   first (verify the fingerprint against the key seen on the old address).
+   Note: while the `2::60` leg still exists, vpn reaches `2::/64` on-link via
+   `enX0`, which the new forward rules no longer permit, so new client->infra
+   flows stall until step 7. Keep steps 5-7 back-to-back.
 6. rtr: switch the static (`no ipv6 route 3::/64 2::60` / `ipv6 route 3::/64
    1::60` in VRF overlay), apply the rtr firewall (DNAT -> `10.0.1.60`) and
    `systemctl restart nat64-vrf-leak` (adds 903; 902 is already live).
