@@ -141,3 +141,6 @@ hyrule_cloud_packages:
   - autoconf
   - automake
   - libtool
+
+# Keep expired VMs restorable for vm_retention_days (app default 30). Off unless the host opts in.
+hyrule_cloud_vm_expiry_retention_enabled: false

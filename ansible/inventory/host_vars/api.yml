@@ -27,3 +27,6 @@ network_flows_outbound:
   - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
   - { to: netproxy, proto: tcp, port: 8452, purpose: "authenticated reverse-SSH tunnel control API (create/extend/revoke leases)" }
   - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }
+
+# Restore window for expired VMs (hyrule-cloud vm_retention_days default 30). Approved by Svag 2026-10-13.
+hyrule_cloud_vm_expiry_retention_enabled: true
