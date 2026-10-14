@@ -1,0 +1,34 @@
+---
+# Diagnose and repair FreeBSD pkg prerequisites for the frr role
+# (cr1-nl1's frr apply hung in `pkg install frr10-pythontools`, 2026-10-14).
+- name: Diagnose pkg state (read-only)
+  shell: |
+    echo "procs: $(pgrep -lf '(^|/)pkg( |$)|pkg-static' | tr '\n' ';')"
+    ls -l /var/db/pkg/*lock* 2>/dev/null | sed 's/^/lock: /'
+    pkg -N 2>&1 | sed 's/^/bootstrap: /'
+    for p in {{ frr_prereqs_packages | join(' ') }}; do pkg info -e "$p" && echo "installed: $p" || echo "missing: $p"; done
+    pkg -vv 2>/dev/null | grep -E 'url|enabled|IP_VERSION' | sed 's/^/repo: /'
+  args: { executable: /bin/sh }
+  register: _pkg_diag
+  changed_when: false
+  failed_when: false
+  tags: [validate, apply]
+
+- name: Show pkg diagnosis
+  debug: { var: _pkg_diag.stdout_lines }
+  tags: [validate, apply]
+
+- name: Refuse to install while another pkg process holds the database
+  assert:
+    that: "(_pkg_diag.stdout_lines | select('match', '^procs: [^ ]') | list | length) == 0"
+    fail_msg: "A pkg process is still running; inspect it before retrying"
+  when: frr_prereqs_apply | bool
+  tags: [apply]
+
+- name: Install packages (bounded, non-interactive)
+  command: "timeout {{ frr_prereqs_pkg_timeout }} env ASSUME_ALWAYS_YES=yes pkg install -y {{ item }}"
+  loop: "{{ frr_prereqs_packages }}"
+  when:
+    - frr_prereqs_apply | bool
+    - "('missing: ' ~ item) in _pkg_diag.stdout"
+  tags: [apply]

@@ -101,14 +101,14 @@ peers:
     underlay: "2a0c:b640:10::213"
   cr1_ch1:
     loopback: "2a0c:b641:b50::c"
-    underlay: "2a09:4c0:100:2d88::8898"
-    underlay_v4: "45.136.136.152"
-    gateway6: "2a09:4c0:100:2d88::8bfe"
+    underlay: "2a09:4c0:100:c768::eae"
+    underlay_v4: "199.104.14.174"
+    gateway6: "2a09:4c0:100:c768::ffe"
   cr1-ch1:
     loopback: "2a0c:b641:b50::c"
-    underlay: "2a09:4c0:100:2d88::8898"
-    underlay_v4: "45.136.136.152"
-    gateway6: "2a09:4c0:100:2d88::8bfe"
+    underlay: "2a09:4c0:100:c768::eae"
+    underlay_v4: "199.104.14.174"
+    gateway6: "2a09:4c0:100:c768::ffe"
   # Off-net external monitor (Vultr London; different ASN, different billing).
   # Probes AS215932 from the outside the same way real users do.
   extmon:
@@ -120,8 +120,10 @@ bgp_peers:
   servperso_de: "2a0c:b640:10::ffff"
   servperso_nl: "2a0c:b640:8:69::ffff"  # placeholder — nl1 BGP peer not live-confirmed
   extra_transit: "2a0c:b641:870::ffff"
-  securebit_ch_v4: "45.136.139.250"
-  securebit_ch_v6: "2a09:4c0:100:2d88::8bfa"
+  # Securebit CH (AS58057, AS-SET AS-SBAG), renumbered Oct 2026. v4 is
+  # inventory-only (no v4 session in FRR), mirroring the old setup.
+  securebit_ch_v4: "199.104.15.250"
+  securebit_ch_v6: "2a09:4c0:100:c768::ffa"
   sbix_rs1_v4: "185.1.135.1"
   sbix_rs1_v6: "2001:7f8:d9:1::1"
   sbix_rs2_v4: "185.1.135.2"

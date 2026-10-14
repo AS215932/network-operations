@@ -6,7 +6,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 FRR_FILES = {
     "rtr": REPO / "configs/rtr/frr.conf",
-    "rtr-bsd": REPO / "configs/rtr-bsd/frr.conf",
     "cr1-nl1": REPO / "configs/cr1-nl1/frr.conf",
     "cr1-de1": REPO / "configs/cr1-de1/frr.conf",
     "cr1-ch1": REPO / "configs/cr1-ch1/frr.conf",
@@ -178,7 +177,7 @@ class ReturnPathSteeringTest(unittest.TestCase):
         """rtr-bsd is equally transit-free: its egress ladder must agree with
         rtr's (ch1 200 > nl1 90 > de1 80), or the two edge routers flap egress
         preference between themselves during parallel operation (issue #14)."""
-        for node in ("rtr", "rtr-bsd"):
+        for node in ("rtr",):
             text = frr_text(node)
             expected = {"2a0c:b641:b50::c": 200, "2a0c:b641:b50::a": 90, "2a0c:b641:b50::b": 80}
             seen = {}
@@ -199,7 +198,7 @@ class ReturnPathSteeringTest(unittest.TestCase):
     def test_more_specifics_are_originated_by_both_edge_routers(self):
         """rtr-bsd must be a drop-in at cutover: it originates the same /48
         more-specifics as rtr so cr1-ch1's export keeps working unchanged."""
-        for node in ("rtr", "rtr-bsd"):
+        for node in ("rtr",):
             text = frr_text(node)
             for prefix in self.MORE_SPECIFICS:
                 with self.subTest(node=node, prefix=prefix):

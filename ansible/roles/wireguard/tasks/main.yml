@@ -1,0 +1,51 @@
+---
+- name: Assert committed WG configs are complete and carry no private key (controller)
+  delegate_to: localhost
+  become: false
+  vars:
+    _src: "{{ lookup('file', wireguard_config_src_dir ~ '/' ~ inventory_hostname ~ '/' ~ item.name ~ '.conf') }}"
+  assert:
+    that:
+      - "'[Interface]' in _src"
+      - "'[Peer]' in _src"
+      - "(_src | regex_findall('PublicKey\\s*=\\s*<') | length) == 0"
+      - "(_src | regex_findall('PrivateKey\\s*=\\s*[A-Za-z0-9+/]{43}=') | length) == 0"
+    fail_msg: "configs/{{ inventory_hostname }}/{{ item.name }}.conf has a peer-key placeholder or contains a private key"
+  loop: "{{ wireguard_links }}"
+  loop_control: { label: "{{ item.name }}" }
+  tags: [validate, apply]
+
+- name: Discover current WireGuard practice (read-only)
+  shell: |
+    echo "rc_script: $(ls /usr/local/etc/rc.d/wireguard 2>/dev/null || echo none)"
+    echo "rc_uses_wg_quick: $(grep -c wg-quick /usr/local/etc/rc.d/wireguard 2>/dev/null || echo 0)"
+    sysrc -a 2>/dev/null | grep '^wireguard_' | sed 's/^/rc.conf: /'
+    ls -l {{ wireguard_conf_dir }} 2>/dev/null | sed 's/^/dir: /'
+    echo "ifaces: $(ifconfig -l)"
+    for i in $(ifconfig -l); do case $i in wg*) echo "$i: $(ifconfig $i inet6 | grep -o 'inet6 fe80::[^% ]*' | tr '\n' ' ')";; esac; done
+    echo "procs: $(pgrep -lf 'wg-quick|pkg' | tr '\n' ';')"
+  args: { executable: /bin/sh }
+  register: _wg_discover
+  changed_when: false
+  failed_when: false
+  tags: [validate, apply]
+
+- name: Show discovery
+  debug: { var: _wg_discover.stdout_lines }
+  tags: [validate, apply]
+
+- name: Require the wg-quick based rc script (existing core practice)
+  assert:
+    that:
+      - "'rc_uses_wg_quick: 0' not in _wg_discover.stdout"
+      - "'rc_script: none' not in _wg_discover.stdout"
+    fail_msg: "rc.d/wireguard is missing or not wg-quick based; refusing to guess the bring-up path"
+  when: wireguard_links | length > 0
+  tags: [apply]
+
+- name: Apply
+  include_tasks: apply.yml
+  loop: "{{ wireguard_links }}"
+  loop_control: { label: "{{ item.name }}" }
+  when: wireguard_apply | bool
+  tags: [apply]
