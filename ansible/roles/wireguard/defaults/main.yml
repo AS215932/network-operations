@@ -1,0 +1,9 @@
+---
+# Gate: apply.yml derives wireguard_apply=true from the playbook name.
+wireguard_apply: false
+wireguard_config_src_dir: "{{ playbook_dir }}/../../configs"
+wireguard_conf_dir: /usr/local/etc/wireguard
+# Interfaces this role manages on the host. Only listed interfaces are touched;
+# pre-existing tunnels (core mesh) are never rewritten.
+#   - { name: wg5, link_local: "fe80::1/64", mtu: 1420 }
+wireguard_links: []
