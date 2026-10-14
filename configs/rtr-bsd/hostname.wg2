@@ -1,0 +1,6 @@
+# rtr-bsd wg2 (issue #14). Private key stays on-host in /etc/wireguard/wg2.key (0600).
+# Core peer added at peer-side deploy: wgpeer <pubkey> wgendpoint <addr> 1343 wgaip ::/0 (see wg2.conf)
+!ifconfig $if wgkey "$(cat /etc/wireguard/wg2.key)" wgport 1345
+inet6 2a0c:b641:b50:ff12::1 127
+# Link-local for ospf6d (wg(4) has none by default).
+inet6 fe80::e 64
