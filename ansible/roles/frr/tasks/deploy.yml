@@ -18,13 +18,29 @@
   changed_when: false
   tags: [apply]
 
+- name: Check whether the integrated-reload tooling package is already installed
+  # Local pkg database lookup only. The package module refreshes the remote
+  # catalog first, which hung for 30 min on cr1-nl1 (2026-10-14) even though
+  # the package was already present.
+  command: "pkg info -e {{ frr_pythontools_pkg }}"
+  register: _frr_pythontools_present
+  changed_when: false
+  failed_when: false
+  when:
+    - frr_pythontools_pkg | default('') | length > 0
+    - ansible_os_family == 'FreeBSD'
+  tags: [apply]
+
 - name: Ensure the integrated-reload tooling package is installed
   # On FreeBSD frr-reload.py ships in a separate package (frr10-pythontools);
   # without it the reload silently applies nothing. Debian bundles it (pkg = "").
+  # If this is missing, run playbooks/frr-prereqs.yml (bounded timeout) instead.
   package:
     name: "{{ frr_pythontools_pkg }}"
     state: present
-  when: frr_pythontools_pkg | default('') | length > 0
+  when:
+    - frr_pythontools_pkg | default('') | length > 0
+    - (_frr_pythontools_present.rc | default(1)) != 0
   tags: [apply]
 
 - name: Resolve effective reload command (fall back when the primary wrapper is absent)
