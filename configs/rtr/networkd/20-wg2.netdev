@@ -9,7 +9,7 @@ ListenPort=1339
 
 [WireGuardPeer]
 PublicKey=kXDLgAfQAV454SZrN8PrF1lNuiEdamAwJDend3x2jWQ=
-Endpoint=[2a09:4c0:100:2d88::8898]:1339
+Endpoint=[2a09:4c0:100:c768::eae]:1339
 AllowedIPs=::/0
 PersistentKeepalive=30
 RouteTable=off

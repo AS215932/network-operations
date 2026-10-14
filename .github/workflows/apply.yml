@@ -41,6 +41,8 @@ on:
           - hashicorp-key
           - soc
           - frr
+          - frr-prereqs
+          - wireguard
           - rtr_routing
           - networkd_resolved
           - mail_openbsd

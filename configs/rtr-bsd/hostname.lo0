@@ -1,0 +1,2 @@
+inet6 2a0c:b641:b50::e 128
+!route -qn add -inet6 2a0c:b641:b50::/44 ::1 -blackhole
