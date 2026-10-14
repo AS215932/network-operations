@@ -104,9 +104,10 @@ monitoring_register: true
 monitoring_role: router
 monitoring_display_name: "rtr-bsd (OVH FR, OpenBSD)"
 monitoring_check_vars:
-  has_frr: true
+  # OpenBSD base bgpd/ospf6d, not FRR (issue #14, 2026-10-14): no frr checks
+  # or frr_exporter. TODO: bgpctl-based session check for Phase 2.
+  has_frr: false
   underlay_address6: "{{ peers.rtr_bsd.underlay }}"
-  prom_instance_frr: "[{{ peers.rtr_bsd.ipv6 }}]:9342"
   site: "ovh1"
 monitoring_node_listen: "[{{ peers.rtr_bsd.ipv6 }}]:9100"
 
