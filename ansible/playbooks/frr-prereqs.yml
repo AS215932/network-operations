@@ -1,5 +1,5 @@
 ---
-- name: FRR prerequisites — diagnose/repair pkg on FreeBSD routers
+- name: "FRR prerequisites — diagnose and repair pkg on FreeBSD routers"
   hosts: routers:&freebsd
   serial: 1
   gather_facts: false
