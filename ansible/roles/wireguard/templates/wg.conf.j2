@@ -1,0 +1,20 @@
+# {{ ansible_managed }}
+# Rendered from configs/{{ inventory_hostname }}/{{ item.name }}.conf.
+# The private key never leaves the host: PostUp loads it from
+# {{ wireguard_conf_dir }}/{{ item.name }}.key. Table = off keeps wg-quick from
+# installing AllowedIPs routes (FRR/OSPF6 owns routing; ::/0 must not leak).
+# Overlay addresses are assigned by FRR (zebra) from frr.conf.
+{% for line in (lookup('file', wireguard_config_src_dir ~ '/' ~ inventory_hostname ~ '/' ~ item.name ~ '.conf')).splitlines() %}
+{% if line is match('^\s*PrivateKey\s*=') %}
+{% elif line is match('^\s*;') %}
+#{{ line | regex_replace('^\s*;', '') }}
+{% else %}
+{{ line }}
+{% endif %}
+{% if line is match('^\s*\[Interface\]') %}
+Address = {{ item.link_local }}
+MTU = {{ item.mtu | default(1420) }}
+Table = off
+PostUp = wg set %i private-key {{ wireguard_conf_dir }}/{{ item.name }}.key
+{% endif %}
+{% endfor %}
