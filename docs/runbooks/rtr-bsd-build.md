@@ -149,3 +149,29 @@ undisturbed.
 - Post-cutover per service: move the address back to rtr (gateway addrs,
   failover IP + vMAC). rtr's configs are untouched by this migration
   except the additive idle `::e` neighbor.
+
+## Build log — 2026-10-14 (Phase 1, partial)
+
+Built from the `OpenBSD 7.8 cloud-init` template on xcp01 (VM `rtr-bsd`,
+uuid `ad349834-dabc-288c-891b-f1c5b4f3eb61`, 2 vCPU / 2 GiB / 12 GiB, VIFs
+mgmt → infra → vm → eth0 as xnf0..3, NoCloud seed `rtr-bsd-seed.iso`).
+dom0 NDP proxy for `48a::3` applied (`configs/dom0/network-setup.sh`).
+
+Findings that change the plan above:
+
+- **FRR is not packaged for OpenBSD 7.8** (`pkg_info -Q frr` is empty; only
+  `quagga-1.2.4p3`). The "FRR on OpenBSD" decision needs revisiting:
+  build FRR from ports/source, or switch rtr-bsd to base `bgpd(8)`/`ospf6d(8)`.
+  Blocked pending a decision; FRR is NOT running on rtr-bsd.
+- **DAD vs dom0 NDP proxy**: dom0 proxies `48a::3` on xenbr0, the same bridge
+  the VM sits on, so OpenBSD marked the address `duplicated`. Fixed with
+  `net.inet6.ip6.dad_count=0` in `/etc/sysctl.conf`.
+- **Template root is 2 GiB (94% full)**. The 12 GiB VDI's extra space is a
+  separate `sd0d` FFS mounted on `/usr/local` (contents copied over).
+- **One default route only**, via dom0 `2001:41d0:303:48a::1` on xnf3 (the
+  WG underlay). The two defaults in step 2 conflict; xnf1 holds `::2/64`
+  on-link with no gateway. Infra-sourced traffic from off-link hosts therefore
+  returns asymmetrically via WAN (SSH to `::2` through rtr times out); manage
+  the box via mgmt link-local from dom0 until the overlay is up.
+- WG keys generated on-host (`/etc/wireguard/wg{0,1,2}.key`, 0600). Public
+  keys are filled into the core-side stubs in this PR.
