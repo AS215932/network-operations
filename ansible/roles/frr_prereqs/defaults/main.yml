@@ -1,0 +1,5 @@
+---
+frr_prereqs_apply: false
+frr_prereqs_packages: [frr10-pythontools]
+# pkg can stall on a dead mirror; bound it well under apply.yml's 30 min.
+frr_prereqs_pkg_timeout: 900

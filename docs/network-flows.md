@@ -134,7 +134,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 
 ### cr1-ch1 — Core router at Securebit CH: FreeBSD + FRRouting, Securebit transit and SBIX/4IXP route-server peering.
 
-> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Securebit transit 2a09:4c0:100:2d88::8bfa (AS58057), SBIX route servers 2001:7f8:d9:1::1-::4 (AS56755), 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (AS35708, pending). pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
+> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Securebit transit 2a09:4c0:100:c768::ffa (AS58057), SBIX route servers 2001:7f8:d9:1::1-::4 (AS56755), 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (AS35708, pending). pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
 
 **Inbound**
 
@@ -147,7 +147,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | 2001:7f8:d9:1::2 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2001:7f8:d9:1::3 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2001:7f8:d9:1::4 | tcp | 179 | External BGP (pf_bgp_peers) |
-| 2a09:4c0:100:2d88::8bfa | tcp | 179 | External BGP (pf_bgp_peers) |
+| 2a09:4c0:100:c768::ffa | tcp | 179 | External BGP (pf_bgp_peers) |
 | any | udp | 1339, 1341, 1342, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |

@@ -1,0 +1,54 @@
+---
+- name: "{{ item.name }}: generate private key on-host if missing (never printed)"
+  shell: "umask 077 && wg genkey > {{ wireguard_conf_dir }}/{{ item.name }}.key"
+  args:
+    creates: "{{ wireguard_conf_dir }}/{{ item.name }}.key"
+    executable: /bin/sh
+  no_log: true
+  tags: [apply]
+
+- name: "{{ item.name }}: render config"
+  template:
+    src: wg.conf.j2
+    dest: "{{ wireguard_conf_dir }}/{{ item.name }}.conf"
+    mode: "0600"
+    owner: root
+  register: _wg_conf
+  tags: [apply]
+
+- name: "{{ item.name }}: enable at boot (append to wireguard_interfaces)"
+  shell: |
+    cur="$(sysrc -n wireguard_interfaces 2>/dev/null)"
+    case " $cur " in *" {{ item.name }} "*) echo unchanged ;; *) sysrc wireguard_interfaces="$cur {{ item.name }}" ;; esac
+  args: { executable: /bin/sh }
+  register: _wg_rc
+  changed_when: "'unchanged' not in _wg_rc.stdout"
+  tags: [apply]
+
+- name: "{{ item.name }}: is it up?"
+  command: "ifconfig {{ item.name }}"
+  register: _wg_if
+  changed_when: false
+  failed_when: false
+  tags: [apply]
+
+- name: "{{ item.name }}: bring up"
+  command: "wg-quick up {{ item.name }}"
+  when: _wg_if.rc != 0
+  tags: [apply]
+
+- name: "{{ item.name }}: restart after config change"
+  shell: "wg-quick down {{ item.name }} && wg-quick up {{ item.name }}"
+  when: _wg_if.rc == 0 and _wg_conf.changed
+  tags: [apply]
+
+- name: "{{ item.name }}: public key"
+  command: "wg show {{ item.name }} public-key"
+  register: _wg_pub
+  changed_when: false
+  tags: [apply]
+
+- name: "{{ item.name }}: report public key"
+  debug:
+    msg: "WG_PUBLIC_KEY {{ inventory_hostname }} {{ item.name }} {{ _wg_pub.stdout }}"
+  tags: [apply]
