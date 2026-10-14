@@ -48,3 +48,7 @@ host_meta:
   summary: "Core router at Servperso DE: FreeBSD + FRRouting, Servperso DE plus Extra-Transit and IXP peering."
   notes: "Listens on four interfaces (vtnet0..3); WG/BGP/transit rules bind to the interface set, SSH/ICMP only on the primary external interface. Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Servperso DE 2a0c:b640:10::ffff, Extra-Transit 2a0c:b641:870::ffff. pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932."
 network_flows_outbound: []
+
+# WireGuard links managed by the wireguard role (issue #14: rtr-bsd).
+wireguard_links:
+  - { name: wg3, link_local: "fe80::2/64", mtu: 1420 }
