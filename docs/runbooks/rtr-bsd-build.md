@@ -7,7 +7,16 @@ no flag day.
 
 Decision log (settle the open questions from issue #14):
 
-- **FRR on OpenBSD, not OpenBGPD/OpenOSPFD.** The fleet is FRR-only and the
+- **Superseded 2026-10-14: OpenBSD base `bgpd(8)` + `ospf6d(8)`, not FRR.**
+  FRR is not packaged for OpenBSD 7.8. Svag decided to use the base daemons;
+  `configs/rtr-bsd/frr.conf` was translated 1:1 into `bgpd.conf` +
+  `ospf6d.conf` (same mesh, next-hop-self, originated set, ch1 200 > nl1 90 >
+  de1 80 ladder, transit-free, lo0-only OSPF6). Pinned by
+  `tests/iac/test_rtr_bsd_openbgpd.py`. Burn-in safety: every neighbor is
+  `down`, and announcements carry localpref 50 / MED 500 (< rtr's 100) so
+  cores and rtr never prefer rtr-bsd. Cutover: drop `down`, then the
+  localpref/MED override. The original rationale follows for history.
+- ~~**FRR on OpenBSD, not OpenBGPD/OpenOSPFD.**~~ The fleet is FRR-only and the
   IaC contracts pin FRR syntax; a second BGP dialect doubles review cost for
   zero forwarding benefit. The VRF/systemd-networkd/Jool pain lives below FRR.
 - **Stateful NAT64 via pf `af-to`, dedicated translation IP.** Per the #23
@@ -175,3 +184,14 @@ Findings that change the plan above:
   the box via mgmt link-local from dom0 until the overlay is up.
 - WG keys generated on-host (`/etc/wireguard/wg{0,1,2}.key`, 0600). Public
   keys are filled into the core-side stubs in this PR.
+
+### 2026-10-14 (later): bgpd/ospf6d deployed
+
+- `/etc/bgpd.conf`, `/etc/ospf6d.conf` (0600) installed from `configs/rtr-bsd/`;
+  `bgpd -n` / `ospf6d -n` OK; both `rcctl enable`d and running. All four
+  neighbors `Idle` (administratively down).
+- `/etc/hostname.lo0` adds `::e/128` and the `/44` blackhole;
+  `hostname.xnf2` holds `b51::2/48`; `hostname.wg{0,1,2}` create the WG
+  interfaces (key from `/etc/wireguard/wgN.key`, port 1343/1344/1345, overlay
+  /127, link-local `fe80::e` for ospf6d). No peers configured yet.
+- `net.inet6.ip6.forwarding=1`.
