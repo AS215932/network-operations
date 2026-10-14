@@ -1,39 +1,56 @@
-# Branch protection — required checks per repo
+# Branch protection — status-gated agent merges
 
-Current `main` protection across the org (set in Wave 6). PR-Agent is **never**
-required (advisory, same-repo-only — requiring it would wedge fork/dependabot
-PRs). Semgrep is required as a *presence* gate while reporting-only; flip it to
-a blocking gate per `docs/ci/semgrep.md` once each repo's baseline is triaged.
+This is the `main` protection inventory across the org as of **2026-08-03**.
+Every protected branch uses strict required status checks, requires no approving
+reviews, does not enforce the rule on administrators, and disallows force pushes
+and deletion. AI agents wait for the exact required checks below and any
+automated review feedback, then use GitHub's normal merge action. Native GitHub
+auto-merge remains disabled.
 
-| Repo | Required checks | strict | reviews | enforce_admins |
-|------|-----------------|:------:|:-------:|:--------------:|
-| `network-operations` | `lint, render, iac-gate, semgrep` | ✓ | 1 | off |
-| `engineering-loop` | `pytest, ruff, mypy, semgrep` | ✓ | 0 | off |
-| `hyrule-web` | `test, frontend` | ✓ | 1 | off |
-| `hyrule-cloud` | `test, semgrep` | ✓ | 0 | off |
-| `noc-agent` | `semgrep` | ✓ | 0 | off |
-| `hyrule-mcp` | `semgrep` | ✓ | 0 | off |
-| `as215932.net` | `semgrep` | ✓ | 0 | off |
+PR-Agent is **never** required: it is advisory and same-repo-only, so requiring
+it would wedge fork and Dependabot PRs. Semgrep remains a required *presence*
+gate while reporting-only; flip it to a blocking findings gate per
+`docs/ci/semgrep.md` once each repo's baseline is triaged.
 
-`Sourcery review` was removed from `network-operations` **before** the
-`sourcery-ai` app was uninstalled (no window where merges blocked on a check
-that could never report). The app is gone (`gh api orgs/AS215932/installations`
-lists only `claude-for-github`, `claude`).
+| Repo | Required checks |
+|------|-----------------|
+| `agent-core` | `test` |
+| `agentic-observatory` | `python`, `frontend` |
+| `as215932.net` | `semgrep` |
+| `engineering-loop` | `pytest`, `ruff`, `mypy` |
+| `hyrule-beacon` | `ci`, `docker-build` |
+| `hyrule-cloud` | `test`, `semgrep` |
+| `hyrule-mcp` | `semgrep`, `test` |
+| `hyrule-network-proxy` | `go`, `semgrep` |
+| `hyrule-prober` | `test` |
+| `hyrule-seo-agent` | `test`, `semgrep` |
+| `hyrule-web` | `test`, `frontend` |
+| `knowledge` | `validate` |
+| `network-operations` | `lint`, `render`, `iac-gate`, `semgrep` |
+| `noc-agent` | `semgrep`, `test` |
+
+Three repositories are intentionally outside this matrix:
+
+- `hyrule-business` is private and branch protection is unavailable under the
+  org's current GitHub plan.
+- `soc-agent` and `.github` do not yet have substantive PR test workflows.
+  Add status-only protection when such checks exist and have reported green on
+  `main`.
 
 ## Why these settings
 
-- **No required reviews on the newly-protected repos** (and `enforce_admins`
-  off everywhere): this is a solo-maintainer org. Requiring an approval with no
-  second maintainer forces an `--admin` bypass on every merge (self-approval is
-  forbidden) and risks a merge lockout. `network-operations`/`hyrule-web` keep
-  their pre-existing 1-review rule; the rest protect via status checks + no
-  force-push/deletion. Tighten later when there's a second reviewer. The
-  `@AS215932/ops` team exists and backs `.github/CODEOWNERS`, but
-  `require_code_owner_reviews` is intentionally left **off** for now.
-- **`semgrep`-only on `noc-agent`/`hyrule-mcp`/`as215932.net`**: those repos have
-  no test/lint workflow yet — `semgrep` is the only existing green check. Adding
-  a real `ruff`+`pytest` gate (uv-managed 3.14, deselect `test_live_smoke.py`)
-  is tracked as follow-up, after which it should be added as required.
+- **No required reviews**: a green, current required-check set is the merge
+  authorization. This lets agents merge without a human approval while
+  preserving test enforcement. Human review remains available when requested
+  or when a normal review comment needs resolution.
+- **Strict checks**: a PR branch must be current with `main`, preventing an
+  agent from merging against stale green results.
+- **No force pushes or branch deletion**: bypassing the normal merge path is
+  still prohibited.
+- **`enforce_admins` off**: administrators retain a recovery path for a broken
+  required workflow. It is an emergency control, not the agent merge path.
+- **CODEOWNERS is advisory**: `@AS215932/ops` continues to document ownership,
+  but `require_code_owner_reviews` is intentionally off.
 
 ## The `iac-gate` deadlock guard (acceptance #7)
 
@@ -54,17 +71,33 @@ IaC changes, and the trusted lab tiers are success-or-skipped — see
 ## Reproducing the protection
 
 ```bash
-# Repos protected on existing green contexts (no required reviews where noted):
+# Apply a status-only rule after every named context has reported green:
 gh api -X PUT repos/AS215932/<repo>/branches/main/protection --input - <<'EOF'
 { "required_status_checks": {"strict": true, "contexts": [...]},
   "enforce_admins": false, "required_pull_request_reviews": null,
-  "restrictions": null, "allow_force_pushes": false, "allow_deletions": false }
+  "restrictions": null, "required_linear_history": false,
+  "allow_force_pushes": false, "allow_deletions": false,
+  "block_creations": false, "required_conversation_resolution": false,
+  "lock_branch": false, "allow_fork_syncing": false }
 EOF
 
 # Add a context to an already-protected repo without disturbing the rest:
 gh api -X POST repos/AS215932/network-operations/branches/main/protection/required_status_checks/contexts \
   -f 'contexts[]=iac-gate' -f 'contexts[]=semgrep'
 ```
+
+## Verification
+
+Always read back the rule after mutation and confirm the required check names,
+`strict: true`, a null review rule, and disabled force pushes/deletions:
+
+```bash
+gh api repos/AS215932/<repo>/branches/main/protection
+```
+
+A docs-only PR in `network-operations` must still produce `iac-gate` success
+while its internal IaC tiers skip; this guards against an Expected-check
+deadlock. A status-only rule is not permission to merge red or pending work.
 
 ## admin:org token — revoke when done
 

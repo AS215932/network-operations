@@ -9,7 +9,8 @@ Deployment runbook for AS215932 (Hyrule/Servify) on OVH RISE-S with XCP-NG.
 ```
 2a0c:b641:b50::/44  (full allocation)
 ├── 2a0c:b641:b50::/48   Infrastructure
-│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, vpn ::60, xoa ::70
+│   └── :2::/64   infra    rtr ::1, dns ::10, api ::20, web ::30, proxy ::40, mon ::50, xoa ::70
+│   └── :1::/64   vpn transit  rtr ::1, vpn ::60 (dedicated rtr<->vpn segment, docs/vpn-transit.md)
 ├── 2a0c:b641:b51::/48   Customer VMs (one /64 per VM)
 └── 2a0c:b641:b52-b5f    Future expansion
 ```
@@ -74,7 +75,7 @@ truth. Proper IPAM deployment and Hyrule integration are tracked in
 |--------|----------|-----|------------------|----------|-----------|
 | cr1.nl1 | Servperso NL | FreeBSD + FRRouting | 2a0c:b640:8:69::1 | ::a | 1.1.1.1 |
 | cr1.de1 | Servperso DE | FreeBSD + FRRouting | 2a0c:b640:10::213 | ::b | 2.2.2.2 |
-| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | 2a09:4c0:100:2d88::8898 (transit), 2001:7f8:d9:1::3:4b7c:2 (SBIX), 2001:7f8:d0::3:4b7c:1 (4IXP) | ::c | 3.3.3.3 |
+| cr1.ch1 | Securebit CH | FreeBSD + FRRouting | 2a09:4c0:100:c768::eae (transit), 2001:7f8:d9:1::3:4b7c:2 (SBIX), 2001:7f8:d0::3:4b7c:1 (4IXP) | ::c | 3.3.3.3 |
 | rtr | OVH FR | Debian 13 + FRRouting | 2001:41d0:303:48a::2 | ::d | 0.0.0.13 |
 
 All loopbacks are in `2a0c:b641:b50::/128` (e.g. `2a0c:b641:b50::a`).

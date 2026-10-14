@@ -16,8 +16,8 @@ pinning exact app commit SHAs. Safety lives in three layers:
 
 ## App promotion model
 
-`hyrule-noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web` do not own
-normal production applies. Their repositories produce reviewed commits with
+`noc-agent`, `hyrule-mcp`, `hyrule-cloud`, and `hyrule-web` do not own
+normal production applies. Their repositories produce validated commits with
 green CI. `network-operations` owns production by pinning those commits in
 inventory:
 
@@ -29,8 +29,8 @@ inventory:
 Use the promotion PR template for coordinated deploys. Merge app PRs first,
 then let the app repo request or manually update a promotion PR with the exact
 merged app SHAs. Production deploys only happen from `network-operations/main`
-after the promotion PR merges and the GitHub `production` environment gate is
-approved.
+after the promotion PR merges. The GitHub `production` environment has no
+required reviewers and permits deployments only from `main`.
 
 The normal automated path is:
 
@@ -40,13 +40,11 @@ The normal automated path is:
    `repository_dispatch` to this repository.
 3. **promote-apps** opens or updates the promotion PR with app pins, compare
    links, and rollback SHAs.
-4. Review the generated promotion PR.
+4. Inspect the generated promotion PR.
 5. Merge the promotion PR after checks pass.
 6. **app-promotion-deploy** starts automatically on the `main` push when an app
    pin file changed. It calls `apply.yml` for the affected playbook(s).
-7. Approve the GitHub `production` environment gate. This is the intended
-   manual deploy step.
-8. Review the workflow summary: app pins, compare links, and the post-deploy
+7. Review the workflow summary: app pins, compare links, and the post-deploy
    Goss result.
 
 Manual fallback: run **Actions -> promote-apps** in this repository and paste
@@ -93,8 +91,9 @@ gh workflow run apply.yml \
 Or via the GitHub UI: **Actions → apply → Run workflow → pick playbook /
 limit / dry-run / PR**.
 
-The workflow pauses immediately at the **`production` environment review**
-gate. Approve in the UI; the run unfreezes.
+The live job enters the **`production` environment** immediately when the run
+originates from `main`. There is no reviewer pause. A run from any other ref
+is rejected by the environment's custom deployment-branch policy.
 
 ## What the workflow does
 
@@ -158,21 +157,33 @@ Record the deploy in the PR description after the fact.
 
 ## Environment protection setup (one-time)
 
-The `production` environment with a required reviewer is set via the GitHub
-UI: **Settings → Environments → New environment → production → Required
-reviewers: @<your-handle>**. Or via:
+The `production` environment has no required reviewers and a custom deployment
+branch policy containing exactly `main`. Configure it for each deployment
+repository (`network-operations`, `hyrule-web`, and `hyrule-cloud`):
 
 ```bash
 gh api -X PUT /repos/AS215932/network-operations/environments/production \
-  -f reviewers='[{"type":"User","id":<user-id>}]'
+  -F wait_timer=0 \
+  -F prevent_self_review=false \
+  -F reviewers=null \
+  -F 'deployment_branch_policy[protected_branches]=false' \
+  -F 'deployment_branch_policy[custom_branch_policies]=true'
+
+gh api -X POST \
+  /repos/AS215932/network-operations/environments/production/deployment-branch-policies \
+  -f name=main -f type=branch
 ```
 
-Once set, every `apply.yml` run pauses for approval before the apply step.
+Read the environment and deployment-branch-policies endpoints back after any
+change. There must be no reviewer protection rule and exactly one branch policy,
+`main`.
 
 ## Branch protection setup (one-time)
 
-`main` must require: `lint`, `render-check`, `ai-review` checks. See the
-PR #44 description (`feat/0d-ci-auto-merge`) for the exact `gh api` call.
+`main` strictly requires `lint`, `render`, `iac-gate`, and `semgrep`,
+with no approving-review requirement. See
+[branch-protection.md](./branch-protection.md) for the exact matrix and API
+shape.
 
 ## Common failure modes
 

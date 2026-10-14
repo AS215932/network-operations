@@ -23,8 +23,9 @@ AS/routing = `as215932.net`.
 Use the app-promotion path, never a manual pin edit:
 
 1. `gh workflow run promote-apps.yml -F hyrule_cloud_sha=<#29 merge SHA> -F note="VPS launch-proof contract"`
-2. Review + merge the promotion PR.
-3. `app-promotion-deploy` calls `apply.yml playbook=cloud`; approve the `production` gate.
+2. Inspect and merge the promotion PR after its required checks pass.
+3. `app-promotion-deploy` calls `apply.yml playbook=cloud` automatically from
+   `main`; monitor the apply and post-deploy validation.
 4. Record the **rollback SHA** = the `hyrule_cloud_version` *before* this promotion (for the rollback-by-SHA step).
 
 ## Smoke sequence

@@ -1,0 +1,12 @@
+# NOC notification ownership rollout
+
+The `noc_agent` role renders non-secret delivery controls in `/etc/noc-agent/runtime.env`, loaded after the credential file by both application and bot units. Defaults preserve the existing posture: reactive reporting and attention ownership disabled, outbox enabled. Editing these controls does not require credential rotation or a Vault template refresh.
+
+1. Merge the compatible noc-agent attention implementation only after current-head CI and review pass. Promote its merged SHA through `promote-apps`, review the generated promotion PR, and verify automatic apply, Goss, actual running SHA and `/health/cases` delivery/spool health.
+2. Verify the independent `noc-agent-delivery-health` Icinga check is actively scheduled and healthy. Audit active human acknowledgements before adopting legacy acknowledgement coverage. Preserve the local card identity directory and retained outbox records.
+3. Set `noc_case_reactive_report_enabled: true` and `noc_case_attention_enabled: true` in the NOC host inventory; retain `noc_case_outbox_enabled: true`. Review and apply through the normal configuration workflow. Check both processes load the intended controls and remain healthy. Observe natural monitor traffic to confirm initial facts survive investigation failures and attention events advance only on successful delivery.
+4. Keep existing direct monitor routes until the owned path and independent failure path are verified. Review direct-route changes separately, including failure routing and recovery notifications. Do not create synthetic customer-channel traffic as a test.
+
+Rollback the ownership flags through inventory and normal apply. Restore previously reviewed direct routes if they were changed. Keep the compatible worker and outbox enabled to drain retained requests. Legacy reactive reminders share the delivery lease and last successful attention clock; quiet card edits do not reset that clock. Preserve attention tables and message identity files. Older application binaries do not understand retained attention payloads: drain those with a compatible worker before a binary rollback.
+
+Monitor-confirmed positive-clean resolution is required for recovery attention. Operator approval/rejection alone is not evidence of monitor recovery. No step in this procedure authorizes mail filesystem repair, Vault reinitialization, deletion of retired VM data, or new paid resources.

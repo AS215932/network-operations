@@ -29,7 +29,6 @@ export ANSIBLE_FORCE_COLOR=true
 export DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-https://discord.com/api/webhooks/0/render-stub}"
 export ICINGA_API_USER="${ICINGA_API_USER:-render-stub}"
 export ICINGA_API_PASSWORD="${ICINGA_API_PASSWORD:-render-stub}"
-export GEMINI_API_KEY="${GEMINI_API_KEY:-render-stub}"
 export NOC_DISCORD_WEBHOOK="${NOC_DISCORD_WEBHOOK:-https://discord.com/api/webhooks/0/render-stub}"
 export XO_TOKEN="${XO_TOKEN:-render-stub}"
 export MAIL_NOC_PASSWORD="${MAIL_NOC_PASSWORD:-render-stub}"
@@ -46,7 +45,7 @@ else
   # Default set — playbooks that have a render-only `--tags validate` path.
   # Skip ones whose role is apply-only (vault, knot, networkd_resolved, etc.)
   # to keep the workflow tight.
-  for p in firewall monitoring logs icinga2 prometheus alertmanager ci extmon; do
+  for p in firewall monitoring logs icinga2 prometheus alertmanager ci extmon rtr-apt-cache; do
     [ -f "playbooks/${p}.yml" ] || continue
     playbooks+=("playbooks/${p}.yml")
   done

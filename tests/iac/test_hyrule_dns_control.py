@@ -12,6 +12,8 @@ import time
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 REPO = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO / "ansible/roles/knot/files/hyrule_dns_control.py"
@@ -206,6 +208,26 @@ class DNSControlTest(unittest.TestCase):
 
         self.assertLess(template.index(member_template), template.index(customer_include))
         self.assertLess(template.index(catalog_zone), template.index(customer_include))
+
+    def test_documented_apply_path_coerces_string_flag_and_runs_nested_tasks(self) -> None:
+        role_root = REPO / "ansible/roles/knot/tasks"
+        knot_tasks = yaml.safe_load((role_root / "knot.yml").read_text())
+        conditions = [task["when"] for task in knot_tasks if "when" in task]
+        self.assertEqual(conditions, ["knot_apply | bool"] * 5)
+
+        main_tasks = yaml.safe_load((role_root / "main.yml").read_text())
+        customer_include = next(
+            task
+            for task in main_tasks
+            if task.get("name") == "Install customer-zone control plane and backups"
+        )
+        include = customer_include["ansible.builtin.include_tasks"]
+        self.assertEqual(include["file"], "customer_zones.yml")
+        self.assertIn("apply", include["apply"]["tags"])
+        self.assertIn("apply", customer_include["tags"])
+
+        runbook = (REPO / "docs/runbooks/managed-domain-dns.md").read_text()
+        self.assertIn("-e knot_apply=true", runbook)
 
     def test_online_backup_holds_dns_mutation_lock_through_control_state_copy(self) -> None:
         helper = (REPO / "ansible/roles/knot/templates/knot-online-backup.j2").read_text()

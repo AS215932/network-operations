@@ -1,0 +1,26 @@
+---
+# Distribute Kim's operator pubkey to all AS215932 hosts: creates the
+# dedicated `kim` operator user with NOPASSWD root (sudo on Linux, doas on
+# BSD) and authorizes the key for it. Kim owns AS215932 operations from now
+# on, so the account mirrors the `ci` deploy user's privilege shape — but
+# unlike id_ci there is no from= restriction, because an operator connects
+# from wherever they work (SSH transport sources stay gated by the firewall
+# role's ssh_allow_sources_*).
+#
+# Run before Kim needs SSH access for ops work (--tags apply runs against
+# the fleet). Bootstrap from the workstation with the private key path:
+#
+# Apply:
+#   KIM_KEY_PATH=<id_kim> ansible-playbook playbooks/kim-ops-key.yml --tags apply
+
+# `external` (extmon) included: same as ci-runner-key.yml — off-net hosts
+# need the operator account too.
+- name: kim operator key distribution — all hosts except retired
+  hosts: linux:freebsd:openbsd:external:!retired
+  gather_facts: false
+  become: true
+  vars:
+    kim_ops_key_path: "{{ lookup('env', 'KIM_KEY_PATH') }}"
+  roles:
+    - kim_ops_key
+  tags: [kim_ops_key]

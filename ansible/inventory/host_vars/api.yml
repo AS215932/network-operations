@@ -1,7 +1,7 @@
 ---
 # api — hyrule-cloud (FastAPI on :8402) + PostgreSQL (localhost) + postgres_exporter.
 
-hyrule_cloud_version: 677532ddc9e0ba04e6552dafb6c300416b7157f9
+hyrule_cloud_version: ee5018f6e4f55ef44ecba4c5609a6f8bfe8910d7
 hyrule_cloud_monero_wallet_rpc_enabled: true
 
 firewall_extra_rules:
@@ -25,4 +25,8 @@ network_flows_outbound:
   - { to: dns, proto: tcp, port: 53, purpose: "RFC 2136 dynamic DNS updates (TSIG hyrule-dns)" }
   - { to: dns, proto: tcp, port: 8453, purpose: "HMAC-authenticated managed customer DNS control" }
   - { to: netproxy, proto: tcp, port: 8450, purpose: "authenticated internal Hyrule Network Proxy sidecar API" }
+  - { to: netproxy, proto: tcp, port: 8452, purpose: "authenticated reverse-SSH tunnel control API (create/extend/revoke leases)" }
   - { to: openprovider, proto: tcp, port: 443, purpose: "domain registration API" }
+
+# Restore window for expired VMs (hyrule-cloud vm_retention_days default 30). Approved by Svag 2026-10-13.
+hyrule_cloud_vm_expiry_retention_enabled: true

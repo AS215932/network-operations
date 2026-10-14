@@ -33,16 +33,17 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | extmon | Debian 13 | `2001:19f0:7402:0cd5:5400:06ff:fe40:7112` | `45.32.179.134` | External monitoring host (off-net) |
 | irc | Debian 13 | `2a0c:b641:b50:2::80` | — | Soju IRC bouncer (fronted by Caddy on proxy) |
 | log | Debian 13 | `2a0c:b641:b50:2::b0` | `10.0.0.60` (mgmt) | Vector aggregator + Loki (centralized logs) |
-| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Engineering Loop operations-lane VM (draft PR automation, no fleet SSH) |
+| loop | Debian 13 | `2a0c:b641:b50:2::f0` | — | Retired loop VM |
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
-| netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule Network Proxy sidecar (:8450 API, :8451 metrics/health) |
-| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp |
+| netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data) |
+| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp + hyrule-prober (:8460) |
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
+| rtr-bsd | OpenBSD | `2a0c:b641:b50:2::2` | — | router/DNS forwarder (parallel burn-in) |
 | vault | Debian 13 | `2a0c:b641:b50:2::c0` | — | Vault secret plane |
-| vpn | Debian 13 | `2a0c:b641:b50:2::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
+| vpn | Debian 13 | `2a0c:b641:b50:1::60` | via rtr DNAT (46.105.40.223) | WireGuard server |
 | web | Debian 13 | `2a0c:b641:b50:2::30` | — | nginx + uvicorn (:8080, :8081) |
 | xoa | Debian 13 | `2a0c:b641:b50:2::70` | `10.0.0.10` (mgmt) | Xen Orchestra |
 
@@ -58,6 +59,7 @@ dom0 is an XCP-NG hypervisor on the underlay only; it is not on the AS215932 ove
 | `2a0c:b641:b50::/64` | Router loopbacks (::a cr1-nl1, ::b cr1-de1, ::c cr1-ch1, ::d rtr) |
 | `2a0c:b641:b50:2::/64` | Infra subnet (rtr ::1, VMs ::10-::f0) |
 | `2a0c:b641:b50:3::/64` | VPN clients (routed via the vpn VM) |
+| `2a0c:b641:b50:1::/64` | Dedicated rtr<->vpn transit (xenbr-transit) |
 | `2a0c:b641:b50:f0::/64` | loop VM Docker bridge containers (routed GUA /64) |
 | `2a0c:b641:b50:ff00::/56` | WireGuard tunnel /127s (mesh links) |
 | `2a0c:b641:b51::/48` | Customer VM allocations (::c1 = ci-pr, the unprivileged PR runner) |
@@ -88,6 +90,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | dns | tcp | 53 | RFC 2136 dynamic DNS updates (TSIG hyrule-dns) |
 | openprovider | tcp | 443 | domain registration API |
 | netproxy | tcp | 8450 | authenticated internal Hyrule Network Proxy sidecar API |
+| netproxy | tcp | 8452 | authenticated reverse-SSH tunnel control API (create/extend/revoke leases) |
 | dns | tcp | 8453 | HMAC-authenticated managed customer DNS control |
 
 ### ci — Privileged self-hosted GitHub Actions runner for AS215932/network-operations; runs apply jobs against the fleet.
@@ -131,7 +134,7 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 
 ### cr1-ch1 — Core router at Securebit CH: FreeBSD + FRRouting, Securebit transit and SBIX/4IXP route-server peering.
 
-> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Securebit transit 2a09:4c0:100:2d88::8bfa (AS58057), SBIX route servers 2001:7f8:d9:1::1-::4 (AS56755), 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (AS35708, pending). pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
+> Inbound table above is rendered from pf_bgp_peers/pf_wg_ports; only the mon scrapes come from firewall_extra_rules. BGP peers: Securebit transit 2a09:4c0:100:c768::ffa (AS58057), SBIX route servers 2001:7f8:d9:1::1-::4 (AS56755), 4IXP route servers 2001:7f8:d0::8b7c:1-::3 (AS35708, pending). pf also does: pass quick on wg all no state; ICMP/ICMPv6 ping; transit inet6 from any to AS215932.
 
 **Inbound**
 
@@ -144,8 +147,8 @@ Inbound tables are rendered from each host's `firewall_extra_rules`; outbound ta
 | 2001:7f8:d9:1::2 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2001:7f8:d9:1::3 | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2001:7f8:d9:1::4 | tcp | 179 | External BGP (pf_bgp_peers) |
-| 2a09:4c0:100:2d88::8bfa | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1339, 1341, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
+| 2a09:4c0:100:c768::ffa | tcp | 179 | External BGP (pf_bgp_peers) |
+| any | udp | 1339, 1341, 1342, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -163,7 +166,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
 | 2a0c:b641:870::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1337, 1338, 1342 | WireGuard underlay tunnels (pf_wg_ports) |
+| any | udp | 1337, 1338, 1342, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -180,7 +183,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | 2a0c:b640:10::ffff | tcp | 179 | External BGP (pf_bgp_peers) |
-| any | udp | 1337, 1338, 1340, 1341 | WireGuard underlay tunnels (pf_wg_ports) |
+| any | udp | 1337, 1338, 1340, 1341, 1343 | WireGuard underlay tunnels (pf_wg_ports) |
 | mon | tcp | 9100 | node_exporter scrape from mon |
 | mon | tcp | 9342 | frr_exporter scrape from mon |
 
@@ -274,7 +277,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | cr1-nl1 loopback | tcp | 6000 | Vector ingest from cr1-nl1 (over WG mesh) |
 | dns | tcp | 6000 | Vector ingest from dns |
 | irc | tcp | 6000 | Vector ingest from irc |
-| loop | tcp | 6000 | Vector ingest from loop |
 | mgmt v4 | tcp (v4) | 6000 | Vector ingest from dom0 over mgmt v4 |
 | mon | tcp | 6000 | Vector ingest from mon |
 | netproxy | tcp | 6000 | Vector ingest from netproxy |
@@ -283,12 +285,14 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | proxy | tcp | 6000 | Vector ingest from proxy |
 | rtr | tcp | 6000 | Vector ingest from rtr |
 | rtr underlay | tcp | 6000 | Vector ingest from rtr underlay |
+| vault | tcp | 6000 | Vector ingest from vault |
 | vpn | tcp | 6000 | Vector ingest from vpn |
 | web | tcp | 6000 | Vector ingest from web |
 | xoa | tcp | 6000 | Vector ingest from xoa |
 | cr1-de1 loopback | tcp | 6514 | syslog (TCP) from cr1-de1 |
 | cr1-nl1 loopback | tcp | 6514 | syslog (TCP) from cr1-nl1 |
 | mail | tcp | 6514 | syslog (TCP) from OpenBSD mail |
+| rtr-bsd | tcp | 6514 | syslog (TCP) from OpenBSD rtr-bsd |
 | mon | tcp | 8686 | Vector internal metrics scrape from mon |
 | mon | tcp | 9100 | node_exporter scrape |
 
@@ -296,30 +300,17 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
-### loop — Engineering Loop operations-lane VM: consumes loop:approved issues and stops at draft PRs; hosts the Agent-Core trace collector and a loopback knowledge MCP.
+### loop — Retired loop VM, preserved with runtime services disabled.
 
-> Not an infra deploy source: no fleet SSH key, no app runtime secrets, no Vault breadth. Docker bridge containers get routed GUA /64 addresses (2a0c:b641:b50:f0::/64), resolve via rtr Unbound, and egress over IPv6. loop does not SSH to the infra fleet.
+> Inventory identity, disks, configuration, and data are retained. Routine fleet maintenance and current network-flow expansions exclude this host.
 
 **Inbound**
 
-| From | Proto | Port | Purpose |
-|---|---|---|---|
-| loop, noc, mon | tcp | 8770 | agent-core collector |
-| proxy, mon | tcp | 8780 | agentic observatory |
-| loop, mon | tcp | 8781 | knowledge read API |
-| mon | tcp | 9100 | node_exporter scrape |
+_No current inbound flow is modelled for this excluded host._
 
 **Outbound**
 
-| To | Proto | Port | Purpose |
-|---|---|---|---|
-| rtr | tcp+udp | 53 | Docker bridge containers resolve via rtr Unbound (DNS64) |
-| github | tcp | 443 | issues, checkouts, branch pushes, draft PRs, knowledge MCP build context |
-| model-providers | tcp | 443 | selected backend/provider LLM APIs |
-| public | tcp | 443 | Docker container base-image and package downloads over routed IPv6 egress |
-| mon | tcp | 5665 | Icinga passive check submission |
-| log | tcp | 6000 | Vector agent to aggregator |
-| vault | tcp | 8200 | Vault Agent secret render |
+_No current outbound flow is modelled for this excluded host._
 
 ### mail — Mail server for as215932.net and hyrule.host: OpenSMTPD, Rspamd, and Dovecot IMAPS, public over a dedicated failover IPv4.
 
@@ -351,7 +342,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | proxy | tcp | 3000 | Grafana from proxy |
-| loop | tcp | 5665 | Icinga2 passive check from engineering-loop |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
 | api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
 | noc | tcp | 9090 | Prometheus API from noc-agent |
@@ -364,17 +354,22 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | public | tcp | 443 | blackbox_exporter HTTPS probes of public services |
 | public | icmp6 | — | blackbox_exporter ICMP reachability probes of public services (internal fleet ICMP sweep is noted in network_flows.yml) |
 
-### netproxy — Internal Hyrule Network Proxy sidecar that executes paid x402-gated Hyrule Cloud network requests.
+### netproxy — Internal egress sidecar for x402 network requests PLUS the public hyrule-tunnel-proxy reverse-SSH tunnel daemon (per-hour x402 leases).
 
-> Prometheus scrape targets go green once the VM is provisioned and the sidecar applied (issue #214).
+> Mixed posture: only tunnel SSH/STUN/data ports are public; sidecar API :8450 and tunnel control :8452 stay internal. Static IPv4 10.0.2.224 (configs/netproxy) + rtr DNAT carry IPv4-only rescue clients.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| any | tcp | 2222 | public reverse-SSH tunnel intake (hyrule-tunnel-proxy) |
+| any | udp | 3478 | public STUN binding responder |
 | api | tcp | 8450 | hyrule-cloud API to network proxy sidecar |
 | mon | tcp | 8451 | Prometheus scrape hyrule-network-proxy metrics |
+| api | tcp | 8452 | hyrule-cloud API to tunnel control API |
+| mon | tcp | 8453 | Prometheus scrape hyrule-tunnel-proxy metrics |
 | mon | tcp | 9100 | node_exporter scrape |
+| any | tcp | 10000-10499 | public reverse-tunnel data ports |
 
 **Outbound**
 
@@ -382,16 +377,17 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | public | tcp+udp | — | direct/Tor/I2P/Yggdrasil egress for request modes, subject to sidecar SSRF/IP policy |
 
-### noc — Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child).
+### noc — Autonomous NOC triage agent (FastAPI :8000) running LLM investigations against hyrule-mcp tools (a stdio child), plus the hyrule-prober sidecar (:8460) for Hyrule Cloud /v1/path/* probes.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
 | extmon | tcp | 8000 | noc-agent webhook from extmon Alertmanager |
-| loop | tcp | 8000 | LHP-v1 Engineering Loop fetch/callback to noc-agent |
 | mon | tcp | 8000 | noc-agent webhook from mon (Alertmanager + Icinga) |
 | proxy | tcp | 8000 | noc-agent control dashboard via Caddy (proxy) |
+| api | tcp | 8460 | hyrule-cloud API to hyrule-prober (path probes) |
+| mon | tcp | 8460 | Icinga /healthz check for hyrule-prober |
 | mon | tcp | 9100 | node_exporter scrape |
 
 **Outbound**
@@ -403,6 +399,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | public | tcp | 443 | LLM API, Discord webhook, and npx package install |
 | mon | tcp | 5665 | Icinga2 REST API |
 | mon | tcp | 9090 | Prometheus query API |
+| public | icmp+udp | — | hyrule-prober ping/traceroute to probe targets (AS215932 vantage) |
 
 ### ns2 — Off-net authoritative secondary nameserver (different ASN and site) providing DNS resilience for AS215932 zones.
 
@@ -424,7 +421,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### proxy — Terminates public TLS and reverse-proxies to web, api, and other backends; ACME DNS-01 via RFC 2136 to dns.
 
-> Most proxy outbound is the mirror of a backend's inbound rule (web :8080/:8081, api :8402, mon :3000, xoa :80/:443, irc :6697, noc :8000, vault :8200, loop :8780); only the noteworthy external/DNS flows are listed below.
+> Most proxy outbound is the mirror of a backend's inbound rule (web :8080/:8081, api :8402, mon :3000, xoa :80/:443, irc :6697, noc :8000, vault :8200); only the noteworthy external/DNS flows are listed below.
 
 **Inbound**
 
@@ -449,7 +446,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| infra subnet, customer subnet, vpn-clients, loop Docker subnet, rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
+| infra subnet, customer subnet, vpn-clients, vpn transit (rtr<->vpn), rtr underlay | tcp+udp | 53 | DNS recursion from overlay + rtr's own (underlay src, VRF) |
 | cr1-nl1 loopback, cr1-de1 loopback, cr1-ch1 loopback | tcp | 179 | iBGP from cr1-* loopbacks |
 | cr1-nl1 underlay | udp | 1337 | WG to cr1-nl1 |
 | cr1-de1 underlay | udp | 1338 | WG to cr1-de1 |
@@ -463,15 +460,33 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | public | any | — | NAT64 egress via Jool (TCP/UDP/ICMP pool4) to the IPv4 internet (source 46.105.40.223); ICMP is used by the nat64 ping6 health check |
 
-### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
+### rtr-bsd — Parallel OpenBSD edge router running FRR BGP/OSPF, Unbound DNS64, and pf customer isolation alongside live rtr; no public v4 services until atomic cutover.
 
-> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, loop, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
+> OSPF (proto 89) on the wg0/wg1/wg2 mesh and iBGP/179 are allowed via firewall_extra_raw_pf, not firewall_extra_rules. SSH (tcp/22) on wan+infra, DNS recursion on infra/vm, and the customer→infra isolation drops are captured in the cross-cutting flows table.
 
 **Inbound**
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| noc, mon, api, web, ci, loop | tcp | 8200 | Vault API from internal agents/checks |
+| any | udp | 1343, 1344, 1345 | WireGuard underlay tunnels (pf_wg_ports) |
+| mon | tcp | 9100 | node_exporter scrape from mon |
+| mon | tcp | 9342 | frr_exporter scrape from mon |
+
+**Outbound**
+
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| public | any | — | IPv6 egress to the internet via the underlay default route (no NAT64 in Phase 1 — overlay clients keep using rtr for v4) |
+
+### vault — HashiCorp Vault machine-secret plane, proxied publicly as vault.as215932.net; internal agents reach the plain-HTTP :8200 listener directly.
+
+> Internal agents/checks reaching vault:8200 (noc, mon, api, web, ci, VPN operators, ops-prefix) are captured in the cross-cutting flows table.
+
+**Inbound**
+
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| noc, mon, api, web, ci | tcp | 8200 | Vault API from internal agents/checks |
 | ops-prefix | tcp | 8200 | Vault API from ops prefix |
 | proxy | tcp | 8200 | Vault API from Caddy proxy |
 | vpn-clients | tcp | 8200 | Vault API from VPN operators |
@@ -481,7 +496,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
-### vpn — WireGuard server for client tunnels; forwards client traffic (wg0 to enX0) toward rtr for DNS64/NAT64 egress.
+### vpn — WireGuard server for client tunnels; forwards client traffic (wg0 to enX1, dedicated transit) toward rtr for DNS64/NAT64 egress.
 
 > The vpn-clients-to-rtr/internet transit is captured in the cross-cutting flows table.
 
@@ -535,7 +550,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 N-to-M flows that are not a single host's inbound rule (DNS recursion, monitoring scrape, SSH, logging, Vault, public ingress, WireGuard mesh, and routine host egress).
 
-> `all` in the table below excludes dom0 (firewall-unmanaged; their real flows are modelled explicitly).
+> `all` in the table below excludes dom0, loop (firewall-unmanaged; any current flows are modelled explicitly).
 
 | From | To | Proto | Port | Purpose |
 |---|---|---|---|---|
@@ -551,7 +566,6 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | dns | ns2 | tcp+udp | 53 | NOTIFY to the off-net secondary (TSIG hyrule-dns) |
 | dom0 | log | tcp | 6000 | hypervisor Vector agent to aggregator over mgmt v4 |
 | irc | dns | tcp | 53 | RFC 2136 dynamic updates for ACME DNS-01 (TSIG hyrule-dns) |
-| loop | vault | tcp | 8200 | vault-agent secret render |
 | mail | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | mon | all | tcp | 22 | SSH for Icinga2 by_ssh checks (monitoring user; privileged plugins via sudo/doas) |
 | mon | all (except extmon) | tcp | 9100 | node_exporter scrape |
@@ -574,10 +588,11 @@ N-to-M flows that are not a single host's inbound rule (DNS recursion, monitorin
 | public | rtr | tcp (v4) | 80 | DNAT to proxy |
 | public | rtr | tcp (v4) | 443 | DNAT to proxy |
 | public | rtr | udp (v4) | 51820 | DNAT to vpn |
-| routers | routers | udp | 1337-1342 | WireGuard full mesh between router underlays |
+| routers | routers | udp | 1337-1345 | WireGuard full mesh between router underlays |
+| rtr-bsd | log | tcp | 6514 | OpenBSD syslogd @@ forward (TCP, no UDP) |
 | vpn-clients | all | tcp | 22 | SSH via VPN |
 | vpn-clients | public | any | — | routed IPv6 / NAT64 egress (all protos) forwarded by vpn via rtr |
-| vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX0 |
+| vpn-clients | rtr | tcp+udp | 53 | DNS64 to rtr; vpn forwards wg0 to enX1 (dedicated transit) |
 | web | vault | tcp | 8200 | vault-agent secret render |
 
 ---
@@ -589,8 +604,8 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | log-shipping infra hosts | infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy, loop. Excludes mail (ships syslog to log:6514, not 6000) and log itself (the aggregator). |
-| `all-linux` | every Linux host | all Debian VMs (routine apt / NTP egress) |
+| `all-infra` | log-shipping infra hosts | active infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy. Excludes retired loop, mail (ships syslog to log:6514, not 6000), and log itself (the aggregator). |
+| `all-linux` | active Linux hosts | active Debian VMs, excluding retired loop (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |
 | `github` | github.com | GitHub API, Actions runner queue, checkouts, PRs, action/image pulls |
@@ -601,7 +616,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | `openrouter` | openrouter.ai | OpenRouter LLM API (PR-Agent) |
 | `ops-prefix` | ops workstation prefix (KPN home) | 2a02:a442:1016::/48, 77.166.211.126/32; SSH + AXFR allow |
 | `package-registries` | PyPI / npm / ghcr.io / Docker Hub | toolchain and container image pulls |
-| `routers` | AS215932 routers | rtr, cr1-nl1, cr1-de1, cr1-ch1 |
+| `routers` | AS215932 routers | rtr, rtr-bsd (parallel burn-in, issue #14), cr1-nl1, cr1-de1, cr1-ch1 |
 | `vpn-clients` | VPN clients | 2a0c:b641:b50:3::/64, routed via the vpn VM |
 
 ---
@@ -613,4 +628,5 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 - FreeBSD core routers cr1-nl1 and cr1-de1 forward syslog to log:6514 via native syslogd; this is rendered as log's inbound rule (log host_vars) and appears in log's per-host inbound table. cr1-ch1 also sets logs_use_freebsd_syslogd but log.yml has no cr1-ch1 6000/6514 allow yet — tracked in issue #431; it is deliberately NOT claimed here until the rule lands.
 - Prometheus scrape on FreeBSD routers: the live pf rulesets historically relied on 'pass quick on wg all no state' over the WireGuard mesh rather than explicit 9100/9342-from-mon rules. The Ansible-rendered configs now add explicit rules for cr1-nl1/de1/ch1, so a future wg-pass lockdown is already covered.
 - dom0 is firewall-unmanaged (playbook targets all:!dom0) so it is excluded from every `all` expansion via all_excludes; its real flows (mon->dom0:9100 scrape and dom0->log:6000 shipping over mgmt v4, xoa->dom0 XAPI) are modelled explicitly.
+- loop is retired and preserved. Routine firewall and fleet maintenance exclude it, its services are disabled, and the current flow model gives it no inherited or explicit active traffic.
 - mon also runs blackbox_exporter ICMPv6 reachability probes against internal targets (all routers, dns/api/web/proxy/vpn/vault, and every WireGuard link endpoint) in addition to the public ICMP probes in mon's outbound table; these internal reachability probes are a monitoring implementation detail not expanded per-host here.

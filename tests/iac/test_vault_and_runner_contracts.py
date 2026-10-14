@@ -57,7 +57,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         spec = yaml.safe_load((REPO / ".github/workflows/post-merge-apply.yml").read_text())
         apply_job = spec["jobs"]["apply"]
         self.assertEqual(apply_job.get("environment"), "production")
-        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v2")
+        self.assertEqual(apply_job.get("concurrency", {}).get("group"), "production-infra-live-v3")
         self.assertFalse(apply_job.get("concurrency", {}).get("cancel-in-progress"))
 
     def test_required_render_check_reports_on_every_pull_request(self):
@@ -92,6 +92,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+apply_var="hyrule_network_proxy_apply=true"
 \s+expected_apply_var="hyrule_network_proxy_apply=true"
 \s+;;
+\s+tunnel-proxy\)
+\s+apply_var="hyrule_tunnel_proxy_apply=true"
+\s+expected_apply_var="hyrule_tunnel_proxy_apply=true"
+\s+;;
 \s+engineering-loop\)
 \s+apply_var="engineering_loop_apply=true"
 \s+expected_apply_var="engineering_loop_apply=true"
@@ -101,6 +105,16 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 \s+# role gate is soc_agent_apply \(role name != playbook name\)
 \s+apply_var="soc_agent_apply=true"
 \s+expected_apply_var="soc_agent_apply=true"
+\s+;;
+\s+prober\)
+\s+# role gate is hyrule_prober_apply \(role name != playbook name\)
+\s+apply_var="hyrule_prober_apply=true"
+\s+expected_apply_var="hyrule_prober_apply=true"
+\s+;;
+\s+mail_openbsd\)
+\s+# role gate is mail_apply \(role name != playbook name\)
+\s+apply_var="mail_apply=true"
+\s+expected_apply_var="mail_apply=true"
 \s+;;
 \s+\*\)
 \s+apply_var="\$\{playbook//-/_\}_apply=true"
@@ -140,9 +154,11 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertIn("role: knowledge_loop", playbook)
         self.assertIn("vault_agent_name: knowledge-loop", playbook)
-        self.assertIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint knowledge-loop Vault bootstrap", workflow)
-        self.assertIn('auth/approle/role/knowledge-loop/role-id', workflow)
+        # Durable-only: a wrapped bootstrap is single-use and is what stranded
+        # this agent for four days (#494), so neither the playbook nor CI may
+        # reintroduce one.
+        self.assertNotIn("VAULT_KNOWLEDGE_LOOP_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint knowledge-loop Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/knowledge-loop/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/knowledge-loop/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/knowledge-loop"', env_template)
@@ -166,9 +182,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertIn("role: agent_core_collector", playbook)
         self.assertIn("vault_agent_name: agent-core-collector", playbook)
-        self.assertIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint agent-core-collector Vault bootstrap", workflow)
-        self.assertIn("auth/approle/role/agent-core-collector/role-id", workflow)
+        self.assertNotIn("VAULT_AGENT_CORE_COLLECTOR_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint agent-core-collector Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/agent-core-collector/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/agent-core-collector/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/agent-core-collector"', env_template)
@@ -196,7 +211,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         runbook = (REPO / "docs/runbooks/bootstrap-engineering-loop-vault.md").read_text()
 
         self.assertEqual(defaults["engineering_loop_governor_timer_enabled"], False)
-        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], True)
+        self.assertEqual(host_vars["engineering_loop_governor_timer_enabled"], False)
         self.assertEqual(
             defaults["engineering_loop_governor_state_dir"],
             "{{ engineering_loop_state_dir }}/reliability-governor",
@@ -245,9 +260,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("when: agentic_observatory_apply | default(false) | bool", playbook)
         self.assertIn("role: agentic_observatory", playbook)
         self.assertIn("vault_agent_name: agentic-observatory", playbook)
-        self.assertIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
-        self.assertIn("Mint agentic-observatory Vault bootstrap", workflow)
-        self.assertIn("auth/approle/role/agentic-observatory/role-id", workflow)
+        self.assertNotIn("VAULT_AGENTIC_OBSERVATORY_WRAPPED_SECRET_ID", playbook)
+        self.assertNotIn("Mint agentic-observatory Vault bootstrap", workflow)
         self.assertIn('path "auth/approle/role/agentic-observatory/role-id"', runner_policy)
         self.assertIn('path "auth/approle/role/agentic-observatory/secret-id"', runner_policy)
         self.assertIn('secret "kv/data/agentic-observatory"', env_template)
@@ -273,8 +287,8 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         # this flip. Expanding the allowlist further (suppress, artifact_review,
         # verification_result) must be a deliberate change that also updates this
         # guardrail.
-        self.assertEqual(host_vars["agentic_observatory_read_only"], False)
-        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], True)
+        self.assertEqual(host_vars["agentic_observatory_read_only"], True)
+        self.assertEqual(host_vars["agentic_observatory_actions_enabled"], False)
         self.assertEqual(
             host_vars["agentic_observatory_enabled_actions"], "feedback,ack,insight_label"
         )
@@ -291,10 +305,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         # checkout must be a reviewed 40-char commit, never floating `main`. The
         # live host may enable the reviewed daily canary, but role defaults remain off.
         self.assertRegex(str(host_vars["knowledge_loop_version"]), r"^[0-9a-f]{40}$")
-        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_timer_enabled"], False)
         self.assertEqual(host_vars["knowledge_loop_max_openrouter_calls_per_day"], 0)
         self.assertEqual(host_vars["knowledge_loop_max_prs_per_day"], 1)
-        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], True)
+        self.assertEqual(host_vars["knowledge_loop_agent_core_trace_enabled"], False)
         self.assertIn("/v1/trace", host_vars["knowledge_loop_agent_core_trace_collector_url"])
 
         runbook = (REPO / "docs/runbooks/bootstrap-knowledge-loop-vault.md").read_text()
@@ -351,6 +365,30 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertIn("map(attribute='stat.exists') | min", apply)
         self.assertIn("knowledge_loop_secret_files.results | map(attribute='stat.exists') | min", handlers)
 
+    def test_vault_agent_units_do_not_wipe_each_others_token_sinks(self):
+        # Every agent on a host writes its token sink into the SAME
+        # /run/vault-agent, and a host runs several (loop runs four). With the
+        # systemd default RuntimeDirectoryPreserve=no, that directory is deleted
+        # whenever ANY one unit stops, destroying the sinks of every sibling that
+        # is still running and still authenticated. mon reads the sink, so the
+        # siblings are reported as holding no Vault token — the exact signature
+        # of the July outage, produced by a healthy restart.
+        #
+        # Observed on loop 2026-07-30: restarting all four agents in sequence
+        # left only the last one's sink on disk, while the journals showed all
+        # four had authenticated and were renewing.
+        unit = (REPO / "ansible/roles/vault_agent/templates/vault-agent.service.j2").read_text()
+        sink = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())["vault_agent_token_sink"]
+
+        self.assertIn("{{ vault_agent_run_dir }}", sink, "sinks are expected to share one run dir")
+        self.assertIn("RuntimeDirectory=vault-agent", unit)
+        self.assertIn(
+            "RuntimeDirectoryPreserve=yes",
+            unit,
+            "a shared RuntimeDirectory must survive a single unit stopping, or one "
+            "agent's restart deletes every other agent's token sink",
+        )
+
     def test_vault_agent_restarts_in_role_not_via_shared_handler(self):
         handlers = (REPO / "ansible/roles/vault_agent/handlers/main.yml").read_text()
         tasks = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
@@ -397,6 +435,207 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             "vault_agent_restart_needed | bool and vault_agent_has_bootstrap_material | bool",
             restart_task["systemd"]["state"],
         )
+
+    def test_vault_agent_durable_mode_persists_the_secret_id(self):
+        # 2026-07-18 -> 2026-07-25: vault-agent-hyrule-cloud on api 403-looped for
+        # a week because a response-wrapped SecretID is deleted after first read,
+        # so the restart on 18 July left it with no credential at all. Durable
+        # mode must clear the wrapping path (which is what makes the template emit
+        # remove_secret_id_file_after_reading = false) even when a stale wrapping
+        # path is still deployed in the host's .hcl.
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertIs(defaults["vault_agent_require_durable_secret_id"], False)
+
+        tasks = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        )
+        resolve = _task_by_name(tasks, "Resolve Vault Agent response wrapping path")
+        wrapping = resolve["set_fact"][
+            "vault_agent_effective_secret_id_response_wrapping_path"
+        ]
+        self.assertIn("vault_agent_require_durable_secret_id | bool", wrapping)
+
+        hcl = (REPO / "ansible/roles/vault_agent/templates/vault-agent.hcl.j2").read_text()
+        self.assertIn("remove_secret_id_file_after_reading = false", hcl)
+        self.assertIn("remove_secret_id_file_after_reading = true", hcl)
+
+        # A wrapping token handed to a durable consumer would be persisted and
+        # spent on first use — the same trap by another route.
+        guard = _task_by_name(tasks, "Assert durable Vault Agent consumers get a plain SecretID")
+        self.assertIn("vault_agent_require_durable_secret_id | bool", guard["when"])
+        self.assertIn("secret_id_bound_cidrs", guard["assert"]["fail_msg"])
+
+    def test_vault_agent_stops_before_installing_a_wrapped_secret_id(self):
+        # A running agent in its retry loop unwraps the token the moment the file
+        # lands, so the restart afterwards finds a spent token
+        # ("wrapping token is not valid or does not exist"). Stop first.
+        text = (REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text()
+        stop_index = text.index("Stop Vault Agent before installing a response-wrapped SecretID")
+        install_index = text.index("Install Vault AppRole secret_id")
+        self.assertLess(stop_index, install_index)
+
+        tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
+        stop = _task_by_name(tasks, "Stop Vault Agent before installing a response-wrapped SecretID")
+        self.assertEqual(stop["systemd"]["state"], "stopped")
+        self.assertIn(
+            "vault_agent_effective_secret_id_response_wrapping_path | length > 0",
+            stop["when"],
+        )
+
+    def test_every_long_lived_vault_agent_requires_a_durable_secret_id(self):
+        # Wrapped mode hands an agent a single-use SecretID and deletes the file
+        # after unwrapping, so the NEXT restart — reboot, package upgrade, OOM,
+        # deploy — has no credential and the agent 403-loops forever while
+        # systemd still reports it active. That is what happened to all four
+        # loop agents between 2026-07-26 and 2026-07-30 (#494) and to
+        # hyrule-cloud in July. Every consumer that must survive a restart
+        # unattended pins the durable shape, so the role refuses a wrapped
+        # bootstrap and clears any stale wrapping path left in the deployed hcl.
+        for playbook, names in (
+            ("engineering-loop.yml", ("engineering-loop", "knowledge-loop",
+                                      "agent-core-collector", "agentic-observatory")),
+            ("noc.yml", ("noc-agent",)),
+        ):
+            text = (REPO / "ansible/playbooks" / playbook).read_text()
+            for name in names:
+                self.assertRegex(
+                    text,
+                    rf"vault_agent_name: {re.escape(name)}\n\s+vault_agent_require_durable_secret_id: true",
+                    f"{playbook}: {name} must pin durable mode",
+                )
+
+    def test_hyrule_cloud_requires_a_durable_secret_id(self):
+        defaults = yaml.safe_load(
+            (REPO / "ansible/roles/hyrule_cloud/defaults/main.yml").read_text()
+        )
+        self.assertIs(defaults["hyrule_cloud_vault_require_durable_secret_id"], True)
+        self.assertIn(
+            "not hyrule_cloud_vault_require_durable_secret_id | bool",
+            defaults["hyrule_cloud_vault_secret_id_response_wrapping_path"],
+        )
+
+        vault_tasks = (REPO / "ansible/roles/hyrule_cloud/tasks/vault.yml").read_text()
+        self.assertIn(
+            "vault_agent_require_durable_secret_id: "
+            '"{{ hyrule_cloud_vault_require_durable_secret_id }}"',
+            vault_tasks,
+        )
+
+        runbook = (REPO / "docs/runbooks/bootstrap-hyrule-cloud-vault.md").read_text()
+        # The AppRole is only safe to persist when it is non-expiring AND pinned
+        # to api's single address.
+        self.assertIn("secret_id_ttl=0", runbook)
+        self.assertIn("secret_id_num_uses=0", runbook)
+        self.assertIn('secret_id_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
+        self.assertIn('token_bound_cidrs="2a0c:b641:b50:2::20/128"', runbook)
+
+    def test_vault_agent_collector_rides_out_a_restart_in_flight(self):
+        # `systemctl restart` — which every apply run performs — walks the unit
+        # through inactive/activating with the token sink absent. A sample taken
+        # inside that window is indistinguishable from a dead agent, and mon
+        # cannot ride it out: max_check_attempts=3 with retry_interval=2m all
+        # re-read the SAME textfile sample, because the collector only refreshes
+        # every 5m. One straddled sample is therefore a hard CRITICAL. The
+        # collector must re-sample once before publishing a down verdict.
+        collector = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent-health-metrics.py.j2"
+        ).read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text())
+
+        self.assertIn(
+            "RESTART_GRACE_SECONDS = {{ vault_agent_metrics_restart_grace_seconds }}",
+            collector,
+        )
+        self.assertIn(
+            "if RESTART_GRACE_SECONDS > 0 and (not active or sink_mtime is None):",
+            collector,
+        )
+        self.assertIn("time.sleep(RESTART_GRACE_SECONDS)", collector)
+        # The published sample must use the re-checked values, never a fresh
+        # inline call that would bypass the grace.
+        self.assertIn(
+            'metric("vault_agent_unit_active", agent_label, "%d" % active)',
+            collector,
+        )
+        self.assertNotIn(
+            'metric("vault_agent_unit_active", agent_label, "%d" % unit_active(unit))',
+            collector,
+        )
+        self.assertGreater(defaults["vault_agent_metrics_restart_grace_seconds"], 0)
+
+    def test_vault_agent_staleness_is_monitored(self):
+        # The July outage was silent for a week: the unit stayed active, so no
+        # existing check saw it. Every Vault Agent host must publish freshness
+        # metrics and every agent must have an Icinga service watching them.
+        metrics_tasks = (REPO / "ansible/roles/vault_agent/tasks/metrics.yml").read_text()
+        self.assertIn("vault-agent-health-metrics.timer", metrics_tasks)
+
+        collector = (
+            REPO / "ansible/roles/vault_agent/templates/vault-agent-health-metrics.py.j2"
+        ).read_text()
+        for metric in (
+            "vault_agent_token_sink_present",
+            "vault_agent_token_sink_mtime_seconds",
+            "vault_agent_secret_id_file_present",
+            "vault_agent_secret_id_ephemeral",
+            "vault_agent_auth_errors_recent",
+            "vault_agent_render_present",
+            "vault_agent_render_mtime_seconds",
+        ):
+            self.assertIn(metric, collector)
+
+        # node_exporter must actually read the textfile dir the collector writes.
+        monitoring_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/monitoring/defaults/main.yml").read_text()
+        )
+        vault_agent_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertIs(monitoring_defaults["monitoring_node_textfile_enabled"], True)
+        self.assertEqual(
+            monitoring_defaults["monitoring_textfile_dir"],
+            vault_agent_defaults["vault_agent_metrics_textfile_dir"],
+        )
+        self.assertIn(
+            "collector.textfile.directory",
+            (REPO / "ansible/roles/monitoring/tasks/node_exporter.yml").read_text(),
+        )
+
+        plugin = REPO / "configs/mon/icinga2/scripts/check_vault_agent_health.py"
+        self.assertTrue(plugin.exists())
+        service = (REPO / "configs/mon/icinga2/services/vault-agent.conf").read_text()
+        self.assertIn('object CheckCommand "vault_agent_health"', service)
+        self.assertIn("for (agent in host.vars.vault_agents)", service)
+        self.assertIn("docs/runbooks/vault-agent-durable-auth.md", service)
+
+        # Every host that runs an agent is registered for the check.
+        self.assertIn(
+            'vars.vault_agents = [ "hyrule-cloud" ]',
+            (REPO / "configs/mon/icinga2/hosts/infra-vms.conf").read_text(),
+        )
+        for host, agents in (
+            ("noc", {"noc-agent"}),
+            ("ci", {"github-runner"}),
+            (
+                "loop",
+                {
+                    "engineering-loop",
+                    "knowledge-loop",
+                    "agent-core-collector",
+                    "agentic-observatory",
+                },
+            ),
+        ):
+            host_vars = yaml.safe_load(
+                (REPO / "ansible/inventory/host_vars" / f"{host}.yml").read_text()
+            )
+            self.assertEqual(
+                set(host_vars["monitoring_check_vars"]["vault_agents"]),
+                agents,
+                f"{host} must register its Vault Agents for the staleness check",
+            )
 
     def test_vault_agent_preserves_wrapped_approle_mode_on_repeat_apply(self):
         tasks = yaml.safe_load((REPO / "ansible/roles/vault_agent/tasks/main.yml").read_text())
@@ -609,22 +848,87 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         for text in (noc_service, bot_service, mcp_service):
             self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', text)
 
-    def test_noc_agent_model_defaults_come_from_toml_not_env(self):
-        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
-        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
-        vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
-        playbook = (REPO / "ansible/playbooks/noc.yml").read_text()
+    def test_noc_agent_uses_one_process_for_coherent_runtime_state(self):
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
 
+        worker_lines = [
+            line.strip()
+            for line in noc_service.splitlines()
+            if line.strip().startswith("--workers ")
+        ]
+        self.assertEqual(worker_lines, ["--workers 1 \\"])
+
+    def test_noc_post_deploy_health_matches_ipv6_listener(self):
+        noc_service = (REPO / "configs/noc-agent.service").read_text()
+        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
+        health_block = next(
+            task
+            for task in play["post_tasks"]
+            if task["name"] == "Verify noc-agent CaseService health"
+        )
+        health_wait = next(
+            task
+            for task in health_block["block"]
+            if task["name"] == "Wait for noc-agent CaseService health endpoint"
+        )
+
+        self.assertIn("--host :: \\", noc_service)
+        self.assertEqual(
+            health_wait["uri"]["url"],
+            "http://[::1]:8000/health/cases",
+        )
+
+    def test_noc_agent_has_no_gemini_or_google_wif_configuration(self):
+        paths = [
+            "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
+            "configs/noc-agent.env.j2",
+            "scripts/vault-put-noc-agent-secrets.sh",
+            "ansible/playbooks/noc.yml",
+            "ansible/roles/noc_agent/defaults/main.yml",
+            "ansible/roles/noc_agent/tasks/main.yml",
+            "ansible/roles/vault_agent/defaults/main.yml",
+        ]
+        for path in paths:
+            text = (REPO / path).read_text()
+            self.assertNotIn("GEMINI", text, path)
+            self.assertNotIn("google_wif", text, path)
+            self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", text, path)
+
+        vault_agent_defaults = yaml.safe_load(
+            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
+        )
+        self.assertEqual(
+            [template["name"] for template in vault_agent_defaults["vault_agent_templates"]],
+            ["noc-agent.env.ctmpl", "noc-agent-github-app-key.pem.ctmpl"],
+        )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_static_secret_reload_command"],
+            "/bin/true",
+        )
+        self.assertEqual(
+            vault_agent_defaults["vault_agent_templates"][1]["reload_command"],
+            "{{ vault_agent_static_secret_reload_command }}",
+        )
+
+        vault_template = (REPO / paths[0]).read_text()
+        noc_env = (REPO / paths[1]).read_text()
+        vault_put = (REPO / paths[2]).read_text()
+        playbook = (REPO / paths[3]).read_text()
         for text in (vault_template, noc_env):
-            self.assertNotIn("google-gla:gemini-3.1-pro-preview", text)
-            self.assertNotIn("google-gla:gemini-2.5-flash", text)
             self.assertIn("OPENROUTER_API_KEY", text)
             self.assertIn("OPENROUTER_MANAGEMENT_API_KEY", text)
-
         self.assertIn("OPENROUTER_API_KEY is required", vault_put)
         self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
         self.assertIn("openrouter_api_key", playbook)
         self.assertIn("openrouter_management_api_key", playbook)
+
+    def test_vault_health_accepts_pretty_printed_unsealed_json(self):
+        vault = yaml.safe_load((REPO / "ansible/inventory/host_vars/vault.yml").read_text())
+        health = vault["monitoring_extra_services"][0]["vars"]
+        self.assertEqual(
+            health["http_expect_body_regex"],
+            '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false',
+        )
 
     def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
@@ -638,10 +942,10 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
         self.assertFalse(defaults["noc_agent_core_trace_enabled"])
         self.assertEqual(defaults["noc_agent_core_trace_collector_url"], "")
-        self.assertTrue(host_vars["noc_agent_core_trace_enabled"])
+        self.assertFalse(host_vars["noc_agent_core_trace_enabled"])
         self.assertEqual(
             host_vars["noc_agent_core_trace_collector_url"],
-            "http://[{{ peers.loop.ipv6 }}]:8770/v1/trace",
+            "",
         )
 
     def test_freebsd_playbooks_can_opt_into_become(self):
@@ -654,6 +958,36 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         defaults = yaml.safe_load((REPO / "ansible/roles/ci_runner_key/defaults/main.yml").read_text())
 
         self.assertEqual(defaults["ci_runner_user_shell"], "/bin/sh")
+
+    def test_kim_ops_user_is_dedicated_and_portable(self):
+        # Kim owns AS215932 operations: the account must be its own dedicated
+        # user (never root, never the legacy operator's svag) with a portable
+        # shell so the role works on Linux and the BSD routers alike.
+        defaults = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/defaults/main.yml").read_text())
+        tasks = yaml.safe_load((REPO / "ansible/roles/kim_ops_key/tasks/main.yml").read_text())
+        play = yaml.safe_load((REPO / "ansible/playbooks/kim-ops-key.yml").read_text())[0]
+
+        self.assertEqual(defaults["kim_ops_user"], "kim")
+        self.assertEqual(defaults["kim_ops_user_shell"], "/bin/sh")
+
+        authorize = _task_by_name(tasks, "Authorize Kim's operator key for the kim user")
+        self.assertEqual(authorize["authorized_key"]["user"], "{{ kim_ops_user }}")
+        self.assertEqual(authorize["authorized_key"]["state"], "present")
+        self.assertNotIn("key_options", authorize["authorized_key"])
+
+        sudo = _task_by_name(tasks, "Grant the kim operator user NOPASSWD sudo (Linux)")
+        self.assertEqual(sudo["copy"]["dest"], "/etc/sudoers.d/kim-ops")
+        self.assertIn("NOPASSWD", sudo["copy"]["content"])
+
+        doas = _task_by_name(tasks, "Grant the kim operator user NOPASSWD doas (BSD)")
+        self.assertIn("permit nopass", doas["lineinfile"]["line"])
+
+        self.assertIn("linux", play["hosts"])
+        self.assertIn("freebsd", play["hosts"])
+        self.assertIn("openbsd", play["hosts"])
+        self.assertIn("external", play["hosts"])
+        self.assertIn("!retired", play["hosts"])
+        self.assertEqual(play["roles"], ["kim_ops_key"])
 
     def test_freebsd_router_inventory_uses_loopback_addresses(self):
         inventory = yaml.safe_load((REPO / "ansible/inventory/hosts.yml").read_text())
@@ -679,7 +1013,7 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         self.assertNotIn("kv/data/ci-runner", policy)
         self.assertNotIn("kv/data/noc-agent", policy)
 
-    def test_hyrule_cloud_domain_purchases_require_both_launch_allowlists(self):
+    def test_hyrule_cloud_domain_sales_require_explicit_scope_and_channel(self):
         template = (
             REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
         ).read_text()
@@ -693,8 +1027,25 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             template,
         )
         self.assertIn(
-            '{{ $domainLaunchAllowed := and (gt (len (parseJSON $domainTlds)) 0) '
-            '(gt (len (parseJSON $domainAccounts)) 0) }}',
+            '{{ $domainMarketplace := or .Data.data.domain_marketplace_sales_enabled '
+            '"false" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainPayers := or .Data.data.domain_marketplace_payer_allowlist "[]" }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainTldScope := or (gt (len (parseJSON $domainTlds)) 0) '
+            '(eq (printf "%v" $domainAllTlds) "true") }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainAccountCohort := gt (len (parseJSON $domainAccounts)) 0 }}',
+            template,
+        )
+        self.assertIn(
+            '{{ $domainLaunchAllowed := and $domainTldScope $domainAccountCohort }}',
             template,
         )
         self.assertIn(
@@ -703,6 +1054,29 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             'true{{ else }}false{{ end }}',
             template,
         )
+        self.assertIn(
+            'DOMAIN_MARKETPLACE_SALES_ENABLED={{ if and '
+            '(eq (printf "%v" $domainMarketplace) "true") $domainTldScope }}'
+            'true{{ else }}false{{ end }}',
+            template,
+        )
+
+    def test_domain_account_checkout_does_not_piggyback_on_marketplace_toggle(self):
+        # Regression: $domainLaunchAllowed used to fall back to "marketplace
+        # sales enabled" when domain_account_allowlist was empty. That let the
+        # exact canary Vault config the rollout runbook documents — purchases
+        # + marketplace enabled, tld_allowlist=["xyz"], no account allowlist —
+        # silently unlock account-based checkout too, not just the intended
+        # wallet-owned marketplace cohort. DOMAIN_PURCHASES_ENABLED's gate must
+        # depend only on a non-empty account allowlist.
+        template = (
+            REPO / "ansible/roles/vault_agent/templates/hyrule-cloud.env.ctmpl.j2"
+        ).read_text()
+        launch_allowed_line = next(
+            line for line in template.splitlines() if "$domainLaunchAllowed :=" in line
+        )
+        self.assertNotIn("domainMarketplace", launch_allowed_line)
+        self.assertIn("domainAccountCohort", launch_allowed_line)
 
     def test_cloud_role_no_longer_renders_secret_env_from_ansible(self):
         role_text = "\n".join(path.read_text() for path in (REPO / "ansible/roles/hyrule_cloud/tasks").glob("*.yml"))
@@ -716,6 +1090,50 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
         unit = (REPO / "ansible/roles/github_runner/templates/github-runner.service.j2").read_text()
         self.assertIn("KillMode=mixed", unit)
         self.assertNotIn("KillMode=process", unit)
+
+    def test_docker_prune_never_combines_until_filter_with_volumes(self):
+        # Docker rejects `--volumes` together with `--filter until=`:
+        #   ERROR: The "until" filter is not supported with "--volumes"
+        # The unit that did both exited 1 on every daily run from 2026-07-21, so
+        # `ci-pr` reclaimed nothing and hit a disk WARNING carrying 6.7 GB of
+        # unreferenced images (network-operations#473). Volume pruning must stay
+        # a separate ExecStart, default-off, and anonymous-only (no `--all`).
+        unit = (REPO / "ansible/roles/github_runner/templates/github-runner-docker-prune.service.j2").read_text()
+        defaults = yaml.safe_load((REPO / "ansible/roles/github_runner/defaults/main.yml").read_text())
+
+        for line in unit.splitlines():
+            if not line.startswith("ExecStart="):
+                continue
+            self.assertFalse(
+                "--volumes" in line and "--filter until=" in line,
+                f"docker rejects --volumes with an until filter: {line}",
+            )
+
+        self.assertIn(
+            "ExecStart=/usr/bin/docker system prune --force "
+            "--filter until={{ github_runner_docker_prune_until }}",
+            unit,
+        )
+
+        # No `--all` on the image prune. `--filter until=` keys on an image's
+        # CREATED (build) time, not its pull time, so every upstream image the
+        # CI labs pin (frr, batfish — both built ~12 months ago) matches on
+        # every run and would be evicted nightly. The next lab job then re-pulls
+        # from quay.io, and that pull has twice stalled past containerlab-frr's
+        # 15-minute timeout with zero layers completed.
+        for line in unit.splitlines():
+            if line.startswith("ExecStart=") and "image prune" not in line and "system prune" not in line:
+                continue
+            if line.startswith("ExecStart="):
+                self.assertNotIn(
+                    "--all",
+                    line,
+                    "pruning tagged images evicts the pinned lab images every night",
+                )
+        self.assertIn("ExecStart=/usr/bin/docker volume prune --force", unit)
+        self.assertNotIn("docker volume prune --all", unit)
+        self.assertIn("{% if github_runner_docker_prune_volumes | bool %}", unit)
+        self.assertIs(defaults["github_runner_docker_prune_volumes"], False)
 
     def test_runner_staging_unmount_removes_fstab_entry(self):
         # state: unmounted left the staging mountpoint in /etc/fstab, duplicating

@@ -7,12 +7,22 @@
   include_tasks: node_exporter.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - inventory_hostname != monitoring_mon_host    # mon scrapes itself; package present
   tags: [apply]
 
 - name: Register host object on mon
   include_tasks: register.yml
   when: monitoring_register | bool
+  tags: [validate, diff, apply]
+
+# mon-only: Grafana datasources + the dashboards under
+# configs/mon/grafana-dashboards/. Kept in this role (rather than per-host)
+# because it configures the monitoring host itself, like the icinga2
+# registration above.
+- name: Provision Grafana datasources and dashboards
+  include_tasks: grafana.yml
+  when: inventory_hostname == monitoring_mon_host
   tags: [validate, diff, apply]
 
 # Per-host by_ssh check scripts installed under /usr/local/lib/nagios/plugins/.
@@ -22,6 +32,7 @@
   include_tasks: check_scripts.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_check_scripts | default([]) | length > 0
   tags: [apply]
 
@@ -32,6 +43,7 @@
   include_tasks: by_ssh_user.yml
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
   tags: [apply]
@@ -52,6 +64,7 @@
   check_mode: false
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
   tags: [apply]
@@ -66,6 +79,7 @@
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
     - by_ssh_host_keyscan.stdout is defined
@@ -82,6 +96,7 @@
   delegate_to: "{{ monitoring_mon_host }}"
   when:
     - monitoring_apply | default(false) | bool
+    - not (monitoring_retired | default(false) | bool)
     - monitoring_by_ssh_pubkey is defined
     - monitoring_by_ssh_pubkey | length > 0
     - by_ssh_host_keyscan.stdout_lines is defined

@@ -23,7 +23,14 @@ route:
       group_wait: 10s
 
 receivers:
+  # An unconditional `webhook_url: ''` here previously crash-looped
+  # Alertmanager (0.28 rejects "unsupported scheme \"\" for URL" at load,
+  # not just at send time), which is fatal in a discord_config since this is
+  # the route's only receiver. Guarded exactly like the noc webhook below:
+  # missing secret degrades to a receiver with zero configs (alerts route
+  # here and are silently dropped) instead of taking the whole daemon down.
   - name: discord
+{% if extmon_discord_webhook_url | default('') %}
     discord_configs:
       - webhook_url: '{{ extmon_discord_webhook_url }}'
         send_resolved: true
@@ -34,6 +41,7 @@ receivers:
           {{ if .Annotations.description }}{{ .Annotations.description }}{{ end }}
           Source: extmon (external monitor) | Started: {{ .StartsAt.Format "2006-01-02 15:04 UTC" }}
           {{ end }}{% endraw %}
+{% endif %}
 {% if extmon_noc_alertmanager_webhook_url | default('') %}
     webhook_configs:
       - url: '{{ extmon_noc_alertmanager_webhook_url }}'

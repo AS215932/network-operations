@@ -7,6 +7,11 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+# Dedicated rtr<->vpn transit (xenbr-transit, rtr enX1 / vpn enX1). Keeps the
+# vpn VM off the shared infra /64 so client<->infra traffic is routed
+# symmetrically through rtr (see docs/vpn-transit.md).
+vpn_transit_subnet: "2a0c:b641:b50:1::/64"
+vpn_transit_v4: "10.0.1.0/24"
 # Routed GUA /64 for Docker bridge containers on the loop VM.
 loop_docker_subnet: "2a0c:b641:b50:f0::/64"
 customer_subnet: "2a0c:b641:b51::/48"
@@ -24,9 +29,11 @@ customer_isolation_block_v6:
   - "{{ infra_subnet }}"
   - "{{ router_loopback_subnet }}"
   - "{{ wg_link_prefix }}"
+  - "{{ vpn_transit_subnet }}"
 customer_isolation_block_v4:
   - "{{ mgmt_v4 }}"
   - "{{ legacy_infra_v4 }}"
+  - "{{ vpn_transit_v4 }}"
 
 # --- Ops workstation (KPN home) ---
 # Live in cr1-* pf SSH allows and configs/knot.conf.j2 AXFR sources.
@@ -41,12 +48,24 @@ peers:
     ipv6: "2a0c:b641:b50:2::1"
     loopback: "2a0c:b641:b50::d"
     underlay: "2001:41d0:303:48a::2"
+  # rtr-bsd — parallel OpenBSD edge router (issue #14). Distinct overlay
+  # loopback (::e), infra address (::2), and OVH underlay address (::3) so it
+  # runs alongside live rtr. Underscore + hyphen keys mirror the cr1_* aliases
+  # (Jinja attribute access vs inventory_hostname lookup).
+  rtr_bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
+  rtr-bsd:
+    ipv6: "2a0c:b641:b50:2::2"
+    loopback: "2a0c:b641:b50::e"
+    underlay: "2001:41d0:303:48a::3"
   dns:     { ipv6: "2a0c:b641:b50:2::10" }
   api:     { ipv6: "2a0c:b641:b50:2::20" }
   web:     { ipv6: "2a0c:b641:b50:2::30" }
   proxy:   { ipv6: "2a0c:b641:b50:2::40" }
   mon:     { ipv6: "2a0c:b641:b50:2::50" }
-  vpn:     { ipv6: "2a0c:b641:b50:2::60" }
+  vpn:     { ipv6: "2a0c:b641:b50:1::60" }
   xoa:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
@@ -82,14 +101,14 @@ peers:
     underlay: "2a0c:b640:10::213"
   cr1_ch1:
     loopback: "2a0c:b641:b50::c"
-    underlay: "2a09:4c0:100:2d88::8898"
-    underlay_v4: "45.136.136.152"
-    gateway6: "2a09:4c0:100:2d88::8bfe"
+    underlay: "2a09:4c0:100:c768::eae"
+    underlay_v4: "199.104.14.174"
+    gateway6: "2a09:4c0:100:c768::ffe"
   cr1-ch1:
     loopback: "2a0c:b641:b50::c"
-    underlay: "2a09:4c0:100:2d88::8898"
-    underlay_v4: "45.136.136.152"
-    gateway6: "2a09:4c0:100:2d88::8bfe"
+    underlay: "2a09:4c0:100:c768::eae"
+    underlay_v4: "199.104.14.174"
+    gateway6: "2a09:4c0:100:c768::ffe"
   # Off-net external monitor (Vultr London; different ASN, different billing).
   # Probes AS215932 from the outside the same way real users do.
   extmon:
@@ -101,8 +120,10 @@ bgp_peers:
   servperso_de: "2a0c:b640:10::ffff"
   servperso_nl: "2a0c:b640:8:69::ffff"  # placeholder — nl1 BGP peer not live-confirmed
   extra_transit: "2a0c:b641:870::ffff"
-  securebit_ch_v4: "45.136.139.250"
-  securebit_ch_v6: "2a09:4c0:100:2d88::8bfa"
+  # Securebit CH (AS58057, AS-SET AS-SBAG), renumbered Oct 2026. v4 is
+  # inventory-only (no v4 session in FRR), mirroring the old setup.
+  securebit_ch_v4: "199.104.15.250"
+  securebit_ch_v6: "2a09:4c0:100:c768::ffa"
   sbix_rs1_v4: "185.1.135.1"
   sbix_rs1_v6: "2001:7f8:d9:1::1"
   sbix_rs2_v4: "185.1.135.2"
@@ -156,6 +177,7 @@ mail_failover_ipv4_gateway: "193.70.32.254"
 # Routers and the XO appliance accept root; everything else uses svag.
 ssh_users:
   rtr: root
+  rtr-bsd: root
   xoa: root
   cr1-nl1: svag
   cr1-de1: svag

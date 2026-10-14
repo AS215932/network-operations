@@ -7,7 +7,7 @@ dom0_networks:
   - name: xenbr-mgmt
     description: "Management (2a0c:b641:b50:0::/64) — XO, dom0"
   - name: xenbr-transit
-    description: "Transit (2a0c:b641:b50:1::/64) — fw <-> rtr"
+    description: "Transit (2a0c:b641:b50:1::/64) — rtr <-> vpn"
   - name: xenbr-infra
     description: "Infrastructure (2a0c:b641:b50:2::/64) — api, web, dns, etc."
   - name: xenbr-vm
