@@ -1,0 +1,9 @@
+---
+- name: FRR prerequisites — diagnose/repair pkg on FreeBSD routers
+  hosts: routers:&freebsd
+  serial: 1
+  gather_facts: false
+  become: true
+  roles:
+    - frr_prereqs
+  tags: [frr]

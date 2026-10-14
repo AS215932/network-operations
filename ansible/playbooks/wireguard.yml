@@ -1,0 +1,9 @@
+---
+- name: WireGuard — new point-to-point links (issue #14)
+  hosts: routers:&freebsd
+  serial: 1
+  gather_facts: false
+  become: true
+  roles:
+    - wireguard
+  tags: [wireguard]
