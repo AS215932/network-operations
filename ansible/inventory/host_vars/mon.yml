@@ -21,6 +21,11 @@ firewall_extra_rules:
   - { proto: tcp, dport: 9090, src: "{{ peers.noc.ipv6 }}", comment: "Prometheus API from noc-agent" }
   - { proto: tcp, dport: 5665, src: "{{ peers.noc.ipv6 }}", comment: "Icinga2 API from noc-agent" }
 
+  # Read-only operator monitoring from the agent box over WireGuard
+  # (Kim/Django watch Icinga + Prometheus after noc-agent retirement).
+  - { proto: tcp, dport: 9090, src: "2a0c:b641:b50:3::4b", comment: "Prometheus API (read) from ops agent box" }
+  - { proto: tcp, dport: 5665, src: "2a0c:b641:b50:3::4b", comment: "Icinga2 API (ops-readonly) from ops agent box" }
+
   # The customer-facing status endpoint reads only the curated public-status
   # alert labels from Prometheus.
   - { proto: tcp, dport: 9090, src: "{{ peers.api.ipv6 }}", comment: "Prometheus public-status queries from hyrule-cloud" }
