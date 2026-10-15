@@ -124,11 +124,6 @@ class PrometheusConfigContracts(unittest.TestCase):
             targets = set(jobs[name]["static_configs"][0]["targets"])
             self.assertEqual(targets, expected, name)
 
-    def test_noc_model_alerts_only_report_total_model_failure(self):
-        tripwires = (MON / "prometheus-rules" / "noc-tripwire.yml").read_text()
-        self.assertNotIn("Gemini", tripwires)
-        self.assertNotIn("NOCAgentModelFallbackActive", tripwires)
-        self.assertIn("NOCAgentAllModelsFailing", tripwires)
 
     def test_rule_files_have_valid_group_and_rule_structure(self):
         alert_names = []

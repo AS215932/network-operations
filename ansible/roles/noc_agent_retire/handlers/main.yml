@@ -1,0 +1,4 @@
+---
+- name: noc_agent_retire reload systemd
+  systemd:
+    daemon_reload: true

@@ -12,7 +12,7 @@ SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 class ProductionAppVersionPinsTest(unittest.TestCase):
     def test_production_app_versions_are_full_commit_shas(self):
         cases = {
-            "ansible/inventory/host_vars/noc.yml": ("noc_agent_version", "hyrule_mcp_version"),
+            "ansible/inventory/host_vars/noc.yml": ("hyrule_mcp_version",),
             "ansible/inventory/host_vars/api.yml": ("hyrule_cloud_version",),
             "ansible/inventory/host_vars/web.yml": ("hyrule_web_version",),
             "ansible/inventory/host_vars/netproxy.yml": ("hyrule_network_proxy_version",),

@@ -50,16 +50,3 @@ groups:
           description: "Prometheus cannot scrape the internal network proxy sidecar on {{ $labels.instance }}. Paid network requests may fail or be preflight-blocked."
           public_title: "Network proxy health unconfirmed"
           public_message: "Live network proxy health checks are unavailable. Requests may still succeed, but some modes could be affected."
-
-      # A successful fallback is normal resilience, not an operator incident.
-      # Alert only when every configured model fails (below).
-
-      - alert: NOCAgentAllModelsFailing
-        expr: increase(noc_agent_model_run_failures_total[10m]) > 0 and increase(noc_agent_model_run_successes_total[10m]) == 0
-        for: 5m
-        labels:
-          severity: critical
-          source: prometheus
-        annotations:
-          summary: "NOC Agent model access is failing"
-          description: "The NOC Agent has model failures and no successful model runs in the last 10 minutes. Check /health/model and provider credentials/quotas."

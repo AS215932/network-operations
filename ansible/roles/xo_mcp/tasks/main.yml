@@ -19,8 +19,6 @@
     mode: "0644"
   notify:
     - restart xo-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
   tags: [apply]
 
 - name: Install XO MCP node dependencies
@@ -36,8 +34,6 @@
   become_user: "{{ xo_mcp_app_user }}"
   notify:
     - restart xo-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
   tags: [apply]
 
 - name: Install /etc/systemd/system/xo-mcp.service
@@ -50,8 +46,6 @@
   notify:
     - reload systemd
     - restart xo-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
   tags: [apply]
 
 - name: Check for rendered NOC Agent env file

@@ -829,98 +829,20 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
 
     def test_noc_action_signing_secret_has_no_empty_fallback(self):
         vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
-        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
         mcp_env = (REPO / "configs/hyrule-mcp.env.j2").read_text()
         vault_put = (REPO / "scripts/vault-put-noc-agent-secrets.sh").read_text()
-        noc_service = (REPO / "configs/noc-agent.service").read_text()
-        bot_service = (REPO / "configs/noc-agent-bot.service").read_text()
         mcp_service = (REPO / "configs/hyrule-mcp.service").read_text()
 
-        for text in (vault_template, noc_env, mcp_env):
+        for text in (vault_template, mcp_env):
             self.assertNotIn('noc_approval_signing_secret ""', text)
             self.assertNotIn("noc_approval_signing_secret | default('')", text)
 
         self.assertIn("NOC_APPROVAL_SIGNING_SECRET is required", vault_put)
         self.assertNotIn("NOC_ACTION_ALLOWED_HOSTS:-noc,mon,cr1-nl1,cr1-de1", vault_put)
         self.assertNotIn("NOC_ACTION_ALLOWED_SERVICES:-node_exporter,noc-agent,noc-agent-bot,hyrule-mcp", vault_put)
-        for text in (noc_service, bot_service):
-            self.assertIn('^NOC_APPROVAL_SIGNING_SECRET=.{32,}$', text)
-        for text in (noc_service, bot_service, mcp_service):
-            self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', text)
+        self.assertIn('^HYRULE_MCP_ACTION_SIGNING_SECRET=.{32,}$', mcp_service)
 
-    def test_noc_agent_uses_one_process_for_coherent_runtime_state(self):
-        noc_service = (REPO / "configs/noc-agent.service").read_text()
 
-        worker_lines = [
-            line.strip()
-            for line in noc_service.splitlines()
-            if line.strip().startswith("--workers ")
-        ]
-        self.assertEqual(worker_lines, ["--workers 1 \\"])
-
-    def test_noc_post_deploy_health_matches_ipv6_listener(self):
-        noc_service = (REPO / "configs/noc-agent.service").read_text()
-        play = yaml.safe_load((REPO / "ansible/playbooks/noc.yml").read_text())[0]
-        health_block = next(
-            task
-            for task in play["post_tasks"]
-            if task["name"] == "Verify noc-agent CaseService health"
-        )
-        health_wait = next(
-            task
-            for task in health_block["block"]
-            if task["name"] == "Wait for noc-agent CaseService health endpoint"
-        )
-
-        self.assertIn("--host :: \\", noc_service)
-        self.assertEqual(
-            health_wait["uri"]["url"],
-            "http://[::1]:8000/health/cases",
-        )
-
-    def test_noc_agent_has_no_gemini_or_google_wif_configuration(self):
-        paths = [
-            "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
-            "configs/noc-agent.env.j2",
-            "scripts/vault-put-noc-agent-secrets.sh",
-            "ansible/playbooks/noc.yml",
-            "ansible/roles/noc_agent/defaults/main.yml",
-            "ansible/roles/noc_agent/tasks/main.yml",
-            "ansible/roles/vault_agent/defaults/main.yml",
-        ]
-        for path in paths:
-            text = (REPO / path).read_text()
-            self.assertNotIn("GEMINI", text, path)
-            self.assertNotIn("google_wif", text, path)
-            self.assertNotIn("GOOGLE_APPLICATION_CREDENTIALS", text, path)
-
-        vault_agent_defaults = yaml.safe_load(
-            (REPO / "ansible/roles/vault_agent/defaults/main.yml").read_text()
-        )
-        self.assertEqual(
-            [template["name"] for template in vault_agent_defaults["vault_agent_templates"]],
-            ["noc-agent.env.ctmpl", "noc-agent-github-app-key.pem.ctmpl"],
-        )
-        self.assertEqual(
-            vault_agent_defaults["vault_agent_static_secret_reload_command"],
-            "/bin/true",
-        )
-        self.assertEqual(
-            vault_agent_defaults["vault_agent_templates"][1]["reload_command"],
-            "{{ vault_agent_static_secret_reload_command }}",
-        )
-
-        vault_template = (REPO / paths[0]).read_text()
-        noc_env = (REPO / paths[1]).read_text()
-        vault_put = (REPO / paths[2]).read_text()
-        playbook = (REPO / paths[3]).read_text()
-        for text in (vault_template, noc_env):
-            self.assertIn("OPENROUTER_API_KEY", text)
-            self.assertIn("OPENROUTER_MANAGEMENT_API_KEY", text)
-        self.assertIn("OPENROUTER_API_KEY is required", vault_put)
-        self.assertIn('openrouter_api_key="${OPENROUTER_API_KEY}"', vault_put)
-        self.assertIn("openrouter_api_key", playbook)
-        self.assertIn("openrouter_management_api_key", playbook)
 
     def test_vault_health_accepts_pretty_printed_unsealed_json(self):
         vault = yaml.safe_load((REPO / "ansible/inventory/host_vars/vault.yml").read_text())
@@ -930,23 +852,6 @@ class VaultAndRunnerContractsTest(unittest.TestCase):
             '"sealed"[[:space:]]*:[[:space:]]*false|"initialized"[[:space:]]*:[[:space:]]*false',
         )
 
-    def test_noc_agent_trace_sink_is_configured_in_both_env_backends(self):
-        vault_template = (REPO / "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2").read_text()
-        noc_env = (REPO / "configs/noc-agent.env.j2").read_text()
-        defaults = yaml.safe_load((REPO / "ansible/roles/noc_agent/defaults/main.yml").read_text())
-        host_vars = yaml.safe_load((REPO / "ansible/inventory/host_vars/noc.yml").read_text())
-
-        for text in (vault_template, noc_env):
-            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE=", text)
-            self.assertIn("HYRULE_NOC_AGENT_CORE_TRACE_COLLECTOR_URL=", text)
-
-        self.assertFalse(defaults["noc_agent_core_trace_enabled"])
-        self.assertEqual(defaults["noc_agent_core_trace_collector_url"], "")
-        self.assertFalse(host_vars["noc_agent_core_trace_enabled"])
-        self.assertEqual(
-            host_vars["noc_agent_core_trace_collector_url"],
-            "",
-        )
 
     def test_freebsd_playbooks_can_opt_into_become(self):
         freebsd_vars = yaml.safe_load((REPO / "ansible/inventory/group_vars/freebsd.yml").read_text())
