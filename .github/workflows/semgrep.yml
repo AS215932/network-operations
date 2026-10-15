@@ -1,7 +1,7 @@
 ---
 name: semgrep
 
-# Token-less Semgrep SAST. Runs on the UNPRIVILEGED `hyrule-public-pr` runner,
+# Token-less Semgrep SAST. Runs on GitHub-hosted ubuntu-latest (free for public repos),
 # uploads SARIF to GitHub Code Scanning (free for this public repo). No
 # SEMGREP_APP_TOKEN / no Semgrep Cloud account. Reporting-only during baseline
 # (continue-on-error) — flip to a gate once findings are triaged.
@@ -29,7 +29,7 @@ concurrency:
 jobs:
   semgrep:
     name: semgrep
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    runs-on: ubuntu-latest
     # Fail fast instead of hanging the single runner. The semgrep image (~1.3 GB)
     # is heavy on first pull on the small ci-pr VM; it's pre-cached, but this caps
     # a cold pull. (The job previously had no timeout, so a slow pull hung it.)
