@@ -14,7 +14,7 @@ on:
       - ansible/playbooks/noc.yml
       - ansible/playbooks/prober.yml
       - ansible/roles/hyrule_prober/**
-      - ansible/roles/noc_agent/**
+      - ansible/roles/noc_agent_retire/**
       - configs/mon/icinga2/**
       - configs/mon/prometheus-rules/**
       - configs/mon/prometheus.yml
@@ -25,9 +25,6 @@ on:
       - ansible/roles/alertmanager/**
       - ansible/playbooks/alertmanager.yml
       - configs/xo-mcp-package.json
-      - configs/noc-agent.env.j2
-      - configs/noc-agent.service
-      - configs/noc-agent-bot.service
       - ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2
       - ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2
 
@@ -66,7 +63,7 @@ jobs:
             ansible/playbooks/noc.yml \
             ansible/playbooks/prober.yml \
             ansible/roles/hyrule_prober \
-            ansible/roles/noc_agent \
+            ansible/roles/noc_agent_retire \
             configs/mon/icinga2 \
             configs/mon/prometheus-rules \
             configs/mon/prometheus.yml \
@@ -77,9 +74,6 @@ jobs:
             ansible/roles/alertmanager \
             ansible/playbooks/alertmanager.yml \
             configs/xo-mcp-package.json \
-            configs/noc-agent.env.j2 \
-            configs/noc-agent.service \
-            configs/noc-agent-bot.service \
             ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2 \
             ansible/roles/vault_agent/templates/github-runner.env.ctmpl.j2)"
           python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
@@ -119,11 +113,8 @@ jobs:
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/noc.yml",
               "configs/xo-mcp-package.json",
-              "configs/noc-agent.env.j2",
-              "configs/noc-agent.service",
-              "configs/noc-agent-bot.service",
               "ansible/roles/vault_agent/templates/noc-agent.env.ctmpl.j2",
-          }) or any(path.startswith("ansible/roles/noc_agent/") for path in changed)
+          }) or any(path.startswith("ansible/roles/noc_agent_retire/") for path in changed)
           prober_changed = any(path in changed for path in {
               "ansible/inventory/host_vars/noc.yml",
               "ansible/playbooks/prober.yml",

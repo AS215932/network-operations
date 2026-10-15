@@ -1,5 +1,10 @@
 # Autonomous NOC Operations
 
+> **Retired (2026-10-15):** noc-agent is no longer deployed. The noc playbook
+> now runs `noc_agent_retire`, which stops/disables `noc-agent` and
+> `noc-agent-bot` and removes their units (data dirs are kept). Operators watch
+> Icinga2 and Prometheus directly. This document is kept for history.
+
 This document covers the post-refactor AS215932 NOC stack deployed on `noc`.
 It complements the lower-level Ansible and deployment runbooks.
 

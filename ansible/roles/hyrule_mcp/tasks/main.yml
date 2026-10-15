@@ -230,8 +230,6 @@
   tags: [apply]
   notify:
     - restart hyrule-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
 
 - name: Check for hyrule-mcp pyproject.toml (set after a successful clone)
   stat:
@@ -251,8 +249,6 @@
   tags: [apply]
   notify:
     - restart hyrule-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
 
 - name: Install /etc/systemd/system/hyrule-mcp.service
   copy:
@@ -265,8 +261,6 @@
   notify:
     - reload systemd
     - restart hyrule-mcp
-    - restart noc-agent
-    - restart noc-agent-bot
 
 - name: Install BGP router snapshot environment
   template:

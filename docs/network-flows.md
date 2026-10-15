@@ -37,7 +37,7 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data) |
-| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp + hyrule-prober (:8460) |
+| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | hyrule-mcp + xo-mcp + hyrule-prober (:8460); noc-agent retired |
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
@@ -386,9 +386,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| extmon | tcp | 8000 | noc-agent webhook from extmon Alertmanager |
-| mon | tcp | 8000 | noc-agent webhook from mon (Alertmanager + Icinga) |
-| proxy | tcp | 8000 | noc-agent control dashboard via Caddy (proxy) |
 | api | tcp | 8460 | hyrule-cloud API to hyrule-prober (path probes) |
 | mon | tcp | 8460 | Icinga /healthz check for hyrule-prober |
 | mon | tcp | 9100 | node_exporter scrape |
