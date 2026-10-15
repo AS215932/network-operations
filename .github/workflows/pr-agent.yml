@@ -1,8 +1,8 @@
 ---
 name: pr-agent
 
-# Advisory AI PR review (replaces hosted Sourcery). Runs on the UNPRIVILEGED
-# `hyrule-public-pr` runner only, with read + PR/issue-comment permissions and
+# Advisory AI PR review (replaces hosted Sourcery). Runs on GitHub-hosted ubuntu-latest
+# (ephemeral, no infra access), with read + PR/issue-comment permissions and
 # our own OpenRouter key. Never deploys, never writes code, never auto-merges.
 # Config (model/fallback/instructions): .pr_agent.toml. Design: docs/ci/pr-agent.md.
 
@@ -38,7 +38,7 @@ jobs:
        github.event.issue.pull_request &&
        startsWith(github.event.comment.body, '/') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - name: PR-Agent
