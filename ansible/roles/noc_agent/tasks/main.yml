@@ -197,31 +197,6 @@
     - "{{ noc_knowledge_export_dir }}"
   tags: [apply]
 
-- name: Checkout pinned NOC Knowledge export repository
-  git:
-    repo: "{{ noc_knowledge_repo }}"
-    dest: "{{ noc_knowledge_install_dir }}"
-    version: "{{ noc_knowledge_version }}"
-    accept_hostkey: true
-    update: true
-    force: true
-  become: true
-  become_user: "{{ noc_agent_user }}"
-  tags: [apply]
-
-- name: Install pinned NOC Knowledge export files
-  copy:
-    src: "{{ noc_knowledge_install_dir }}/exports/{{ item }}"
-    dest: "{{ noc_knowledge_export_dir }}/{{ item }}"
-    owner: "{{ noc_agent_user }}"
-    group: "{{ noc_agent_group }}"
-    mode: "0644"
-    remote_src: true
-  loop:
-    - knowledge.sqlite
-    - manifest.json
-  tags: [apply]
-
 - name: Generate per-repo deploy key for noc-agent (idempotent)
   command: ssh-keygen -t ed25519 -N "" -C "noc-agent@noc deploy:noc-agent" -f /var/lib/noc-agent/.ssh/id_noc-agent
   args:
@@ -259,6 +234,70 @@
         User git
         IdentityFile /var/lib/noc-agent/.ssh/id_noc-agent
         IdentitiesOnly yes
+  tags: [apply]
+
+- name: Generate per-repo deploy key for NOC Knowledge (idempotent)
+  command: ssh-keygen -t ed25519 -N "" -C "noc-agent@noc deploy:knowledge" -f /var/lib/noc-agent/.ssh/id_noc-knowledge
+  args:
+    creates: /var/lib/noc-agent/.ssh/id_noc-knowledge
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  tags: [apply]
+
+- name: Show NOC Knowledge deploy key pubkey (add to github.com/AS215932/knowledge deploy keys)
+  command: cat /var/lib/noc-agent/.ssh/id_noc-knowledge.pub
+  register: noc_knowledge_deploy_pub
+  changed_when: false
+  tags: [apply]
+
+- name: Print NOC Knowledge deploy-key reminder
+  debug:
+    msg: |
+      NOC Knowledge deploy key (read-only) — add to:
+        https://github.com/AS215932/knowledge/settings/keys
+      Pubkey:
+        {{ noc_knowledge_deploy_pub.stdout }}
+  tags: [apply]
+
+- name: Configure SSH for NOC Knowledge clones via deploy key
+  blockinfile:
+    path: /var/lib/noc-agent/.ssh/config
+    create: true
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0600"
+    marker: "# {mark} noc-knowledge deploy key"
+    block: |
+      Host github-noc-knowledge
+        Hostname github.com
+        User git
+        IdentityFile /var/lib/noc-agent/.ssh/id_noc-knowledge
+        IdentitiesOnly yes
+  tags: [apply]
+
+- name: Checkout pinned NOC Knowledge export repository
+  git:
+    repo: "{{ noc_knowledge_repo }}"
+    dest: "{{ noc_knowledge_install_dir }}"
+    version: "{{ noc_knowledge_version }}"
+    accept_hostkey: true
+    update: true
+    force: true
+  become: true
+  become_user: "{{ noc_agent_user }}"
+  tags: [apply]
+
+- name: Install pinned NOC Knowledge export files
+  copy:
+    src: "{{ noc_knowledge_install_dir }}/exports/{{ item }}"
+    dest: "{{ noc_knowledge_export_dir }}/{{ item }}"
+    owner: "{{ noc_agent_user }}"
+    group: "{{ noc_agent_group }}"
+    mode: "0644"
+    remote_src: true
+  loop:
+    - knowledge.sqlite
+    - manifest.json
   tags: [apply]
 
 - name: Clone noc-agent repository

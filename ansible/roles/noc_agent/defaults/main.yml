@@ -13,7 +13,7 @@ noc_case_reactive_report_enabled: false
 noc_case_attention_enabled: false
 noc_case_outbox_enabled: true
 
-noc_knowledge_repo: https://github.com/AS215932/knowledge.git
+noc_knowledge_repo: "git@github-noc-knowledge:AS215932/knowledge.git"
 noc_knowledge_version: main
 noc_knowledge_install_dir: /opt/noc-knowledge/repo
 noc_knowledge_export_dir: /opt/noc-knowledge/exports
