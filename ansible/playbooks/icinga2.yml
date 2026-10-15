@@ -21,6 +21,7 @@
   become: true
   vars:
     icinga2_noc_agent_api_password: "{{ lookup('env', 'ICINGA_NOC_AGENT_API_PASSWORD') | default('', true) }}"
+    icinga2_ops_readonly_api_password: "{{ lookup('env', 'ICINGA_OPS_READONLY_API_PASSWORD') | default('', true) }}"
   roles:
     - icinga2
   tags: [icinga2]
