@@ -2,6 +2,8 @@
 as215932_prefix: "2a0c:b641:b50::/44"
 infra_subnet: "2a0c:b641:b50:2::/64"
 vpn_clients_subnet: "2a0c:b641:b50:3::/64"
+vpn_transit_subnet: "2a0c:b641:b50:1::/64"
+vpn_transit_v4: "10.0.1.0/24"
 customer_subnet: "2a0c:b641:b51::/48"
 mgmt_v4: "10.0.0.0/24"
 
@@ -14,7 +16,7 @@ peers:
   web: { ipv6: "2a0c:b641:b50:2::30" }
   proxy: { ipv6: "2a0c:b641:b50:2::40" }
   mon: { ipv6: "2a0c:b641:b50:2::50" }
-  vpn: { ipv6: "2a0c:b641:b50:2::60" }
+  vpn: { ipv6: "2a0c:b641:b50:1::60" }
   xoa:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
