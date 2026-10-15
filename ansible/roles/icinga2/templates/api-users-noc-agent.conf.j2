@@ -1,4 +1,4 @@
-// /etc/icinga2/conf.d/api-users-managed.conf — managed by ansible (roles/icinga2)
+// /etc/icinga2/conf.d/api-users-noc-agent.conf — managed by ansible (roles/icinga2)
 //
 // Additive ApiUser definitions. The original /etc/icinga2/conf.d/api-users.conf
 // (containing the default `root` ApiUser from `icinga2 api setup`) is left
@@ -9,7 +9,6 @@
 // `noc-agent` ApiUser below carries exactly the permissions the MCP tools
 // actually need.
 
-{% if icinga2_noc_agent_api_password | default('') | length > 0 %}
 object ApiUser "noc-agent" {
   password = "{{ icinga2_noc_agent_api_password }}"
   permissions = [
@@ -18,18 +17,3 @@ object ApiUser "noc-agent" {
     "objects/query/Service",
   ]
 }
-{% endif %}
-{% if icinga2_ops_readonly_api_password | default('') | length > 0 %}
-
-// Read-only operator access (Kim/Django agents on the box, 2a0c:b641:b50:3::4b)
-// for watching hosts/services after noc-agent retirement. Query-only: no
-// actions, no config, no events.
-object ApiUser "ops-readonly" {
-  password = "{{ icinga2_ops_readonly_api_password }}"
-  permissions = [
-    "objects/query/Host",
-    "objects/query/Service",
-    "status/query",
-  ]
-}
-{% endif %}

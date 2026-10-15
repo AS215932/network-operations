@@ -51,11 +51,11 @@ curl -s -k -u "noc-agent:$NEW_PW" \
   re-rendered `/opt/noc-agent/.env`. Wait one render cycle (≤ wait.max in
   vault-agent.hcl, default 10s) or `systemctl reload vault-agent-noc-agent`.
 - **`403 Forbidden` on acknowledge-problem**: permissions list mismatch.
-  Compare `/etc/icinga2/conf.d/api-users-managed.conf` against the
-  Ansible template `roles/icinga2/templates/api-users-managed.conf.j2`.
+  Compare `/etc/icinga2/conf.d/api-users-noc-agent.conf` against the
+  Ansible template `roles/icinga2/templates/api-users-noc-agent.conf.j2`.
 - **`icinga2 daemon -C` fails**: a stray syntax error somewhere; the
   managed file uses `--strict-permissions` ownership (`nagios:nagios 0640`),
-  so check perms first with `ls -la /etc/icinga2/conf.d/api-users-managed.conf`.
+  so check perms first with `ls -la /etc/icinga2/conf.d/api-users-noc-agent.conf`.
 
 ## Tighten further (future work)
 
