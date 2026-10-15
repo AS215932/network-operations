@@ -28,6 +28,8 @@ if importlib.util.find_spec("pybatfish") is None:
     sys.exit(1)
 PY
 
+BATFISH_IMAGE="${BATFISH_IMAGE:-batfish/allinone@sha256:54cb0ed94fd9a3c1ca0985f73e5be479e955cee9b9f6a6799b66be3364fd8e5c}"
+
 if [[ -z "${BATFISH_HOST:-}" ]]; then
   if ! command -v docker >/dev/null 2>&1; then
     echo "BATFISH_HOST is unset and docker is unavailable" >&2
@@ -38,7 +40,10 @@ if [[ -z "${BATFISH_HOST:-}" ]]; then
   # self-hosted runner's Docker daemon can't program the iptables DOCKER nat chain
   # for published ports, which fails `-p` with "iptables: No chain/target/match"
   # (network-operations#143). Host networking needs no DNAT, so it sidesteps that.
-  docker run -d --name "$container_name" --network host batfish/allinone >/dev/null
+  # Pinned by digest (network-operations#508): the runner prune no longer evicts
+  # the image, so a floating tag would silently freeze at whatever was cached.
+  # Bump deliberately: batfish/allinone:latest as of 2026-08-27.
+  docker run -d --name "$container_name" --network host "${BATFISH_IMAGE}" >/dev/null
   started_container=1
   export BATFISH_HOST=127.0.0.1
   sleep 15
