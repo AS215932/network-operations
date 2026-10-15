@@ -14,7 +14,7 @@ permissions:
 jobs:
   lint:
     name: lint
-    runs-on: [self-hosted, linux, x64, hyrule-public-pr]
+    runs-on: ubuntu-latest
     # roles_path lives in ansible/ansible.cfg, which isn't picked up when lint
     # runs from the repo root — point ansible at ansible/roles explicitly so
     # syntax-check can resolve role references.
@@ -22,6 +22,15 @@ jobs:
       ANSIBLE_ROLES_PATH: ${{ github.workspace }}/ansible/roles
     steps:
       - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CI tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint yamllint jinja2 pyyaml netaddr
 
       - name: yamllint
         id: yamllint
