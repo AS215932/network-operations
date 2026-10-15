@@ -54,7 +54,7 @@ class AppPromotionBotTest(unittest.TestCase):
     def test_promote_apps_uses_app_token_and_rebuilds_branch_from_main(self):
         workflow_text = (REPO / ".github/workflows/promote-apps.yml").read_text()
 
-        self.assertIn("actions/create-github-app-token@v2", workflow_text)
+        self.assertIn("actions/create-github-app-token@v3", workflow_text)
         self.assertIn("GH_TOKEN: ${{ steps.app-token.outputs.token }}", workflow_text)
         # The branch must be rebuilt from origin/main every run — never
         # continued from its old tip (once main moves a pin via a manually
