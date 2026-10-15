@@ -12,7 +12,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 PIN_TARGETS = {
-    "noc_agent_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/noc-agent", "noc"),
     "hyrule_mcp_version": ("ansible/inventory/host_vars/noc.yml", "AS215932/hyrule-mcp", "noc"),
     "hyrule_cloud_version": ("ansible/inventory/host_vars/api.yml", "AS215932/hyrule-cloud", "cloud"),
     "hyrule_web_version": ("ansible/inventory/host_vars/web.yml", "AS215932/hyrule-web", "web"),
@@ -40,7 +39,6 @@ _SLAVED_PINS: dict[str, tuple[str, str]] = {
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--noc-agent-sha", default="")
     parser.add_argument("--hyrule-mcp-sha", default="")
     parser.add_argument("--hyrule-cloud-sha", default="")
     parser.add_argument("--hyrule-web-sha", default="")
@@ -57,7 +55,6 @@ def main() -> int:
     args = parser.parse_args()
 
     requested = {
-        "noc_agent_version": args.noc_agent_sha.strip(),
         "hyrule_mcp_version": args.hyrule_mcp_sha.strip(),
         "hyrule_cloud_version": args.hyrule_cloud_sha.strip(),
         "hyrule_web_version": args.hyrule_web_sha.strip(),

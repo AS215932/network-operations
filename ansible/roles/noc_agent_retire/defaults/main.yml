@@ -1,0 +1,4 @@
+---
+noc_agent_retire_units:
+  - noc-agent
+  - noc-agent-bot

@@ -25,7 +25,6 @@ class AppPromotionBotTest(unittest.TestCase):
         self.assertIn("ref: ${{ github.sha }}", workflow_text)
 
         expected_cases = {
-            "AS215932/noc-agent)": 'noc_agent_sha="$sha"',
             "AS215932/hyrule-mcp)": 'hyrule_mcp_sha="$sha"',
             "AS215932/hyrule-cloud)": 'hyrule_cloud_sha="$sha"',
             "AS215932/hyrule-web)": 'hyrule_web_sha="$sha"',

@@ -1,10 +1,12 @@
 ---
-# noc rollout — installs hyrule-mcp + noc-agent on the noc VM.
+# noc rollout — installs hyrule-mcp + xo-mcp on the noc VM and keeps the
+# retired noc-agent service stopped (noc-agent was retired in favour of
+# operator-watched Icinga/Prometheus; its state dirs are kept on disk).
 #
 # hyrule_mcp runs FIRST: creates the noc-agent user, lays down /opt/hyrule-mcp,
 # /etc/hyrule-mcp/hosts.yml, /etc/hyrule-mcp/.env, and /var/lib/hyrule-mcp/.ssh/id_noc_mcp.
-# noc_agent runs SECOND: clones noc-agent, renders /opt/noc-agent/.env,
-# installs the systemd unit, and starts the service.
+# noc_agent_retire stops/disables noc-agent + noc-agent-bot and removes their
+# systemd units. /opt/noc-agent/.env stays: hyrule-mcp and xo-mcp read it.
 #
 # Prerequisites:
 #   - noc VM provisioned and reachable at peers.noc.ipv6.
@@ -21,73 +23,11 @@
 #   set -a; source ../secrets.local.sh; set +a
 #   ansible-playbook playbooks/noc.yml --tags apply -e '{"noc_apply":true}' --limit noc
 
-- name: noc — apply hyrule-mcp + noc-agent
+- name: noc — apply hyrule-mcp + xo-mcp, retire noc-agent
   hosts: noc
   serial: 1
   gather_facts: true
   become: true
-  pre_tasks:
-    - name: Require NOC approval signing secret
-      assert:
-        that:
-          - noc_approval_signing_secret | length >= 32
-        fail_msg: >-
-          NOC_APPROVAL_SIGNING_SECRET must be set to at least 32 characters
-          before deploying NOC write-action approval support.
-      when: noc_agent_secret_backend == 'env'
-      no_log: true
-      tags: [validate, apply]
-
-  post_tasks:
-    - name: Verify noc-agent CaseService health
-      tags: [validate, apply]
-      block:
-        - name: Wait for noc-agent CaseService health endpoint
-          uri:
-            url: http://[::1]:8000/health/cases
-            return_content: true
-            status_code: 200
-            timeout: 10
-          register: noc_agent_case_health
-          retries: 36
-          delay: 5
-          until:
-            - noc_agent_case_health.status == 200
-            - (noc_agent_case_health.json.status | default('')) == 'ok'
-            - (noc_agent_case_health.json.backend | default('')) == 'PostgresCaseStore'
-            - noc_agent_case_health.json.outbox_worker.enabled is defined
-            - noc_agent_case_health.json.outbox_worker.running is defined
-            - (noc_agent_case_health.json.outbox_worker.enabled | bool) == (noc_case_outbox_enabled | default(true) | bool)
-            - (noc_agent_case_health.json.outbox_worker.running | bool) == (noc_case_outbox_enabled | default(true) | bool)
-
-        - name: Show noc-agent CaseService health
-          debug:
-            var: noc_agent_case_health.json
-      rescue:
-        - name: Capture noc-agent service status
-          command: systemctl status noc-agent --no-pager -l
-          register: noc_agent_service_status
-          changed_when: false
-          failed_when: false
-
-        - name: Capture noc-agent journal
-          command: journalctl -u noc-agent -n 120 --no-pager
-          register: noc_agent_journal
-          changed_when: false
-          failed_when: false
-
-        - name: Show noc-agent service status
-          debug:
-            var: noc_agent_service_status.stdout_lines
-
-        - name: Show noc-agent recent journal
-          debug:
-            var: noc_agent_journal.stdout_lines
-
-        - name: Fail noc-agent health verification
-          fail:
-            msg: noc-agent /health/cases did not become healthy after deploy
-
   vars:
     openrouter_api_key: "{{ lookup('env', 'OPENROUTER_API_KEY') | default('', true) }}"
     openrouter_management_api_key: "{{ lookup('env', 'OPENROUTER_MANAGEMENT_API_KEY') | default('', true) }}"
@@ -100,17 +40,18 @@
     noc_mail_password: "{{ lookup('env', 'MAIL_NOC_PASSWORD') }}"
     noc_discord_bot_token: "{{ lookup('env', 'NOC_DISCORD_BOT_TOKEN') | default('', true) }}"
     noc_control_token: "{{ lookup('env', 'NOC_CONTROL_TOKEN') | default('', true) }}"
-    noc_approval_signing_secret: "{{ lookup('env', 'NOC_APPROVAL_SIGNING_SECRET') | default('', true) }}"
     noc_mcp_key_path: "{{ lookup('env', 'NOC_MCP_KEY_PATH') }}"
     noc_agent_secret_backend: "{{ lookup('env', 'NOC_AGENT_SECRET_BACKEND') | default('vault', true) }}"
   roles:
     - hyrule_mcp
-    - noc_agent
+    - noc_agent_retire
     - xo_mcp
     - role: vault_agent
       vars:
         vault_agent_name: noc-agent
         vault_agent_require_durable_secret_id: true
+        # noc-agent is retired; the github-app PEM template must not restart it.
+        vault_agent_reload_command: /bin/true
         # vault_agent_vault_addr inherits the role default
         # (http://[{{ peers.vault.ipv6 }}]:8200) so noc's secrets plane
         # survives a Caddy/proxy outage. The public vault.as215932.net route
@@ -119,11 +60,7 @@
         vault_agent_secret_id: "{{ lookup('env', 'VAULT_NOC_AGENT_SECRET_ID') | default('', true) }}"
         vault_agent_env_destination: /opt/noc-agent/.env
         vault_agent_env_reload_command: >-
-          /bin/grep -Eq ^NOC_APPROVAL_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
           /bin/grep -Eq ^HYRULE_MCP_ACTION_SIGNING_SECRET=................................ /opt/noc-agent/.env &&
-          /bin/sh -c 'test "{{ "1" if noc_lhp_enabled | bool else "0" }}" != "1" || /bin/grep -Eq ^NOC_LHP_ENGINEERING_SECRET=................................ /opt/noc-agent/.env' &&
-          /bin/systemctl restart xo-mcp.service &&
-          /bin/systemctl restart noc-agent.service &&
-          /bin/systemctl restart noc-agent-bot.service
+          /bin/systemctl restart xo-mcp.service
       when: noc_agent_secret_backend == 'vault'
   tags: [noc]
