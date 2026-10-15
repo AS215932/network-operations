@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       iac_changed: ${{ steps.diff.outputs.iac_changed }}
+      pin_only: ${{ steps.diff.outputs.pin_only }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -93,6 +94,13 @@ jobs:
           echo "Changed paths:"
           printf '%s\n' "${changed_paths}"
 
+          # App-promotion PRs only bump <app>_version SHA pins in host_vars.
+          # They keep static-iac (catches a pin that breaks templating) but
+          # skip the idempotency pass and the lab tiers (network#272).
+          pin_only="$(python3 scripts/ci/is-app-pin-only.py "${diff_base}" "${head}" || echo false)"
+          echo "pin_only=${pin_only}" >> "${GITHUB_OUTPUT}"
+          echo "App-pin-only diff: ${pin_only}"
+
           if printf '%s\n' "${changed_paths}" | grep -Eq '^(\.github/workflows/iac-tests\.yml|\.pre-commit-config\.yaml|ansible/|configs/|scripts/ci/|tests/)'; then
             echo "iac_changed=true" >> "${GITHUB_OUTPUT}"
           else
@@ -133,7 +141,7 @@ jobs:
   ansible-idempotency:
     runs-on: ubuntu-latest
     needs: [changes, static-iac]
-    if: ${{ needs.changes.outputs.iac_changed == 'true' }}
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && needs.changes.outputs.pin_only != 'true' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7.0.1
@@ -154,7 +162,7 @@ jobs:
   batfish:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: [changes, static-iac]
-    if: ${{ needs.changes.outputs.iac_changed == 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true') }}
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && needs.changes.outputs.pin_only != 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_BATFISH_TESTS == 'true') }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
@@ -182,7 +190,7 @@ jobs:
   containerlab-frr:
     runs-on: [self-hosted, linux, x64, hyrule-infra]
     needs: [changes, static-iac]
-    if: ${{ needs.changes.outputs.iac_changed == 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true') }}
+    if: ${{ needs.changes.outputs.iac_changed == 'true' && needs.changes.outputs.pin_only != 'true' && (github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTAINERLAB_TESTS == 'true') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7.0.1
@@ -213,6 +221,7 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           IAC_CHANGED: ${{ needs.changes.outputs.iac_changed }}
+          PIN_ONLY: ${{ needs.changes.outputs.pin_only }}
           STATIC_IAC: ${{ needs.static-iac.result }}
           ANSIBLE_IDEMPOTENCY: ${{ needs.ansible-idempotency.result }}
           BATFISH: ${{ needs.batfish.result }}
@@ -222,6 +231,7 @@ jobs:
           echo "Tier results:"
           echo "  changes             = ${CHANGES}"
           echo "  iac_changed         = ${IAC_CHANGED}"
+          echo "  pin_only            = ${PIN_ONLY}"
           echo "  static-iac          = ${STATIC_IAC}"
           echo "  ansible-idempotency = ${ANSIBLE_IDEMPOTENCY}"
           echo "  batfish (trusted)   = ${BATFISH}"
@@ -235,7 +245,13 @@ jobs:
 
           if [ "${IAC_CHANGED}" = "true" ]; then
             # Required tiers must succeed when IaC-relevant paths changed.
-            for pair in "static-iac:${STATIC_IAC}" "ansible-idempotency:${ANSIBLE_IDEMPOTENCY}"; do
+            required="static-iac:${STATIC_IAC}"
+            if [ "${PIN_ONLY}" != "true" ]; then
+              required="${required} ansible-idempotency:${ANSIBLE_IDEMPOTENCY}"
+            else
+              echo "App-pin-only diff: ansible-idempotency is not required."
+            fi
+            for pair in ${required}; do
               name="${pair%%:*}"; res="${pair##*:}"
               if [ "${res}" != "success" ]; then
                 echo "::error::required tier ${name} did not pass (${res})"
