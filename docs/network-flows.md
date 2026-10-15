@@ -341,6 +341,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| proxy | tcp | 80 | Icinga Web from proxy |
 | proxy | tcp | 3000 | Grafana from proxy |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
 | api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
