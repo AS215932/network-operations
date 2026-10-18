@@ -30,6 +30,7 @@ on:
           - noc
           - network-proxy
           - tunnel-proxy
+          - overlay
           - prober
           - vault
           - ci

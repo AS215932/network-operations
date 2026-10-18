@@ -1,0 +1,59 @@
+# /etc/i2pd/i2pd.conf — {{ inventory_hostname }} — managed by ansible (roles/overlay)
+# Generated: do not edit by hand.
+#
+# Plain transit router: no client proxies (HTTP/SOCKS/SAM/BOB/I2CP) exposed.
+# IPv6-only transports on a fixed port so the host firewall can allow exactly
+# one port; IPv4 stays off (see overlay_i2pd_ipv4 in roles/overlay/defaults).
+
+log = syslog
+loglevel = warn
+
+ipv4 = {{ overlay_i2pd_ipv4 | bool | lower }}
+ipv6 = {{ overlay_i2pd_ipv6 | bool | lower }}
+address6 = {{ overlay_ipv6 }}
+port = {{ overlay_i2pd_port }}
+# Public GUA, not behind NAT.
+nat = false
+
+bandwidth = {{ overlay_i2pd_bandwidth }}
+share = {{ overlay_i2pd_share }}
+notransit = false
+floodfill = {{ overlay_i2pd_floodfill | bool | lower }}
+
+[ntcp2]
+enabled = true
+published = true
+
+[ssu2]
+enabled = true
+published = true
+
+# Router console, loopback only (ssh -L for diagnostics).
+[http]
+enabled = true
+address = 127.0.0.1
+port = 7070
+
+[httpproxy]
+enabled = false
+
+[socksproxy]
+enabled = false
+
+[sam]
+enabled = false
+
+[bob]
+enabled = false
+
+[i2cp]
+enabled = false
+
+[i2pcontrol]
+enabled = false
+
+[upnp]
+enabled = false
+
+[reseed]
+verify = true

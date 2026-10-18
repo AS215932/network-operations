@@ -24,6 +24,16 @@ rtr_proxy_v4:  "10.0.2.40"
 rtr_vpn_v4:    "10.0.1.60"  # vpn on the dedicated transit (enX1)
 rtr_tunnel_v4: "10.0.2.224"
 
+# overlay (Tor relay) IPv4 ORPort DNAT: 46.105.40.223:901/tcp -> 10.0.2.71:9001.
+# OFF until the overlay VM exists and Tor is released (relay-only + ContactInfo):
+# flipping it reloads rtr's nftables, which also restarts Jool (handlers).
+# Public port must stay < 1024 (Jool pool4 is 1024-60999, rtr ephemeral
+# 61000-65535) — tests/iac/test_overlay_contracts.py guards it.
+rtr_overlay_dnat_enabled: false
+rtr_overlay_v4: "{{ peers.overlay.infra_v4 }}"
+rtr_overlay_tor_orport_public: 901
+rtr_overlay_tor_orport: 9001
+
 # --- Input chain posture ---
 # Enforced default-deny. Customer forwarding isolation is enforced separately in
 # the rtr nftables forward chains.

@@ -49,6 +49,11 @@ scrape_configs:
           site: ovh1
           role: irc
       - targets:
+          - "[2a0c:b641:b50:2::71]:9100"   # overlay (Tor relay / i2pd / Yggdrasil)
+        labels:
+          site: ovh1
+          role: overlay
+      - targets:
           - "[2001:41d0:304:300::7bfb]:9100" # ns2
         labels:
           site: ovh-gra11

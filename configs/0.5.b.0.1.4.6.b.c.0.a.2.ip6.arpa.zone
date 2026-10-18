@@ -19,7 +19,7 @@ $ORIGIN 0.5.b.0.1.4.6.b.c.0.a.2.ip6.arpa.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026101201 ; serial
+                  2026101801 ; serial
                   3600       ; refresh
                   900        ; retry
                   604800     ; expire
@@ -56,6 +56,9 @@ $TTL 3600
 
 ; --- :2::70 — xoa ---
 0.7.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  xoa.as215932.net.
+
+; --- :2::71 — overlay (Tor relay / i2pd / Yggdrasil) ---
+1.7.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  overlay.as215932.net.
 
 ; --- :2::80 — irc ---
 0.8.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.0.0  IN  PTR  irc.as215932.net.

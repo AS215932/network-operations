@@ -8,7 +8,7 @@ $ORIGIN as215932.net.
 $TTL 3600
 
 @       IN  SOA   ns1.servify.network. admin.servify.network. (
-                  2026101201 ; serial (YYYYMMDDNN)
+                  2026101801 ; serial (YYYYMMDDNN)
                   3600       ; refresh (1h)
                   900        ; retry (15m)
                   604800     ; expire (7d)
@@ -42,6 +42,7 @@ vault-node IN AAAA 2a0c:b641:b50:2::c0
 mon     IN  AAAA  2a0c:b641:b50:2::50
 vpn     IN  AAAA  2a0c:b641:b50:1::60
 xoa     IN  AAAA  2a0c:b641:b50:2::70
+overlay IN  AAAA  2a0c:b641:b50:2::71 ; Tor non-exit relay / i2pd / Yggdrasil
 irc     IN  AAAA  2a0c:b641:b50:2::80
 mail    IN  A     51.91.236.215
 mail    IN  AAAA  2a0c:b641:b50:2::90

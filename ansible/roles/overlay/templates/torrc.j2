@@ -1,0 +1,48 @@
+# /etc/tor/torrc — {{ inventory_hostname }} — managed by ansible (roles/overlay)
+# Generated: do not edit by hand.
+#
+# NON-EXIT relay only. The role refuses any overlay_tor_mode other than
+# "relay" (tasks/validate.yml); exit traffic would make AS215932 the visible
+# source of arbitrary Internet traffic (abuse mail, RIPE abuse-c, OVH ToS).
+# User/DataDirectory come from Debian's tor-service-defaults-torrc.
+
+Nickname {{ overlay_tor_nickname }}
+ContactInfo {{ overlay_tor_contact_info }}
+{% if overlay_tor_my_family | length > 0 %}
+MyFamily {{ overlay_tor_my_family | join(',') }}
+{% else %}
+# MyFamily <fingerprint>,<fingerprint>  (set overlay_tor_my_family once we run more relays)
+{% endif %}
+
+# --- Reachability -----------------------------------------------------------
+# IPv6: directly on the infra GUA (rtr forwards the /64, no NAT).
+ORPort [{{ overlay_ipv6 }}]:{{ overlay_tor_orport }}
+# IPv4: advertise rtr's failover IP; rtr DNATs
+# {{ overlay_public_v4 }}:{{ overlay_tor_orport_v4_public }} -> {{ overlay_infra_v4 }}:{{ overlay_tor_orport }}.
+ORPort {{ overlay_public_v4 }}:{{ overlay_tor_orport_v4_public }} NoListen
+ORPort {{ overlay_infra_v4 }}:{{ overlay_tor_orport }} NoAdvertise
+Address {{ overlay_public_v4 }}
+Address {{ overlay_ipv6 }}
+OutboundBindAddress {{ overlay_infra_v4 }}
+OutboundBindAddress {{ overlay_ipv6 }}
+
+# --- Relay, never exit ------------------------------------------------------
+ExitRelay 0
+IPv6Exit 0
+ExitPolicy reject *:*
+ExitPolicy reject6 *:*
+
+# No local client/controller surface on a pure relay.
+SocksPort 0
+ControlPort 0
+
+# --- Bandwidth --------------------------------------------------------------
+RelayBandwidthRate {{ overlay_tor_relay_bandwidth_rate }}
+RelayBandwidthBurst {{ overlay_tor_relay_bandwidth_burst }}
+{% if overlay_tor_accounting_max %}
+AccountingMax {{ overlay_tor_accounting_max }}
+AccountingStart {{ overlay_tor_accounting_start }}
+{% endif %}
+MaxMemInQueues {{ overlay_tor_max_mem_in_queues }}
+
+Log notice syslog

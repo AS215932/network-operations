@@ -1,0 +1,22 @@
+---
+# overlay — public Tor (non-exit) relay, i2pd router and Yggdrasil node.
+#
+# Validate (no live changes; renders ansible/generated/overlay/*):
+#   ansible-playbook playbooks/overlay.yml --tags validate --connection=local
+#
+# Apply (live; run playbooks/firewall.yml --limit overlay first so
+# /etc/nftables.conf includes /etc/nftables.d/*.nft):
+#   ansible-playbook playbooks/overlay.yml --tags apply -e overlay_apply=true
+#
+# Tor stays stopped while host_vars/overlay.yml has overlay_tor_enabled: false
+# (held until ContactInfo is set and relay-only is confirmed).
+
+- name: overlay — Tor relay / i2pd / Yggdrasil
+  hosts: overlay
+  serial: 1
+  gather_facts: false
+  become: true
+  roles:
+    - role: overlay
+      tags: [overlay]
+  tags: [overlay]

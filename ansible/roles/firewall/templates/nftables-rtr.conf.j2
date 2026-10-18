@@ -18,6 +18,9 @@ define DNS_IP    = {{ rtr_dns_v4 }}
 define PROXY_IP  = {{ rtr_proxy_v4 }}
 define VPN_IP    = {{ rtr_vpn_v4 }}
 define TUNNEL_IP = {{ rtr_tunnel_v4 }}
+{% if rtr_overlay_dnat_enabled | default(false) | bool %}
+define OVERLAY_IP = {{ rtr_overlay_v4 }}
+{% endif %}
 
 table ip nat {
     chain prerouting {
@@ -39,6 +42,13 @@ table ip nat {
         ip daddr $WAN_IP tcp dport 2222 dnat to $TUNNEL_IP
         ip daddr $WAN_IP udp dport 3478 dnat to $TUNNEL_IP
         ip daddr $WAN_IP tcp dport 10000-10499 dnat to $TUNNEL_IP
+{% if rtr_overlay_dnat_enabled | default(false) | bool %}
+
+        # Tor relay IPv4 ORPort (overlay). Public port is below 1024 so it can
+        # never collide with Jool pool4 (1024-60999) or rtr's ephemeral range
+        # (61000-65535); the relay itself listens on its standard ORPort.
+        ip daddr $WAN_IP tcp dport {{ rtr_overlay_tor_orport_public }} dnat to $OVERLAY_IP:{{ rtr_overlay_tor_orport }}
+{% endif %}
     }
 
     chain postrouting {
@@ -72,6 +82,9 @@ table ip filter {
         ip daddr $TUNNEL_IP tcp dport 2222 accept
         ip daddr $TUNNEL_IP udp dport 3478 accept
         ip daddr $TUNNEL_IP tcp dport 10000-10499 accept
+{% if rtr_overlay_dnat_enabled | default(false) | bool %}
+        ip daddr $OVERLAY_IP tcp dport {{ rtr_overlay_tor_orport }} accept
+{% endif %}
     }
 }
 

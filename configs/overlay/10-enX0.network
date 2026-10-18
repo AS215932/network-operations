@@ -1,0 +1,27 @@
+# /etc/systemd/network/10-enX0.network — overlay VM (infra bridge)
+# Tor relay / i2pd / Yggdrasil. IPv6 GUA carries all overlay-network traffic;
+# the RFC1918 IPv4 exists only as the DNAT backend for rtr's 46.105.40.223
+# (Tor IPv4 ORPort 901/tcp -> 10.0.2.71:9001) and for outbound v4 via rtr
+# masquerade (Tor relay-to-relay). scripts/create-overlay-vm.sh seeds the same
+# addresses through cloud-init.
+[Match]
+Name=enX0
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+DNS=2a0c:b641:b50:2::1
+
+[Address]
+Address=2a0c:b641:b50:2::71/64
+
+[Route]
+Destination=::/0
+Gateway=2a0c:b641:b50:2::1
+
+[Address]
+Address=10.0.2.71/24
+
+[Route]
+Destination=0.0.0.0/0
+Gateway=10.0.2.1

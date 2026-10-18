@@ -1,0 +1,151 @@
+---
+# Live changes on the overlay VM. Gated by overlay_apply (tasks/main.yml).
+# Order matters: the ygg0 nft zone is loaded BEFORE yggdrasil starts, so the
+# tun interface never exists without its isolation.
+
+- name: Install overlay packages
+  ansible.builtin.apt:
+    name: "{{ overlay_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Keep forwarding off (overlay is an endpoint, never a router)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-overlay-no-forward.conf
+    content: |
+      # managed by ansible (roles/overlay): never route between ygg0 and the AS.
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.forwarding = 0
+      net.ipv6.conf.default.forwarding = 0
+    owner: root
+    group: root
+    mode: "0644"
+  register: _overlay_sysctl
+
+- name: Load forwarding sysctls
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/60-overlay-no-forward.conf
+  when: _overlay_sysctl.changed
+  changed_when: true
+
+# --- ygg0 nftables zone -----------------------------------------------------
+- name: Check that roles/firewall's nftables.conf includes the role table dir
+  ansible.builtin.command: "grep -F 'include \"{{ overlay_nft_include_dir }}/*.nft\"' /etc/nftables.conf"
+  register: _overlay_fw_include
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to start Yggdrasil before the firewall role carries the include
+  ansible.builtin.assert:
+    that:
+      - _overlay_fw_include.rc == 0
+    fail_msg: >-
+      /etc/nftables.conf does not include {{ overlay_nft_include_dir }}/*.nft,
+      so a firewall reload would drop the ygg0 isolation table. Apply
+      playbooks/firewall.yml --limit {{ inventory_hostname }} first.
+
+- name: Ensure nftables include dir exists
+  ansible.builtin.file:
+    path: "{{ overlay_nft_include_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render ygg0 isolation table
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: "{{ overlay_nft_ygg_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nft -c -f %s"
+  notify: reload overlay ygg nft table
+
+- name: Load ygg0 isolation before any overlay daemon starts
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify the ygg0 isolation table is live
+  ansible.builtin.command: nft list table inet overlay_ygg
+  changed_when: false
+
+# --- Yggdrasil -------------------------------------------------------------
+- name: "Yggdrasil: generate private key on-host if missing (never printed)"
+  ansible.builtin.shell: >-
+    umask 027 &&
+    openssl genpkey -algorithm ed25519 -out {{ overlay_yggdrasil_key_path }}
+  args:
+    creates: "{{ overlay_yggdrasil_key_path }}"
+    executable: /bin/sh
+  no_log: true
+  when: overlay_yggdrasil_enabled | bool
+
+- name: "Yggdrasil: private key readable by the service group only"
+  ansible.builtin.file:
+    path: "{{ overlay_yggdrasil_key_path }}"
+    owner: root
+    group: yggdrasil
+    mode: "0640"
+  when: overlay_yggdrasil_enabled | bool
+
+- name: "Yggdrasil: render config"
+  ansible.builtin.template:
+    src: yggdrasil.conf.j2
+    dest: "{{ overlay_yggdrasil_conf_path }}"
+    owner: root
+    group: yggdrasil
+    mode: "0640"
+  notify: restart yggdrasil
+
+- name: "Yggdrasil: service state"
+  ansible.builtin.systemd:
+    name: yggdrasil
+    enabled: "{{ overlay_yggdrasil_enabled | bool }}"
+    state: "{{ 'started' if overlay_yggdrasil_enabled | bool else 'stopped' }}"
+
+- name: "Yggdrasil: node address"
+  ansible.builtin.command: "yggdrasil -useconffile {{ overlay_yggdrasil_conf_path }} -address"
+  register: _overlay_ygg_addr
+  changed_when: false
+  when: overlay_yggdrasil_enabled | bool
+
+- name: "Yggdrasil: report node address"
+  ansible.builtin.debug:
+    msg: "YGGDRASIL_ADDRESS {{ inventory_hostname }} {{ _overlay_ygg_addr.stdout }}"
+  when: overlay_yggdrasil_enabled | bool
+
+# --- i2pd ------------------------------------------------------------------
+- name: "i2pd: render config"
+  ansible.builtin.template:
+    src: i2pd.conf.j2
+    dest: /etc/i2pd/i2pd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart i2pd
+
+- name: "i2pd: service state"
+  ansible.builtin.systemd:
+    name: i2pd
+    enabled: "{{ overlay_i2pd_enabled | bool }}"
+    state: "{{ 'started' if overlay_i2pd_enabled | bool else 'stopped' }}"
+
+# --- Tor -------------------------------------------------------------------
+# Debian's tor package starts a local client by default; when the relay is on
+# hold the service is stopped and disabled rather than left as a stray client.
+- name: "Tor: render torrc"
+  ansible.builtin.template:
+    src: torrc.j2
+    dest: /etc/tor/torrc
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "tor --verify-config -f %s"
+  notify: restart tor
+  when: overlay_tor_enabled | bool
+
+- name: "Tor: service state"
+  ansible.builtin.systemd:
+    name: tor
+    enabled: "{{ overlay_tor_enabled | bool }}"
+    state: "{{ 'started' if overlay_tor_enabled | bool else 'stopped' }}"
