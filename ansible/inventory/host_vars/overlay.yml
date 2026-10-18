@@ -12,13 +12,14 @@
 # monitoring, logs.
 
 # --- Tor ---------------------------------------------------------------------
-# HELD: stays stopped/disabled until Svag (1) confirms relay-only (no exit)
-# and (2) fills in ContactInfo. Flip to true in the same PR that sets them;
+# HELD: stays stopped/disabled until Svag confirms relay-only (no exit).
+# ContactInfo (ContactInfo Information Sharing Spec v2) given by Svag
+# 2026-10-19. Flip to true (with rtr_overlay_dnat_enabled) once confirmed;
 # validate.yml refuses CHANGEME once enabled. Exit mode is not implemented.
 overlay_tor_enabled: false
 overlay_tor_mode: relay
 overlay_tor_nickname: AS215932overlay
-overlay_tor_contact_info: "CHANGEME <abuse/noc contact for AS215932 — Svag to fill>"
+overlay_tor_contact_info: "email:tor[]as215932.net url:https://as215932.net ciissversion:2"
 overlay_tor_my_family: []
 overlay_tor_orport: 9001
 overlay_tor_orport_v4_public: 901
@@ -106,8 +107,8 @@ host_meta:
   summary: "Tor relay (never exit), i2pd transit router and Yggdrasil node. ygg0 sits in its own nft table that drops all inbound except ICMPv6/replies and never forwards to or from the AS."
   ipv4: "Tor ORPort via rtr DNAT 46.105.40.223:901 -> 10.0.2.71:9001 (gated by rtr_overlay_dnat_enabled)"
   notes: >-
-    Tor is held (overlay_tor_enabled: false) until ContactInfo is filled and
-    relay-only is confirmed. Yggdrasil keypair is generated on-host on first
+    Tor is held (overlay_tor_enabled: false) until relay-only is confirmed;
+    ContactInfo is set. Yggdrasil keypair is generated on-host on first
     apply and never stored in the repo.
 network_flows_inbound:
   - { from: public, proto: tcp, port: 9001, purpose: "Tor ORPort (IPv6 direct; IPv4 via rtr DNAT from 46.105.40.223:901)" }

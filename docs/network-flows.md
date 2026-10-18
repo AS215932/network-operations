@@ -421,7 +421,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 ### overlay — Tor relay (never exit), i2pd transit router and Yggdrasil node. ygg0 sits in its own nft table that drops all inbound except ICMPv6/replies and never forwards to or from the AS.
 
-> Tor is held (overlay_tor_enabled: false) until ContactInfo is filled and relay-only is confirmed. Yggdrasil keypair is generated on-host on first apply and never stored in the repo.
+> Tor is held (overlay_tor_enabled: false) until relay-only is confirmed; ContactInfo is set. Yggdrasil keypair is generated on-host on first apply and never stored in the repo.
 
 **Inbound**
 

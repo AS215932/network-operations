@@ -7,7 +7,7 @@
 # User/DataDirectory come from Debian's tor-service-defaults-torrc.
 
 Nickname AS215932overlay
-ContactInfo CHANGEME <abuse/noc contact for AS215932 — Svag to fill>
+ContactInfo email:tor[]as215932.net url:https://as215932.net ciissversion:2
 # MyFamily <fingerprint>,<fingerprint>  (set overlay_tor_my_family once we run more relays)
 
 # --- Reachability -----------------------------------------------------------
