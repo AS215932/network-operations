@@ -234,6 +234,31 @@ class OverlayAccessTest(unittest.TestCase):
         self.assertNotRegex(script, r"ssh-(ed25519|rsa) AAAA", "no hard-coded keys")
         self.assertEqual(script.count("ssh_authorized_keys:"), 1)
 
+    def test_create_script_strips_template_svag_user(self):
+        # The Debian 13 template has svag baked into its image; first boot
+        # must delete it so overlay stays kim-only.
+        script = (REPO / "scripts/create-overlay-vm.sh").read_text()
+        self.assertIn("runcmd:", script)
+        self.assertIn("userdel -r svag", script)
+        self.assertIn("/^svag /d", script)
+
+    def test_create_script_xe_backend_picks_a_unique_mac(self):
+        script = (REPO / "scripts/create-overlay-vm.sh").read_text()
+        self.assertIn('BACKEND="${BACKEND:-auto}"', script)
+        self.assertIn("vm-install template=$TEMPLATE", script)
+        self.assertIn("mkfs.vfat -n CIDATA", script)
+        self.assertNotIn("mac=random", script)
+        self.assertIn('vif-create vm-uuid="$VM_ID" network-uuid=$INFRA device=0 mac="$MAC"', script)
+        self.assertIn("vif-list params=MAC", script)
+
+
+class OverlayTorContactMailTest(unittest.TestCase):
+    def test_tor_contact_address_is_a_mail_role_address(self):
+        overlay = _yaml(HOST_VARS / "overlay.yml")
+        self.assertIn("email:tor[]as215932.net", overlay["overlay_tor_contact_info"])
+        mail = _yaml(HOST_VARS / "mail.yml")
+        self.assertIn("tor", mail["mail_role_addresses"])
+
 
 class RtrOverlayDnatTest(unittest.TestCase):
     def setUp(self):

@@ -76,6 +76,7 @@ mail_role_addresses:
   - peering
   - dh
   - support
+  - tor          # Tor relay ContactInfo (overlay: email:tor[]as215932.net) -> noc+tor
 
 # --- Structured flow metadata (read by scripts/render-network-flows.py) ---
 host_meta:

@@ -42,15 +42,33 @@ Until then `overlay_tor_enabled: false` (Tor stopped/disabled on the host) and
 1. Create the VM (dry run first, then `--apply`):
 
    ```sh
-   KIM_PUBKEY_FILE=~/.ssh/id_kim.pub scripts/create-overlay-vm.sh
-   KIM_PUBKEY_FILE=~/.ssh/id_kim.pub scripts/create-overlay-vm.sh --apply
+   # on xcp01 dom0, as kim (xe runs via sudo; xo-cli is not installed there)
+   KIM_PUBKEY_FILE=~/id_kim.pub scripts/create-overlay-vm.sh
+   KIM_PUBKEY_FILE=~/id_kim.pub scripts/create-overlay-vm.sh --apply
+   # elsewhere, with xo-cli registered against XO:
+   KIM_PUBKEY_FILE=~/.ssh/id_kim.pub BACKEND=xo scripts/create-overlay-vm.sh --apply
    ```
 
+   The xe backend (`BACKEND=auto` picks it when `xe` is on PATH) does
+   vm-install from the Debian 13 template, sets 2 GiB / 2 vCPU, grows the root
+   VDI to 20 GiB, replaces the template VIFs with one infra VIF on a fresh
+   random MAC that is checked against every VIF on the host, and attaches a
+   NoCloud seed VDI (`overlay-cidata`, vfat label CIDATA). Detach and destroy
+   the seed VDI after the first boot.
+
    cloud-init creates only `kim` (`/bin/sh`, NOPASSWD sudo), sets both
-   addresses, disables root login. `configs/overlay/10-enX0.network` is the
+   addresses, disables root login. The template image ships a baked-in
+   `svag` user + key; the cloud-config `runcmd` deletes it (and its
+   `/etc/sudoers.d/90-cloud-init-users` rule) on first boot. `configs/overlay/10-enX0.network` is the
    reference networkd unit if the netplan render needs replacing.
 
-2. From the workstation (`-u kim`), bootstrap the fleet accounts:
+2. From the workstation (`-u kim`), bootstrap the fleet accounts. Do this
+   from an SSH source the firewall allows (ops / vpn / noc / mon / ci):
+   after step 3 xcp01 dom0 is no longer an allowed source. Until the
+   ci-runner-key step has run, CI cannot reach overlay — keep `:!overlay` in
+   `scripts/ci/check-drift.sh` and Icinga registration (`monitoring_register:
+   true`, applied by the monitoring playbook / post-merge drift apply) waits
+   for it.
 
    ```sh
    KIM_KEY_PATH=<id_kim> ansible-playbook playbooks/kim-ops-key.yml --tags apply --limit overlay
