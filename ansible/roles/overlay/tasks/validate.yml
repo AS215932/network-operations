@@ -14,14 +14,16 @@
   delegate_to: localhost
   become: false
 
-- name: Tor ContactInfo must be set before Tor is enabled
+- name: Tor ContactInfo and AccountingMax must be set before Tor is enabled
   ansible.builtin.assert:
     that:
       - overlay_tor_contact_info | length > 0
       - "'CHANGEME' not in overlay_tor_contact_info"
+      - overlay_tor_accounting_max | length > 0
     fail_msg: >-
       Set overlay_tor_contact_info in host_vars/{{ inventory_hostname }}.yml
-      (operator-owned contact) before setting overlay_tor_enabled: true.
+      (operator-owned contact) and overlay_tor_accounting_max before setting
+      overlay_tor_enabled: true.
   when: overlay_tor_enabled | bool
   delegate_to: localhost
   become: false

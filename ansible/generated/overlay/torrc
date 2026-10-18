@@ -35,6 +35,8 @@ ControlPort 0
 # --- Bandwidth --------------------------------------------------------------
 RelayBandwidthRate 10 MBytes
 RelayBandwidthBurst 20 MBytes
+AccountingMax 3 TBytes
+AccountingStart month 1 00:00
 MaxMemInQueues 512 MB
 
 Log notice syslog

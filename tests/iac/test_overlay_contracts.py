@@ -91,10 +91,25 @@ class TorIsNonExitTest(unittest.TestCase):
     def test_tor_is_held_until_contactinfo_is_set(self):
         host = _yaml(HOST_VARS / "overlay.yml")
         validate = _yaml(ROLE / "tasks/validate.yml")
-        guard = _task_by_name(validate, "Tor ContactInfo must be set before Tor is enabled")
+        guard = _task_by_name(validate, "Tor ContactInfo and AccountingMax must be set before Tor is enabled")
         self.assertIn("'CHANGEME' not in overlay_tor_contact_info", guard["ansible.builtin.assert"]["that"])
         if "CHANGEME" in host["overlay_tor_contact_info"]:
             self.assertFalse(host["overlay_tor_enabled"], "Tor enabled with placeholder ContactInfo")
+
+    def test_monthly_accounting_cap_is_set_when_tor_is_enabled(self):
+        host = _yaml(HOST_VARS / "overlay.yml")
+        validate = _yaml(ROLE / "tasks/validate.yml")
+        guard = _task_by_name(validate, "Tor ContactInfo and AccountingMax must be set before Tor is enabled")
+        self.assertIn("overlay_tor_accounting_max | length > 0", guard["ansible.builtin.assert"]["that"])
+        self.assertEqual(guard["when"], "overlay_tor_enabled | bool")
+        # Host value is set now, so enabling Tor cannot ship uncapped.
+        self.assertEqual(host["overlay_tor_accounting_max"], "3 TBytes")
+        self.assertEqual(host["overlay_tor_accounting_start"], "month 1 00:00")
+        if host["overlay_tor_enabled"]:
+            self.assertTrue(host["overlay_tor_accounting_max"].strip())
+        d = dict(self.directives)
+        self.assertEqual(d.get("AccountingMax"), "3 TBytes")
+        self.assertEqual(d.get("AccountingStart"), "month 1 00:00")
 
     def test_bandwidth_is_limited(self):
         d = dict(self.directives)
@@ -175,6 +190,7 @@ class YggdrasilZoneIsolationTest(unittest.TestCase):
         self.assertGreaterEqual(len(conf["Peers"]), 3)
         for peer in conf["Peers"]:
             self.assertTrue(peer.startswith("tls://"), peer)
+            self.assertRegex(peer, r"\?key=[0-9a-f]{64}$", f"peer not pinned by key: {peer}")
 
     def test_yggdrasil_private_key_is_generated_on_host_never_in_repo(self):
         conf = json.loads((GEN / "yggdrasil.conf").read_text())

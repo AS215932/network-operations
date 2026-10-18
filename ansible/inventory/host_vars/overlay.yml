@@ -24,7 +24,9 @@ overlay_tor_orport: 9001
 overlay_tor_orport_v4_public: 901
 overlay_tor_relay_bandwidth_rate: "10 MBytes"
 overlay_tor_relay_bandwidth_burst: "20 MBytes"
-overlay_tor_accounting_max: ""
+# Monthly cap: hibernates after 3 TB per direction, resets on the 1st.
+overlay_tor_accounting_max: "3 TBytes"
+overlay_tor_accounting_start: "month 1 00:00"
 
 # --- i2pd --------------------------------------------------------------------
 overlay_i2pd_enabled: true
@@ -37,14 +39,16 @@ overlay_i2pd_share: 50         # % of bandwidth offered to transit
 # --- Yggdrasil -----------------------------------------------------------------
 # Outbound-only TLS peerings to a handful of public peers
 # (github.com/yggdrasil-network/public-peers, europe/), pinned by ?key= where
-# the operator publishes one. No Listen, no multicast on the infra segment.
+# EVERY peer is pinned by ?key= as published in that list (tested).
+# No Listen, no multicast on the infra segment.
 overlay_yggdrasil_enabled: true
 overlay_yggdrasil_peers:
   - "tls://yggdrasil.neilalexander.dev:64648?key=ecbbcb3298e7d3b4196103333c3e839cfe47a6ca47602b94a6d596683f6bb358"
   - "tls://ygg1.mk16.de:1338?key=0000000087ee9949eeab56bd430ee8f324cad55abf3993ed9b9be63ce693e18a"
   - "tls://ygg2.mk16.de:1338?key=000000d80a2d7b3126ea65c8c08fc751088c491a5cdd47eff11c86fa1e4644ae"
   - "tls://[2a0f:b240:e:162::1]:443?key=000000035621c71b5610434589df051aed2688510f904ae79860668dc0fbf182"
-  - "tls://cirno.nadeko.net:44442"
+  # Replaces cirno.nadeko.net (no published key in public-peers).
+  - "tls://nl1.route172.de:443?key=000000002643ae27bad63e2a81f1d30554ce9ea634f5990062a9e079e23593cd"
 overlay_yggdrasil_listen: []
 
 # --- Firewall ------------------------------------------------------------------
