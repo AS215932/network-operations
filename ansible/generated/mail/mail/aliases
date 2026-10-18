@@ -9,3 +9,4 @@ abuse: noc+abuse
 peering: noc+peering
 dh: noc+dh
 support: noc+support
+tor: noc+tor
