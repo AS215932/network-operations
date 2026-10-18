@@ -1,0 +1,11 @@
+---
+# Validate (render review artifacts + policy asserts) always runs; apply is
+# gated so default invocations never touch the host.
+- name: Validate overlay inputs and render review artifacts
+  ansible.builtin.import_tasks: validate.yml
+  tags: [validate, diff, apply]
+
+- name: Apply overlay role
+  ansible.builtin.import_tasks: apply.yml
+  when: overlay_apply | bool
+  tags: [apply]

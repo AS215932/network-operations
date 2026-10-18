@@ -18,6 +18,11 @@ firewall_extra_raw_nft: ""
 firewall_forward_extra_raw_nft: ""
 firewall_extra_raw_pf: ""
 
+# Linux non-rtr hosts only: directory whose *.nft files /etc/nftables.conf
+# includes after its own table (roles that own a separate nft table, e.g.
+# roles/overlay's ygg0 zone). Empty = no include line rendered.
+firewall_nft_include_dir: ""
+
 # rtr-only — preserves the existing IPv4 NAT/forward block.
 firewall_rtr_v4_nat: false
 

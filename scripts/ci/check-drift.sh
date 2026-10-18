@@ -8,7 +8,7 @@
 #   ../scripts/ci/check-drift.sh <log-dir> [playbook ...]
 #
 # With no playbook arguments the canonical sweep below runs. The limit can be
-# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr:!rtr-bsd; retirement registration remains covered) — used by the post-merge
+# narrowed via CHECK_DRIFT_LIMIT (default all:!ci-pr:!rtr-bsd:!overlay; retirement registration remains covered) — used by the post-merge
 # verify pass to re-check only the hosts it just applied.
 #
 # ci-pr lives on the customer-isolated segment and is managed from the ops
@@ -18,6 +18,10 @@
 # inventory host with no machine behind it would fail every sweep as
 # UNREACHABLE. REMOVE this exclusion in the build commit that first boots
 # rtr-bsd — the runbook (docs/runbooks/rtr-bsd-build.md Phase 1) calls it out.
+#
+# overlay (Tor relay / i2pd / Yggdrasil) is excluded for the same reason until
+# its VM is created and bootstrapped (docs/runbooks/overlay-build.md). REMOVE
+# `:!overlay` in the commit that first applies the overlay role.
 
 set -uo pipefail
 
@@ -38,7 +42,7 @@ if [ "${#playbooks[@]}" -eq 0 ]; then
 fi
 
 # Monitoring must still reconcile retired-host tombstones on mon.
-limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr:!rtr-bsd}"
+limit="${CHECK_DRIFT_LIMIT:-all:!ci-pr:!rtr-bsd:!overlay}"
 
 mkdir -p "$logdir"
 status=0

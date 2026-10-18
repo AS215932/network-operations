@@ -1,0 +1,40 @@
+#!/usr/sbin/nft -f
+# {{ overlay_nft_ygg_file }} — {{ inventory_hostname }} — managed by ansible (roles/overlay)
+# Generated: do not edit by hand.
+#
+# Yggdrasil zone. {{ overlay_yggdrasil_ifname }} is an untrusted overlay: it may reach NOTHING on
+# this host except ICMPv6 errors/echo and replies to flows the host started,
+# and nothing is ever forwarded between {{ overlay_yggdrasil_ifname }} and {{ overlay_iface }} (the AS).
+# Yggdrasil's own peering runs over TLS on {{ overlay_iface }} (outbound only) and is
+# handled by the main inet filter table.
+#
+# Separate table so it survives as one unit: roles/firewall's /etc/nftables.conf
+# includes {{ overlay_nft_include_dir }}/*.nft after `flush ruleset`; the role also
+# loads this file standalone. A drop in any base chain is final, so these
+# chains cannot be overridden by accepts in table inet filter.
+
+table inet overlay_ygg
+delete table inet overlay_ygg
+
+table inet overlay_ygg {
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+
+        iifname "{{ overlay_yggdrasil_ifname }}" ct state established,related accept
+        iifname "{{ overlay_yggdrasil_ifname }}" ct state invalid counter drop
+        iifname "{{ overlay_yggdrasil_ifname }}" icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
+        iifname "{{ overlay_yggdrasil_ifname }}" counter drop comment "ygg-zone: no inbound services from Yggdrasil"
+
+        # Anti-spoof: Yggdrasil-space sources only ever arrive on {{ overlay_yggdrasil_ifname }} (or lo).
+        iifname != { "{{ overlay_yggdrasil_ifname }}", "lo" } ip6 saddr {{ overlay_yggdrasil_prefix }} counter drop comment "ygg-zone: Yggdrasil source outside {{ overlay_yggdrasil_ifname }}"
+    }
+
+    chain forward {
+        type filter hook forward priority filter - 10; policy accept;
+
+        iifname "{{ overlay_yggdrasil_ifname }}" counter drop comment "ygg-zone: no forwarding Yggdrasil -> AS215932"
+        oifname "{{ overlay_yggdrasil_ifname }}" counter drop comment "ygg-zone: no forwarding AS215932 -> Yggdrasil"
+        ip6 saddr {{ overlay_yggdrasil_prefix }} counter drop comment "ygg-zone: no forwarding of Yggdrasil sources"
+        ip6 daddr {{ overlay_yggdrasil_prefix }} counter drop comment "ygg-zone: no forwarding to Yggdrasil destinations"
+    }
+}

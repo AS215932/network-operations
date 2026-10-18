@@ -42,3 +42,10 @@ table inet filter {
         type filter hook output priority filter; policy accept;
     }
 }
+{% if firewall_nft_include_dir %}
+
+# Role-owned extra tables (e.g. roles/overlay's ygg0 zone), re-added after the
+# `flush ruleset` above. A glob that matches no file is not an error, so the
+# firewall can be applied before the owning role has written its table.
+include "{{ firewall_nft_include_dir }}/*.nft"
+{% endif %}

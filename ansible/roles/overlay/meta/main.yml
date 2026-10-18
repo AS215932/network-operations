@@ -1,0 +1,9 @@
+---
+galaxy_info:
+  role_name: overlay
+  author: AS215932
+  description: Public overlay-network node (Tor non-exit relay, i2pd router, Yggdrasil)
+  license: MIT
+  min_ansible_version: "2.14"
+
+dependencies: []

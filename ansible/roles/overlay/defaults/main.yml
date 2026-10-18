@@ -1,0 +1,85 @@
+---
+# overlay — public overlay-network node: Tor (non-exit relay), i2pd (router),
+# Yggdrasil (public peers). Host-specific values (ContactInfo, peers,
+# bandwidth) live in ansible/inventory/host_vars/overlay.yml; these are the
+# safe fallbacks.
+
+# Live mutation gate. Render (--tags validate) never needs it.
+overlay_apply: false
+
+# Where the controller-side review artifacts land (ansible/generated/<host>/).
+overlay_generated_dir: "{{ playbook_dir }}/../generated"
+
+overlay_packages:
+  - nftables
+  - openssl
+  - tor
+  - i2pd
+  - yggdrasil
+
+# Public identity. The infra address is the host's GUA; the public IPv4 is
+# rtr's failover IP, reached through a DNAT on rtr (rtr_overlay_dnat_enabled).
+overlay_ipv6: "{{ peers.overlay.ipv6 }}"
+overlay_infra_v4: "{{ peers.overlay.infra_v4 }}"
+overlay_public_v4: "46.105.40.223"
+overlay_iface: enX0
+
+# --- Tor -------------------------------------------------------------------
+# overlay_tor_mode is deliberately a one-value enum: the role only implements
+# a non-exit relay. validate.yml fails on anything else, so turning this box
+# into an exit needs a reviewed role change (abuse contact, RIPE, OVH ToS),
+# not a host_vars flip.
+overlay_tor_enabled: true
+overlay_tor_mode: relay
+overlay_tor_nickname: AS215932overlay
+# Must be replaced before Tor is enabled; validate.yml refuses the placeholder.
+overlay_tor_contact_info: "CHANGEME"
+# Fingerprints of other relays run by the same operator (none yet).
+overlay_tor_my_family: []
+overlay_tor_orport: 9001
+# Public IPv4 ORPort on rtr's failover IP. MUST stay outside rtr's Jool pool4
+# (TCP/UDP 1024-60999, configs/rtr/jool/jool.conf) and rtr's own ephemeral
+# range (61000-65535, configs/rtr/sysctl.conf), otherwise inbound DNAT and
+# NAT64 sessions fight over the same 46.105.40.223:port.
+overlay_tor_orport_v4_public: 901
+overlay_tor_relay_bandwidth_rate: "10 MBytes"
+overlay_tor_relay_bandwidth_burst: "20 MBytes"
+# Optional monthly cap, e.g. "1 TBytes". Empty = no accounting.
+overlay_tor_accounting_max: ""
+overlay_tor_accounting_start: "month 1 00:00"
+# 2 GiB VM shared with i2pd/Yggdrasil; Tor would otherwise size its cell
+# queues at ~3/4 of RAM.
+overlay_tor_max_mem_in_queues: "512 MB"
+
+# --- i2pd ------------------------------------------------------------------
+overlay_i2pd_enabled: true
+# Fixed NTCP2 (tcp) + SSU2 (udp) port. IPv6 only: IPv4 would share rtr's
+# 46.105.40.223 with Jool's UDP pool4 through masquerade, which is exactly the
+# Jool+UDP mess we are not touching before rtr-bsd.
+overlay_i2pd_port: 24316
+overlay_i2pd_ipv4: false
+overlay_i2pd_ipv6: true
+# KBytes/s (i2pd accepts a letter class or a number) and transit share in %.
+overlay_i2pd_bandwidth: 2048
+overlay_i2pd_share: 50
+overlay_i2pd_floodfill: false
+
+# --- Yggdrasil ---------------------------------------------------------------
+overlay_yggdrasil_enabled: true
+overlay_yggdrasil_conf_path: /etc/yggdrasil/yggdrasil.conf
+# Generated ON THE HOST on first apply (openssl genpkey ed25519), never in the
+# repo — same model as the WireGuard role's on-host `wg genkey`.
+overlay_yggdrasil_key_path: /etc/yggdrasil/private.pem
+overlay_yggdrasil_ifname: ygg0
+overlay_yggdrasil_mtu: 65535
+# Outbound-only peering; no Listen, no multicast discovery on the infra L2.
+overlay_yggdrasil_peers: []
+overlay_yggdrasil_listen: []
+
+# --- host-local nftables zone for ygg0 ----------------------------------------
+# Rendered by this role (templates/nftables.conf.j2) as a separate
+# `table inet overlay_ygg`, included by roles/firewall's /etc/nftables.conf via
+# firewall_nft_include_dir so a firewall reload (flush ruleset) re-adds it.
+overlay_nft_include_dir: /etc/nftables.d
+overlay_nft_ygg_file: "{{ overlay_nft_include_dir }}/50-overlay-ygg.nft"
+overlay_yggdrasil_prefix: "200::/7"
