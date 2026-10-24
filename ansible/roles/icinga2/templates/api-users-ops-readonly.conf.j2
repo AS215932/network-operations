@@ -1,0 +1,15 @@
+// /etc/icinga2/conf.d/api-users-ops-readonly.conf — managed by ansible (roles/icinga2)
+//
+// Read-only operator access (Kim/Django agents on the box, 2a0c:b641:b50:3::4b)
+// for watching hosts/services after noc-agent retirement. Query-only: no
+// actions, no config, no events. Separate file from the noc-agent ApiUser so
+// neither task can drop the other user.
+
+object ApiUser "ops-readonly" {
+  password = "{{ icinga2_ops_readonly_api_password }}"
+  permissions = [
+    "objects/query/Host",
+    "objects/query/Service",
+    "status/query",
+  ]
+}

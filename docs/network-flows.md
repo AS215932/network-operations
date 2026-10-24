@@ -345,7 +345,9 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | proxy | tcp | 80 | Icinga Web from proxy |
 | proxy | tcp | 3000 | Grafana from proxy |
+| 2a0c:b641:b50:3::4b | tcp | 5665 | Icinga2 API (ops-readonly) from ops agent box |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
+| 2a0c:b641:b50:3::4b | tcp | 9090 | Prometheus API (read) from ops agent box |
 | api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
 | noc | tcp | 9090 | Prometheus API from noc-agent |
 | mon | tcp | 9100 | node_exporter self-scrape |
