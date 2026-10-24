@@ -19,6 +19,8 @@
   shell: |
     echo "rc_script: $(ls /usr/local/etc/rc.d/wireguard 2>/dev/null || echo none)"
     echo "rc_uses_wg_quick: $(grep -c wg-quick /usr/local/etc/rc.d/wireguard 2>/dev/null || echo 0)"
+    grep -v '^#' /usr/local/etc/rc.d/wireguard 2>/dev/null | grep -v '^\s*$' | sed 's/^/rc_body: /'
+    pkg which -q /usr/local/etc/rc.d/wireguard 2>/dev/null | sed 's/^/rc_pkg: /'
     sysrc -a 2>/dev/null | grep '^wireguard_' | sed 's/^/rc.conf: /'
     ls -l {{ wireguard_conf_dir }} 2>/dev/null | sed 's/^/dir: /'
     echo "ifaces: $(ifconfig -l)"
