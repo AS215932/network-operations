@@ -1,0 +1,17 @@
+# WireGuard template for a GPU node (vast.ai / any IPv4-only host).
+# Render per node: replace NODE_ID (hex, 11..ff) and keys. Private key stays on the node.
+# Underlay: IPv4 (node is behind NAT, so it dials out and keeps the NAT open).
+# Inner: IPv6-only, 2a0c:b641:b50:10::/64 (AS215932). vLLM listens on the inner address only:
+#   vllm serve Qwen/Qwen3.8-27B-FP8 --host 2a0c:b641:b50:10::NODE_ID --port 8000
+[Interface]
+PrivateKey = <GPU_NODE_PRIVATE_KEY>
+Address = 2a0c:b641:b50:10::NODE_ID/128
+MTU = 1380
+
+[Peer]
+# inf-sthlm
+PublicKey = <INF_STHLM_PUBLIC_KEY>
+PresharedKey = <PER_NODE_PSK>
+Endpoint = <STHLM_V4_UNDERLAY>:51820
+AllowedIPs = 2a0c:b641:b50:10::1/128
+PersistentKeepalive = 25
