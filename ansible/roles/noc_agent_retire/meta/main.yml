@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: AS215932
+  description: Retire noc-agent on the noc VM (stop, disable, remove units; keep data)
+  license: proprietary
+  min_ansible_version: "2.14"
+dependencies: []

@@ -30,6 +30,7 @@ on:
           - noc
           - network-proxy
           - tunnel-proxy
+          - overlay
           - prober
           - vault
           - ci
@@ -166,7 +167,7 @@ jobs:
           case "$PLAYBOOK" in
             noc)
               host_vars="ansible/inventory/host_vars/noc.yml"
-              entries="noc_agent_version|AS215932/noc-agent hyrule_mcp_version|AS215932/hyrule-mcp noc_knowledge_version|AS215932/knowledge"
+              entries="hyrule_mcp_version|AS215932/hyrule-mcp"
               ;;
             engineering-loop)
               host_vars="ansible/inventory/host_vars/loop.yml"

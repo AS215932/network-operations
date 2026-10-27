@@ -1,0 +1,16 @@
+{# /etc/yggdrasil/yggdrasil.conf — rendered as strict JSON (valid HJSON).
+   The private key is NOT in this file: PrivateKeyPath points at a PEM that
+   tasks/apply.yml generates on the host on first run. #}
+{{ {
+  "PrivateKeyPath": overlay_yggdrasil_key_path,
+  "Peers": overlay_yggdrasil_peers,
+  "InterfacePeers": {},
+  "Listen": overlay_yggdrasil_listen,
+  "AdminListen": "unix:///run/yggdrasil/yggdrasil.sock",
+  "MulticastInterfaces": [],
+  "AllowedPublicKeys": [],
+  "IfName": overlay_yggdrasil_ifname,
+  "IfMTU": overlay_yggdrasil_mtu | int,
+  "NodeInfoPrivacy": true,
+  "NodeInfo": {}
+} | to_nice_json(indent=2) }}

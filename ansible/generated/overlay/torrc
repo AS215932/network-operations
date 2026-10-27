@@ -1,0 +1,42 @@
+# /etc/tor/torrc — overlay — managed by ansible (roles/overlay)
+# Generated: do not edit by hand.
+#
+# NON-EXIT relay only. The role refuses any overlay_tor_mode other than
+# "relay" (tasks/validate.yml); exit traffic would make AS215932 the visible
+# source of arbitrary Internet traffic (abuse mail, RIPE abuse-c, OVH ToS).
+# User/DataDirectory come from Debian's tor-service-defaults-torrc.
+
+Nickname AS215932overlay
+ContactInfo email:tor[]as215932.net url:https://as215932.net ciissversion:2
+# MyFamily <fingerprint>,<fingerprint>  (set overlay_tor_my_family once we run more relays)
+
+# --- Reachability -----------------------------------------------------------
+# IPv6: directly on the infra GUA (rtr forwards the /64, no NAT).
+ORPort [2a0c:b641:b50:2::71]:9001
+# IPv4: advertise rtr's failover IP; rtr DNATs
+# 46.105.40.223:901 -> 10.0.2.71:9001.
+ORPort 46.105.40.223:901 NoListen
+ORPort 10.0.2.71:9001 NoAdvertise
+Address 46.105.40.223
+Address 2a0c:b641:b50:2::71
+OutboundBindAddress 10.0.2.71
+OutboundBindAddress 2a0c:b641:b50:2::71
+
+# --- Relay, never exit ------------------------------------------------------
+ExitRelay 0
+IPv6Exit 0
+ExitPolicy reject *:*
+ExitPolicy reject6 *:*
+
+# No local client/controller surface on a pure relay.
+SocksPort 0
+ControlPort 0
+
+# --- Bandwidth --------------------------------------------------------------
+RelayBandwidthRate 10 MBytes
+RelayBandwidthBurst 20 MBytes
+AccountingMax 3 TBytes
+AccountingStart month 1 00:00
+MaxMemInQueues 512 MB
+
+Log notice syslog

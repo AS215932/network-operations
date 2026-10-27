@@ -1,0 +1,33 @@
+---
+# noc-agent is retired: operators (Kim/Django) watch Icinga + Prometheus
+# directly. Stop and disable the old services and remove their unit files.
+# Data is intentionally KEPT: /opt/noc-agent (its .env is still read by
+# hyrule-mcp and xo-mcp), /var/lib/noc-agent, the noc_agent PostgreSQL
+# database, and the noc-agent system user.
+
+- name: Check for noc-agent unit files
+  stat:
+    path: "/etc/systemd/system/{{ item }}.service"
+  loop: "{{ noc_agent_retire_units }}"
+  register: noc_agent_retire_unit_stat
+  tags: [apply]
+
+- name: Stop and disable retired noc-agent services
+  systemd:
+    name: "{{ item.item }}"
+    state: stopped
+    enabled: false
+  loop: "{{ noc_agent_retire_unit_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: [apply]
+
+- name: Remove retired noc-agent unit files
+  file:
+    path: "/etc/systemd/system/{{ item }}.service"
+    state: absent
+  loop: "{{ noc_agent_retire_units }}"
+  notify: noc_agent_retire reload systemd
+  tags: [apply]

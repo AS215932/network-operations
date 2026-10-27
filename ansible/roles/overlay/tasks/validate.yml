@@ -1,0 +1,71 @@
+---
+# Policy guards + controller-side review artifacts (ansible/generated/<host>/).
+# Runs on every invocation, including CI's render-only --tags validate.
+
+- name: Tor must be a non-exit relay (exit needs a reviewed role change)
+  ansible.builtin.assert:
+    that:
+      - overlay_tor_mode == 'relay'
+    fail_msg: >-
+      overlay_tor_mode={{ overlay_tor_mode }} is not supported. roles/overlay
+      only renders a non-exit relay (ExitRelay 0, ExitPolicy reject *:*).
+      Running an exit from AS215932 needs an abuse contact, RIPE abuse-c and
+      OVH sign-off first.
+  delegate_to: localhost
+  become: false
+
+- name: Tor ContactInfo and AccountingMax must be set before Tor is enabled
+  ansible.builtin.assert:
+    that:
+      - overlay_tor_contact_info | length > 0
+      - "'CHANGEME' not in overlay_tor_contact_info"
+      - overlay_tor_accounting_max | length > 0
+    fail_msg: >-
+      Set overlay_tor_contact_info in host_vars/{{ inventory_hostname }}.yml
+      (operator-owned contact) and overlay_tor_accounting_max before setting
+      overlay_tor_enabled: true.
+  when: overlay_tor_enabled | bool
+  delegate_to: localhost
+  become: false
+
+- name: Public IPv4 ORPort must stay clear of rtr Jool pool4 and ephemeral ports
+  ansible.builtin.assert:
+    that:
+      - overlay_tor_orport_v4_public | int > 0
+      - overlay_tor_orport_v4_public | int < 1024
+    fail_msg: >-
+      overlay_tor_orport_v4_public={{ overlay_tor_orport_v4_public }} would be
+      DNATed on rtr's 46.105.40.223, whose 1024-60999 belong to Jool pool4 and
+      61000-65535 to rtr's own ephemeral range.
+  delegate_to: localhost
+  become: false
+
+- name: Yggdrasil needs at least one outbound public peer and no listener/multicast
+  ansible.builtin.assert:
+    that:
+      - overlay_yggdrasil_peers | length > 0
+      - overlay_yggdrasil_listen | length == 0
+  when: overlay_yggdrasil_enabled | bool
+  delegate_to: localhost
+  become: false
+
+- name: Ensure review artifact directory exists
+  ansible.builtin.file:
+    path: "{{ overlay_generated_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: false
+
+- name: Render overlay review artifacts to controller
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ overlay_generated_dir }}/{{ inventory_hostname }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - { src: torrc.j2, dest: torrc }
+    - { src: i2pd.conf.j2, dest: i2pd.conf }
+    - { src: yggdrasil.conf.j2, dest: yggdrasil.conf }
+    - { src: nftables.conf.j2, dest: overlay-ygg.nft }
+  delegate_to: localhost
+  become: false

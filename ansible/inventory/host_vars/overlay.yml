@@ -1,0 +1,117 @@
+---
+# overlay — public overlay-network node (Svag, 2026-10-18): Tor NON-EXIT
+# relay, i2pd router, Yggdrasil node. xcp01, Debian 13, 2 vCPU / 2 GiB / 20 GB.
+#
+# Addresses: 2a0c:b641:b50:2::71/64 (infra GUA, all IPv6 service traffic) and
+# 10.0.2.71/24 (private DNAT backend only: rtr maps 46.105.40.223:901/tcp to
+# 10.0.2.71:9001 for Tor's IPv4 ORPort once rtr_overlay_dnat_enabled is true).
+# Access: dedicated `kim` operator user only — no root, no svag keys
+# (scripts/create-overlay-vm.sh, playbooks/kim-ops-key.yml).
+#
+# Roles: firewall (host input filter), overlay (daemons + ygg0 nft zone),
+# monitoring, logs.
+
+# --- Tor ---------------------------------------------------------------------
+# HELD: stays stopped/disabled until Svag confirms relay-only (no exit).
+# ContactInfo (ContactInfo Information Sharing Spec v2) given by Svag
+# 2026-10-19. Flip to true (with rtr_overlay_dnat_enabled) once confirmed;
+# validate.yml refuses CHANGEME once enabled. Exit mode is not implemented.
+overlay_tor_enabled: false
+overlay_tor_mode: relay
+overlay_tor_nickname: AS215932overlay
+overlay_tor_contact_info: "email:tor[]as215932.net url:https://as215932.net ciissversion:2"
+overlay_tor_my_family: []
+overlay_tor_orport: 9001
+overlay_tor_orport_v4_public: 901
+overlay_tor_relay_bandwidth_rate: "10 MBytes"
+overlay_tor_relay_bandwidth_burst: "20 MBytes"
+# Monthly cap: hibernates after 3 TB per direction, resets on the 1st.
+overlay_tor_accounting_max: "3 TBytes"
+overlay_tor_accounting_start: "month 1 00:00"
+
+# --- i2pd --------------------------------------------------------------------
+overlay_i2pd_enabled: true
+overlay_i2pd_port: 24316
+overlay_i2pd_ipv4: false
+overlay_i2pd_ipv6: true
+overlay_i2pd_bandwidth: 2048   # KBytes/s
+overlay_i2pd_share: 50         # % of bandwidth offered to transit
+
+# --- Yggdrasil -----------------------------------------------------------------
+# Outbound-only TLS peerings to a handful of public peers
+# (github.com/yggdrasil-network/public-peers, europe/), pinned by ?key= where
+# EVERY peer is pinned by ?key= as published in that list (tested).
+# No Listen, no multicast on the infra segment.
+overlay_yggdrasil_enabled: true
+overlay_yggdrasil_peers:
+  - "tls://yggdrasil.neilalexander.dev:64648?key=ecbbcb3298e7d3b4196103333c3e839cfe47a6ca47602b94a6d596683f6bb358"
+  - "tls://ygg1.mk16.de:1338?key=0000000087ee9949eeab56bd430ee8f324cad55abf3993ed9b9be63ce693e18a"
+  - "tls://ygg2.mk16.de:1338?key=000000d80a2d7b3126ea65c8c08fc751088c491a5cdd47eff11c86fa1e4644ae"
+  - "tls://[2a0f:b240:e:162::1]:443?key=000000035621c71b5610434589df051aed2688510f904ae79860668dc0fbf182"
+  # Replaces cirno.nadeko.net (no published key in public-peers).
+  - "tls://nl1.route172.de:443?key=000000002643ae27bad63e2a81f1d30554ce9ea634f5990062a9e079e23593cd"
+overlay_yggdrasil_listen: []
+
+# --- Firewall ------------------------------------------------------------------
+# SSH comes only from the shared ssh_allow_sources_* set (ops prefix, VPN
+# clients, ci, noc, mon) via the base template. Public service ports are bound
+# to the infra NIC so nothing arriving on ygg0 can match them; the ygg0 zone
+# itself is the separate table inet overlay_ygg (roles/overlay), pulled in by
+# the include below.
+firewall_nft_include_dir: /etc/nftables.d
+firewall_extra_rules:
+  # Tor ORPort: v6 direct to ::71, v4 arrives DNATed from rtr (src preserved).
+  # src:any renders no saddr clause, so one inet rule matches both families
+  # (same as netproxy); no `family:` qualifier, which would duplicate it.
+  - { proto: tcp, dport: 9001, src: any, iifname: enX0, comment: "Tor ORPort (public, non-exit relay; v4 via rtr DNAT)" }
+  # i2pd NTCP2 (tcp) + SSU2 (udp), IPv6 only — ::/0 pins the rule to ip6.
+  - { proto: tcp+udp, dport: 24316, src: "::/0", iifname: enX0, comment: "i2pd NTCP2/SSU2 (public, IPv6 only)" }
+  # Monitoring.
+  - { proto: tcp, dport: 9100, src: "{{ peers.mon.ipv6 }}", comment: "node_exporter scrape" }
+
+# --- Monitoring ------------------------------------------------------------------
+monitoring_register: true
+monitoring_display_name: "overlay (Tor relay / i2pd / Yggdrasil)"
+monitoring_role: overlay
+monitoring_extra_services:
+  - name: i2pd-unit
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    notes: "i2pd router is active"
+    vars:
+      prom_instance: "[{{ peers.overlay.ipv6 }}]:9100"
+      systemd_unit: i2pd.service
+  - name: yggdrasil-unit
+    check_command: prom_systemd_unit
+    interval: 2m
+    retry: 1m
+    notes: "Yggdrasil node is active"
+    vars:
+      prom_instance: "[{{ peers.overlay.ipv6 }}]:9100"
+      systemd_unit: yggdrasil.service
+  - name: i2pd-ntcp2
+    check_command: tcp
+    interval: 5m
+    notes: "i2pd NTCP2 listener on tcp/24316 (IPv6)"
+    vars: { tcp_address: "{{ peers.overlay.ipv6 }}", tcp_port: 24316 }
+
+# --- Logs --- (ships journald to log VM via Vector)
+logs_register: true
+logs_role: overlay
+
+# --- Structured flow metadata (read by scripts/render-network-flows.py) ---
+host_meta:
+  os: "Debian 13"
+  role: "Public overlay-network node: Tor non-exit relay (:9001), i2pd (:24316), Yggdrasil (outbound peers)"
+  summary: "Tor relay (never exit), i2pd transit router and Yggdrasil node. ygg0 sits in its own nft table that drops all inbound except ICMPv6/replies and never forwards to or from the AS."
+  ipv4: "Tor ORPort via rtr DNAT 46.105.40.223:901 -> 10.0.2.71:9001 (gated by rtr_overlay_dnat_enabled)"
+  notes: >-
+    Tor is held (overlay_tor_enabled: false) until relay-only is confirmed;
+    ContactInfo is set. Yggdrasil keypair is generated on-host on first
+    apply and never stored in the repo.
+network_flows_inbound:
+  - { from: public, proto: tcp, port: 9001, purpose: "Tor ORPort (IPv6 direct; IPv4 via rtr DNAT from 46.105.40.223:901)" }
+  - { from: public, proto: "tcp+udp", port: 24316, purpose: "i2pd NTCP2/SSU2 (IPv6 only)" }
+network_flows_outbound:
+  - { to: public, proto: tcp, purpose: "Tor relay-to-relay (v4 via rtr masquerade, v6 direct), i2pd peers (v6), Yggdrasil TLS peerings" }

@@ -1,0 +1,22 @@
+---
+- name: reload overlay ygg nft table
+  ansible.builtin.command: "nft -f {{ overlay_nft_ygg_file }}"
+  changed_when: true
+
+- name: restart tor
+  ansible.builtin.systemd:
+    name: tor
+    state: restarted
+  when: overlay_tor_enabled | bool
+
+- name: restart i2pd
+  ansible.builtin.systemd:
+    name: i2pd
+    state: restarted
+  when: overlay_i2pd_enabled | bool
+
+- name: restart yggdrasil
+  ansible.builtin.systemd:
+    name: yggdrasil
+    state: restarted
+  when: overlay_yggdrasil_enabled | bool

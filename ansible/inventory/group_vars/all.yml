@@ -69,6 +69,13 @@ peers:
   xoa:
     ipv6: "2a0c:b641:b50:2::70"
     mgmt_v4: "10.0.0.10"
+  # overlay — public Tor (non-exit) relay / i2pd router / Yggdrasil node.
+  # ::71 because ::60 is the old vpn endpoint still referenced by IPv6
+  # WireGuard clients (docs/vpn-transit.md) and ::10..::f0 are all taken.
+  # infra_v4 is the private DNAT backend for rtr's 46.105.40.223 (Tor ORPort).
+  overlay:
+    ipv6: "2a0c:b641:b50:2::71"
+    infra_v4: "10.0.2.71"
   irc:     { ipv6: "2a0c:b641:b50:2::80" }
   mail:
     ipv6: "2a0c:b641:b50:2::90"
@@ -179,6 +186,7 @@ ssh_users:
   rtr: root
   rtr-bsd: root
   xoa: root
+  overlay: kim      # no svag/root keys on overlay; dedicated kim operator user
   cr1-nl1: svag
   cr1-de1: svag
   cr1-ch1: svag

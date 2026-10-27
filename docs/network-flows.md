@@ -37,8 +37,9 @@ Then run `python3 scripts/render-network-flows.py`. The freshness test `tests/ia
 | mail | OpenBSD 7.8 | `2a0c:b641:b50:2::90` | 51.91.236.215 | OpenSMTPD + Rspamd + Dovecot mail server |
 | mon | Debian 13 | `2a0c:b641:b50:2::50` | — | Prometheus + Grafana + Icinga2 + blackbox |
 | netproxy | Debian 13 | `2a0c:b641:b50:2::e0` | — | Hyrule network proxy sidecar (:8450) + public reverse-SSH tunnel (:2222 SSH, :3478 STUN, 10000-10499 data) |
-| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | noc-agent (FastAPI :8000) + hyrule-mcp + hyrule-prober (:8460) |
+| noc | Debian 13 | `2a0c:b641:b50:2::a0` | — | hyrule-mcp + xo-mcp + hyrule-prober (:8460); noc-agent retired |
 | ns2 | Debian 13 | `2001:41d0:304:300::7bfb` | `54.38.14.218` | secondary nameserver (OVH GRA11) |
+| overlay | Debian 13 | `2a0c:b641:b50:2::71` | Tor ORPort via rtr DNAT 46.105.40.223:901 -> 10.0.2.71:9001 (gated by rtr_overlay_dnat_enabled) | Public overlay-network node: Tor non-exit relay (:9001), i2pd (:24316), Yggdrasil (outbound peers) |
 | proxy | Debian 13 | `2a0c:b641:b50:2::40` | via rtr DNAT (46.105.40.223) | Caddy TLS reverse proxy |
 | rtr | Debian 13 | `2a0c:b641:b50:2::1` | 46.105.40.223 (failover, NAT64) | router/NAT64/DNS forwarder/DNAT gateway |
 | rtr-bsd | OpenBSD | `2a0c:b641:b50:2::2` | — | router/DNS forwarder (parallel burn-in) |
@@ -282,6 +283,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 | netproxy | tcp | 6000 | Vector ingest from netproxy |
 | noc | tcp | 6000 | Vector ingest from noc |
 | ns2 | tcp | 6000 | Vector ingest from off-net ns2 |
+| overlay | tcp | 6000 | Vector ingest from overlay |
 | proxy | tcp | 6000 | Vector ingest from proxy |
 | rtr | tcp | 6000 | Vector ingest from rtr |
 | rtr underlay | tcp | 6000 | Vector ingest from rtr underlay |
@@ -341,6 +343,7 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
+| proxy | tcp | 80 | Icinga Web from proxy |
 | proxy | tcp | 3000 | Grafana from proxy |
 | noc | tcp | 5665 | Icinga2 API from noc-agent |
 | api | tcp | 9090 | Prometheus public-status queries from hyrule-cloud |
@@ -383,9 +386,6 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 
 | From | Proto | Port | Purpose |
 |---|---|---|---|
-| extmon | tcp | 8000 | noc-agent webhook from extmon Alertmanager |
-| mon | tcp | 8000 | noc-agent webhook from mon (Alertmanager + Icinga) |
-| proxy | tcp | 8000 | noc-agent control dashboard via Caddy (proxy) |
 | api | tcp | 8460 | hyrule-cloud API to hyrule-prober (path probes) |
 | mon | tcp | 8460 | Icinga /healthz check for hyrule-prober |
 | mon | tcp | 9100 | node_exporter scrape |
@@ -418,6 +418,24 @@ _No noteworthy host-specific outbound beyond the cross-cutting flows._
 |---|---|---|---|
 | dns | tcp | 53 | AXFR pull from the primary on NOTIFY (TSIG hyrule-dns) |
 | log | tcp | 6000 | off-net Vector agent to aggregator over public IPv6 |
+
+### overlay — Tor relay (never exit), i2pd transit router and Yggdrasil node. ygg0 sits in its own nft table that drops all inbound except ICMPv6/replies and never forwards to or from the AS.
+
+> Tor is held (overlay_tor_enabled: false) until relay-only is confirmed; ContactInfo is set. Yggdrasil keypair is generated on-host on first apply and never stored in the repo.
+
+**Inbound**
+
+| From | Proto | Port | Purpose |
+|---|---|---|---|
+| any | tcp | 9001 | Tor ORPort (public, non-exit relay; v4 via rtr DNAT) |
+| mon | tcp | 9100 | node_exporter scrape |
+| ::/0 | tcp+udp | 24316 | i2pd NTCP2/SSU2 (public, IPv6 only) |
+
+**Outbound**
+
+| To | Proto | Port | Purpose |
+|---|---|---|---|
+| public | tcp | — | Tor relay-to-relay (v4 via rtr masquerade, v6 direct), i2pd peers (v6), Yggdrasil TLS peerings |
 
 ### proxy — Terminates public TLS and reverse-proxies to web, api, and other backends; ACME DNS-01 via RFC 2136 to dns.
 
@@ -604,7 +622,7 @@ Non-peer `from`/`to` tokens used above (external services, source realms, and ho
 | Token | Endpoint | Note |
 |---|---|---|
 | `acme-providers` | ACME CAs (Let's Encrypt / ZeroSSL) | certificate issuance |
-| `all-infra` | log-shipping infra hosts | active infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, irc, noc, vault, ci, netproxy. Excludes retired loop, mail (ships syslog to log:6514, not 6000), and log itself (the aggregator). |
+| `all-infra` | log-shipping infra hosts | active infra_vms that run a Vector agent to log:6000 — dns, api, web, proxy, mon, vpn, xoa, overlay, irc, noc, vault, ci, netproxy. Excludes retired loop, mail (ships syslog to log:6514, not 6000), and log itself (the aggregator). |
 | `all-linux` | active Linux hosts | active Debian VMs, excluding retired loop (routine apt / NTP egress) |
 | `anthropic` | api.anthropic.com | Claude API for CI AI review |
 | `debian-mirrors` | deb.debian.org + security.debian.org | apt / unattended-upgrades |

@@ -1,0 +1,40 @@
+#!/usr/sbin/nft -f
+# /etc/nftables.d/50-overlay-ygg.nft — overlay — managed by ansible (roles/overlay)
+# Generated: do not edit by hand.
+#
+# Yggdrasil zone. ygg0 is an untrusted overlay: it may reach NOTHING on
+# this host except ICMPv6 errors/echo and replies to flows the host started,
+# and nothing is ever forwarded between ygg0 and enX0 (the AS).
+# Yggdrasil's own peering runs over TLS on enX0 (outbound only) and is
+# handled by the main inet filter table.
+#
+# Separate table so it survives as one unit: roles/firewall's /etc/nftables.conf
+# includes /etc/nftables.d/*.nft after `flush ruleset`; the role also
+# loads this file standalone. A drop in any base chain is final, so these
+# chains cannot be overridden by accepts in table inet filter.
+
+table inet overlay_ygg
+delete table inet overlay_ygg
+
+table inet overlay_ygg {
+    chain input {
+        type filter hook input priority filter - 10; policy accept;
+
+        iifname "ygg0" ct state established,related accept
+        iifname "ygg0" ct state invalid counter drop
+        iifname "ygg0" icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem } accept
+        iifname "ygg0" counter drop comment "ygg-zone: no inbound services from Yggdrasil"
+
+        # Anti-spoof: Yggdrasil-space sources only ever arrive on ygg0 (or lo).
+        iifname != { "ygg0", "lo" } ip6 saddr 200::/7 counter drop comment "ygg-zone: Yggdrasil source outside ygg0"
+    }
+
+    chain forward {
+        type filter hook forward priority filter - 10; policy accept;
+
+        iifname "ygg0" counter drop comment "ygg-zone: no forwarding Yggdrasil -> AS215932"
+        oifname "ygg0" counter drop comment "ygg-zone: no forwarding AS215932 -> Yggdrasil"
+        ip6 saddr 200::/7 counter drop comment "ygg-zone: no forwarding of Yggdrasil sources"
+        ip6 daddr 200::/7 counter drop comment "ygg-zone: no forwarding to Yggdrasil destinations"
+    }
+}
