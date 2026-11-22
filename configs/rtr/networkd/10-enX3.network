@@ -7,3 +7,4 @@ Name=enX3
 VRF=overlay
 LinkLocalAddressing=ipv6
 IPv6AcceptRA=false
+KeepConfiguration=static

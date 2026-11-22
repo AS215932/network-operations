@@ -7,3 +7,4 @@ Name=lo-overlay
 VRF=overlay
 LinkLocalAddressing=no
 IPv6AcceptRA=false
+KeepConfiguration=static
