@@ -8,6 +8,7 @@ Name=wg0
 VRF=overlay
 LinkLocalAddressing=no
 IPv6AcceptRA=false
+KeepConfiguration=static
 
 [Address]
 Address=fe80::d:0/64
